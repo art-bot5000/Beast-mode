@@ -1,0 +1,2292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Beast Mode</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #06080a;
+  --surface: #0d1117;
+  --surface2: #131a21;
+  --border: rgba(255,255,255,0.07);
+  --accent: #e8ff00;
+  --accent2: #ff4d00;
+  --text: #d4dde6;
+  --muted: #4a5a68;
+  --radius: 3px;
+}
+.mode-insect { --accent: #00ffb0; --accent2: #00cc88; }
+.mode-beast  { --accent: #ff6a00; --accent2: #ff0040; }
+.mode-fusion { --accent: #c800ff; --accent2: #ff0080; }
+.preset-horror  { --accent: #cc0033; --accent2: #660022; }
+.preset-scifi   { --accent: #00d4ff; --accent2: #0066ff; }
+.preset-fantasy { --accent: #c77dff; --accent2: #7b2fff; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Rajdhani', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  overflow-x: hidden;
+}
+
+/* animated scanline bg */
+body::before {
+  content:'';
+  position:fixed;inset:0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px);
+  pointer-events:none;z-index:0;
+}
+
+.app { position:relative;z-index:1;max-width:900px;margin:0 auto;padding:24px 20px; }
+
+/* HEADER */
+header { margin-bottom:28px; }
+.title-line { display:flex;align-items:baseline;gap:12px;flex-wrap:wrap; }
+h1 {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(32px,6vw,54px);
+  letter-spacing:4px;
+  color: var(--accent);
+  text-shadow: 0 0 30px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: color .3s, text-shadow .3s;
+  line-height:1;
+}
+.version { font-size:10px;letter-spacing:3px;color:var(--muted);font-weight:600; }
+
+/* MODE TOGGLE */
+.mode-toggle {
+  display:flex;gap:0;margin:16px 0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;
+}
+.mode-btn {
+  padding:8px 22px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;
+  letter-spacing:2px;cursor:pointer;border:none;background:transparent;color:var(--muted);
+  transition:all .2s;text-transform:uppercase;
+}
+.mode-btn.active { background:var(--accent);color:#000; }
+
+/* STYLE PRESETS */
+.preset-row { display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap; }
+.preset-btn {
+  padding:6px 14px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;
+  letter-spacing:2px;cursor:pointer;border:1px solid var(--border);background:transparent;
+  color:var(--muted);border-radius:var(--radius);transition:all .2s;text-transform:uppercase;
+}
+.preset-btn:hover { border-color:var(--accent);color:var(--accent); }
+.preset-btn.active { background:var(--accent);color:#000;border-color:var(--accent); }
+
+/* PANEL */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius:var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.panel-title {
+  font-size:10px;letter-spacing:4px;color:var(--accent);font-weight:700;
+  margin-bottom:14px;text-transform:uppercase;
+  transition: color .3s;
+}
+
+/* GRID CONTROLS */
+.controls-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+.controls-grid.three { grid-template-columns:1fr 1fr 1fr; }
+
+@media(max-width:640px){
+  /* Single column everything */
+  .controls-grid, .controls-grid.three { grid-template-columns:1fr; }
+
+  /* Larger tap targets */
+  .btn { padding:13px 18px;font-size:12px; }
+  .btn-row { gap:8px; }
+  .mode-btn { padding:10px 16px;font-size:11px; }
+  .preset-btn { padding:8px 12px;font-size:10px; }
+
+  /* Dropdowns */
+  select, .sd-display { padding:11px 12px;font-size:14px; }
+  .sd-option { padding:10px 14px;font-size:14px; }
+  .sd-thumb { width:36px;height:36px; }
+  .sd-thumb-placeholder { width:36px;height:36px; }
+  .sd-panel { max-height:280px; }
+  .sd-search { font-size:14px; }
+  .sd-sort-btn { padding:5px 10px; }
+
+  /* Header */
+  h1 { font-size:28px;letter-spacing:2px; }
+  .mode-toggle { flex-wrap:wrap; }
+
+  /* Panels */
+  .panel { padding:14px; }
+  .fav-item { flex-wrap:wrap; }
+  .fav-actions { margin-left:auto; }
+
+  /* Output */
+  .output-box { font-size:12px;max-height:200px; }
+
+  /* Status bar wrap */
+  .status-bar { gap:10px; }
+
+  /* HSL sliders */
+  .hsl-input { width:42px; }
+
+  /* Colour tuner grid → single column */
+  #colourTuner > div:nth-child(2) { grid-template-columns:1fr !important; }
+
+  /* Preview popup — slide up from bottom on mobile */
+  #thumbPreviewBackdrop { display:none; }
+  #thumbPreviewBackdrop.visible { display:block; }
+  #thumbPreview {
+    display:flex !important;
+    position:fixed !important;
+    top:auto !important;
+    bottom:-360px !important;
+    left:0 !important; right:0 !important;
+    transform:none !important;
+    width:100% !important;
+    max-width:100% !important;
+    border-radius:12px 12px 0 0 !important;
+    border-bottom:none !important;
+    padding:16px !important;
+    transition:bottom .3s cubic-bezier(.4,0,.2,1) !important;
+    align-items:center !important;
+  }
+  #thumbPreview.visible {
+    bottom:0 !important;
+  }
+  #thumbPreview img, #thumbPreviewSpinner {
+    width:min(260px, calc(100vw - 80px)) !important;
+    height:min(260px, calc(100vw - 80px)) !important;
+  }
+
+  /* Load textarea */
+  #loadTextarea { height:70px; }
+}
+
+.field label {
+  display:block;font-size:10px;letter-spacing:3px;color:var(--muted);
+  margin-bottom:5px;font-weight:600;text-transform:uppercase;
+}
+select {
+  width:100%;padding:9px 10px;background:var(--surface2);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius);
+  font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:500;
+  cursor:pointer;outline:none;transition:border-color .2s;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;
+}
+select:focus { border-color: var(--accent); }
+
+/* SEARCHABLE DROPDOWN */
+.sd-wrap { position:relative; width:100%; }
+.sd-display {
+  width:100%;padding:9px 32px 9px 10px;background:var(--surface2);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius);
+  font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:500;
+  cursor:pointer;outline:none;transition:border-color .2s;
+  display:flex;align-items:center;justify-content:space-between;user-select:none;
+  white-space:nowrap;overflow:hidden;
+}
+.sd-display.open { border-color:var(--accent); }
+.sd-display .sd-val { overflow:hidden;text-overflow:ellipsis;flex:1; }
+.sd-display .sd-arrow { flex-shrink:0;margin-left:6px;font-size:9px;color:var(--muted);transition:transform .2s; }
+.sd-display.open .sd-arrow { transform:rotate(180deg); }
+.sd-panel {
+  display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:999;
+  background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);
+  box-shadow:0 8px 32px rgba(0,0,0,.7);flex-direction:column;max-height:320px;
+}
+.sd-panel.open { display:flex; }
+.sd-search-row {
+  display:flex;align-items:center;gap:6px;padding:8px 10px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.sd-search {
+  flex:1;background:transparent;border:none;outline:none;
+  font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--text);
+}
+.sd-search::placeholder { color:var(--muted); }
+.sd-sort-btn {
+  font-size:9px;letter-spacing:1px;padding:3px 8px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--muted);
+  border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;
+  white-space:nowrap;transition:all .15s;
+}
+.sd-sort-btn:hover,.sd-sort-btn.active { border-color:var(--accent);color:var(--accent); }
+.sd-list { overflow-y:auto;flex:1; }
+.sd-list::-webkit-scrollbar { width:3px; }
+.sd-list::-webkit-scrollbar-thumb { background:var(--muted); }
+.sd-group-label {
+  font-size:9px;letter-spacing:3px;color:var(--accent);font-weight:700;
+  padding:8px 10px 3px;text-transform:uppercase;position:sticky;top:0;
+  background:var(--surface);z-index:1;border-bottom:1px solid var(--border);
+}
+.sd-option {
+  padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:500;
+  cursor:pointer;color:var(--text);transition:background .1s;
+  display:flex;align-items:center;gap:9px;
+}
+.sd-option:hover { background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent); }
+.sd-option.selected { color:var(--accent);font-weight:700; }
+.sd-thumb {
+  width:32px;height:32px;border-radius:2px;object-fit:cover;flex-shrink:0;
+  background:var(--surface2);border:1px solid var(--border);
+  transition:opacity .3s;opacity:0;cursor:zoom-in;
+}
+.sd-thumb.loaded { opacity:1; }
+.sd-thumb-placeholder {
+  width:32px;height:32px;border-radius:2px;flex-shrink:0;
+  background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:var(--muted);
+}
+.sd-name { flex:1; }
+.sd-none { padding:10px 12px;color:var(--muted);font-size:12px;letter-spacing:1px; }
+
+/* HOVER PREVIEW POPUP */
+#thumbPreviewBackdrop {
+  display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);
+}
+#thumbPreviewBackdrop.visible { display:block; }
+#thumbPreview {
+  display:none;position:fixed;z-index:9999;
+  pointer-events:auto;
+  flex-direction:column;align-items:center;gap:6px;
+  background:var(--surface);border:1px solid var(--accent);
+  border-radius:4px;padding:8px;
+  box-shadow:0 8px 32px rgba(0,0,0,.8);
+  max-width:200px;width:200px;
+}
+#thumbPreview.visible { display:flex; }
+#thumbPreview img {
+  width:180px;height:180px;object-fit:cover;border-radius:2px;
+  border:1px solid var(--border);
+}
+#thumbPreview .preview-label {
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:1px;color:var(--accent);text-align:left;line-height:1.3;
+  flex:1;
+}
+#thumbPreview .preview-source {
+  font-size:9px;color:var(--muted);letter-spacing:1px;align-self:flex-start;
+}
+#thumbPreviewSpinner {
+  width:180px;height:180px;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:10px;letter-spacing:2px;
+}
+
+/* BUTTONS */
+.btn-row { display:flex;gap:10px;flex-wrap:wrap;margin-top:4px; }
+.btn {
+  padding:10px 20px;font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-size:11px;letter-spacing:2px;cursor:pointer;border-radius:var(--radius);
+  transition:all .2s;text-transform:uppercase;border:none;
+}
+.btn-primary { background:var(--accent);color:#000; }
+.btn-primary:hover { filter:brightness(1.15);box-shadow:0 0 20px color-mix(in srgb,var(--accent) 40%,transparent); }
+.btn-outline { background:transparent;color:var(--accent);border:1px solid var(--accent); }
+.btn-outline:hover { background:color-mix(in srgb,var(--accent) 10%,transparent); }
+.btn-ghost { background:transparent;color:var(--muted);border:1px solid var(--border); }
+.btn-ghost:hover { color:var(--text);border-color:var(--text); }
+
+/* OUTPUT */
+.output-box {
+  background:#000;border:1px solid var(--border);border-left:2px solid var(--accent);
+  border-radius:var(--radius);padding:16px;font-size:12px;line-height:1.8;
+  color:#8ecfb8;min-height:80px;max-height:340px;overflow-y:auto;
+  font-family:'Rajdhani',sans-serif;font-weight:500;letter-spacing:.3px;
+  white-space:pre-wrap;transition:border-color .3s;
+}
+
+/* FAVOURITES */
+.favs-list { display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto; }
+.fav-item {
+  background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 12px;font-size:11px;line-height:1.6;color:var(--text);
+  display:flex;gap:10px;align-items:flex-start;
+}
+.fav-text { flex:1;font-family:'Rajdhani',sans-serif;font-weight:500; }
+.fav-actions { display:flex;gap:6px;flex-shrink:0; }
+.fav-btn {
+  padding:3px 8px;font-size:10px;letter-spacing:1px;cursor:pointer;
+  border-radius:var(--radius);border:none;font-family:'Rajdhani',sans-serif;font-weight:700;
+}
+.fav-copy { background:var(--accent);color:#000; }
+.fav-del  { background:transparent;color:var(--muted);border:1px solid var(--border); }
+.fav-del:hover { color:#ff4444;border-color:#ff4444; }
+.fav-tag {
+  font-size:9px;letter-spacing:2px;padding:2px 6px;border-radius:2px;
+  background:color-mix(in srgb,var(--accent) 15%,transparent);
+  color:var(--accent);font-weight:700;flex-shrink:0;margin-top:1px;
+}
+.empty-favs { color:var(--muted);font-size:11px;letter-spacing:2px;padding:10px 0; }
+
+/* STATUS BAR */
+.status-bar {
+  display:flex;gap:16px;padding:8px 0;border-top:1px solid var(--border);
+  margin-top:8px;flex-wrap:wrap;
+}
+.stat { font-size:10px;letter-spacing:2px;color:var(--muted); }
+.stat span { color:var(--accent); }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--muted);border-radius:2px; }
+
+/* HSL SLIDERS */
+.hsl-row { display:flex;align-items:center;gap:8px;margin-bottom:5px; }
+.hsl-lbl { font-size:9px;letter-spacing:2px;color:var(--muted);font-weight:700;width:12px;flex-shrink:0; }
+.hsl-slider { flex:1;height:4px;border-radius:2px;outline:none;border:none;cursor:pointer;accent-color:var(--accent); }
+.hsl-val { font-size:10px;color:var(--text);width:32px;text-align:right;flex-shrink:0;font-family:'Rajdhani',sans-serif; }
+.hsl-input {
+  width:36px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);
+  border-radius:2px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;
+  font-weight:600;text-align:right;padding:1px 3px;outline:none;
+  -moz-appearance:textfield;
+}
+.hsl-input::-webkit-inner-spin-button,
+.hsl-input::-webkit-outer-spin-button { -webkit-appearance:none; }
+.hsl-input:focus { border-color:var(--accent); }
+.hsl-unit { font-size:10px;color:var(--muted);flex-shrink:0;width:10px; }
+
+/* anim */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+.generating { animation:pulse .6s ease infinite; }
+</style>
+</head>
+<body>
+<!-- HOVER PREVIEW POPUP -->
+<div id="thumbPreviewBackdrop" onclick="hidePreview()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);"></div>
+<div id="thumbPreview">
+  <div style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;">
+    <div class="preview-label" id="thumbPreviewLabel"></div>
+    <button onclick="hidePreview()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:2px 7px;cursor:pointer;font-size:11px;flex-shrink:0;">✕</button>
+  </div>
+  <div id="thumbPreviewSpinner">LOADING...</div>
+  <img id="thumbPreviewImg" src="" alt="" style="display:none;">
+  <div class="preview-source" id="thumbPreviewSource"></div>
+</div>
+<div class="app">
+
+<header>
+  <div class="title-line">
+    <h1 id="mainTitle">BEAST MODE</h1>
+    <span class="version">V3.0 // HYBRID ENGINE</span>
+  </div>
+
+  <!-- MODE TOGGLE -->
+  <div class="mode-toggle" style="margin-top:14px;">
+    <button class="mode-btn active" id="btnInsect" onclick="setMode('insect')">⬡ INSECT MODE</button>
+    <button class="mode-btn" id="btnBeast" onclick="setMode('beast')">☠ BEAST MODE</button>
+    <button class="mode-btn" id="btnFusion" onclick="setMode('fusion')">⚡ FUSION MODE</button>
+  </div>
+
+  <!-- STYLE PRESETS -->
+  <div class="preset-row">
+    <span style="font-size:10px;letter-spacing:3px;color:var(--muted);align-self:center;">STYLE:</span>
+    <button class="preset-btn active" onclick="setPreset('default',this)">DEFAULT</button>
+    <button class="preset-btn" onclick="setPreset('horror',this)">☠ HORROR</button>
+    <button class="preset-btn" onclick="setPreset('scifi',this)">◈ SCI-FI</button>
+    <button class="preset-btn" onclick="setPreset('fantasy',this)">✦ FANTASY</button>
+  </div>
+</header>
+
+<!-- CONTROLS -->
+<div class="panel">
+  <div class="panel-title">// HYBRID CONFIGURATION</div>
+  <div class="controls-grid">
+    <div class="field">
+      <label id="labelA">Body / Armor</label>
+      <div class="sd-wrap" id="sdWrapA">
+        <div class="sd-display" id="sdDispA" onclick="toggleSD('A')">
+          <span class="sd-val" id="sdValA">— select —</span>
+          <span class="sd-arrow">▼</span>
+        </div>
+        <div class="sd-panel" id="sdPanelA">
+          <div class="sd-search-row">
+            <input class="sd-search" id="sdSearchA" placeholder="Search species…" oninput="filterSD('A')" onclick="event.stopPropagation()">
+            <button class="sd-sort-btn active" id="sdSortGroupA" onclick="setSortSD('A','group')">GROUPED</button>
+            <button class="sd-sort-btn" id="sdSortAzA" onclick="setSortSD('A','az')">A–Z</button>
+          </div>
+          <div class="sd-list" id="sdListA"></div>
+        </div>
+      </div>
+      <input type="hidden" id="creatureA">
+    </div>
+    <div class="field">
+      <label id="labelB">Limbs / Weapons</label>
+      <div class="sd-wrap" id="sdWrapB">
+        <div class="sd-display" id="sdDispB" onclick="toggleSD('B')">
+          <span class="sd-val" id="sdValB">— select —</span>
+          <span class="sd-arrow">▼</span>
+        </div>
+        <div class="sd-panel" id="sdPanelB">
+          <div class="sd-search-row">
+            <input class="sd-search" id="sdSearchB" placeholder="Search species…" oninput="filterSD('B')" onclick="event.stopPropagation()">
+            <button class="sd-sort-btn active" id="sdSortGroupB" onclick="setSortSD('B','group')">GROUPED</button>
+            <button class="sd-sort-btn" id="sdSortAzB" onclick="setSortSD('B','az')">A–Z</button>
+          </div>
+          <div class="sd-list" id="sdListB"></div>
+        </div>
+      </div>
+      <input type="hidden" id="creatureB">
+    </div>
+    <div class="field" style="grid-column:1/-1;">
+      <label>Colour Palette</label>
+      <select id="colourSel" onchange="onPaletteChange()"></select>
+      <!-- COLOUR TUNER PANEL -->
+      <div id="colourTuner" style="display:none;margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+        <div style="font-size:9px;letter-spacing:3px;color:var(--accent);font-weight:700;margin-bottom:12px;">// FINE-TUNE COLOURS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <!-- Colour A -->
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <div id="swatchA" style="width:20px;height:20px;border-radius:2px;border:1px solid var(--border);flex-shrink:0;"></div>
+              <div style="font-size:9px;letter-spacing:2px;color:var(--accent);font-weight:700;text-transform:uppercase;" id="colALabel">COLOUR 1</div>
+              <div id="colAHex" style="font-size:10px;color:var(--text);margin-left:auto;font-family:'Rajdhani',sans-serif;">#000000</div>
+            </div>
+            <div class="hsl-row"><label class="hsl-lbl">H</label><input type="range" class="hsl-slider" id="colAH" min="0" max="360" value="0" oninput="onHSLChange('A')"><input type="number" class="hsl-input" id="colAHv" min="0" max="360" value="0" oninput="onValueInput('A','H')"><span class="hsl-unit">°</span></div>
+            <div class="hsl-row"><label class="hsl-lbl">S</label><input type="range" class="hsl-slider" id="colAS" min="0" max="100" value="0" oninput="onHSLChange('A')"><input type="number" class="hsl-input" id="colASv" min="0" max="100" value="0" oninput="onValueInput('A','S')"><span class="hsl-unit">%</span></div>
+            <div class="hsl-row"><label class="hsl-lbl">L</label><input type="range" class="hsl-slider" id="colAL" min="0" max="100" value="0" oninput="onHSLChange('A')"><input type="number" class="hsl-input" id="colALv" min="0" max="100" value="0" oninput="onValueInput('A','L')"><span class="hsl-unit">%</span></div>
+            <div style="margin-top:8px;">
+              <div style="font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;">MODIFIER</div>
+              <select id="modA" style="width:100%" onchange="updateTunerSummary()"></select>
+            </div>
+          </div>
+          <!-- Colour B -->
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <div id="swatchB" style="width:20px;height:20px;border-radius:2px;border:1px solid var(--border);flex-shrink:0;"></div>
+              <div style="font-size:9px;letter-spacing:2px;color:var(--accent);font-weight:700;text-transform:uppercase;" id="colBLabel">COLOUR 2</div>
+              <div id="colBHex" style="font-size:10px;color:var(--text);margin-left:auto;font-family:'Rajdhani',sans-serif;">#000000</div>
+            </div>
+            <div class="hsl-row"><label class="hsl-lbl">H</label><input type="range" class="hsl-slider" id="colBH" min="0" max="360" value="0" oninput="onHSLChange('B')"><input type="number" class="hsl-input" id="colBHv" min="0" max="360" value="0" oninput="onValueInput('B','H')"><span class="hsl-unit">°</span></div>
+            <div class="hsl-row"><label class="hsl-lbl">S</label><input type="range" class="hsl-slider" id="colBS" min="0" max="100" value="0" oninput="onHSLChange('B')"><input type="number" class="hsl-input" id="colBSv" min="0" max="100" value="0" oninput="onValueInput('B','S')"><span class="hsl-unit">%</span></div>
+            <div class="hsl-row"><label class="hsl-lbl">L</label><input type="range" class="hsl-slider" id="colBL" min="0" max="100" value="0" oninput="onHSLChange('B')"><input type="number" class="hsl-input" id="colBLv" min="0" max="100" value="0" oninput="onValueInput('B','L')"><span class="hsl-unit">%</span></div>
+            <div style="margin-top:8px;">
+              <div style="font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;">MODIFIER</div>
+              <select id="modB" style="width:100%" onchange="updateTunerSummary()"></select>
+            </div>
+          </div>
+        </div>
+        <!-- Preview strip -->
+        <div style="margin-top:12px;">
+          <div style="display:flex;height:24px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);">
+            <div id="previewA" style="flex:1;"></div>
+            <div id="previewB" style="flex:1;"></div>
+          </div>
+          <div style="margin-top:8px;font-size:10px;color:var(--muted);letter-spacing:1px;" id="tunerSummary"></div>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Material</label>
+      <select id="materialSel"></select>
+    </div>
+    <div class="field">
+      <label>Environment</label>
+      <select id="envSel"></select>
+    </div>
+    <div class="field">
+      <label>Environment Lighting</label>
+      <select id="lightSel"></select>
+    </div>
+    <div class="field">
+      <label>Mech Inspiration 1</label>
+      <div class="sd-wrap" id="sdWrapI1">
+        <div class="sd-display" id="sdDispI1" onclick="toggleInsp('I1')">
+          <span class="sd-val" id="sdValI1">— None —</span>
+          <span class="sd-arrow">▼</span>
+        </div>
+        <div class="sd-panel" id="sdPanelI1">
+          <div class="sd-search-row">
+            <input class="sd-search" id="sdSearchI1" placeholder="Search inspirations…" oninput="filterInsp('I1')" onclick="event.stopPropagation()">
+          </div>
+          <div class="sd-list" id="sdListI1"></div>
+        </div>
+      </div>
+      <input type="hidden" id="insp1Sel">
+    </div>
+    <div class="field">
+      <label>Mech Inspiration 2</label>
+      <div class="sd-wrap" id="sdWrapI2">
+        <div class="sd-display" id="sdDispI2" onclick="toggleInsp('I2')">
+          <span class="sd-val" id="sdValI2">— None —</span>
+          <span class="sd-arrow">▼</span>
+        </div>
+        <div class="sd-panel" id="sdPanelI2">
+          <div class="sd-search-row">
+            <input class="sd-search" id="sdSearchI2" placeholder="Search inspirations…" oninput="filterInsp('I2')" onclick="event.stopPropagation()">
+          </div>
+          <div class="sd-list" id="sdListI2"></div>
+        </div>
+      </div>
+      <input type="hidden" id="insp2Sel">
+    </div>
+  </div>
+</div>
+
+<!-- ACTIONS -->
+<div class="panel" style="padding:16px 20px;">
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="generateSingle()">▶ GENERATE MECH</button>
+    <button class="btn btn-outline" onclick="generateBatch()">⊞ BATCH × 10</button>
+    <button class="btn btn-outline" onclick="randomiseAll()">⚄ RANDOMISE ALL</button>
+    <button class="btn btn-ghost" onclick="saveFav()">♥ SAVE PROMPT</button>
+    <button class="btn btn-ghost" onclick="exportAll()">⬇ EXPORT .TXT</button>
+  </div>
+</div>
+
+<!-- OUTPUT -->
+<div class="panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+    <div class="panel-title" style="margin-bottom:0;">// OUTPUT PROMPT</div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-ghost" id="copyPromptBtn" onclick="copyPromptOnly()" style="padding:4px 12px;font-size:10px;">⎘ COPY PROMPT</button>
+      <button class="btn btn-ghost" id="copyOutBtn" onclick="copyOutput()" style="padding:4px 12px;font-size:10px;">⎘ COPY ALL</button>
+    </div>
+  </div>
+  <div class="output-box" id="output">// Select a configuration and generate your mech prompt...</div>
+  <div class="status-bar">
+    <div class="stat">SPECIES LOADED: <span id="speciesCount">0</span></div>
+    <div class="stat">MODE: <span id="modeLabel">INSECT</span></div>
+    <div class="stat">STYLE: <span id="styleLabel">DEFAULT</span></div>
+    <div class="stat">SAVED: <span id="favCount">0</span></div>
+  </div>
+</div>
+
+<!-- FAVOURITES -->
+<div class="panel" id="favsPanel">
+  <div class="panel-title">// SAVED PROMPTS</div>
+  <div class="favs-list" id="favsList">
+    <div class="empty-favs">// No saved prompts yet — generate and save your favourites</div>
+  </div>
+</div>
+
+<!-- LOAD SETTINGS -->
+<div class="panel" id="loadPanel">
+  <div class="panel-title">// LOAD SETTINGS FROM PROMPT</div>
+  <div style="font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;line-height:1.6;">
+    Paste a saved prompt below, or import a .txt file. The app will detect the embedded settings block and restore all fields.
+  </div>
+  <textarea id="loadTextarea" placeholder="// Paste a saved prompt here..." style="
+    width:100%;height:90px;background:#000;border:1px solid var(--border);border-radius:var(--radius);
+    color:#8ecfb8;font-family:'Rajdhani',sans-serif;font-size:12px;padding:10px;
+    outline:none;resize:vertical;line-height:1.6;
+  " oninput="onLoadTextareaInput()"></textarea>
+  <input type="file" id="loadFileInput" accept=".txt" style="display:none" onchange="onFileImport(event)">
+  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
+    <button class="btn btn-primary" id="loadBtn" onclick="loadFromText()" disabled style="opacity:.4;">⬆ RESTORE SETTINGS</button>
+    <button class="btn btn-outline" onclick="document.getElementById('loadFileInput').click()">📂 IMPORT .TXT</button>
+    <button class="btn btn-ghost" onclick="clearLoadPanel()">✕ CLEAR</button>
+    <span id="loadStatus" style="font-size:10px;letter-spacing:2px;color:var(--muted);"></span>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════════
+
+const INSECTS = {
+  // ── BEETLES ──────────────────────────────────────────────────────
+  "Rhinoceros Beetle":{body:"armored beetle chassis",armor:"reinforced shell",legs:"powerful legs",weapon:"ram horns"},
+  "Hercules Beetle":{body:"long-horned frame",armor:"reinforced carapace",legs:"tank legs",weapon:"horn ram"},
+  "Goliath Beetle":{body:"giant chassis",armor:"dense plates",legs:"strong limbs",weapon:"pincer jaws"},
+  "Stag Beetle":{body:"armored frame",armor:"horned shell",legs:"crawler legs",weapon:"horn attack"},
+  "Ironclad Beetle":{body:"heavily armored frame",armor:"iron shell",legs:"stubby legs",weapon:"crushing jaws"},
+  "Bombardier Beetle":{body:"blast chassis",armor:"heat-resistant plates",legs:"multi-jointed legs",weapon:"steam cannon"},
+  "Trilobite Beetle":{body:"trilobite shell frame",armor:"overlapping plates",legs:"multi-jointed legs",weapon:"crushing mandibles"},
+  "Tiger Beetle":{body:"fast predator frame",armor:"iridescent plates",legs:"sprint legs",weapon:"scissor jaws"},
+  "Diving Beetle":{body:"streamlined aquatic frame",armor:"waterproof shell",legs:"paddle limbs",weapon:"crushing bite"},
+  "Longhorn Beetle":{body:"elongated frame",armor:"banded plates",legs:"clinging limbs",weapon:"antenna whip"},
+  "Jewel Beetle":{body:"iridescent chassis",armor:"gem-like plates",legs:"agile legs",weapon:"heat beam"},
+  "Whirligig Beetle":{body:"disc-shaped frame",armor:"split-lens shell",legs:"rowing limbs",weapon:"vortex spin"},
+  "Firefly":{body:"luminescent frame",armor:"soft bioluminescent plates",legs:"landing limbs",weapon:"light pulse emitter"},
+  "Titan Beetle":{body:"enormous chassis",armor:"ultra-thick plates",legs:"powerful legs",weapon:"mandible shear"},
+  "Click Beetle":{body:"spring-loaded chassis",armor:"hard wing cases",legs:"snap legs",weapon:"kinetic launch"},
+  "Violin Beetle":{body:"flat violin-shaped frame",armor:"transparent wing edges",legs:"wide-gait legs",weapon:"acid ooze"},
+  "Dung Beetle":{body:"rounded hauler frame",armor:"rugged shell",legs:"grip legs",weapon:"rolling ram"},
+  "Ground Beetle":{body:"low-profile chassis",armor:"polished plates",legs:"patrol legs",weapon:"acid mandibles"},
+  "Bark Beetle":{body:"compact chassis",armor:"wood-pattern plates",legs:"grip claws",weapon:"bore drill"},
+  "Blister Beetle":{body:"slender frame",armor:"soft warning plates",legs:"walking limbs",weapon:"cantharidin sprayer"},
+  "Rove Beetle":{body:"flexible chassis",armor:"shortened elytra",legs:"swift legs",weapon:"gland spray"},
+  "Hister Beetle":{body:"compact box frame",armor:"polished black shell",legs:"burrowing limbs",weapon:"clamping jaws"},
+  "Soldier Beetle":{body:"narrow frame",armor:"soft plates",legs:"patrol limbs",weapon:"pheromone gun"},
+  "Atlas Beetle":{body:"Y-horned chassis",armor:"thick plates",legs:"tank legs",weapon:"triple horn"},
+  "Elephant Beetle":{body:"humped chassis",armor:"spotted plates",legs:"strong legs",weapon:"trunk ram"},
+  "Palo Verde Root Borer":{body:"large long-horned frame",armor:"mottled plates",legs:"burrowing legs",weapon:"antenna whip"},
+  "Wallace's Giant Bee":{body:"massive bee frame",armor:"dense fur-plates",legs:"pollen legs",weapon:"massive sting"},
+  // ── FLIES ────────────────────────────────────────────────────────
+  "Dragonfly":{body:"aerodynamic body",armor:"light plating",legs:"landing limbs",weapon:"precision targeting system"},
+  "Emperor Dragonfly":{body:"large aerial frame",armor:"banded thorax plates",legs:"basket limbs",weapon:"aerial snatch"},
+  "Glasstail Dragonfly":{body:"transparent-tailed frame",armor:"clear wing plates",legs:"perch limbs",weapon:"aerial ambush"},
+  "Damselfly":{body:"slender hovering frame",armor:"delicate wings",legs:"perch limbs",weapon:"precision grab"},
+  "Stalk-Eyed Fly":{body:"compact scout body",armor:"sensor dome",legs:"agile legs",weapon:"optic array"},
+  "Tsetse Fly":{body:"compact flying body",armor:"chitin plates",legs:"quick legs",weapon:"proboscis injector"},
+  "Horse Fly":{body:"robust flying body",armor:"hard wings",legs:"landing legs",weapon:"biting mouth"},
+  "Robber Fly":{body:"fast predatory frame",armor:"bristled plates",legs:"grip limbs",weapon:"stab beak"},
+  "Hoverfly":{body:"hovering chassis",armor:"bee-mimic plates",legs:"delicate limbs",weapon:"pollen cannon"},
+  "Crane Fly":{body:"long-limbed frame",armor:"fragile shell",legs:"dangling limbs",weapon:"decoy emitter"},
+  "Botfly":{body:"parasitic chassis",armor:"thick hide",legs:"gripping limbs",weapon:"larval injector"},
+  "Mayfly":{body:"ephemeral frame",armor:"transparent wings",legs:"brief-contact limbs",weapon:"swarm burst"},
+  "Blow Fly":{body:"metallic chassis",armor:"shiny plates",legs:"landing legs",weapon:"chemical sniffer"},
+  "Scorpion Fly":{body:"predatory frame",armor:"banded plates",legs:"grasping limbs",weapon:"tail sting"},
+  "Gnat":{body:"tiny flying frame",armor:"minimal plates",legs:"hovering limbs",weapon:"swarm burst"},
+  "Mosquito":{body:"slender flying frame",armor:"scale wings",legs:"landing legs",weapon:"blood lance"},
+  "Black Fly":{body:"humpbacked frame",armor:"dense plates",legs:"crawler legs",weapon:"blood slice"},
+  "Sand Fly":{body:"hairy tiny frame",armor:"held-wing plates",legs:"quick legs",weapon:"venom bite"},
+  "Fungus Gnat":{body:"slender frame",armor:"delicate wings",legs:"walking legs",weapon:"spore cloud"},
+  // ── WASPS & BEES ─────────────────────────────────────────────────
+  "Bumblebee":{body:"rounded flying chassis",armor:"honeycomb plating",legs:"pollen limbs",weapon:"venomous stinger"},
+  "Yellowjacket Wasp":{body:"slender body",armor:"hard exoskeleton",legs:"swift legs",weapon:"venom stinger"},
+  "Hornet":{body:"slender flying frame",armor:"hard banded plates",legs:"swift limbs",weapon:"venom stinger"},
+  "Japanese Giant Hornet":{body:"large flying frame",armor:"banded plates",legs:"swift legs",weapon:"mandible saw"},
+  "Tarantula Hawk":{body:"flying predator body",armor:"reinforced wing casing",legs:"grappling limbs",weapon:"paralysis stinger"},
+  "Paper Wasp":{body:"slender frame",armor:"segmented waist",legs:"dangling limbs",weapon:"venom lance"},
+  "Mud Dauber":{body:"needle-thin frame",armor:"clay-daubed plates",legs:"construction limbs",weapon:"sting lance"},
+  "Cicada Killer":{body:"large flying frame",armor:"banded plates",legs:"carrying limbs",weapon:"paralysis sting"},
+  "Orchid Bee":{body:"iridescent frame",armor:"metallic plates",legs:"pollen legs",weapon:"mandible snip"},
+  "Velvet Ant":{body:"fuzzy armored frame",armor:"dense fur plates",legs:"running limbs",weapon:"intense sting"},
+  "Cuckoo Wasp":{body:"gem-like frame",armor:"pitted metallic shell",legs:"agile limbs",weapon:"ovipositor dart"},
+  "Wood Wasp":{body:"robust frame",armor:"striped plates",legs:"grip limbs",weapon:"wood drill"},
+  "Giant Ichneumon Wasp":{body:"long-ovipositor frame",armor:"banded plates",legs:"grip limbs",weapon:"drill ovipositor"},
+  "Warrior Wasp":{body:"ranked colony frame",armor:"hard striped plates",legs:"marching limbs",weapon:"intense sting"},
+  // ── ANTS ─────────────────────────────────────────────────────────
+  "Fire Ant":{body:"agile frame",armor:"hard chitin exoskeleton",legs:"rapid legs",weapon:"acid bite"},
+  "Bullet Ant":{body:"large ant frame",armor:"tough chitin",legs:"powerful legs",weapon:"pain-inducing sting"},
+  "Army Ant":{body:"swarm chassis",armor:"massed plates",legs:"marching limbs",weapon:"mandible shear"},
+  "Driver Ant":{body:"colonial frame",armor:"massed armor",legs:"coordinated limbs",weapon:"mandible blade"},
+  "Carpenter Ant":{body:"large wood-boring frame",armor:"segmented shell",legs:"grip legs",weapon:"formic spray"},
+  "Leafcutter Ant":{body:"carrying frame",armor:"plate armor",legs:"worker limbs",weapon:"mandible saw"},
+  "Trap-Jaw Ant":{body:"fast-strike frame",armor:"hard chitin",legs:"sprint legs",weapon:"snap jaws"},
+  "Weaver Ant":{body:"arboreal frame",armor:"green chitin",legs:"silk limbs",weapon:"silk binder"},
+  // ── MANTIDS ──────────────────────────────────────────────────────
+  "Praying Mantis":{body:"slender predator frame",armor:"segmented armor",legs:"raptorial limbs",weapon:"scythe arms"},
+  "Orchid Mantis":{body:"floral torso",armor:"petal plating",legs:"bladed limbs",weapon:"raptorial scythe"},
+  "Dead Leaf Mantis":{body:"flat leaf-shaped frame",armor:"crinkled camouflage plates",legs:"twig limbs",weapon:"ambush claws"},
+  "Ghost Mantis":{body:"wispy frame",armor:"bark-pattern plates",legs:"swaying limbs",weapon:"raptorial strike"},
+  "Spiny Flower Mantis":{body:"spiral-patterned frame",armor:"eye-spot plates",legs:"grasping limbs",weapon:"spine lance"},
+  "Budwing Mantis":{body:"compact frame",armor:"camo wing plates",legs:"grip limbs",weapon:"raptorial claws"},
+  "Mantis Fly":{body:"raptorial flying frame",armor:"segmented armor",legs:"mantis-strike limbs",weapon:"raptorial claws"},
+  // ── TRUE BUGS (HEMIPTERA) ─────────────────────────────────────────
+  "Assassin Bug":{body:"predatory frame",armor:"armored exoskeleton",legs:"grasping legs",weapon:"piercing proboscis"},
+  "Treehopper":{body:"angular chassis",armor:"antenna plating",legs:"articulated legs",weapon:"spike emitter"},
+  "Cicada":{body:"resonant thorax",armor:"sound-dampening plates",legs:"gripping limbs",weapon:"sonic vibration cannon"},
+  "Leafhopper":{body:"slender jumping body",armor:"leaf-like plates",legs:"jumping legs",weapon:"spear limb"},
+  "Planthopper":{body:"slender frame",armor:"camouflage plates",legs:"jump legs",weapon:"piercing appendages"},
+  "Water Strider":{body:"floating chassis",armor:"hydrophobic plates",legs:"skimming limbs",weapon:"piercing claws"},
+  "Cockroach":{body:"hardy frame",armor:"armor plates",legs:"rapid limbs",weapon:"spiked mandibles"},
+  "Giant Water Bug":{body:"powerful aquatic frame",armor:"flat shell",legs:"oar limbs",weapon:"venom beak"},
+  "Backswimmer":{body:"inverted swimming frame",armor:"keel plates",legs:"rowing limbs",weapon:"piercing beak"},
+  "Shield Bug":{body:"shield-shaped chassis",armor:"heraldic plates",legs:"gripping limbs",weapon:"chemical spray"},
+  "Bed Bug":{body:"flat oval frame",armor:"reddish plates",legs:"crawling limbs",weapon:"blood lance"},
+  "Aphid":{body:"soft swarm body",armor:"waxy coat",legs:"clinging limbs",weapon:"honeydew pump"},
+  "Water Scorpion":{body:"flat aquatic frame",armor:"leaf-like plates",legs:"predatory limbs",weapon:"sting siphon"},
+  "Peanut Head Bug":{body:"hollow-head frame",armor:"peanut-shaped dome",legs:"stout legs",weapon:"false eye bluff"},
+  // ── MOTHS & BUTTERFLIES ───────────────────────────────────────────
+  "Monarch Butterfly":{body:"winged chassis",armor:"light scale plates",legs:"landing limbs",weapon:"gust launcher"},
+  "Blue Morpho Butterfly":{body:"iridescent wing chassis",armor:"reflective scale plates",legs:"landing limbs",weapon:"light refractor"},
+  "Glasswing Butterfly":{body:"transparent wing frame",armor:"clear plates",legs:"delicate limbs",weapon:"stealth glide"},
+  "Swallowtail Butterfly":{body:"tailed wing frame",armor:"patterned plates",legs:"landing limbs",weapon:"wing gust"},
+  "Queen Alexandra Birdwing":{body:"massive butterfly frame",armor:"teal-black wings",legs:"landing limbs",weapon:"wing gust"},
+  "Atlas Moth":{body:"large winged frame",armor:"thick wing plates",legs:"landing limbs",weapon:"wing blade"},
+  "Luna Moth":{body:"pale winged chassis",armor:"soft plates",legs:"landing limbs",weapon:"wind slashes"},
+  "Death's Head Hawk-Moth":{body:"robust frame",armor:"skull-patterned thorax",legs:"hover limbs",weapon:"squeak emitter"},
+  "Hawk Moth":{body:"streamlined hovering frame",armor:"camouflage wings",legs:"hovering limbs",weapon:"long proboscis"},
+  "Hummingbird Hawk-Moth":{body:"hovering frame",armor:"scaled plates",legs:"hover limbs",weapon:"long proboscis"},
+  "Peppered Moth":{body:"mottled frame",armor:"bark-pattern wings",legs:"resting limbs",weapon:"dust scatter"},
+  "Silkworm Moth":{body:"silk-wrapped frame",armor:"fiber plates",legs:"clinging limbs",weapon:"silk binder"},
+  "Io Moth":{body:"eyed-wing frame",armor:"eyespot plates",legs:"landing limbs",weapon:"false-eye bluff"},
+  "Comet Moth":{body:"tailed wing frame",armor:"gold-dusted plates",legs:"landing limbs",weapon:"wing slash"},
+  "Hercules Moth":{body:"largest-wing frame",armor:"pale wing plates",legs:"landing limbs",weapon:"wing gale"},
+  "Armyworm Moth":{body:"larval body",armor:"protective shell",legs:"crawling limbs",weapon:"acid nozzle"},
+  // ── GRASSHOPPERS, CRICKETS & LOCUSTS ─────────────────────────────
+  "Grasshopper":{body:"jumping frame",armor:"strong exoskeleton",legs:"long jump legs",weapon:"kicking limbs"},
+  "Cricket":{body:"chirping frame",armor:"thin plates",legs:"jump legs",weapon:"sonic strike"},
+  "Locust":{body:"swarm chassis",armor:"hard plates",legs:"launch legs",weapon:"mandible shear"},
+  "Katydid":{body:"leaf-shaped frame",armor:"vein-patterned plates",legs:"long legs",weapon:"stridulation pulse"},
+  "Mole Cricket":{body:"burrowing frame",armor:"velvety plates",legs:"shovel limbs",weapon:"underground strike"},
+  "Cave Cricket":{body:"humpbacked frame",armor:"pale plates",legs:"long sensory legs",weapon:"kick blast"},
+  "Weta":{body:"heavy armored frame",armor:"ridge-spiked plates",legs:"powerful legs",weapon:"spine defense"},
+  "Giant Weta":{body:"massive cricket frame",armor:"ridge-spiked plates",legs:"powerful legs",weapon:"spine defense"},
+  "Jerusalem Cricket":{body:"large burrowing frame",armor:"banded plates",legs:"digging legs",weapon:"bite crush"},
+  // ── STICK & LEAF INSECTS ─────────────────────────────────────────
+  "Stick Insect":{body:"elongated body",armor:"branch-like armor",legs:"flexible limbs",weapon:"grappling limbs"},
+  "Leaf Insect":{body:"flat leaf frame",armor:"vein-etched plates",legs:"swaying limbs",weapon:"camouflage burst"},
+  "Thorny Stick Insect":{body:"thorn-studded frame",armor:"spiked bark plates",legs:"gripping limbs",weapon:"spine rake"},
+  "Chan's Megastick":{body:"world's longest frame",armor:"branch-like plates",legs:"grip legs",weapon:"camouflage lock"},
+  // ── SPIDERS & ARACHNIDS ───────────────────────────────────────────
+  "Peacock Spider":{body:"ornate body",armor:"camouflage plates",legs:"agile limbs",weapon:"strike claws"},
+  "Whip Spider":{body:"flat stealth body",armor:"stealth plates",legs:"sensing limbs",weapon:"grasping claws"},
+  "Scorpion":{body:"armored segmented frame",armor:"hard carapace plates",legs:"crawler legs",weapon:"tail stinger"},
+  "Emperor Scorpion":{body:"large imperial frame",armor:"glossy black plates",legs:"crusher legs",weapon:"claw-sting combo"},
+  "Deathstalker Scorpion":{body:"slender lethal frame",armor:"yellow plates",legs:"fast legs",weapon:"neurotoxin sting"},
+  "Fat-Tail Scorpion":{body:"robust frame",armor:"thick plates",legs:"sturdy legs",weapon:"fat-tail sting"},
+  "Centipede":{body:"elongated segmented body",armor:"flex plates",legs:"many limbs",weapon:"mandible strike"},
+  "Giant Desert Centipede":{body:"large fast frame",armor:"plate rings",legs:"many sprint limbs",weapon:"venom claws"},
+  "Vietnamese Centipede":{body:"large armored frame",armor:"hard plates",legs:"many power limbs",weapon:"venom fangs"},
+  "Amazonian Giant Centipede":{body:"longest centipede frame",armor:"thick segments",legs:"many grip limbs",weapon:"bat-hunter fangs"},
+  "Millipede":{body:"long multi-segment frame",armor:"overlapping plates",legs:"crawler limbs",weapon:"cyanide spray"},
+  "Giant African Millipede":{body:"massive segmented frame",armor:"stacked rings",legs:"hundred limbs",weapon:"cyanide spray"},
+  "Harvestman":{body:"oval body long-limbed frame",armor:"minimal plates",legs:"stilted limbs",weapon:"chemical gland"},
+  "Vinegaroon":{body:"armored arachnid frame",armor:"dark hard plates",legs:"sensory limbs",weapon:"acid spray"},
+  "Giant Vinegaroon":{body:"large arachnid frame",armor:"dark hard plates",legs:"sensory limbs",weapon:"acid whip"},
+  "Sun Spider":{body:"fast hairy frame",armor:"divided body plates",legs:"sprint limbs",weapon:"giant chelicerae"},
+  "Camel Spider":{body:"large jaw-dominant frame",armor:"hairy plates",legs:"sprint limbs",weapon:"giant chelicerae"},
+  "Pseudoscorpion":{body:"tiny armored frame",armor:"hard plates",legs:"eight limbs",weapon:"venom claws"},
+  "Tailless Whip Scorpion":{body:"flat terror frame",armor:"wide body plates",legs:"long whip-limbs",weapon:"pedipalp crush"},
+  "Peacock Spider":{body:"ornate body",armor:"camouflage plates",legs:"agile limbs",weapon:"strike claws"},
+  "Goliath Bird-Eater":{body:"massive arachnid frame",armor:"dense hair plates",legs:"crushing legs",weapon:"hair barrage"},
+  "Black Widow Spider":{body:"round-abdomen frame",armor:"hourglass plates",legs:"web legs",weapon:"neurotoxin fang"},
+  "Funnel Web Spider":{body:"robust frame",armor:"glossy plates",legs:"speed limbs",weapon:"powerful fangs"},
+  "Trapdoor Spider":{body:"burrow frame",armor:"lid-door plates",legs:"ambush limbs",weapon:"spring trap"},
+  "Brazilian Wandering Spider":{body:"aggressive roaming frame",armor:"banded plates",legs:"sprint legs",weapon:"potent venom"},
+  "Huntsman Spider":{body:"flat wide-body frame",armor:"camo plates",legs:"lateral-spread legs",weapon:"rapid fangs"},
+  "Tarantula":{body:"hairy arachnid frame",armor:"urticating hairs",legs:"eight power legs",weapon:"fang venom"},
+  // ── TERMITES & SOCIAL ─────────────────────────────────────────────
+  "Termite":{body:"swarm chassis",armor:"soft armor",legs:"crawler limbs",weapon:"acid mandibles"},
+  "Termite Soldier":{body:"large-headed frame",armor:"reinforced head",legs:"patrol limbs",weapon:"mandible crusher"},
+  // ── PRIMITIVE & WINGLESS ─────────────────────────────────────────
+  "Earwig":{body:"slender chassis",armor:"winged plates",legs:"scuttling limbs",weapon:"forcep claws"},
+  "Silverfish":{body:"slender creeping frame",armor:"silver scales",legs:"crawler legs",weapon:"spike tail"},
+  "Firebrat":{body:"heat-resistant frame",armor:"bristled scales",legs:"runner legs",weapon:"escape dash"},
+  "Springtail":{body:"tiny jumping frame",armor:"waxy coat",legs:"furcula launch legs",weapon:"spring escape"},
+  "Bristletail":{body:"archaic frame",armor:"scaly plates",legs:"agile legs",weapon:"tail whip"},
+  "Flea":{body:"small jumping frame",armor:"chitin plates",legs:"spring legs",weapon:"piercing bite"},
+  "Body Louse":{body:"flat clinging frame",armor:"grip plates",legs:"claw limbs",weapon:"blood lance"},
+  "Webspinner":{body:"slender tunnel frame",armor:"silk-walled plates",legs:"running limbs",weapon:"silk cocoon"},
+  "Rock Crawler":{body:"cold-adapted frame",armor:"thin flexible plates",legs:"climbing limbs",weapon:"mandible grip"},
+  "Grylloblattid":{body:"wingless ice-crawler frame",armor:"soft plates",legs:"slow cold legs",weapon:"mandible grab"},
+  "Mantophasmatodea":{body:"predatory wingless frame",armor:"cylindrical plates",legs:"raptorial limbs",weapon:"grip claws"},
+  // ── LACEWINGS, ANTLIONS & RELATIVES ──────────────────────────────
+  "Lacewing":{body:"delicate frame",armor:"light wings",legs:"grasping limbs",weapon:"net launcher"},
+  "Antlion":{body:"burrowing body",armor:"dusty plates",legs:"digging limbs",weapon:"crushing jaws"},
+  "Owlfly":{body:"large-eyed aerial frame",armor:"patterned wings",legs:"perch limbs",weapon:"aerial ambush"},
+  "Giant Lacewing":{body:"large delicate frame",armor:"patterned wings",legs:"resting limbs",weapon:"pheromone cloud"},
+  // ── WATER INSECTS ─────────────────────────────────────────────────
+  "Water Boatman":{body:"oval aquatic frame",armor:"air-pocket shell",legs:"oar limbs",weapon:"scrape song"},
+  "Dobsonfly":{body:"large-winged frame",armor:"mottled wings",legs:"crawler legs",weapon:"mandible crush"},
+  "Giant Waterbug":{body:"large aquatic predator frame",armor:"flat back plates",legs:"capture limbs",weapon:"dissolve beak"},
+  "Raft Spider":{body:"surface-hunting frame",armor:"water-repellent plates",legs:"surface-run limbs",weapon:"vibration sense"},
+  "Diving Bell Spider":{body:"aquatic silk frame",armor:"air bubble shell",legs:"web limbs",weapon:"underwater web"},
+  // ── VELVET WORM & EXOTIC ─────────────────────────────────────────
+  "Velvet Worm":{body:"flexible body",armor:"soft armor",legs:"stubby limbs",weapon:"adhesive net"},
+  "Giraffe Weevil":{body:"elongated neck chassis",armor:"rigid plates",legs:"long limbs",weapon:"reach strike"},
+  "Violin Beetle":{body:"flat violin-shaped frame",armor:"transparent wing edges",legs:"wide-gait legs",weapon:"acid ooze"},
+  "Twisted-Wing Parasite":{body:"parasitic fan-wing frame",armor:"twisted elytra",legs:"grip limbs",weapon:"host injection"},
+  "Zorapteran":{body:"tiny social frame",armor:"minimal plates",legs:"worker legs",weapon:"fungus tools"},
+  "Barklouse":{body:"flattened bark frame",armor:"cryptic plates",legs:"sliding limbs",weapon:"silk spinner"},
+  "Angel Insect":{body:"tiny wood-boring frame",armor:"minimal plates",legs:"grip legs",weapon:"tunnel borer"},
+  "Thrips":{body:"tiny sliver frame",armor:"fringed wings",legs:"rasping limbs",weapon:"rasp mouth"},
+  "Scale Insect":{body:"armored disc frame",armor:"hard wax shell",legs:"anchor limbs",weapon:"phloem tap"},
+  "Mealybug":{body:"oval waxy frame",armor:"powdery coat",legs:"crawler limbs",weapon:"sap drainer"},
+  // ── ADDITIONAL BEETLES ────────────────────────────────────────────
+  "Emerald Ash Borer":{body:"sleek chassis",armor:"emerald plates",legs:"rapid legs",weapon:"drill mandibles"},
+  "Japanese Beetle":{body:"metallic body",armor:"hard plates",legs:"crawler legs",weapon:"mandible jaws"},
+  "Ladybug":{body:"rounded chassis",armor:"spotted shell",legs:"crawler legs",weapon:"acid spray"},
+  "Weevil":{body:"snouted frame",armor:"armored shell",legs:"crawler legs",weapon:"snout drill"},
+  "Cockchafer":{body:"heavy flying frame",armor:"thick exoskeleton",legs:"crawler legs",weapon:"mandible ram"},
+  "Leafcutter Bee":{body:"hairy frame",armor:"segment plates",legs:"cutting limbs",weapon:"mandible shear"},
+  // ── ADDITIONAL ARACHNIDS ──────────────────────────────────────────
+  "Solifuge":{body:"fast hairy frame",armor:"flexible plates",legs:"racing limbs",weapon:"chelicera crush"},
+  "Whip Scorpion":{body:"large arachnid frame",armor:"dark plates",legs:"tactile limbs",weapon:"acid whip"},
+  // ── ADDITIONAL BUGS ───────────────────────────────────────────────
+  "March Fly":{body:"stocky frame",armor:"hairy plates",legs:"slow legs",weapon:"blood lance"},
+  "Midge":{body:"slender tiny frame",armor:"soft wings",legs:"hovering limbs",weapon:"swarm cloud"},
+  "Glowworm":{body:"elongated glowing body",armor:"soft plates",legs:"crawler limbs",weapon:"light emitter"},
+  "Firefly Larva":{body:"soft-body crawler frame",armor:"segmented plates",legs:"crawler limbs",weapon:"bioluminescent lure"},
+  // ── ADDITIONAL MOTHS ──────────────────────────────────────────────
+  "Sphinx Moth":{body:"heavy-bodied hover frame",armor:"banded abdomen plates",legs:"hover limbs",weapon:"proboscis lance"},
+  "Garden Tiger Moth":{body:"aposematic frame",armor:"bold-pattern plates",legs:"landing limbs",weapon:"toxic hair spray"},
+  "Cinnabar Moth":{body:"red-and-black frame",armor:"warning plates",legs:"landing limbs",weapon:"alkaloid spray"},
+}
+
+const BEASTS = {
+  // Insects & Arachnids (from list)
+  "Tarantula (Mech)":{body:"heavy-legged spider mech frame",armor:"dense hair-plate armor",legs:"eight crushing legs",weapon:"fang venom injector"},
+  "Spider Queen":{body:"arachnid humanoid mech frame",armor:"silk-woven plates",legs:"eight articulated limbs",weapon:"silk-bind cannon"},
+
+  // Reptiles & Amphibians
+  "Dragon":{body:"winged apex mech frame",armor:"scale-reinforced plates",legs:"quad taloned limbs",weapon:"flame cannon"},
+  "Komodo Dragon":{body:"low tank-like stance frame",armor:"armored hide plates",legs:"wide crawler limbs",weapon:"venom bite"},
+  "Cobra":{body:"hooded head chassis",armor:"scale plating",legs:"serpentine drive limbs",weapon:"venom cannon"},
+  "Crocodile":{body:"hydraulic jaw armored frame",armor:"armored scute plates",legs:"low-slung crawler legs",weapon:"death-roll jaw"},
+  "Gecko":{body:"adhesive stealth frame",armor:"grip-pad plates",legs:"adhesive foot limbs",weapon:"camouflage burst"},
+  "Frog":{body:"spring-loaded joint frame",armor:"moist impact plates",legs:"launch limbs",weapon:"tongue harpoon"},
+  "Salamander":{body:"elemental skin chassis",armor:"molten-texture plates",legs:"agile limbs",weapon:"elemental spray"},
+
+  // Mammalian Predators
+  "Wolf":{body:"feral mech wolf frame",armor:"layered fur-metal plates",legs:"sprint limbs",weapon:"fang strike"},
+  "Lion":{body:"regal tank-like frame",armor:"mane-plate armor",legs:"power limbs",weapon:"claw rake"},
+  "Tiger":{body:"sleek hunter frame",armor:"stripe-patterned plates",legs:"pounce limbs",weapon:"fang slash"},
+  "Bear":{body:"brutal heavy-class frame",armor:"dense hide plates",legs:"crush limbs",weapon:"swipe claws"},
+  "Gorilla":{body:"bipedal powerhouse frame",armor:"knuckle-plate armor",legs:"ground-pound limbs",weapon:"fist cannon"},
+  "Panther":{body:"stealth mode frame",armor:"dark absorption plates",legs:"silent-stride limbs",weapon:"shadow slash"},
+  "Hyena":{body:"chaotic scavenger frame",armor:"asymmetric plates",legs:"loping limbs",weapon:"bone-crush jaws"},
+  "Rhino":{body:"armored battering-ram frame",armor:"thick layered hide plates",legs:"charge limbs",weapon:"horn ram"},
+  "Bull":{body:"charging power mech frame",armor:"muscle-plate armor",legs:"heavy-hoof limbs",weapon:"gore horns"},
+
+  // Avian
+  "Falcon":{body:"speed precision strike frame",armor:"swept-wing plates",legs:"talon limbs",weapon:"dive strike"},
+  "Owl":{body:"stealth night-vision frame",armor:"silent-feather plates",legs:"silent-grip limbs",weapon:"night optics"},
+  "Raven":{body:"dark gothic recon frame",armor:"dark feather plates",legs:"perch limbs",weapon:"shadow bolt"},
+  "Eagle":{body:"majestic aerial frame",armor:"patriot plates",legs:"talon-grip limbs",weapon:"diving strike"},
+  "Vulture":{body:"scavenger decayed-armor frame",armor:"weathered plates",legs:"hunched limbs",weapon:"acid bile"},
+  "Phoenix":{body:"flame-emitting rebirth frame",armor:"ember-plate armor",legs:"fire-trail limbs",weapon:"rebirth nova"},
+  "Bat":{body:"echolocation stealth frame",armor:"membrane wing plates",legs:"hanging limbs",weapon:"sonic pulse"},
+
+  // Aquatic & Amphibious
+  "Shark":{body:"torpedo sleek frame",armor:"denticle plates",legs:"fin drive limbs",weapon:"jaw crush"},
+  "Octopus":{body:"multi-appendage mech frame",armor:"chromatophore plates",legs:"eight flex limbs",weapon:"ink dispersal"},
+  "Squid":{body:"ink dispersal frame",armor:"mantle plates",legs:"tentacle limbs",weapon:"energy siphon"},
+  "Anglerfish":{body:"deep horror frame",armor:"dark bio-plates",legs:"fin limbs",weapon:"glowing lure trap"},
+  "Stingray":{body:"hovering glide frame",armor:"flat disc plates",legs:"undulating limbs",weapon:"barb sting"},
+  "Dolphin":{body:"streamlined scout frame",armor:"smooth plates",legs:"fin drive limbs",weapon:"sonic blast"},
+  "Lobster":{body:"armored exoskeleton frame",armor:"hard shell plates",legs:"crawler limbs",weapon:"claw crusher"},
+  "Man O'War":{body:"colonial float frame",armor:"translucent plates",legs:"tentacle limbs",weapon:"nematocyst grid"},
+  "Jellyfish":{body:"pulsing bell frame",armor:"transparent plates",legs:"trailing tentacle limbs",weapon:"venom net"},
+  "Giant Isopod":{body:"armored crustacean frame",armor:"overlapping scute plates",legs:"many crawler limbs",weapon:"mandible crush"},
+  "Kraken":{body:"tentacle oceanic horror frame",armor:"deep pressure plates",legs:"mass tentacle limbs",weapon:"crush-wrap tentacles"},
+  "Leviathan":{body:"massive deep-sea frame",armor:"abyssal armor plates",legs:"serpentine drive limbs",weapon:"void beam"},
+
+  // Alien & Mythic
+  "Xenomorph":{body:"biomechanical alien frame",armor:"exo-chitin plates",legs:"quad hind limbs",weapon:"acid blood spray"},
+  "Predator (Yautja)":{body:"hunting trophy frame",armor:"cloaking mesh plates",legs:"power limbs",weapon:"plasma caster"},
+  "Kaiju":{body:"colossal monster frame",armor:"ultra-thick hide plates",legs:"city-crusher limbs",weapon:"energy beam"},
+  "Chimera":{body:"multi-limbed hybrid frame",armor:"fused beast plates",legs:"mixed-type limbs",weapon:"elemental strike"},
+  "Hydra":{body:"multi-headed serpent frame",armor:"regenerating plates",legs:"serpentine base limbs",weapon:"multi-head bite"},
+  "Basilisk":{body:"serpentine mech-beast frame",armor:"petrifying plates",legs:"serpentine drive limbs",weapon:"gaze beam"},
+  "Cerberus":{body:"three-headed mech hound frame",armor:"tri-layer plates",legs:"power quad limbs",weapon:"tri-fang strike"},
+  "Manticore":{body:"lion-scorpion hybrid frame",armor:"composite plates",legs:"quad-strike limbs",weapon:"spine volley"},
+  "Behemoth":{body:"massive armored creature frame",armor:"mountain-thick plates",legs:"earth-shake limbs",weapon:"mass crush"},
+  "Mecha Godzilla":{body:"classic biomechanical kaiju frame",armor:"nuclear-alloy plates",legs:"city-scale limbs",weapon:"nuclear beam"},
+  "Godzilla":{body:"apex kaiju frame",armor:"nuclear-hardened plates",legs:"city-scale limbs",weapon:"atomic breath"},
+  "King Ghidorah":{body:"three-headed dragon frame",armor:"golden scale plates",legs:"wing-walk limbs",weapon:"gravity beam"},
+  "Mothra":{body:"giant moth deity frame",armor:"scale dust plates",legs:"landing limbs",weapon:"scale powder blast"},
+  "Biollante":{body:"plant-beast hybrid frame",armor:"vine-wrapped plates",legs:"root-anchor limbs",weapon:"acid vine spray"},
+  "Jorōgumo":{body:"spider-woman hybrid frame",armor:"silk-armored plates",legs:"eight silk limbs",weapon:"web trap"},
+  "Cthulhu":{body:"cosmic horror frame",armor:"reality-warping plates",legs:"tentacle base limbs",weapon:"madness ray"},
+
+  // Mythical / Supernatural
+  "Griffin":{body:"eagle-lion hybrid frame",armor:"feather-plate armor",legs:"talon-claw limbs",weapon:"dive slash"},
+  "Minotaur":{body:"bull-humanoid mech frame",armor:"labyrinth-plate armor",legs:"charge limbs",weapon:"axe-smash"},
+  "Pegasus":{body:"winged horse mech frame",armor:"cloud-plate armor",legs:"gallop limbs",weapon:"lightning strike"},
+  "Gargoyle":{body:"stone-mech guardian frame",armor:"stone-fused plates",legs:"perch limbs",weapon:"stone shard volley"},
+  "Golem":{body:"stone metal hybrid frame",armor:"earthen plates",legs:"heavy-tread limbs",weapon:"boulder crush"},
+  "Oni":{body:"Japanese demon-mech frame",armor:"iron-club plates",legs:"demon stride limbs",weapon:"thunder club"},
+
+  // Fantasy & Horror
+  "Wendigo":{body:"distorted biomech skeletal frame",armor:"bone-fused plates",legs:"elongated horror limbs",weapon:"cold grasp"},
+  "Werewolf":{body:"organic metal muscle fiber frame",armor:"adaptive plates",legs:"lunge limbs",weapon:"rending claws"},
+  "Vampire":{body:"sleek red-black armor frame",armor:"bat-wing cape plates",legs:"predator limbs",weapon:"fanged drain"},
+  "Demon":{body:"spiked armor molten-core frame",armor:"infernal plates",legs:"cloven-hoof limbs",weapon:"hellfire burst"},
+  "Reaper":{body:"scythe-arm floating cloak frame",armor:"void-black plates",legs:"floating limbs",weapon:"soul scythe"},
+
+  // Armored Creatures
+  "Pangolin":{body:"overlapping keratin scale frame",armor:"layered keratin plates",legs:"burrowing limbs",weapon:"curled battering ram"},
+  "Armadillo":{body:"jointed bony plate frame",armor:"osteoderm shell",legs:"burrowing limbs",weapon:"roll ram"},
+  "Tortoise":{body:"bony shell-fused frame",armor:"domed carapace",legs:"slow powerful limbs",weapon:"shell slam"},
+  "Horseshoe Crab":{body:"ancient carapace frame",armor:"tough horseshoe shell",legs:"ten crawler limbs",weapon:"spike tail"},
+  "Porcupine":{body:"quill-covered frame",armor:"barbed quill plates",legs:"lumber limbs",weapon:"quill volley"},
+  "Hedgehog":{body:"spine-coat frame",armor:"dense short spine plates",legs:"scurry limbs",weapon:"ball-curl slam"},
+  "Echidna":{body:"spine-fur hybrid frame",armor:"mixed spine plates",legs:"digging limbs",weapon:"spine launch"},
+  "Sea Urchin":{body:"calcite shell frame",armor:"spine-covered shell",legs:"tube-foot limbs",weapon:"spine barrage"},
+  "Nautilus":{body:"coiled shell chamber frame",armor:"hard coiled shell",legs:"tentacle limbs",weapon:"jet propulsion"},
+  "Boxfish":{body:"rigid bony outer-skeleton frame",armor:"scute-box plates",legs:"fin-drive limbs",weapon:"poison cloud"},
+  "Hippopotamus":{body:"dense nearly-bulletproof frame",armor:"thick hide plates",legs:"semi-aquatic limbs",weapon:"jaw crush"},
+  "Elephant":{body:"thick wrinkled skin frame",armor:"layered hide plates",legs:"column limbs",weapon:"tusk ram"},
+  "Rhinoceros (Beast)":{body:"thick layered skin frame",armor:"layered horn plates",legs:"charge limbs",weapon:"horn gore"},
+
+  // Misc
+  "Gnome":{body:"compact earth-bound frame",armor:"stone-stitch plates",legs:"stubby limbs",weapon:"earth spike"},
+}
+
+const COLOURS = [
+  "midnight black and toxic green","blood crimson and bone white","deep ocean blue and bioluminescent teal",
+  "obsidian black and molten orange","iridescent beetle green","rust-red and copper","arctic white and ice blue",
+  "void black and violet plasma","amber and charred black","chrome silver and electric blue",
+  "jungle green and mud brown","emerald and gold","ash grey and acid yellow","deep purple and silver",
+  "volcanic red and soot black","bronze and verdigris","pearl white and rose gold","shadow black and ghost white",
+  "neon coral and deep navy","desert sand and burnt sienna","malachite green and iron grey",
+  "oil-slick rainbow","abyssal black and pale cyan","war-worn olive and rust","bioluminescent blue-green",
+  "scarlet and pitch black","titanium white and midnight blue","forest camouflage pattern",
+  "carapace brown and amber","gunmetal grey and toxic yellow",
+]
+
+const MATERIALS = [
+  // Natural-inspired
+  "living chitin-steel hybrid","bio-organic mech tissue","coral-infused metal",
+  "bone-lattice composite","keratin-reinforced plating","calcified shell-alloy",
+  "venom-soaked titanium","silk-woven carbon fiber","crystallized carapace alloy",
+  "bark-fused iron plates","deep-sea pressure metal","root-infused obsidian",
+  // Industrial
+  "titanium alloy","carbon fiber plating","obsidian armor","nano-ceramic composite",
+  "plasma-forged chromite","magnetized ferrofluid shell","reactive smart-metal",
+  "graphene-wrapped steel","void-cast iron","neutronium plating",
+  // Exotic
+  "living muscle-metal hybrid","ghost-phase alloy","bioluminescent polymer shell",
+  "shadow-forged dark matter plates","ancient stone-fused mech hide","phoenix-tempered alloy",
+  "kraken-ink composite","cursed bone-metal","soul-forged obsidian","radioactive isotope shell",
+]
+
+const ENVIRONMENTS = [
+  "deep ocean trench","volcanic wasteland","dense jungle","arctic tundra",
+  "alien biome","post-apocalyptic megacity","gas giant atmosphere",
+  "crystalline cave system","irradiated wetlands","desert storm",
+  "sunken ancient ruins","zero-gravity asteroid field","flooded neon cityscape",
+  "primordial forest","scorched nuclear wasteland","bioluminescent deep sea",
+  "frozen tundra glacier","smoldering lava fields","overgrown megastructure",
+]
+
+const LIGHTING = [
+  "cinematic dramatic lighting","bioluminescent glow","harsh industrial floodlights",
+  "blood-red sunset","stormy lightning strikes","neon city reflections",
+  "deep ocean darkness with glowing lures","volcanic firelight","aurora borealis glow",
+  "eclipse backlight silhouette","thick fog diffused light","hyperrealistic golden hour",
+  "UV black-light fluorescence","cold moonlight","heat-shimmer haze",
+]
+
+const INSPIRATIONS = [
+  "Armored Core",
+  "Battle of the Planets / Gatchaman Standard Flight Formation",
+  "Battletech MechWarrior",
+  "Big Hero 6 (Baymax Armor Mode)",
+  "Chappie",
+  "ED-209",
+  "Elysium Exosuit",
+  "Evangelion",
+  "Gipsy Danger",
+  "Gundam",
+  "Gurren Lagann",
+  "Hulkbuster",
+  "Iron Man Godbuster Armor",
+  "Iron Man Godkiller Armor",
+  "Iron Man Mark 1 Prototype",
+  "Iron Man Mark XXXVIII Igor",
+  "Iron Man Phoenix Killer Armor",
+  "Iron Man Thorbuster Armor",
+  "Laputa Robot Soldier (Castle in the Sky)",
+  "Macross VF-1 Valkyrie",
+  "Mazinger Z",
+  "Mecha Godzilla",
+  "Megas XLR",
+  "Metal Gear Ray",
+  "Metal Gear Rex",
+  "Metal Gear Sahelanthropus",
+  "Nier Automata YoRHa Units",
+  "Optimus Prime",
+  "Pacific Rim Gypsy Avenger",
+  "Pacific Rim Jaeger",
+  "Pacific Rim Obsidian Fury",
+  "Pacific Rim Saber Athena",
+  "Patlabor",
+  "Photorealistic Crysis Nanosuit",
+  "Photorealistic The Sentinel from The Matrix",
+  "Power Rangers Megazord",
+  "Robot Knights (Castle in the Sky / Howl's Moving Castle)",
+  "Robocop",
+  "Samurai Iron Man (Manga Verse / Toyline)",
+  "Sentinel (from X-Men)",
+  "Sym-Bionic Titan robot",
+  "Terminator Endoskeleton",
+  "The Iron Giant",
+  "Titanfall Titans",
+  "Transformers",
+  "Ultron",
+  "Voltron",
+  "Zoids",
+]
+
+const COLOUR_MODIFIERS = [
+  { value:'',              label:'— None —' },
+  // Luminosity & light
+  { value:'bioluminescent',        label:'Bioluminescent — self-emitting organic glow' },
+  { value:'iridescent',            label:'Iridescent — shifts hue at different angles' },
+  { value:'phosphorescent',        label:'Phosphorescent — glows after absorbing light' },
+  { value:'chromatic aberration',  label:'Chromatic Aberration — rainbow fringe on edges' },
+  { value:'neon backlit',          label:'Neon Backlit — vivid electric inner glow' },
+  { value:'subsurface scattering', label:'Subsurface Scattering — light bleeds through surface' },
+  { value:'retroreflective',       label:'Retroreflective — high-vis tape-like shine' },
+  { value:'fluorescent',           label:'Fluorescent — intensely vivid under UV' },
+  // Surface texture & finish
+  { value:'metallic sheen',        label:'Metallic Sheen — polished reflective finish' },
+  { value:'brushed metal',         label:'Brushed Metal — directional fine-grained finish' },
+  { value:'oil-slick',             label:'Oil-Slick — rainbow swirl on dark surface' },
+  { value:'oxidised patina',       label:'Oxidised Patina — aged verdigris or rust bloom' },
+  { value:'holographic foil',      label:'Holographic Foil — colour-shifting prismatic foil' },
+  { value:'matte void',            label:'Matte Void — light-absorbing flat finish' },
+  { value:'cracked enamel',        label:'Cracked Enamel — ceramic glaze with fracture lines' },
+  { value:'carbon fibre weave',    label:'Carbon Fibre Weave — dark lattice texture' },
+  { value:'battle-worn',           label:'Battle-Worn — scuffed, scratched, chipped edges' },
+  { value:'heat-scorched',         label:'Heat-Scorched — burn marks and temper colours' },
+  { value:'crystalline facets',    label:'Crystalline Facets — geometric refracting planes' },
+  // Organic & material
+  { value:'translucent chitin',    label:'Translucent Chitin — semi-see-through insect shell' },
+  { value:'wet membrane',          label:'Wet Membrane — glistening organic tissue' },
+  { value:'venom-infused',         label:'Venom-Infused — toxic warning colouration' },
+  { value:'bioluminescent veins',  label:'Bioluminescent Veins — glowing vein network' },
+  { value:'bio-reactive',          label:'Bio-Reactive — colour shifts with movement/heat' },
+  { value:'coral encrusted',       label:'Coral Encrusted — rough calcified nodule texture' },
+  // Energy & plasma
+  { value:'plasma discharge',      label:'Plasma Discharge — arcing energy along edges' },
+  { value:'void energy',           label:'Void Energy — deep space darkness with particle glow' },
+  { value:'molten core bleed',     label:'Molten Core Bleed — glowing cracks leaking heat' },
+  { value:'arc welding glow',      label:'Arc Welding Glow — intense white-blue edge burn' },
+  { value:'electromagnetic pulse', label:'Electromagnetic Pulse — distortion aura' },
+]
+
+const STYLE_MODS = {
+  default: { adj:"hyper detailed, photorealistic, concept art", suffix:"cinematic composition, 8K render" },
+  horror:  { adj:"grotesque biomechanical horror, visceral, disturbing detail", suffix:"dark atmospheric, horror lighting, unsettling scale" },
+  scifi:   { adj:"hard sci-fi, technical blueprint aesthetic, greebled surfaces", suffix:"sci-fi concept art, holographic HUD elements, technical render" },
+  fantasy: { adj:"fantasy epic art, painterly, mythic scale", suffix:"epic fantasy illustration, ethereal energy effects, grand scale" },
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// COLOUR TUNER
+// ═══════════════════════════════════════════════════════════════════
+
+// Seed colours for each palette entry [colA_hex, colB_hex, labelA, labelB]
+const PALETTE_SEEDS = {
+  "abyssal black and pale cyan":          ["#0a0a0f","#a8f0f0","Abyssal Black","Pale Cyan"],
+  "amber and charred black":              ["#ffb300","#1a0f00","Amber","Charred Black"],
+  "arctic white and ice blue":            ["#f0f8ff","#4db8d4","Arctic White","Ice Blue"],
+  "ash grey and acid yellow":             ["#6b6b6b","#ccff00","Ash Grey","Acid Yellow"],
+  "bioluminescent blue-green":            ["#00ffcc","#005544","Bioluminescent Blue","Bioluminescent Green"],
+  "blood crimson and bone white":         ["#8b0000","#f5f0e8","Blood Crimson","Bone White"],
+  "bronze and verdigris":                 ["#cd7f32","#40826d","Bronze","Verdigris"],
+  "carapace brown and amber":             ["#4a3728","#ffb300","Carapace Brown","Amber"],
+  "chrome silver and electric blue":      ["#c0c0c0","#0066ff","Chrome Silver","Electric Blue"],
+  "deep ocean blue and bioluminescent teal":["#003366","#00ffcc","Deep Ocean Blue","Bioluminescent Teal"],
+  "deep purple and silver":               ["#2d0057","#c0c0c0","Deep Purple","Silver"],
+  "desert sand and burnt sienna":         ["#d4b483","#8b4513","Desert Sand","Burnt Sienna"],
+  "emerald and gold":                     ["#009b77","#ffd700","Emerald","Gold"],
+  "forest camouflage pattern":            ["#4a5c3a","#2d3a1e","Forest Green","Dark Olive"],
+  "gunmetal grey and toxic yellow":       ["#2a2d2e","#ccff00","Gunmetal Grey","Toxic Yellow"],
+  "iridescent beetle green":              ["#3ab54a","#8dff8d","Iridescent Green","Beetle Sheen"],
+  "jungle green and mud brown":           ["#2d5a27","#6b4c2a","Jungle Green","Mud Brown"],
+  "malachite green and iron grey":        ["#0bda51","#4a4a4a","Malachite Green","Iron Grey"],
+  "midnight black and toxic green":       ["#0a0a0a","#39ff14","Midnight Black","Toxic Green"],
+  "neon coral and deep navy":             ["#ff6b6b","#001f3f","Neon Coral","Deep Navy"],
+  "obsidian black and molten orange":     ["#0d0d0d","#ff6600","Obsidian Black","Molten Orange"],
+  "oil-slick rainbow":                    ["#1a0033","#ff00ff","Oil-Slick Dark","Oil-Slick Sheen"],
+  "pearl white and rose gold":            ["#f8f8f0","#b76e79","Pearl White","Rose Gold"],
+  "rust-red and copper":                  ["#8b2500","#b87333","Rust Red","Copper"],
+  "scarlet and pitch black":              ["#cc0000","#0a0a0a","Scarlet","Pitch Black"],
+  "shadow black and ghost white":         ["#111111","#f5f5f5","Shadow Black","Ghost White"],
+  "titanium white and midnight blue":     ["#e8e8e8","#191970","Titanium White","Midnight Blue"],
+  "void black and violet plasma":         ["#050008","#8b00ff","Void Black","Violet Plasma"],
+  "volcanic red and soot black":          ["#cc2200","#1a1008","Volcanic Red","Soot Black"],
+  "war-worn olive and rust":              ["#6b6b47","#7a3b1e","War-Worn Olive","Rust"],
+}
+
+// Colour state
+const colState = { A: '#888888', B: '#444444', nameA: '', nameB: '' }
+
+function hexToHSL(hex) {
+  let r = parseInt(hex.slice(1,3),16)/255
+  let g = parseInt(hex.slice(3,5),16)/255
+  let b = parseInt(hex.slice(5,7),16)/255
+  const max=Math.max(r,g,b), min=Math.min(r,g,b)
+  let h,s,l=(max+min)/2
+  if(max===min){ h=s=0 } else {
+    const d=max-min; s=l>0.5?d/(2-max-min):d/(max+min)
+    switch(max){ case r:h=((g-b)/d+(g<b?6:0))/6;break; case g:h=((b-r)/d+2)/6;break; case b:h=((r-g)/d+4)/6;break }
+  }
+  return [Math.round(h*360), Math.round(s*100), Math.round(l*100)]
+}
+
+function hslToHex(h,s,l) {
+  s/=100; l/=100
+  const a=s*Math.min(l,1-l)
+  const f=n=>{ const k=(n+h/30)%12; const c=l-a*Math.max(Math.min(k-3,9-k,1),-1); return Math.round(255*c).toString(16).padStart(2,'0') }
+  return `#${f(0)}${f(8)}${f(4)}`
+}
+
+function hexToName(hex) {
+  // Return a human-readable description based on HSL
+  const [h,s,l] = hexToHSL(hex)
+  let hue='', sat='', lit=''
+  if(s<10) hue='grey'
+  else if(h<15||h>=345) hue='red'
+  else if(h<40) hue='orange'
+  else if(h<65) hue='yellow'
+  else if(h<150) hue='green'
+  else if(h<195) hue='cyan'
+  else if(h<255) hue='blue'
+  else if(h<290) hue='purple'
+  else if(h<345) hue='pink'
+  if(l<12) return 'near black'
+  if(l>92) return 'near white'
+  lit = l<30?'dark ':l>70?'light ':''
+  sat = s<25?'muted ':s>75?'vivid ':''
+  return `${lit}${sat}${hue}`
+}
+
+function updatePickerUI(slot, hex) {
+  colState[slot] = hex
+  const [h,s,l] = hexToHSL(hex)
+  document.getElementById('col'+slot+'H').value = h
+  document.getElementById('col'+slot+'S').value = s
+  document.getElementById('col'+slot+'L').value = l
+  document.getElementById('col'+slot+'Hv').value = h
+  document.getElementById('col'+slot+'Sv').value = s
+  document.getElementById('col'+slot+'Lv').value = l
+  document.getElementById('col'+slot+'Hex').textContent = hex.toUpperCase()
+  document.getElementById('col'+slot+'Label').textContent = colState['name'+slot] || hexToName(hex)
+  document.getElementById('swatch'+slot).style.background = hex
+  document.getElementById('preview'+slot).style.background = hex
+  updateTunerSummary()
+}
+
+function updateTunerSummary() {
+  const nameA = document.getElementById('colALabel').textContent
+  const nameB = document.getElementById('colBLabel').textContent
+  const modA = document.getElementById('modA') ? document.getElementById('modA').value : ''
+  const modB = document.getElementById('modB') ? document.getElementById('modB').value : ''
+  const partA = modA ? `${modA} ${nameA} (${colState.A.toUpperCase()})` : `${nameA} (${colState.A.toUpperCase()})`
+  const partB = modB ? `${modB} ${nameB} (${colState.B.toUpperCase()})` : `${nameB} (${colState.B.toUpperCase()})`
+  document.getElementById('tunerSummary').textContent = `Prompt: "${partA} and ${partB}"`
+}
+
+function onHSLChange(slot) {
+  const h = +document.getElementById('col'+slot+'H').value
+  const s = +document.getElementById('col'+slot+'S').value
+  const l = +document.getElementById('col'+slot+'L').value
+  const hex = hslToHex(h,s,l)
+  colState[slot] = hex
+  colState['name'+slot] = ''  // clear seeded name — auto-name takes over
+  document.getElementById('col'+slot+'Hv').value = h
+  document.getElementById('col'+slot+'Sv').value = s
+  document.getElementById('col'+slot+'Lv').value = l
+  document.getElementById('col'+slot+'Hex').textContent = hex.toUpperCase()
+  document.getElementById('col'+slot+'Label').textContent = hexToName(hex)
+  document.getElementById('swatch'+slot).style.background = hex
+  document.getElementById('preview'+slot).style.background = hex
+  updateTunerSummary()
+}
+
+function onValueInput(slot, channel) {
+  const inputEl = document.getElementById('col'+slot+channel+'v')
+  const max = channel === 'H' ? 360 : 100
+  let val = Math.max(0, Math.min(max, parseInt(inputEl.value) || 0))
+  inputEl.value = val
+  document.getElementById('col'+slot+channel).value = val
+  const h = +document.getElementById('col'+slot+'Hv').value
+  const s = +document.getElementById('col'+slot+'Sv').value
+  const l = +document.getElementById('col'+slot+'Lv').value
+  const hex = hslToHex(h,s,l)
+  colState[slot] = hex
+  colState['name'+slot] = ''  // clear seeded name — auto-name takes over
+  document.getElementById('col'+slot+'Hex').textContent = hex.toUpperCase()
+  document.getElementById('col'+slot+'Label').textContent = hexToName(hex)
+  document.getElementById('swatch'+slot).style.background = hex
+  document.getElementById('preview'+slot).style.background = hex
+  updateTunerSummary()
+}
+
+function onPaletteChange() {
+  const val = document.getElementById('colourSel').value
+  const tuner = document.getElementById('colourTuner')
+  if (!val) { tuner.style.display='none'; return }
+  tuner.style.display = 'block'
+  const seed = PALETTE_SEEDS[val]
+  if (seed) {
+    colState.nameA = seed[2]; colState.nameB = seed[3]
+    document.getElementById('colALabel').textContent = seed[2].toUpperCase()
+    document.getElementById('colBLabel').textContent = seed[3].toUpperCase()
+    updatePickerUI('A', seed[0])
+    updatePickerUI('B', seed[1])
+  } else {
+    colState.nameA = 'Colour 1'; colState.nameB = 'Colour 2'
+    document.getElementById('colALabel').textContent = 'COLOUR 1'
+    document.getElementById('colBLabel').textContent = 'COLOUR 2'
+    updatePickerUI('A', '#888888')
+    updatePickerUI('B', '#444444')
+  }
+}
+
+function getColourString() {
+  const palette = document.getElementById('colourSel').value
+  const tuner = document.getElementById('colourTuner')
+  if (!palette || tuner.style.display === 'none') return palette
+  const nameA = document.getElementById('colALabel').textContent
+  const nameB = document.getElementById('colBLabel').textContent
+  const modA = document.getElementById('modA').value
+  const modB = document.getElementById('modB').value
+  const partA = modA ? `${modA} ${nameA} (${colState.A.toUpperCase()})` : `${nameA} (${colState.A.toUpperCase()})`
+  const partB = modB ? `${modB} ${nameB} (${colState.B.toUpperCase()})` : `${nameB} (${colState.B.toUpperCase()})`
+  return `${palette}, fine-tuned to ${partA} and ${partB}`
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let currentMode = 'insect'
+let currentPreset = 'default'
+let favourites = []
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+function getList(slot){
+  // slot = 'A' or 'B', used in fusion mode to split the lists
+  if (currentMode === 'insect') return INSECTS
+  if (currentMode === 'beast')  return BEASTS
+  // fusion: A = insects, B = beasts
+  return slot === 'B' ? BEASTS : INSECTS
+}
+
+// Insect mode groups — keys must exactly match INSECTS keys
+const INSECT_GROUPS = {
+  "🪲 Beetles":        ["Rhinoceros Beetle","Hercules Beetle","Goliath Beetle","Stag Beetle","Ironclad Beetle","Bombardier Beetle","Trilobite Beetle","Tiger Beetle","Diving Beetle","Longhorn Beetle","Jewel Beetle","Whirligig Beetle","Firefly","Titan Beetle","Click Beetle","Violin Beetle","Dung Beetle","Ground Beetle","Bark Beetle","Blister Beetle","Rove Beetle","Hister Beetle","Soldier Beetle","Atlas Beetle","Elephant Beetle","Palo Verde Root Borer","Emerald Ash Borer","Japanese Beetle","Ladybug","Weevil","Cockchafer"],
+  "🦟 Flies & Midges": ["Dragonfly","Emperor Dragonfly","Glasstail Dragonfly","Damselfly","Stalk-Eyed Fly","Tsetse Fly","Horse Fly","Robber Fly","Hoverfly","Crane Fly","Botfly","Mayfly","Blow Fly","Scorpion Fly","Gnat","Mosquito","Black Fly","Sand Fly","Fungus Gnat","Midge","March Fly"],
+  "🐝 Wasps & Bees":   ["Bumblebee","Yellowjacket Wasp","Hornet","Japanese Giant Hornet","Tarantula Hawk","Paper Wasp","Mud Dauber","Cicada Killer","Orchid Bee","Velvet Ant","Cuckoo Wasp","Wood Wasp","Giant Ichneumon Wasp","Warrior Wasp","Wallace's Giant Bee","Leafcutter Bee"],
+  "🐜 Ants":           ["Fire Ant","Bullet Ant","Army Ant","Driver Ant","Carpenter Ant","Leafcutter Ant","Trap-Jaw Ant","Weaver Ant"],
+  "🦗 Mantids":        ["Praying Mantis","Orchid Mantis","Dead Leaf Mantis","Ghost Mantis","Spiny Flower Mantis","Budwing Mantis","Mantis Fly"],
+  "🐛 True Bugs":      ["Assassin Bug","Treehopper","Cicada","Leafhopper","Planthopper","Water Strider","Cockroach","Giant Water Bug","Backswimmer","Shield Bug","Bed Bug","Aphid","Water Scorpion","Peanut Head Bug","Thrips","Scale Insect","Mealybug"],
+  "🦋 Moths & Butterflies": ["Monarch Butterfly","Blue Morpho Butterfly","Glasswing Butterfly","Swallowtail Butterfly","Queen Alexandra Birdwing","Atlas Moth","Luna Moth","Death's Head Hawk-Moth","Hawk Moth","Hummingbird Hawk-Moth","Peppered Moth","Silkworm Moth","Io Moth","Comet Moth","Hercules Moth","Armyworm Moth","Sphinx Moth","Garden Tiger Moth","Cinnabar Moth"],
+  "🦗 Grasshoppers & Crickets": ["Grasshopper","Cricket","Locust","Katydid","Mole Cricket","Cave Cricket","Weta","Giant Weta","Jerusalem Cricket"],
+  "🌿 Stick & Leaf Insects": ["Stick Insect","Leaf Insect","Thorny Stick Insect","Chan's Megastick"],
+  "🕷 Spiders & Arachnids": ["Peacock Spider","Whip Spider","Scorpion","Emperor Scorpion","Deathstalker Scorpion","Fat-Tail Scorpion","Centipede","Giant Desert Centipede","Vietnamese Centipede","Amazonian Giant Centipede","Millipede","Giant African Millipede","Harvestman","Vinegaroon","Giant Vinegaroon","Sun Spider","Camel Spider","Pseudoscorpion","Tailless Whip Scorpion","Goliath Bird-Eater","Black Widow Spider","Funnel Web Spider","Trapdoor Spider","Brazilian Wandering Spider","Huntsman Spider","Tarantula","Solifuge","Whip Scorpion"],
+  "🪲 Termites & Social": ["Termite","Termite Soldier"],
+  "🦟 Primitive & Wingless": ["Earwig","Silverfish","Firebrat","Springtail","Bristletail","Flea","Body Louse","Webspinner","Rock Crawler","Grylloblattid","Mantophasmatodea"],
+  "🌊 Water Insects":  ["Water Boatman","Dobsonfly","Giant Waterbug","Raft Spider","Diving Bell Spider"],
+  "🔬 Lacewings & Antlions": ["Lacewing","Antlion","Owlfly","Giant Lacewing"],
+  "🌿 Exotic & Rare":  ["Velvet Worm","Giraffe Weevil","Twisted-Wing Parasite","Zorapteran","Barklouse","Angel Insect","Glowworm","Firefly Larva"],
+}
+
+function addGroupedOptions(selectEl, groups) {
+  selectEl.innerHTML = ''
+  let totalAdded = 0
+  for (const [groupName, members] of Object.entries(groups)) {
+    const sorted = [...members].sort((a,b) => a.localeCompare(b))
+    const og = document.createElement('optgroup')
+    og.label = groupName
+    sorted.forEach(name => {
+      if (INSECTS[name]) { // only add if exists in data
+        og.appendChild(new Option(name, name))
+        totalAdded++
+      }
+    })
+    if (og.children.length) selectEl.appendChild(og)
+  }
+  return totalAdded
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WIKIPEDIA THUMBNAIL ENGINE
+// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// THUMBNAIL ENGINE — iNaturalist → Wikimedia Commons cascade
+// ═══════════════════════════════════════════════════════════════════
+const imgCache   = {}  // name → { thumb, large, source } | 'missing' | 'loading'
+
+// Search term overrides for iNaturalist / Wikimedia
+const SEARCH_OVERRIDES = {
+  "Tarantula (Mech)":          "tarantula",
+  "Spider Queen":               "spider",
+  "Rhinoceros (Beast)":         "rhinoceros",
+  "Man O'War":                  "Portuguese man o' war",
+  "Glasstail Dragonfly":        "dragonfly",
+  "Budwing Mantis":             "Gongylus gongyloides",
+  "Spiny Flower Mantis":        "Pseudocreobotra wahlbergii",
+  "Dead Leaf Mantis":           "Deroplatys dessicata",
+  "Tailless Whip Scorpion":     "Amblypygi",
+  "Grylloblattid":              "Grylloblattidae",
+  "Mantophasmatodea":           "Mantophasmatodea",
+  "Zorapteran":                 "Zoraptera",
+  "Barklouse":                  "Psocoptera",
+  "Angel Insect":               "Zoraptera",
+  "Diving Bell Spider":         "Argyroneta aquatica",
+  "Raft Spider":                "Dolomedes",
+  "Hister Beetle":              "Histeridae",
+  "Soldier Beetle":             "Cantharidae",
+  "Palo Verde Root Borer":      "Derobrachus hovorei",
+  "Rove Beetle":                "Staphylinidae",
+  "Blister Beetle":             "Meloidae",
+  "Solifuge":                   "Solifugae",
+  "Whip Scorpion":              "Uropygi",
+  "Body Louse":                 "Pediculus humanus",
+  "Rock Crawler":               "Grylloblattidae",
+  "Webspinner":                 "Embioptera",
+  "Twisted-Wing Parasite":      "Strepsiptera",
+  "Firefly Larva":              "Lampyridae",
+  "Glasswing Butterfly":        "Greta oto",
+  "Io Moth":                    "Automeris io",
+  "Comet Moth":                 "Argema mittrei",
+  "Sphinx Moth":                "Sphingidae",
+  "Cinnabar Moth":              "Tyria jacobaeae",
+  "Garden Tiger Moth":          "Arctia caja",
+  "Chan's Megastick":           "Phobaeticus chani",
+  "Giant Weta":                 "Deinacrida",
+  "Weta":                       "Anostostomatidae",
+  "Vinegaroon":                 "Mastigoproctus giganteus",
+  "Giant Vinegaroon":           "Mastigoproctus giganteus",
+  "Sun Spider":                 "Solifugae",
+  "Camel Spider":               "Solifugae",
+  "Pseudoscorpion":             "Pseudoscorpiones",
+  "Whip Spider":                "Amblypygi",
+  "Velvet Worm":                "Peripatidae",
+  "Springtail":                 "Collembola",
+  "Bristletail":                "Archaeognatha",
+  "Firebrat":                   "Thermobia domestica",
+  "Cockchafer":                 "Melolontha melolontha",
+  "Glowworm":                   "Lampyris noctiluca",
+  "Water Scorpion":             "Nepa cinerea",
+  "Giant Waterbug":             "Lethocerus americanus",
+  "Mole Cricket":               "Gryllotalpa gryllotalpa",
+  "Cave Cricket":               "Rhaphidophoridae",
+  "Jerusalem Cricket":          "Stenopelmatus",
+  "Peanut Head Bug":            "Fulgora laternaria",
+  "Violin Beetle":              "Mormolyce phyllodes",
+  "Giraffe Weevil":             "Trachelophorus giraffa",
+  "Jewel Beetle":               "Buprestidae",
+  "Atlas Beetle":               "Chalcosoma atlas",
+  "Elephant Beetle":            "Megasoma elephas",
+  // Beast mode
+  "Predator (Yautja)":          "Yautja Predator",
+  "Kaiju":                      "Kaiju",
+  "Mecha Godzilla":             "Mechagodzilla",
+  "Jorōgumo":                   "Jorogumo",
+  "Hydra":                      "Lernaean Hydra",
+  "Basilisk":                   "Basilisk legendary creature",
+  "Cerberus":                   "Cerberus",
+  "Manticore":                  "Manticore",
+  "Behemoth":                   "Behemoth",
+  "Chimera":                    "Chimera mythology",
+  "Leviathan":                  "Leviathan",
+  "Gnome":                      "Gnome",
+  "Wendigo":                    "Wendigo",
+  "Reaper":                     "Grim reaper",
+  // Inspirations
+  "Hulkbuster":                 "Iron Man's armor",
+  "Ultron":                     "Ultron",
+  "Sym-Bionic Titan robot":     "Sym-Bionic Titan",
+  "Laputa Robot Soldier (Castle in the Sky)": "Castle in the Sky",
+  "Robot Knights (Castle in the Sky / Howl's Moving Castle)": "Howl's Moving Castle",
+  "Battle of the Planets / Gatchaman Standard Flight Formation": "Science Ninja Team Gatchaman",
+  "Photorealistic The Sentinel from The Matrix": "Sentinel machine",
+  "Photorealistic Crysis Nanosuit": "Crysis",
+  "Nier Automata YoRHa Units":  "NieR Automata",
+  "Samurai Iron Man (Manga Verse / Toyline)": "Iron Man",
+  "Iron Man Mark XXXVIII Igor": "Iron Man's armor",
+  "Pacific Rim Jaeger":         "Pacific Rim film",
+  "Pacific Rim Gypsy Avenger":  "Pacific Rim Uprising",
+  "Pacific Rim Obsidian Fury":  "Pacific Rim Uprising",
+  "Pacific Rim Saber Athena":   "Pacific Rim Uprising",
+  "Gipsy Danger":               "Pacific Rim film",
+  "Big Hero 6 (Baymax Armor Mode)": "Baymax",
+}
+
+// Entries that should skip iNaturalist and go straight to Wikimedia
+// (fictional, mythological, kaiju, mechs, ambiguous common names)
+const WIKI_ONLY = new Set([
+  // Aquatic — common names too ambiguous for iNat taxonomy
+  "Anglerfish","Shark","Stingray","Dolphin","Squid","Octopus","Lobster",
+  "Jellyfish","Giant Isopod","Man O'War","Kraken","Leviathan",
+  // Reptiles / amphibians — common names hit wrong species on iNat
+  "Dragon","Salamander","Frog","Cobra","Gecko",
+  // Mammals
+  "Wolf","Lion","Tiger","Bear","Gorilla","Panther","Hyena","Rhino","Bull",
+  "Elephant","Hippopotamus","Rhinoceros (Beast)",
+  // Birds
+  "Falcon","Owl","Raven","Eagle","Vulture","Bat",
+  // Armored creatures
+  "Pangolin","Armadillo","Tortoise","Horseshoe Crab","Porcupine",
+  "Hedgehog","Echidna","Sea Urchin","Nautilus","Boxfish",
+  // Fictional / mythological / kaiju / mechs — iNat will return random organisms
+  "Phoenix","Dragon",
+  "Xenomorph","Predator (Yautja)","Kaiju","Chimera","Hydra","Basilisk",
+  "Cerberus","Manticore","Behemoth","Mecha Godzilla","Godzilla",
+  "King Ghidorah","Mothra","Biollante","Jorōgumo","Cthulhu",
+  "Griffin","Minotaur","Pegasus","Gargoyle","Golem","Oni",
+  "Wendigo","Werewolf","Vampire","Demon","Reaper","Gnome",
+  "Spider Queen","Tarantula (Mech)",
+  // Inspirations
+  "Gundam","Transformers","Evangelion","Pacific Rim Jaeger","Zoids",
+  "Armored Core","Battletech MechWarrior","Macross VF-1 Valkyrie",
+  "Patlabor","Voltron","Megas XLR","Gipsy Danger","Optimus Prime",
+  "Mazinger Z","Gurren Lagann","Hulkbuster","Ultron",
+  "Terminator Endoskeleton","Robocop","ED-209","The Iron Giant",
+  "Photorealistic The Sentinel from The Matrix",
+  "Laputa Robot Soldier (Castle in the Sky)",
+  "Robot Knights (Castle in the Sky / Howl's Moving Castle)",
+  "Battle of the Planets / Gatchaman Standard Flight Formation",
+  "Sym-Bionic Titan robot","Big Hero 6 (Baymax Armor Mode)",
+  "Power Rangers Megazord","Metal Gear Rex","Metal Gear Ray",
+  "Metal Gear Sahelanthropus","Pacific Rim Saber Athena",
+  "Pacific Rim Gypsy Avenger","Pacific Rim Obsidian Fury",
+  "Sentinel (from X-Men)","Iron Man Mark 1 Prototype",
+  "Iron Man Mark XXXVIII Igor","Iron Man Thorbuster Armor",
+  "Iron Man Phoenix Killer Armor","Iron Man Godkiller Armor",
+  "Iron Man Godbuster Armor","Samurai Iron Man (Manga Verse / Toyline)",
+  "Elysium Exosuit","Photorealistic Crysis Nanosuit",
+  "Nier Automata YoRHa Units","Titanfall Titans","Chappie",
+])
+
+// ─── CURATED INSPIRATION SEARCH TERMS ───────────────────────────────────────
+// These go straight to Wikipedia API (skipping iNaturalist entirely).
+// Tuned for the best image result per entry.
+function getSearchTerm(name) {
+  return SEARCH_OVERRIDES[name] || name
+}
+
+// Pre-mark all inspirations as missing so fetchThumb is never called for them
+INSPIRATIONS.forEach(name => { imgCache[name] = 'missing' })
+
+// iNaturalist fetch — best for real organisms
+async function fetchFromINaturalist(name) {
+  const q = encodeURIComponent(getSearchTerm(name))
+  const url = `https://api.inaturalist.org/v1/taxa?q=${q}&per_page=1&rank=species,genus,family,order`
+  const res = await fetch(url)
+  const data = await res.json()
+  const taxon = data.results?.[0]
+  if (taxon?.default_photo) {
+    return {
+      thumb:  taxon.default_photo.square_url,
+      large:  taxon.default_photo.medium_url || taxon.default_photo.square_url,
+      source: 'iNaturalist'
+    }
+  }
+  return null
+}
+
+// Wikimedia fetch — used for WIKI_ONLY entries and as fallback
+async function fetchFromWikimedia(name) {
+  const q = encodeURIComponent(getSearchTerm(name))
+  const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${q}&prop=pageimages&format=json&pithumbsize=300&piprop=thumbnail&origin=*`
+  const res = await fetch(wikiUrl)
+  const data = await res.json()
+  const page = Object.values(data.query.pages)[0]
+  if (page?.thumbnail) {
+    const large = page.thumbnail.source.replace(/\/\d+px-/, '/400px-')
+    return { thumb: page.thumbnail.source, large, source: 'Wikipedia' }
+  }
+  return null
+}
+
+async function fetchThumb(name) {
+  if (imgCache[name]) return
+  imgCache[name] = 'loading'
+  try {
+    // Skip iNaturalist for fictional/mythological/common-name-ambiguous entries
+    const result = WIKI_ONLY.has(name)
+      ? await fetchFromWikimedia(name)
+      : await fetchFromINaturalist(name) || await fetchFromWikimedia(name)
+    imgCache[name] = result || 'missing'
+  } catch(e) {
+    imgCache[name] = 'missing'
+  }
+  applyThumbToDOM(name)
+}
+
+function applyThumbToDOM(name) {
+  document.querySelectorAll(`img[data-wiki="${CSS.escape(name)}"]`).forEach(img => {
+    const cached = imgCache[name]
+    if (cached && cached !== 'missing' && cached !== 'loading') {
+      img.src = cached.thumb
+      img.classList.add('loaded')
+    } else {
+      img.style.display = 'none'
+      const ph = img.nextElementSibling
+      if (ph?.classList.contains('sd-thumb-placeholder')) ph.style.display = 'flex'
+    }
+  })
+}
+
+// IntersectionObserver — lazy load on scroll
+const thumbObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return
+    const img = entry.target
+    const name = img.dataset.wiki
+    if (!name) return
+    thumbObserver.unobserve(img)
+    const cached = imgCache[name]
+    if (cached && cached !== 'loading') {
+      if (cached !== 'missing') { img.src = cached.thumb; img.classList.add('loaded') }
+      else { img.style.display='none'; const ph=img.nextElementSibling; if(ph?.classList.contains('sd-thumb-placeholder')) ph.style.display='flex' }
+    } else {
+      fetchThumb(name)
+    }
+  })
+}, { rootMargin: '60px' })
+
+// ─── HOVER PREVIEW ───────────────────────────────────────────────────────────
+let previewTimeout = null
+
+function showPreview(name, thumbEl) {
+  clearTimeout(previewTimeout)
+  previewTimeout = setTimeout(() => {
+    const popup   = document.getElementById('thumbPreview')
+    const spinner = document.getElementById('thumbPreviewSpinner')
+    const img     = document.getElementById('thumbPreviewImg')
+    const label   = document.getElementById('thumbPreviewLabel')
+    const source  = document.getElementById('thumbPreviewSource')
+
+    label.textContent  = name
+    img.style.display  = 'none'
+    spinner.style.display = 'flex'
+    source.textContent = ''
+    positionPreview(thumbEl)
+    popup.classList.add('visible')
+
+    const cached = imgCache[name]
+    if (cached && cached !== 'missing' && cached !== 'loading') {
+      showPreviewImage(cached)
+    } else if (!cached || cached === 'loading') {
+      // Fetch if not yet started, then update when done
+      if (!cached) fetchThumb(name)
+      const wait = setInterval(() => {
+        const c = imgCache[name]
+        if (!c || c === 'loading') return
+        clearInterval(wait)
+        if (c !== 'missing') showPreviewImage(c)
+        else { spinner.textContent = 'NO IMAGE'; }
+      }, 100)
+    } else {
+      spinner.textContent = 'NO IMAGE'
+    }
+  }, 300)  // 300ms delay before showing
+}
+
+function showPreviewImage(cached) {
+  const spinner = document.getElementById('thumbPreviewSpinner')
+  const img     = document.getElementById('thumbPreviewImg')
+  const source  = document.getElementById('thumbPreviewSource')
+  img.onload = () => { spinner.style.display='none'; img.style.display='block' }
+  img.src = cached.large
+  source.textContent = cached.source
+}
+
+function positionPreview(anchor) {
+  const popup = document.getElementById('thumbPreview')
+  const backdrop = document.getElementById('thumbPreviewBackdrop')
+  if (isTouch()) {
+    // CSS handles the slide-up from bottom — just show the backdrop
+    popup.style.left = ''; popup.style.top = ''
+    backdrop.classList.add('visible')
+    return
+  }
+  backdrop.classList.remove('visible')
+  const rect = anchor.getBoundingClientRect()
+  const pw = 216, ph = 240
+  let left = rect.right + 10
+  let top  = rect.top - 8
+  if (left + pw > window.innerWidth - 10) left = rect.left - pw - 10
+  if (top + ph > window.innerHeight - 10) top = window.innerHeight - ph - 10
+  if (top < 10) top = 10
+  popup.style.left = left + 'px'
+  popup.style.top  = top + 'px'
+}
+
+function hidePreview() {
+  clearTimeout(previewTimeout)
+  document.getElementById('thumbPreview').classList.remove('visible')
+  document.getElementById('thumbPreviewBackdrop').classList.remove('visible')
+  document.getElementById('thumbPreviewBackdrop').style.display = ''
+}
+
+function isTouch() { return window.matchMedia('(max-width:640px)').matches || navigator.maxTouchPoints > 0 }
+
+// Hide if mouse leaves the dropdown panel entirely (desktop only)
+document.addEventListener('mouseover', e => {
+  if (isTouch()) return
+  const inPanel = e.target.closest('.sd-panel') || e.target.closest('#thumbPreview')
+  if (!inPanel) hidePreview()
+})
+
+function makeOption(name, selected) {
+  const div = document.createElement('div')
+  div.className = 'sd-option' + (name === selected ? ' selected' : '')
+
+  const img = document.createElement('img')
+  img.className = 'sd-thumb'
+  img.dataset.wiki = name
+  img.alt = ''
+
+  const ph = document.createElement('div')
+  ph.className = 'sd-thumb-placeholder'
+  ph.style.display = 'none'
+  ph.textContent = '·'
+
+  const cached = imgCache[name]
+  if (cached && cached !== 'loading') {
+    if (cached !== 'missing') { img.src = cached.thumb; img.classList.add('loaded') }
+    else { img.style.display='none'; ph.style.display='flex' }
+  } else {
+    thumbObserver.observe(img)
+  }
+
+  // Desktop: hover to preview. Touch: tap thumbnail to toggle preview
+  if (isTouch()) {
+    img.addEventListener('click', e => {
+      e.stopPropagation()
+      const popup = document.getElementById('thumbPreview')
+      if (popup.classList.contains('visible') && popup.dataset.currentName === name) {
+        hidePreview()
+      } else {
+        popup.dataset.currentName = name
+        showPreview(name, img)
+      }
+    })
+  } else {
+    img.addEventListener('mouseenter', e => { e.stopPropagation(); showPreview(name, img) })
+    img.addEventListener('mouseleave', () => { clearTimeout(previewTimeout) })
+  }
+
+  const label = document.createElement('span')
+  label.className = 'sd-name'
+  label.textContent = name
+
+  div.appendChild(img)
+  div.appendChild(ph)
+  div.appendChild(label)
+  return div
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SEARCHABLE DROPDOWN ENGINE
+// ═══════════════════════════════════════════════════════════════════
+const sdState = {
+  A: { value:'', sort:'group', query:'' },
+  B: { value:'', sort:'group', query:'' },
+}
+
+function toggleSD(id) {
+  const panel = document.getElementById('sdPanel'+id)
+  const disp  = document.getElementById('sdDisp'+id)
+  const other = id === 'A' ? 'B' : 'A'
+  const isOpen = panel.classList.contains('open')
+  // close both first
+  closeSD('A'); closeSD('B')
+  if (!isOpen) {
+    panel.classList.add('open')
+    disp.classList.add('open')
+    const inp = document.getElementById('sdSearch'+id)
+    inp.value = ''; sdState[id].query = ''
+    renderSDList(id)
+    setTimeout(() => inp.focus(), 50)
+  }
+}
+
+function closeSD(id) {
+  document.getElementById('sdPanel'+id).classList.remove('open')
+  document.getElementById('sdDisp'+id).classList.remove('open')
+}
+
+// Close on outside click — extended to include inspiration dropdowns
+document.addEventListener('click', e => {
+  ['A','B'].forEach(id => {
+    const wrap = document.getElementById('sdWrap'+id)
+    if (wrap && !wrap.contains(e.target)) closeSD(id)
+  })
+  ;['I1','I2'].forEach(id => {
+    const wrap = document.getElementById('sdWrapI'+id.slice(1))
+    if (wrap && !wrap.contains(e.target)) closeInsp(id)
+  })
+})
+
+function setSortSD(id, mode) {
+  sdState[id].sort = mode
+  document.getElementById('sdSortGroup'+id).classList.toggle('active', mode==='group')
+  document.getElementById('sdSortAz'+id).classList.toggle('active', mode==='az')
+  renderSDList(id)
+}
+
+function filterSD(id) {
+  sdState[id].query = document.getElementById('sdSearch'+id).value.toLowerCase()
+  renderSDList(id)
+}
+
+function selectSDOption(id, value) {
+  sdState[id].value = value
+  document.getElementById('sdVal'+id).textContent = value
+  document.getElementById('creature'+id).value = value
+  closeSD(id)
+  // re-render to update .selected highlight
+  renderSDList(id)
+}
+
+function renderSDList(id) {
+  const list  = document.getElementById('sdList'+id)
+  const query = sdState[id].query
+  const sort  = sdState[id].sort
+  const selected = sdState[id].value
+  list.innerHTML = ''
+
+  const useInsectGroups = (currentMode === 'insect' || (currentMode === 'fusion' && id === 'A')) && sort === 'group'
+
+  if (useInsectGroups) {
+    let totalShown = 0
+    for (const [groupName, members] of Object.entries(INSECT_GROUPS)) {
+      const filtered = members
+        .filter(n => INSECTS[n] && (!query || n.toLowerCase().includes(query)))
+        .sort((a,b) => a.localeCompare(b))
+      if (!filtered.length) continue
+      const lbl = document.createElement('div')
+      lbl.className = 'sd-group-label'; lbl.textContent = groupName
+      list.appendChild(lbl)
+      filtered.forEach(name => {
+        const div = makeOption(name, selected)
+        div.addEventListener('click', () => selectSDOption(id, name))
+        list.appendChild(div)
+        totalShown++
+      })
+    }
+    if (!totalShown) { const d=document.createElement('div'); d.className='sd-none'; d.textContent='No matches found'; list.appendChild(d) }
+  } else {
+    const sourceList = getList(id)
+    const allNames = Object.keys(sourceList)
+    const filtered = allNames
+      .filter(n => !query || n.toLowerCase().includes(query))
+      .sort((a,b) => a.localeCompare(b))
+    if (!filtered.length) { const d=document.createElement('div'); d.className='sd-none'; d.textContent='No matches found'; list.appendChild(d); return }
+    filtered.forEach(name => {
+      const div = makeOption(name, selected)
+      div.addEventListener('click', () => selectSDOption(id, name))
+      list.appendChild(div)
+    })
+  }
+}
+
+// ─── INSPIRATION THUMBNAIL DROPDOWNS ─────────────────────────────────────────
+const inspState = {
+  I1: { value: '', query: '' },
+  I2: { value: '', query: '' },
+}
+
+function toggleInsp(id) {
+  const panel = document.getElementById('sdPanelI'+id.slice(1))
+  const disp  = document.getElementById('sdDispI'+id.slice(1))
+  const isOpen = panel.classList.contains('open')
+  // Close all
+  closeInsp('I1'); closeInsp('I2'); closeSD('A'); closeSD('B')
+  if (!isOpen) {
+    panel.classList.add('open')
+    disp.classList.add('open')
+    const inp = document.getElementById('sdSearchI'+id.slice(1))
+    inp.value = ''; inspState[id].query = ''
+    renderInspList(id, inspState[id].query)
+    setTimeout(() => inp.focus(), 50)
+  }
+}
+
+function closeInsp(id) {
+  const num = id.slice(1)
+  document.getElementById('sdPanelI'+num)?.classList.remove('open')
+  document.getElementById('sdDispI'+num)?.classList.remove('open')
+}
+
+function filterInsp(id) {
+  inspState[id].query = document.getElementById('sdSearchI'+id.slice(1)).value.toLowerCase()
+  renderInspList(id, inspState[id].query)
+}
+
+function selectInspOption(id, value) {
+  inspState[id].value = value
+  document.getElementById('sdValI'+id.slice(1)).textContent = value || '— None —'
+  document.getElementById('insp'+id.slice(1)+'Sel').value = value
+  closeInsp(id)
+  renderInspList(id, inspState[id].query)
+}
+
+function renderInspList(id, query) {
+  const listEl = document.getElementById('sdListI'+id.slice(1))
+  if (!listEl) return
+  listEl.innerHTML = ''
+  const selected = inspState[id].value
+  const q = (query || '').toLowerCase()
+
+  if (!q) {
+    const none = document.createElement('div')
+    none.className = 'sd-option' + (!selected ? ' selected' : '')
+    none.style.cssText = 'padding:7px 12px;color:var(--muted);font-style:italic;'
+    none.textContent = '— None —'
+    none.onclick = () => selectInspOption(id, '')
+    listEl.appendChild(none)
+  }
+
+  const filtered = INSPIRATIONS.filter(n => !q || n.toLowerCase().includes(q))
+  filtered.forEach(name => {
+    const div = document.createElement('div')
+    div.className = 'sd-option' + (name === selected ? ' selected' : '')
+    div.style.padding = '7px 12px'
+    div.textContent = name
+    div.addEventListener('click', () => selectInspOption(id, name))
+    listEl.appendChild(div)
+  })
+
+  if (!filtered.length && q) {
+    const d = document.createElement('div'); d.className='sd-none'; d.textContent='No matches found'; listEl.appendChild(d)
+  }
+}
+
+function populateDropdowns(){
+  const isFusion = currentMode === 'fusion'
+  const isInsect = currentMode === 'insect'
+
+  // Update field labels
+  document.getElementById('labelA').textContent = isFusion ? 'Insect Body / Armor' : 'Body / Armor'
+  document.getElementById('labelB').textContent = isFusion ? 'Beast Limbs / Weapons' : 'Limbs / Weapons'
+
+  // Show/hide group sort buttons
+  // A: grouped available if insect or fusion; B: only if insect
+  const showGroupA = isInsect || isFusion
+  const showGroupB = isInsect
+
+  ;['A','B'].forEach(id => {
+    const showGroup = id === 'A' ? showGroupA : showGroupB
+    document.getElementById('sdSortGroup'+id).style.display = showGroup ? '' : 'none'
+    document.getElementById('sdSortAz'+id).style.display = ''
+    sdState[id].sort = showGroup ? 'group' : 'az'
+    document.getElementById('sdSortGroup'+id).classList.toggle('active', showGroup)
+    document.getElementById('sdSortAz'+id).classList.toggle('active', !showGroup)
+  })
+
+  // Pick random defaults per slot
+  ;['A','B'].forEach(id => {
+    const names = Object.keys(getList(id))
+    const pick = names[Math.floor(Math.random()*names.length)]
+    sdState[id].value = pick
+    document.getElementById('sdVal'+id).textContent = pick
+    document.getElementById('creature'+id).value = pick
+    const inp = document.getElementById('sdSearch'+id)
+    if(inp) inp.value = ''
+    sdState[id].query = ''
+  })
+
+  // Species count: show combined in fusion, else single list
+  if (isFusion) {
+    document.getElementById('speciesCount').textContent =
+      Object.keys(INSECTS).length + ' + ' + Object.keys(BEASTS).length
+  } else {
+    document.getElementById('speciesCount').textContent = Object.keys(getList('A')).length
+  }
+}
+
+function populateStatic(){
+  const col = document.getElementById('colourSel')
+  const mat = document.getElementById('materialSel')
+  const env = document.getElementById('envSel')
+  const lit = document.getElementById('lightSel')
+  const sortedColours = [...COLOURS].sort((a,b) => a.localeCompare(b))
+  sortedColours.forEach(c => col.add(new Option(c,c)))
+  MATERIALS.forEach(m => mat.add(new Option(m,m)))
+  const sortedEnv = [...ENVIRONMENTS].sort((a,b) => a.localeCompare(b))
+  sortedEnv.forEach(e => env.add(new Option(e,e)))
+  const sortedLit = [...LIGHTING].sort((a,b) => a.localeCompare(b))
+  sortedLit.forEach(l => lit.add(new Option(l,l)))
+  // Modifier dropdowns
+  ;['modA','modB'].forEach(id => {
+    const sel = document.getElementById(id)
+    COLOUR_MODIFIERS.forEach(m => sel.add(new Option(m.label, m.value)))
+  })
+  // Inspirations — populate custom thumbnail dropdowns
+  renderInspList('I1', '')
+  renderInspList('I2', '')
+}
+
+function init(){
+  populateStatic()
+  populateDropdowns()
+}
+init()
+
+// ═══════════════════════════════════════════════════════════════════
+// MODE & PRESET
+// ═══════════════════════════════════════════════════════════════════
+function setMode(mode){
+  currentMode = mode
+  const body = document.querySelector('.app').parentElement
+  body.className = body.className.replace(/mode-\w+/g,'').trim()
+  body.classList.add('mode-'+mode)
+  document.getElementById('btnInsect').classList.toggle('active', mode==='insect')
+  document.getElementById('btnBeast').classList.toggle('active', mode==='beast')
+  document.getElementById('btnFusion').classList.toggle('active', mode==='fusion')
+  document.getElementById('modeLabel').textContent = mode.toUpperCase()
+  const titles = { insect:'INSECT MECH GENERATOR', beast:'BEAST MODE', fusion:'FUSION MODE' }
+  document.getElementById('mainTitle').textContent = titles[mode]
+  populateDropdowns()
+}
+
+function setPreset(preset, btn){
+  currentPreset = preset
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  const body = document.querySelector('.app').parentElement
+  body.className = body.className.replace(/preset-\w+/g,'').trim()
+  if(preset !== 'default') body.classList.add('preset-'+preset)
+  document.getElementById('styleLabel').textContent = preset.toUpperCase()
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROMPT BUILDER
+// ═══════════════════════════════════════════════════════════════════
+function buildPrompt(aName, bName, colour, material, env, lighting, insp1, insp2){
+  const A = getList('A')[aName]
+  const B = getList('B')[bName]
+  const s = STYLE_MODS[currentPreset]
+  const inspirations = [insp1, insp2].filter(Boolean)
+  const inspStr = inspirations.length ? ` — mech design inspired by the aesthetic of ${inspirations.join(' and ')}` : ''
+  return `giant biomechanical hybrid mech inspired by ${aName} body and ${bName} limbs — ${A.body}, ${A.armor}, ${B.legs}, ${B.weapon} — coloured ${colour} — constructed from ${material} — deployed in a ${env} — ${lighting}${inspStr} — ${s.adj} — exposed hydraulic pistons, glowing optical sensors — ${s.suffix}`
+}
+
+function getRandItem(arr){ return arr[Math.floor(Math.random()*arr.length)] }
+function getRandName(slot){ const k=Object.keys(getList(slot)); return k[Math.floor(Math.random()*k.length)] }
+
+// ═══════════════════════════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════════════════════════
+const SETTINGS_DELIMITER = '\n\n---SETTINGS---\n'
+
+function captureSettings() {
+  return {
+    _v: 1,
+    mode:     currentMode,
+    preset:   currentPreset,
+    creatureA: document.getElementById('creatureA').value,
+    creatureB: document.getElementById('creatureB').value,
+    colour:   document.getElementById('colourSel').value,
+    colAHex:  colState.A,
+    colBHex:  colState.B,
+    colAH:    document.getElementById('colAH').value,
+    colAS:    document.getElementById('colAS').value,
+    colAL:    document.getElementById('colAL').value,
+    colBH:    document.getElementById('colBH').value,
+    colBS:    document.getElementById('colBS').value,
+    colBL:    document.getElementById('colBL').value,
+    modA:     document.getElementById('modA').value,
+    modB:     document.getElementById('modB').value,
+    material: document.getElementById('materialSel').value,
+    env:      document.getElementById('envSel').value,
+    lighting: document.getElementById('lightSel').value,
+    insp1:    document.getElementById('insp1Sel').value,
+    insp2:    document.getElementById('insp2Sel').value,
+  }
+}
+
+function applySettings(s) {
+  // Mode first — this re-populates creature dropdowns
+  if (s.mode && ['insect','beast','fusion'].includes(s.mode)) {
+    currentMode = s.mode
+    const body = document.querySelector('.app').parentElement
+    body.className = body.className.replace(/mode-\w+/g,'').trim()
+    body.classList.add('mode-'+s.mode)
+    ;['insect','beast','fusion'].forEach(m =>
+      document.getElementById('btn'+m.charAt(0).toUpperCase()+m.slice(1)).classList.toggle('active', m===s.mode))
+    document.getElementById('modeLabel').textContent = s.mode.toUpperCase()
+    const titles = { insect:'INSECT MECH GENERATOR', beast:'BEAST MODE', fusion:'FUSION MODE' }
+    document.getElementById('mainTitle').textContent = titles[s.mode]
+    populateDropdowns()
+  }
+
+  // Style preset
+  if (s.preset) {
+    currentPreset = s.preset
+    document.querySelectorAll('.preset-btn').forEach(b => {
+      const matches = b.textContent.toLowerCase().includes(s.preset) ||
+                      b.onclick?.toString().includes(`'${s.preset}'`)
+      b.classList.toggle('active', b.getAttribute('onclick')?.includes(`'${s.preset}'`))
+    })
+    const body = document.querySelector('.app').parentElement
+    body.className = body.className.replace(/preset-\w+/g,'').trim()
+    if (s.preset !== 'default') body.classList.add('preset-'+s.preset)
+    document.getElementById('styleLabel').textContent = s.preset.toUpperCase()
+  }
+
+  // Creature dropdowns (searchable)
+  ;[['A', s.creatureA], ['B', s.creatureB]].forEach(([slot, val]) => {
+    if (!val) return
+    sdState[slot].value = val
+    document.getElementById('sdVal'+slot).textContent = val
+    document.getElementById('creature'+slot).value = val
+  })
+
+  // Colour palette + tuner
+  if (s.colour) {
+    document.getElementById('colourSel').value = s.colour
+    onPaletteChange()
+    // Override with saved fine-tuned values if present
+    if (s.colAHex) updatePickerUI('A', s.colAHex)
+    if (s.colBHex) updatePickerUI('B', s.colBHex)
+  }
+  if (s.modA !== undefined) document.getElementById('modA').value = s.modA
+  if (s.modB !== undefined) document.getElementById('modB').value = s.modB
+
+  // Other dropdowns — safe: unknown values just silently leave default
+  const setVal = (id, val) => { if (val !== undefined && document.getElementById(id)) document.getElementById(id).value = val }
+  setVal('materialSel', s.material)
+  setVal('envSel',      s.env)
+  setVal('lightSel',    s.lighting)
+  // Inspiration dropdowns
+  if (s.insp1 !== undefined) selectInspOption('I1', s.insp1 || '')
+  if (s.insp2 !== undefined) selectInspOption('I2', s.insp2 || '')
+
+  updateTunerSummary()
+}
+
+function generateSingle(){
+  const aName = document.getElementById('creatureA').value
+  const bName = document.getElementById('creatureB').value
+  const colour = getColourString()
+  const material = document.getElementById('materialSel').value
+  const env = document.getElementById('envSel').value
+  const lighting = document.getElementById('lightSel').value
+  const insp1 = document.getElementById('insp1Sel').value
+  const insp2 = document.getElementById('insp2Sel').value
+  const out = document.getElementById('output')
+  out.textContent = '// Generating...'
+  out.classList.add('generating')
+  setTimeout(()=>{
+    out.classList.remove('generating')
+    const prompt = buildPrompt(aName,bName,colour,material,env,lighting,insp1,insp2)
+    const settings = JSON.stringify(captureSettings())
+    out.textContent = `[${currentMode.toUpperCase()} // ${currentPreset.toUpperCase()}]\n\n${prompt}${SETTINGS_DELIMITER}${settings}`
+  }, 200)
+}
+
+// ─── LOAD FROM PASTE ─────────────────────────────────────────────────────────
+
+function extractSettings(text) {
+  const idx = text.indexOf('---SETTINGS---')
+  if (idx === -1) return null
+  try {
+    return JSON.parse(text.slice(idx + '---SETTINGS---'.length).trim())
+  } catch(e) { return null }
+}
+
+function onLoadTextareaInput() {
+  const text = document.getElementById('loadTextarea').value.trim()
+  const s = extractSettings(text)
+  const btn = document.getElementById('loadBtn')
+  const status = document.getElementById('loadStatus')
+  if (s) {
+    btn.disabled = false
+    btn.style.opacity = '1'
+    status.textContent = '✓ SETTINGS BLOCK DETECTED'
+    status.style.color = 'var(--accent)'
+  } else if (text.length > 0) {
+    btn.disabled = true
+    btn.style.opacity = '.4'
+    status.textContent = '✗ NO SETTINGS BLOCK FOUND'
+    status.style.color = '#ff4444'
+  } else {
+    btn.disabled = true
+    btn.style.opacity = '.4'
+    status.textContent = ''
+  }
+}
+
+function loadFromText() {
+  const text = document.getElementById('loadTextarea').value.trim()
+  const s = extractSettings(text)
+  if (!s) return
+  applySettings(s)
+  document.getElementById('loadStatus').textContent = '✓ SETTINGS RESTORED'
+  document.getElementById('loadStatus').style.color = 'var(--accent)'
+  // Restore the clean prompt (without settings block) to the output box
+  const promptOnly = text.slice(0, text.indexOf('---SETTINGS---')).trim()
+  document.getElementById('output').textContent = promptOnly
+}
+
+function onFileImport(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    const text = e.target.result
+    document.getElementById('loadTextarea').value = text
+    onLoadTextareaInput()
+    // reset so the same file can be re-imported if needed
+    event.target.value = ''
+  }
+  reader.onerror = () => {
+    document.getElementById('loadStatus').textContent = '✗ FILE READ ERROR'
+    document.getElementById('loadStatus').style.color = '#ff4444'
+  }
+  reader.readAsText(file)
+}
+
+function clearLoadPanel() {
+  document.getElementById('loadTextarea').value = ''
+  document.getElementById('loadBtn').disabled = true
+  document.getElementById('loadBtn').style.opacity = '.4'
+  document.getElementById('loadStatus').textContent = ''
+}
+
+function generateBatch(){
+  const colour = getColourString()
+  const material = document.getElementById('materialSel').value
+  const env = document.getElementById('envSel').value
+  const lighting = document.getElementById('lightSel').value
+  const insp1 = document.getElementById('insp1Sel').value
+  const insp2 = document.getElementById('insp2Sel').value
+  const out = document.getElementById('output')
+  out.textContent = '// Generating batch...'
+  out.classList.add('generating')
+  setTimeout(()=>{
+    out.classList.remove('generating')
+    let text = `[BATCH × 10 // ${currentMode.toUpperCase()} // ${currentPreset.toUpperCase()}]\n\n`
+    for(let i=0;i<10;i++){
+      const a = getRandName('A'); const b = getRandName('B')
+      text += `${String(i+1).padStart(2,'0')} ▸ ${buildPrompt(a,b,colour,material,env,lighting,insp1,insp2)}\n\n`
+    }
+    out.textContent = text
+  }, 200)
+}
+
+function randomiseAll(){
+  const rand = arr => arr[Math.floor(Math.random()*arr.length)]
+  ;['A','B'].forEach(id => {
+    const pick = getRandName(id)
+    sdState[id].value = pick
+    document.getElementById('sdVal'+id).textContent = pick
+    document.getElementById('creature'+id).value = pick
+  })
+  document.getElementById('colourSel').value  = rand(COLOURS.slice().sort((a,b)=>a.localeCompare(b)))
+  document.getElementById('materialSel').value = rand(MATERIALS)
+  document.getElementById('envSel').value      = rand(ENVIRONMENTS.slice().sort((a,b)=>a.localeCompare(b)))
+  document.getElementById('lightSel').value    = rand(LIGHTING.slice().sort((a,b)=>a.localeCompare(b)))
+  generateSingle()
+}
+
+function saveFav(){
+  const text = document.getElementById('output').textContent
+  if(!text || text.startsWith('//')) return
+  const promptOnly = text.includes('---SETTINGS---') ? text.slice(0, text.indexOf('---SETTINGS---')).trim() : text
+  favourites.unshift({ text, promptOnly, mode: currentMode, preset: currentPreset, id: Date.now() })
+  renderFavs()
+}
+
+function deleteFav(id){
+  favourites = favourites.filter(f => f.id !== id)
+  renderFavs()
+}
+
+function copyFav(id){
+  const f = favourites.find(x => x.id === id)
+  if(!f) return
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = f.text
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  } catch(e) {}
+}
+
+function renderFavs(){
+  const list = document.getElementById('favsList')
+  document.getElementById('favCount').textContent = favourites.length
+  if(!favourites.length){
+    list.innerHTML = '<div class="empty-favs">// No saved prompts yet — generate and save your favourites</div>'
+    return
+  }
+  list.innerHTML = favourites.map(f => {
+    const display = (f.promptOnly || f.text).slice(0,180)
+    const ellipsis = (f.promptOnly || f.text).length > 180 ? '…' : ''
+    return `
+    <div class="fav-item">
+      <span class="fav-tag">${f.mode.toUpperCase()}</span>
+      <span class="fav-tag" style="background:color-mix(in srgb,#ff6a00 15%,transparent);color:#ff9a40;">${f.preset.toUpperCase()}</span>
+      <span class="fav-text">${display}${ellipsis}</span>
+      <div class="fav-actions">
+        <button class="fav-btn fav-copy" onclick="copyFav(${f.id})">COPY</button>
+        <button class="fav-btn fav-del" onclick="deleteFav(${f.id})">✕</button>
+      </div>
+    </div>`
+  }).join('')
+}
+
+function copyPromptOnly(){
+  const text = document.getElementById('output').textContent
+  if(!text || text.startsWith('//')) return
+  const clean = text.includes('---SETTINGS---') ? text.slice(0, text.indexOf('---SETTINGS---')).trim() : text
+  const btn = document.getElementById('copyPromptBtn')
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = clean
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    const orig = btn.textContent
+    btn.textContent = '✓ COPIED'
+    setTimeout(()=> btn.textContent = orig, 1500)
+  } catch(e) {
+    btn.textContent = '✗ FAILED'
+    setTimeout(()=> btn.textContent = '⎘ COPY PROMPT', 1500)
+  }
+}
+
+function copyOutput(){
+  const text = document.getElementById('output').textContent
+  if(!text || text.startsWith('//')) return
+  const btn = document.getElementById('copyOutBtn')
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    const orig = btn.textContent
+    btn.textContent = '✓ COPIED'
+    setTimeout(()=> btn.textContent = orig, 1500)
+  } catch(e) {
+    btn.textContent = '✗ FAILED'
+    setTimeout(()=> btn.textContent = '⎘ COPY', 1500)
+  }
+}
+
+function exportAll(){
+  const output = document.getElementById('output').textContent
+  const favText = favourites.length
+    ? '\n\n═══════════════════\nSAVED PROMPTS\n═══════════════════\n\n' + favourites.map((f,i)=>`[${i+1}] ${f.text}`).join('\n\n')
+    : ''
+  const full = `BEAST MODE // EXPORT\nGenerated: ${new Date().toLocaleString()}\n\n${output}${favText}`
+
+  // Build meaningful filename
+  const slugify = str => (str || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24)
+  const mode    = currentMode
+  const armor   = slugify(document.getElementById('creatureA').value)
+  const weapons = slugify(document.getElementById('creatureB').value)
+  const colour  = slugify(document.getElementById('colourSel').value)
+  const insp1   = slugify(document.getElementById('insp1Sel').value)
+  const now     = new Date()
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`
+  const parts   = [mode, armor, weapons, colour, insp1, dateStr].filter(Boolean)
+  const filename = parts.join('_') + '.txt'
+
+  try {
+    const blob = new Blob([full], {type:'text/plain'})
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url) }, 100)
+  } catch(e) {
+    const w = window.open('', '_blank')
+    if(w){ w.document.write('<pre>' + full.replace(/</g,'&lt;') + '</pre>'); w.document.title = 'Mech Prompts Export' }
+  }
+}
+</script>
+</body>
+</html>
