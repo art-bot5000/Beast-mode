@@ -379,6 +379,25 @@ select:focus { border-color: var(--accent); }
 }
 .accordion-drive-badge.show { display:inline; }
 
+/* RESTORE POPUP */
+#driveRestorePopup {
+  display:none;position:fixed;inset:0;z-index:10000;
+  align-items:center;justify-content:center;
+  background:rgba(0,0,0,.75);
+}
+.restore-card {
+  background:var(--surface);border:1px solid var(--accent);border-radius:4px;
+  padding:24px;max-width:420px;width:calc(100% - 40px);
+  display:flex;flex-direction:column;gap:14px;
+  box-shadow:0 16px 48px rgba(0,0,0,.9);
+}
+.restore-card h3 {
+  font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;
+  color:var(--accent);margin:0;
+}
+.restore-card p { font-size:12px;color:var(--muted);line-height:1.7;margin:0; }
+.restore-btns { display:flex;gap:10px; }
+
 /* DRIVE SYNC */
 .drive-bar {
   display:flex;align-items:center;gap:10px;padding:10px 14px;
@@ -401,6 +420,18 @@ select:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
+<!-- RESTORE SESSION POPUP -->
+<div id="driveRestorePopup">
+  <div class="restore-card">
+    <h3>// RESTORE SESSION?</h3>
+    <p>A previous session was found in Google Drive. Restore it to pick up exactly where you left off — all settings, mode, creatures, colours and inspirations will be applied.</p>
+    <div class="restore-btns">
+      <button class="btn btn-primary" onclick="driveRestoreAccept()">✓ RESTORE SESSION</button>
+      <button class="btn btn-ghost" onclick="driveRestoreDecline()">✕ START FRESH</button>
+    </div>
+  </div>
+</div>
+
 <!-- HOVER PREVIEW POPUP -->
 <div id="thumbPreviewBackdrop" onclick="hidePreview()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);"></div>
 <div id="thumbPreview">
@@ -2121,6 +2152,7 @@ function generateSingle(){
     // Show only the clean prompt — settings block hidden from view
     out.textContent = `${header}\n\n${prompt}`
     out.dataset.full = full
+    driveSaveCurrentDebounced()
   }, 200)
 }
 
@@ -2249,13 +2281,14 @@ function saveFav(){
 
   favourites.unshift({ text: full, promptOnly, mode: currentMode, preset: currentPreset, id: Date.now() })
   renderFavs()
-  driveSaveDebounced()
+  driveSavePrompt(favourites[0])
+  driveSaveCurrentDebounced()
 }
 
 function deleteFav(id){
   favourites = favourites.filter(f => f.id !== id)
   renderFavs()
-  driveSaveDebounced()
+  driveDeletePrompt(id)
 }
 
 function copyFav(id){
@@ -2392,16 +2425,19 @@ function restoreFav(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GOOGLE DRIVE INTEGRATION
+// GOOGLE DRIVE INTEGRATION — per-file architecture
 // ═══════════════════════════════════════════════════════════════════
-const DRIVE_CLIENT_ID = '115162218034-eoub6c46sqcmhamb72hoj3l69ov1321d.apps.googleusercontent.com'
-const DRIVE_SCOPES    = 'https://www.googleapis.com/auth/drive.appdata'
-const DRIVE_FILE_NAME = 'beast-mode-favourites.json'
+const DRIVE_CLIENT_ID       = '115162218034-eoub6c46sqcmhamb72hoj3l69ov1321d.apps.googleusercontent.com'
+const DRIVE_SCOPES          = 'https://www.googleapis.com/auth/drive.appdata'
+const CURRENT_SETTINGS_FILE = 'beast-mode-current-settings.json'
+const PROMPT_FILE_PREFIX    = 'beast-mode-prompt-'
 
-let driveToken     = null
-let driveSaveTimer = null
-let driveFileId    = null
+let driveToken       = null
+let driveCurrentId   = null
+let driveCurrentTimer = null
+let drivePromptIds   = {}
 
+// ─── AUTH ─────────────────────────────────────────────────────────
 function initDrive() {
   if (typeof google === 'undefined') { setTimeout(initDrive, 600); return }
   google.accounts.id.initialize({ client_id: DRIVE_CLIENT_ID, callback: onGoogleSignIn })
@@ -2409,13 +2445,12 @@ function initDrive() {
     document.getElementById('googleSignInBtn'),
     { theme:'outline', size:'medium', text:'signin_with', shape:'rectangular' }
   )
-  // Restore previous session
   try {
     const saved = JSON.parse(localStorage.getItem('bm_drive_session') || 'null')
     if (saved && saved.expires > Date.now()) {
       driveToken = saved.token
       showDriveSignedIn(saved.name, saved.picture)
-      driveSync()
+      driveOnSignedIn()
       return
     }
   } catch(e) {}
@@ -2439,12 +2474,183 @@ function onGoogleSignIn(response) {
         expires: Date.now() + (tokenResp.expires_in - 60) * 1000,
       }))
       showDriveSignedIn(payload.name, payload.picture)
-      driveSync()
+      driveOnSignedIn()
     }
   })
   tokenClient.requestAccessToken({ prompt:'' })
 }
 
+async function driveOnSignedIn() {
+  setDriveStatus('LOADING…')
+  await driveLoadAllPrompts()
+  await driveLoadCurrentSettings()
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────
+function showDriveSignedIn(name, picture) {
+  document.getElementById('driveSignedOut').style.display = 'none'
+  document.getElementById('driveSignedIn').style.display  = 'flex'
+  document.getElementById('driveName').textContent = name
+  if (picture) document.getElementById('driveAvatar').src = picture
+  collapseLoadPanel()
+  document.getElementById('loadDriveBadge').classList.add('show')
+}
+
+function driveSignOut() {
+  driveToken = null; driveCurrentId = null; drivePromptIds = {}
+  localStorage.removeItem('bm_drive_session')
+  document.getElementById('driveSignedOut').style.display = 'flex'
+  document.getElementById('driveSignedIn').style.display  = 'none'
+  document.getElementById('loadDriveBadge').classList.remove('show')
+  openLoadPanel()
+  setDriveStatus('—')
+}
+
+function setDriveStatus(msg, type='') {
+  const el = document.getElementById('driveStatus')
+  el.textContent = msg
+  el.className = 'drive-status' + (type ? ' '+type : '')
+}
+
+// ─── RESTORE SESSION POPUP ────────────────────────────────────────
+function showRestorePopup(settings) {
+  const popup = document.getElementById('driveRestorePopup')
+  popup.style.display = 'flex'
+  popup.dataset.settings = JSON.stringify(settings)
+}
+
+function driveRestoreAccept() {
+  const popup = document.getElementById('driveRestorePopup')
+  try {
+    applySettings(JSON.parse(popup.dataset.settings))
+    setDriveStatus('✓ SESSION RESTORED','ok')
+  } catch(e) { setDriveStatus('✗ RESTORE FAILED','err') }
+  popup.style.display = 'none'
+}
+
+function driveRestoreDecline() {
+  document.getElementById('driveRestorePopup').style.display = 'none'
+  setDriveStatus('✓ READY','ok')
+}
+
+// ─── CURRENT SETTINGS ─────────────────────────────────────────────
+async function driveSaveCurrentSettings() {
+  if (!driveToken) return
+  try {
+    const body = JSON.stringify({ settings: captureSettings(), savedAt: new Date().toISOString() })
+    if (driveCurrentId) {
+      await drivePatchFile(driveCurrentId, body)
+    } else {
+      driveCurrentId = await driveCreateFile(CURRENT_SETTINGS_FILE, body)
+    }
+  } catch(e) {}
+}
+
+function driveSaveCurrentDebounced() {
+  if (!driveToken) return
+  clearTimeout(driveCurrentTimer)
+  driveCurrentTimer = setTimeout(driveSaveCurrentSettings, 3000)
+}
+
+async function driveLoadCurrentSettings() {
+  if (!driveToken) return
+  try {
+    const files = await driveListFiles("name='" + CURRENT_SETTINGS_FILE + "'")
+    if (!files.length) { setDriveStatus('✓ READY','ok'); return }
+    driveCurrentId = files[0].id
+    const data = await driveReadFile(driveCurrentId)
+    if (data?.settings) showRestorePopup(data.settings)
+    else setDriveStatus('✓ READY','ok')
+  } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
+}
+
+// ─── INDIVIDUAL PROMPT FILES ──────────────────────────────────────
+async function driveSavePrompt(fav) {
+  if (!driveToken) return
+  setDriveStatus('SAVING…')
+  try {
+    const fname = PROMPT_FILE_PREFIX + fav.id + '.json'
+    const body  = JSON.stringify({ fav, savedAt: new Date().toISOString() })
+    if (drivePromptIds[fav.id]) {
+      await drivePatchFile(drivePromptIds[fav.id], body)
+    } else {
+      drivePromptIds[fav.id] = await driveCreateFile(fname, body)
+    }
+    setDriveStatus('✓ SAVED','ok')
+  } catch(e) { setDriveStatus('✗ SAVE FAILED','err') }
+}
+
+async function driveDeletePrompt(id) {
+  if (!driveToken || !drivePromptIds[id]) return
+  try {
+    await fetch('https://www.googleapis.com/drive/v3/files/' + drivePromptIds[id], {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + driveToken }
+    })
+    delete drivePromptIds[id]
+  } catch(e) {}
+}
+
+async function driveLoadAllPrompts() {
+  if (!driveToken) return
+  try {
+    const files = await driveListFiles("name contains '" + PROMPT_FILE_PREFIX + "'")
+    const loaded = []
+    await Promise.all(files.map(async f => {
+      try {
+        const data = await driveReadFile(f.id)
+        if (data?.fav) { drivePromptIds[data.fav.id] = f.id; loaded.push(data.fav) }
+      } catch(e) {}
+    }))
+    if (loaded.length) {
+      loaded.sort((a,b) => b.id - a.id)
+      const driveIds = new Set(loaded.map(f => f.id))
+      const localOnly = favourites.filter(f => !driveIds.has(f.id))
+      favourites = [...loaded, ...localOnly]
+      renderFavs()
+    }
+  } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
+}
+
+async function driveSync() { await driveLoadAllPrompts() }
+
+// ─── DRIVE API HELPERS ────────────────────────────────────────────
+async function driveListFiles(q) {
+  const res = await fetch(
+    'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=' + encodeURIComponent(q) + '&fields=files(id,name)',
+    { headers: { Authorization: 'Bearer ' + driveToken } }
+  )
+  return (await res.json()).files || []
+}
+
+async function driveReadFile(id) {
+  const res = await fetch(
+    'https://www.googleapis.com/drive/v3/files/' + id + '?alt=media',
+    { headers: { Authorization: 'Bearer ' + driveToken } }
+  )
+  return res.json()
+}
+
+async function driveCreateFile(name, body) {
+  const meta = JSON.stringify({ name, parents: ['appDataFolder'] })
+  const form = new FormData()
+  form.append('metadata', new Blob([meta], {type:'application/json'}))
+  form.append('file',     new Blob([body], {type:'application/json'}))
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+    { method:'POST', headers:{ Authorization:'Bearer ' + driveToken }, body:form }
+  )
+  return (await res.json()).id
+}
+
+async function drivePatchFile(id, body) {
+  await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media',
+    { method:'PATCH', headers:{ Authorization:'Bearer ' + driveToken, 'Content-Type':'application/json' }, body }
+  )
+}
+
+// ─── ACCORDION HELPERS ────────────────────────────────────────────
 function toggleLoadPanel() {
   const body  = document.getElementById('loadBody')
   const arrow = document.getElementById('loadArrow')
@@ -2480,107 +2686,7 @@ function collapseLoadPanel() {
   arrow.classList.remove('open')
 }
 
-function showDriveSignedIn(name, picture) {
-  document.getElementById('driveSignedOut').style.display = 'none'
-  document.getElementById('driveSignedIn').style.display  = 'flex'
-  document.getElementById('driveName').textContent = name
-  if (picture) document.getElementById('driveAvatar').src = picture
-  // Collapse load panel and show Drive badge
-  collapseLoadPanel()
-  document.getElementById('loadDriveBadge').classList.add('show')
-}
-
-function driveSignOut() {
-  driveToken = null; driveFileId = null
-  localStorage.removeItem('bm_drive_session')
-  document.getElementById('driveSignedOut').style.display = 'flex'
-  document.getElementById('driveSignedIn').style.display  = 'none'
-  document.getElementById('loadDriveBadge').classList.remove('show')
-  openLoadPanel()
-  setDriveStatus('—')
-}
-
-function setDriveStatus(msg, type='') {
-  const el = document.getElementById('driveStatus')
-  el.textContent = msg
-  el.className = 'drive-status' + (type ? ' '+type : '')
-}
-
-async function driveGetFileId() {
-  if (driveFileId) return driveFileId
-  const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27${DRIVE_FILE_NAME}%27&fields=files(id)`,
-    { headers: { Authorization: `Bearer ${driveToken}` } }
-  )
-  const data = await res.json()
-  driveFileId = data.files?.[0]?.id || null
-  return driveFileId
-}
-
-// Auto-save — debounced 2s after any change
-function driveSaveDebounced() {
-  if (!driveToken) return
-  clearTimeout(driveSaveTimer)
-  driveSaveTimer = setTimeout(driveSaveFavourites, 2000)
-}
-
-async function driveSaveFavourites() {
-  if (!driveToken) return
-  setDriveStatus('SAVING…')
-  try {
-    const body = JSON.stringify({ favourites, savedAt: new Date().toISOString() })
-    const fileId = await driveGetFileId()
-    if (fileId) {
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${driveToken}`, 'Content-Type': 'application/json' },
-        body
-      })
-    } else {
-      const meta = JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] })
-      const form = new FormData()
-      form.append('metadata', new Blob([meta], {type:'application/json'}))
-      form.append('file',     new Blob([body], {type:'application/json'}))
-      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-        method: 'POST', headers: { Authorization: `Bearer ${driveToken}` }, body: form
-      })
-      driveFileId = (await res.json()).id
-    }
-    setDriveStatus('✓ SAVED','ok')
-  } catch(e) { setDriveStatus('✗ SAVE FAILED','err') }
-}
-
-async function driveLoadFavourites() {
-  if (!driveToken) return
-  setDriveStatus('LOADING…')
-  try {
-    const fileId = await driveGetFileId()
-    if (!fileId) { setDriveStatus('✓ READY','ok'); return }
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { Authorization: `Bearer ${driveToken}` }
-    })
-    const data = await res.json()
-    if (Array.isArray(data.favourites)) {
-      // Merge: Drive is source of truth; keep any local items not yet saved
-      const driveIds = new Set(data.favourites.map(f => f.id))
-      const localOnly = favourites.filter(f => !driveIds.has(f.id))
-      favourites = [...data.favourites, ...localOnly]
-      renderFavs()
-    }
-    setDriveStatus('✓ SYNCED','ok')
-  } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
-}
-
-async function driveSync() {
-  await driveLoadFavourites()
-  if (favourites.length) await driveSaveFavourites()
-}
-
-window.addEventListener('load', () => {
-  setTimeout(initDrive, 800)
-  // Open load panel by default (Drive may collapse it once signed in)
-  openLoadPanel()
-})
+window.addEventListener('load', () => { setTimeout(initDrive, 800); openLoadPanel() })
 </script>
 </body>
 </html>
