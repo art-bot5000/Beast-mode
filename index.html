@@ -296,6 +296,39 @@ select:focus { border-color: var(--accent); }
 .btn-ghost { background:transparent;color:var(--muted);border:1px solid var(--border); }
 .btn-ghost:hover { color:var(--text);border-color:var(--text); }
 
+/* LIGHT MODE */
+body.light {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --surface2: #e8ecf0;
+  --border: rgba(0,0,0,0.10);
+  --text: #1a2332;
+  --muted: #7a8a99;
+  --radius: 3px;
+}
+body.light { background:var(--bg);color:var(--text); }
+body.light::before { background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.025) 2px,rgba(0,0,0,0.025) 4px); }
+body.light .output-box { background:#fff;color:#2a6050; }
+body.light select { background:var(--surface);color:var(--text); }
+body.light .sd-display { background:var(--surface);color:var(--text); }
+body.light .sd-panel  { background:var(--surface); }
+body.light .sd-group-label { background:var(--surface); }
+body.light .hsl-input { background:var(--surface);color:var(--text); }
+body.light .restore-card { background:var(--surface); }
+body.light #thumbPreview { background:var(--surface); }
+body.light .drive-bar { background:var(--surface2); }
+body.light #loadTextarea { background:var(--surface2);color:var(--text); }
+body.light .fav-item { background:var(--surface2); }
+body.light .colourTuner { background:var(--surface2); }
+
+#lightToggle {
+  background:transparent;border:1px solid var(--border);border-radius:20px;
+  padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:2px;color:var(--muted);
+  transition:all .2s;display:flex;align-items:center;gap:6px;
+}
+#lightToggle:hover { border-color:var(--accent);color:var(--accent); }
+
 /* FIELD SELECTOR */
 .field-selector {
   display:none;margin-top:8px;padding:8px 10px;
@@ -312,29 +345,43 @@ select:focus { border-color: var(--accent); }
   transition:color .15s;
 }
 .field-checks-wrap {
-  overflow:hidden;transition:max-height .25s ease, opacity .2s ease;
-  opacity:1;
+  overflow:hidden;transition:max-height .25s ease, opacity .2s ease;opacity:1;
 }
-.field-checks-wrap.collapsed { max-height:0 !important; opacity:0; pointer-events:none; }
+.field-checks-wrap.collapsed { max-height:0 !important;opacity:0;pointer-events:none; }
 .field-checks-wrap.expanded  { opacity:1; }
+.field-inner {
+  display:flex;gap:10px;padding-top:10px;
+}
+.field-thumb-wrap {
+  flex-shrink:0;width:80px;height:80px;border-radius:var(--radius);
+  overflow:hidden;border:1px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;
+}
+.field-thumb-img {
+  width:80px;height:80px;object-fit:cover;display:block;
+}
+.field-thumb-ph {
+  font-size:9px;color:var(--muted);letter-spacing:1px;text-align:center;padding:4px;
+}
 .field-checks {
-  display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;padding-top:8px;
+  flex:1;display:grid;grid-template-columns:1fr 1fr;gap:5px;align-content:start;
 }
-.field-check {
-  display:flex;align-items:flex-start;gap:6px;cursor:pointer;
+/* Pill toggle — replaces checkbox */
+.field-pill {
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  cursor:pointer;border-radius:3px;padding:5px 6px;
+  border:1px solid var(--accent);
+  background:transparent;color:var(--accent);
+  font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:1px;line-height:1.2;transition:background .15s,color .15s;
+  user-select:none;
 }
-.field-check input[type=checkbox] {
-  margin-top:2px;flex-shrink:0;accent-color:var(--accent);cursor:pointer;
-}
-.field-check-label {
-  font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:600;
-  letter-spacing:1px;color:var(--muted);line-height:1.4;
-}
-.field-check:hover .field-check-label { color:var(--text); }
-.field-check input:checked ~ .field-check-label { color:var(--accent); }
-.field-check-val {
-  font-size:9px;color:var(--muted);font-style:italic;display:block;
-  font-weight:400;letter-spacing:0;
+.field-pill:hover { background:color-mix(in srgb,var(--accent) 15%,transparent); }
+.field-pill.on { background:var(--accent);color:var(--bg); }
+.field-pill-val {
+  display:block;font-size:8px;font-weight:400;letter-spacing:0;
+  opacity:.75;font-style:italic;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
 }
 
 /* OUTPUT */
@@ -501,6 +548,7 @@ select:focus { border-color: var(--accent); }
   <div class="title-line">
     <h1 id="mainTitle">BEAST MODE</h1>
     <span class="version">V3.0 // HYBRID ENGINE</span>
+    <button id="lightToggle" onclick="toggleLightMode()" style="margin-left:auto;">☀ LIGHT</button>
   </div>
 
   <!-- MODE TOGGLE -->
@@ -562,7 +610,12 @@ select:focus { border-color: var(--accent); }
           <span class="accordion-arrow" id="fieldSelArrowA">▼</span>
         </div>
         <div class="field-checks-wrap collapsed" id="fieldChecksWrapA">
-          <div class="field-checks" id="fieldChecksA"></div>
+          <div class="field-inner">
+            <div class="field-thumb-wrap" id="fieldThumbWrapA">
+              <div class="field-thumb-ph">NO IMAGE</div>
+            </div>
+            <div class="field-checks" id="fieldChecksA"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -589,7 +642,12 @@ select:focus { border-color: var(--accent); }
           <span class="accordion-arrow" id="fieldSelArrowB">▼</span>
         </div>
         <div class="field-checks-wrap collapsed" id="fieldChecksWrapB">
-          <div class="field-checks" id="fieldChecksB"></div>
+          <div class="field-inner">
+            <div class="field-thumb-wrap" id="fieldThumbWrapB">
+              <div class="field-thumb-ph">NO IMAGE</div>
+            </div>
+            <div class="field-checks" id="fieldChecksB"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -2153,34 +2211,67 @@ function renderFieldSelector(slot, creature) {
   panel.classList.add('visible')
   checks.innerHTML = ''
 
-  let checkedCount = 0
+  // ── Thumbnail ──────────────────────────────────────────────────
+  const thumbWrap = document.getElementById('fieldThumbWrap'+slot)
+  thumbWrap.innerHTML = ''
+  const cached = imgCache[creature]
+  if (cached && cached !== 'missing' && cached !== 'loading') {
+    const img = document.createElement('img')
+    img.className = 'field-thumb-img'
+    img.src = cached.large || cached.thumb
+    img.alt = creature
+    thumbWrap.appendChild(img)
+  } else {
+    const ph = document.createElement('div')
+    ph.className = 'field-thumb-ph'
+    ph.textContent = creature.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase()
+    thumbWrap.appendChild(ph)
+    // Fetch if not yet loaded, then update
+    if (!cached || cached === 'loading') {
+      if (!cached) fetchThumb(creature)
+      const poll = setInterval(() => {
+        const c = imgCache[creature]
+        if (!c || c === 'loading') return
+        clearInterval(poll)
+        thumbWrap.innerHTML = ''
+        if (c !== 'missing') {
+          const img = document.createElement('img')
+          img.className = 'field-thumb-img'; img.src = c.large || c.thumb; img.alt = creature
+          thumbWrap.appendChild(img)
+        } else {
+          const p = document.createElement('div'); p.className='field-thumb-ph'
+          p.textContent = creature.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase()
+          thumbWrap.appendChild(p)
+        }
+      }, 200)
+    }
+  }
+
+  // ── Pills ──────────────────────────────────────────────────────
   FIELD_DEFS.forEach(f => {
     const val = data[f.key]
     if (!val) return
-    const checked = fieldState[slot][f.key] !== undefined
+    const on = fieldState[slot][f.key] !== undefined
       ? fieldState[slot][f.key]
       : (slot === 'A' ? f.defaultA : f.defaultB)
-    if (checked) checkedCount++
-    const div = document.createElement('label')
-    div.className = 'field-check'
-    div.innerHTML = `
-      <input type="checkbox" ${checked ? 'checked' : ''}>
-      <span class="field-check-label">${f.label}<span class="field-check-val">${val}</span></span>`
-    div.querySelector('input').addEventListener('change', e => {
-      fieldState[slot][f.key] = e.target.checked
+
+    const pill = document.createElement('div')
+    pill.className = 'field-pill' + (on ? ' on' : '')
+    pill.innerHTML = `${f.label}<span class="field-pill-val">${val}</span>`
+    pill.addEventListener('click', () => {
+      const nowOn = !pill.classList.contains('on')
+      pill.classList.toggle('on', nowOn)
+      fieldState[slot][f.key] = nowOn
       updateFieldSelTitle(slot)
       driveSaveCurrentDebounced()
     })
-    checks.appendChild(div)
+    checks.appendChild(pill)
   })
 
   updateFieldSelTitle(slot)
 
-  // Re-apply open/closed state after re-render
   const wrap = document.getElementById('fieldChecksWrap'+slot)
-  if (wrap.classList.contains('expanded')) {
-    wrap.style.maxHeight = 'none'
-  }
+  if (wrap.classList.contains('expanded')) wrap.style.maxHeight = 'none'
 }
 
 function updateFieldSelTitle(slot) {
@@ -2904,6 +2995,24 @@ function collapseLoadPanel() {
   requestAnimationFrame(()=>{ body.style.maxHeight = '0'; body.classList.remove('expanded'); body.classList.add('collapsed') })
   arrow.classList.remove('open')
 }
+
+function toggleLightMode() {
+  const isLight = document.body.classList.toggle('light')
+  const btn = document.getElementById('lightToggle')
+  btn.textContent = isLight ? '🌙 DARK' : '☀ LIGHT'
+  localStorage.setItem('bm_light', isLight ? '1' : '')
+}
+
+// Restore light mode preference
+;(function(){
+  if (localStorage.getItem('bm_light')) {
+    document.body.classList.add('light')
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('lightToggle')
+      if (btn) btn.textContent = '🌙 DARK'
+    })
+  }
+})()
 
 window.addEventListener('load', () => { setTimeout(initDrive, 800); openLoadPanel() })
 </script>
