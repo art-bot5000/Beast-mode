@@ -3,10 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Beast Mode</title>
+<title>Beast Mode // Prompt Manager</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap');
 
 :root {
@@ -54,11 +57,9 @@ header { margin-bottom:28px; }
 .title-line { display:flex;align-items:baseline;gap:12px;flex-wrap:wrap; }
 h1 {
   font-family:'Bebas Neue',sans-serif;
-  font-size:clamp(32px,6vw,54px);
+  font-size:32px;
   letter-spacing:4px;
-  color: var(--accent);
-  text-shadow: 0 0 30px color-mix(in srgb, var(--accent) 40%, transparent);
-  transition: color .3s, text-shadow .3s;
+  color:var(--accent);
   line-height:1;
 }
 .version { font-size:10px;letter-spacing:3px;color:var(--muted);font-weight:600; }
@@ -589,9 +590,651 @@ body.light .colourTuner { background:var(--surface2); }
 /* anim */
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
 .generating { animation:pulse .6s ease infinite; }
+
+
+
+/* ═══════════════════════════════════════════════════════
+   NAVIGATION SHELL
+═══════════════════════════════════════════════════════ */
+
+/* Top nav */
+.nav-bar {
+  position:sticky;top:0;z-index:200;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:stretch;justify-content:space-between;
+  padding:0 20px;
+}
+.nav-brand {
+  display:flex;align-items:center;gap:10px;
+  font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;
+  color:var(--accent);text-decoration:none;padding:12px 0;flex-shrink:0;
+}
+.nav-brand .version { font-family:'Rajdhani',sans-serif;font-size:9px;letter-spacing:3px;color:var(--muted);font-weight:600; }
+.nav-tabs { display:flex;align-items:stretch;gap:0; }
+.nav-tab {
+  display:flex;align-items:center;gap:6px;padding:0 18px;
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;
+  color:var(--muted);cursor:pointer;border:none;background:transparent;
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;
+  white-space:nowrap;
+}
+.nav-tab:hover { color:var(--text); }
+.nav-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+.nav-tab .tab-icon { font-size:13px; }
+.nav-tab .tab-badge {
+  background:var(--accent);color:#000;border-radius:10px;
+  font-size:9px;padding:1px 5px;font-weight:700;min-width:16px;text-align:center;
+}
+.nav-actions { display:flex;align-items:center;gap:6px;padding:8px 0; }
+
+/* Views */
+.view { display:none;min-height:60vh; }
+.view.active { display:block; }
+.view-inner { max-width:900px;margin:0 auto;padding:24px 20px; }
+
+/* Bottom tab bar on mobile */
+@media(max-width:640px){
+  .nav-bar { padding:0 8px; }
+  .nav-brand .version { display:none; }
+  .nav-brand { font-size:16px;letter-spacing:2px; }
+  .nav-tab { padding:0 12px;font-size:10px;gap:4px; }
+  .nav-tab .tab-label { display:none; }
+  .nav-tab .tab-icon { font-size:16px; }
+  .view-inner { padding:16px 12px; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   LIBRARY VIEW
+═══════════════════════════════════════════════════════ */
+.lib-toolbar {
+  display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;
+}
+.lib-search {
+  flex:1;min-width:160px;padding:9px 12px 9px 36px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:13px;outline:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%234a5a68' stroke-width='2'%3E%3Ccircle cx='6' cy='6' r='4'/%3E%3Cpath d='M10 10l3 3'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:10px center;
+}
+.lib-search:focus { border-color:var(--accent); }
+.lib-search::placeholder { color:var(--muted); }
+
+.lib-count {
+  font-size:10px;letter-spacing:2px;color:var(--muted);white-space:nowrap;align-self:center;
+}
+.lib-count span { color:var(--accent);font-weight:700; }
+
+.lib-filter-row {
+  display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px;align-items:center;
+}
+.lib-filter-label { font-size:9px;letter-spacing:2px;color:var(--muted);margin-right:2px; }
+.lib-filter-chip {
+  padding:4px 10px;border-radius:12px;font-size:10px;letter-spacing:1px;font-weight:700;
+  cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);
+  font-family:'Rajdhani',sans-serif;transition:all .15s;white-space:nowrap;
+}
+.lib-filter-chip:hover { border-color:var(--accent);color:var(--accent); }
+.lib-filter-chip.active { background:var(--accent);color:#000;border-color:var(--accent); }
+.lib-filter-chip .chip-count {
+  opacity:.6;font-size:9px;margin-left:3px;
+}
+.lib-filter-chip.active .chip-count { opacity:.7; }
+
+.lib-grid {
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;
+}
+@media(max-width:640px){ .lib-grid { grid-template-columns:1fr; gap:10px; } }
+
+/* Card */
+.lib-card {
+  background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:border-color .2s,box-shadow .2s,transform .15s;
+}
+.lib-card:hover {
+  border-color:color-mix(in srgb,var(--accent) 60%,transparent);
+  box-shadow:0 4px 20px rgba(0,0,0,.4);
+  transform:translateY(-2px);
+}
+
+/* Image */
+.lib-card-image {
+  width:100%;aspect-ratio:16/9;object-fit:cover;display:block;
+  background:var(--surface2);cursor:zoom-in;
+}
+.lib-card-image-ph {
+  width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;
+  background:var(--surface2);color:var(--muted);font-size:10px;letter-spacing:2px;
+  cursor:pointer;transition:background .15s;flex-direction:column;gap:8px;
+  border-bottom:1px solid var(--border);
+}
+.lib-card-image-ph:hover { background:color-mix(in srgb,var(--accent) 6%,transparent);color:var(--accent); }
+.lib-card-image-ph .ph-icon { font-size:22px;opacity:.3; }
+.lib-card-image-ph .ph-label { font-size:9px;letter-spacing:2px; }
+
+/* Body */
+.lib-card-body { padding:14px;flex:1;display:flex;flex-direction:column;gap:9px; }
+
+.lib-card-header { display:flex;align-items:flex-start;justify-content:space-between;gap:8px; }
+.lib-card-title {
+  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;
+  color:var(--text);letter-spacing:.5px;line-height:1.2;
+  background:transparent;border:none;outline:none;width:100%;padding:0;
+  cursor:text;border-bottom:1px solid transparent;transition:border-color .15s;
+}
+.lib-card-title:focus { border-bottom-color:var(--accent); }
+.lib-card-title:hover:not(:focus) { border-bottom-color:var(--border); }
+
+.lib-card-date { font-size:9px;color:var(--muted);letter-spacing:1px;white-space:nowrap;margin-top:2px; }
+
+/* Creatures line */
+.lib-card-creatures {
+  font-size:10px;color:var(--muted);letter-spacing:.5px;
+  display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+}
+.lib-card-creatures strong { color:var(--text);font-weight:700; }
+.lib-card-creature-sep { opacity:.4; }
+
+/* Tags */
+.lib-card-tags { display:flex;gap:4px;flex-wrap:wrap;align-items:center; }
+.lib-tag {
+  font-size:9px;letter-spacing:1.5px;padding:2px 7px;border-radius:10px;font-weight:700;
+  background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);
+  white-space:nowrap;
+}
+.lib-tag.mode-insect { background:color-mix(in srgb,#00ffb0 12%,transparent);color:#00ffb0; }
+.lib-tag.mode-beast  { background:color-mix(in srgb,#ff6a00 12%,transparent);color:#ff6a00; }
+.lib-tag.mode-fusion { background:color-mix(in srgb,#c800ff 12%,transparent);color:#c800ff; }
+.lib-tag.tag-model   { background:var(--surface2);color:var(--muted);border:1px solid var(--border); }
+.lib-tag.tag-style   { background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--accent);opacity:.7; }
+
+/* Prompt text */
+.lib-card-prompt-wrap { position:relative; }
+.lib-card-prompt {
+  font-size:11px;color:var(--muted);line-height:1.7;font-family:'Rajdhani',sans-serif;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  cursor:pointer;transition:color .1s;
+}
+.lib-card-prompt:hover { color:var(--text); }
+.lib-card-prompt.expanded {
+  display:block;-webkit-line-clamp:unset;overflow:visible;
+}
+.lib-card-expand-btn {
+  font-size:9px;letter-spacing:1px;color:var(--accent);cursor:pointer;
+  background:none;border:none;padding:0;font-family:'Rajdhani',sans-serif;
+  font-weight:700;margin-top:2px;display:block;
+}
+
+/* Stars + meta row */
+.lib-card-meta { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+.lib-card-stars { display:flex;gap:1px; }
+.lib-star { font-size:15px;cursor:pointer;color:var(--border);transition:color .1s,transform .1s; }
+.lib-star.on { color:#ffcc00; }
+.lib-star:hover { color:#ffcc00;transform:scale(1.2); }
+
+/* Actions */
+.lib-card-actions {
+  display:flex;gap:0;border-top:1px solid var(--border);
+  background:var(--surface2);overflow:hidden;
+}
+.lib-card-actions .lib-action-btn {
+  flex:1;padding:9px 6px;font-family:'Rajdhani',sans-serif;font-size:10px;
+  font-weight:700;letter-spacing:1px;cursor:pointer;border:none;background:transparent;
+  color:var(--muted);transition:background .15s,color .15s;border-right:1px solid var(--border);
+  white-space:nowrap;
+}
+.lib-card-actions .lib-action-btn:last-child { border-right:none; }
+.lib-card-actions .lib-action-btn:hover { background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent); }
+.lib-card-actions .lib-action-btn.danger:hover { background:color-mix(in srgb,#ff4444 10%,transparent);color:#ff4444; }
+
+/* Empty state */
+.lib-empty {
+  grid-column:1/-1;text-align:center;padding:80px 20px;
+}
+.lib-empty-icon { font-size:48px;opacity:.15;display:block;margin-bottom:16px; }
+.lib-empty-title { font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:var(--muted);margin-bottom:8px; }
+.lib-empty-sub { font-size:11px;color:var(--muted);letter-spacing:1px;line-height:1.8;opacity:.7; }
+.lib-empty-cta { margin-top:20px; }
+
+/* Sort select */
+.lib-sort-select {
+  padding:8px 28px 8px 10px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--muted);font-family:'Rajdhani',sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;outline:none;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+}
+.lib-sort-select:focus { outline:none;border-color:var(--accent); }
+
+/* Image status toggles */
+.lib-card-img-status {
+  display:flex;gap:10px;padding:8px 14px;border-top:1px solid var(--border);
+  background:color-mix(in srgb,var(--surface2) 50%,transparent);
+  flex-wrap:wrap;
+}
+.img-status-toggle {
+  display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+}
+.img-status-toggle input[type=checkbox] {
+  display:none;
+}
+.img-status-pill {
+  padding:3px 10px;border-radius:10px;font-family:'Rajdhani',sans-serif;
+  font-size:10px;font-weight:700;letter-spacing:1px;
+  border:1px solid var(--border);color:var(--muted);background:transparent;
+  transition:all .15s;white-space:nowrap;cursor:pointer;
+}
+.img-status-toggle input:checked + .img-status-pill {
+  background:color-mix(in srgb,var(--accent) 15%,transparent);
+  border-color:var(--accent);color:var(--accent);
+}
+.img-status-toggle:hover .img-status-pill { border-color:var(--accent);color:var(--accent); }
+
+
+#libLightbox {
+  display:none;position:fixed;inset:0;z-index:10002;
+  background:rgba(0,0,0,.92);align-items:center;justify-content:center;
+  cursor:zoom-out;
+}
+#libLightbox.open { display:flex; }
+#libLightbox img {
+  max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;
+  box-shadow:0 20px 60px rgba(0,0,0,.8);
+}
+#libLightbox .lb-close {
+  position:absolute;top:16px;right:16px;background:rgba(0,0,0,.6);
+  border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:4px;
+  padding:6px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;
+  font-size:12px;letter-spacing:2px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   IMAGE UPLOAD MODAL
+═══════════════════════════════════════════════════════ */
+#imageUploadModal {
+  display:none;position:fixed;inset:0;z-index:10001;
+  background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;
+}
+#imageUploadModal.open { display:flex; }
+.img-modal-card {
+  background:var(--surface);border:1px solid var(--accent);border-radius:4px;
+  width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
+  display:flex;flex-direction:column;gap:0;
+}
+.img-modal-header {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.img-modal-title { font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:3px;color:var(--accent); }
+.img-modal-body { padding:18px;display:flex;flex-direction:column;gap:14px; }
+.img-drop-zone {
+  border:2px dashed var(--border);border-radius:4px;padding:28px 16px;text-align:center;
+  cursor:pointer;transition:border-color .15s,background .15s;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+.img-drop-zone:hover, .img-drop-zone.drag-over { border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,transparent); }
+.img-drop-zone .drop-icon { font-size:28px;opacity:.4; }
+.img-drop-zone p { font-size:11px;color:var(--muted);letter-spacing:1px;margin:0; }
+.img-preview-wrap { position:relative;border-radius:4px;overflow:hidden; }
+.img-preview-wrap img { width:100%;display:block;border-radius:4px; }
+.img-preview-remove {
+  position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;
+  border:none;border-radius:2px;padding:3px 8px;cursor:pointer;font-size:11px;
+}
+.img-modal-field label { font-size:9px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:5px;font-weight:700; }
+.img-modal-input {
+  width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;
+  font-size:13px;outline:none;
+}
+.img-modal-input:focus { border-color:var(--accent); }
+.img-modal-footer {
+  display:flex;gap:8px;padding:14px 18px;border-top:1px solid var(--border);flex-shrink:0;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SETTINGS VIEW
+═══════════════════════════════════════════════════════ */
+.settings-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+@media(max-width:640px){ .settings-grid { grid-template-columns:1fr; } }
+.settings-section { background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px; }
+.settings-section-title { font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--accent);margin-bottom:14px; }
+.settings-row { display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border); }
+.settings-row:last-child { border-bottom:none; }
+.settings-label { font-size:11px;letter-spacing:1px;color:var(--text);font-weight:600; }
+.settings-desc { font-size:10px;color:var(--muted);margin-top:2px; }
+.model-tag {
+  font-size:9px;letter-spacing:1px;padding:2px 6px;border-radius:2px;
+  background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+  display:flex;align-items:center;gap:4px;
+}
+.model-tag .del { cursor:pointer;color:#ff4444;margin-left:2px; }
+.models-list { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
+
+/* Generator view wrapper — remove old .app padding since view-inner handles it */
+#viewGenerator .view-inner header { margin-bottom:20px; }
+
+
+/* ═══════════════════════════════════════════════════════
+   PARTICLE BUILDER
+═══════════════════════════════════════════════════════ */
+.pb-section-label {
+  font-size:10px;letter-spacing:4px;color:var(--muted);font-weight:700;margin-bottom:10px;
+}
+
+/* Output */
+.pb-output-wrap { margin-bottom:20px; }
+.pb-output {
+  background:#000;border:1px solid var(--border);border-left:2px solid #38b6ff;
+  border-radius:var(--radius);padding:14px 50px 14px 14px;
+  font-family:'Rajdhani',sans-serif;font-size:12px;line-height:2;
+  color:#7ec8e3;min-height:54px;word-break:break-word;position:relative;
+}
+.pb-output-ph { color:var(--muted);font-style:italic; }
+.pb-copy-btn {
+  position:absolute;top:10px;right:10px;background:transparent;
+  border:1px solid var(--border);color:var(--muted);border-radius:3px;
+  padding:3px 10px;font-size:10px;letter-spacing:1px;cursor:pointer;
+  font-family:'Rajdhani',sans-serif;font-weight:700;transition:all .15s;
+}
+.pb-copy-btn:hover { border-color:#38b6ff;color:#38b6ff; }
+.pb-particle-span {
+  border-radius:3px;padding:1px 4px;margin:0 1px;
+  font-weight:600;cursor:default;
+}
+
+/* Legend */
+.pb-legend {
+  display:flex;gap:5px;flex-wrap:wrap;margin-bottom:20px;
+}
+.pb-legend-chip {
+  display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:10px;
+  font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;
+  border:1px solid transparent;transition:all .15s;user-select:none;
+}
+.pb-legend-chip:hover { opacity:.8; }
+.pb-legend-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
+
+/* Library header */
+.pb-library-header {
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;flex-wrap:wrap;gap:8px;
+}
+.pb-search {
+  padding:7px 12px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;
+  font-size:12px;outline:none;min-width:180px;
+}
+.pb-search:focus { border-color:#38b6ff; }
+
+/* Add form */
+.pb-add-form {
+  display:none;padding:14px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius);margin-bottom:14px;
+}
+.pb-add-form.open { display:block; }
+.pb-add-row { display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end; }
+.pb-field-label { font-size:9px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;font-weight:700; }
+.pb-input {
+  width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;
+  font-size:12px;outline:none;
+}
+.pb-input:focus { border-color:#38b6ff; }
+
+/* Particle grid */
+.pb-type-block {
+  background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  overflow:hidden;margin-bottom:10px;
+}
+.pb-type-header {
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  cursor:pointer;user-select:none;
+}
+.pb-type-header:hover { background:var(--surface2); }
+.pb-type-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
+.pb-type-name { font-size:11px;font-weight:700;letter-spacing:2px;flex:1; }
+.pb-type-count { font-size:9px;color:var(--muted);letter-spacing:1px; }
+.pb-type-arrow { font-size:9px;color:var(--muted);transition:transform .2s;flex-shrink:0; }
+.pb-type-arrow.open { transform:rotate(180deg); }
+
+.pb-type-body { border-top:1px solid var(--border); }
+.pb-type-body.collapsed { display:none; }
+
+/* Category tabs inside a type */
+.pb-cat-tabs {
+  display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;
+  background:var(--surface2);
+}
+.pb-cat-tab {
+  padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1px;
+  cursor:pointer;border:none;background:transparent;color:var(--muted);
+  font-family:'Rajdhani',sans-serif;white-space:nowrap;transition:all .15s;
+  border-bottom:2px solid transparent;
+}
+.pb-cat-tab:hover { color:var(--text); }
+.pb-cat-tab.active { color:#000;border-bottom-color:currentColor; }
+
+/* Particle chips in library */
+.pb-particles {
+  display:flex;flex-wrap:wrap;gap:7px;padding:12px 14px;
+  min-height:44px;
+}
+.pb-particle {
+  display:flex;align-items:center;gap:5px;padding:5px 10px 5px 8px;
+  border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.3px;
+  cursor:pointer;border:1px solid transparent;transition:all .12s;
+  position:relative;max-width:320px;
+}
+.pb-particle:hover { transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.3); }
+.pb-particle .pp-add { font-size:11px;opacity:.5;flex-shrink:0;margin-right:2px; }
+.pb-particle-text { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.pb-particle-del {
+  margin-left:4px;opacity:0;font-size:11px;flex-shrink:0;transition:opacity .1s;
+  cursor:pointer;color:rgba(0,0,0,.5);
+}
+.pb-particle:hover .pb-particle-del { opacity:.6; }
+.pb-particle-del:hover { opacity:1 !important; }
+
+/* Add category/particle inline */
+.pb-add-inline {
+  display:flex;gap:6px;padding:8px 14px 10px;flex-wrap:wrap;
+  align-items:center;border-top:1px solid var(--border);background:var(--surface2);
+}
+.pb-inline-input {
+  flex:1;min-width:160px;padding:5px 8px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:11px;outline:none;
+}
+.pb-inline-input:focus { border-color:#38b6ff; }
+.pb-add-cat-btn {
+  padding:4px 10px;font-size:9px;letter-spacing:1px;font-weight:700;
+  font-family:'Rajdhani',sans-serif;cursor:pointer;border-radius:3px;
+  background:transparent;border:1px dashed;transition:all .15s;
+}
+.pb-add-cat-btn:hover { opacity:.8; }
+
+/* Formula */
+.pb-formula {
+  display:flex;flex-wrap:wrap;gap:6px;padding:12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  min-height:52px;align-items:flex-start;
+}
+.pb-formula-ph { color:var(--muted);font-size:11px;letter-spacing:1px;align-self:center; }
+.pb-formula-chip {
+  display:flex;align-items:center;gap:4px;padding:5px 8px;border-radius:4px;
+  font-size:11px;font-weight:700;letter-spacing:.3px;cursor:grab;
+  border:1px solid transparent;transition:transform .1s;user-select:none;
+  max-width:240px;
+}
+.pb-formula-chip:active { cursor:grabbing;transform:scale(.95); }
+.pb-formula-chip .pfc-type {
+  font-size:8px;letter-spacing:1px;opacity:.6;text-transform:uppercase;flex-shrink:0;
+}
+.pb-formula-chip .pfc-text {
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
+}
+.pb-formula-chip .pfc-rm {
+  flex-shrink:0;cursor:pointer;opacity:.5;font-size:12px;margin-left:2px;
+  transition:opacity .1s;
+}
+.pb-formula-chip .pfc-rm:hover { opacity:1; }
+.pb-formula-chip.drag-over { outline:2px dashed rgba(255,255,255,.4);outline-offset:2px; }
+
+.pb-formula-sep {
+  color:var(--muted);align-self:center;font-size:13px;opacity:.4;flex-shrink:0;
+}
+
+.pb-cat-tab.drag-over {
+  background:color-mix(in srgb,var(--accent) 20%,transparent);
+  color:var(--text) !important;
+  border-bottom-color:var(--accent) !important;
+}
+
+/* ── LIBRARY SELECTOR BAR ────────────────────────────────────────── */
+.pb-lib-bar {
+  display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;
+}
+.pb-lib-tabs { display:flex;gap:4px;flex:1;flex-wrap:wrap; }
+.pb-lib-tab {
+  display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:4px;
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;
+  cursor:pointer;border:1px solid var(--border);background:var(--surface2);
+  color:var(--muted);transition:all .15s;white-space:nowrap;
+}
+.pb-lib-tab:hover { border-color:var(--accent);color:var(--accent); }
+.pb-lib-tab.active { background:color-mix(in srgb,var(--accent) 12%,transparent);border-color:var(--accent);color:var(--accent); }
+.pb-lib-tab-count { font-size:9px;opacity:.6;background:rgba(255,255,255,.08);border-radius:8px;padding:1px 5px; }
+.pb-lib-tab-name {
+  border:none;background:transparent;color:inherit;
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;
+  outline:none;cursor:text;min-width:24px;max-width:90px;padding:0;
+}
+.pb-lib-tab-name:focus { border-bottom:1px solid currentColor; }
+.pb-builtin-toggle {
+  padding:6px 12px;border-radius:4px;font-family:'Rajdhani',sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--muted);
+  transition:all .15s;white-space:nowrap;flex-shrink:0;
+}
+.pb-builtin-toggle:hover { border-color:var(--accent);color:var(--accent); }
+.pb-builtin-toggle.on { background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:var(--accent);color:var(--accent); }
+
+/* Mobile */
+@media(max-width:640px){
+  .pb-output { font-size:11px;padding:12px 44px 12px 12px; }
+  .pb-particle { font-size:10px;padding:4px 8px; }
+  .pb-formula-chip { font-size:10px;max-width:180px; }
+}
+.pb-import-card {
+  background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  width:100%;max-width:700px;display:flex;flex-direction:column;
+  margin:0 auto;overflow:hidden;
+}
+.pb-import-header {
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;
+  background:var(--surface2);
+}
+.pb-import-title {
+  font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);
+}
+.pb-import-sub { font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:3px; }
+.pb-import-close {
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:3px;padding:4px 10px;cursor:pointer;font-size:13px;flex-shrink:0;
+  transition:all .15s;
+}
+.pb-import-close:hover { border-color:var(--text);color:var(--text); }
+.pb-import-section { padding:16px 20px;border-bottom:1px solid var(--border); }
+.pb-import-step {
+  font-size:9px;letter-spacing:3px;color:var(--muted);font-weight:700;
+  margin-bottom:10px;text-transform:uppercase;
+}
+.pb-import-footer {
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  padding:14px 20px;background:var(--surface2);flex-shrink:0;
+}
+
+/* Type picker */
+.pb-type-picker { display:flex;flex-wrap:wrap;gap:6px; }
+.pb-type-pick-btn {
+  display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:4px;
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;
+  cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none;
+}
+.pb-type-pick-btn:hover { filter:brightness(1.2); }
+.pb-type-pick-btn.active { outline:2px solid #fff;outline-offset:2px; }
+.pb-type-pick-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+
+/* Paste textarea */
+.pb-import-textarea {
+  width:100%;min-height:100px;max-height:200px;resize:vertical;
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:13px;line-height:1.7;
+  padding:10px 12px;outline:none;
+}
+.pb-import-textarea:focus { border-color:var(--accent); }
+
+/* Annotated text area — token tap approach */
+.pb-annotated-wrap {
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;
+}
+.pb-annotated {
+  font-family:'Rajdhani',sans-serif;font-size:14px;line-height:2.2;
+  color:var(--text);word-break:break-word;user-select:none;-webkit-user-select:none;
+}
+/* Each word token */
+.pb-token {
+  display:inline;padding:1px 0;border-radius:2px;cursor:pointer;
+  transition:background .1s;position:relative;
+}
+.pb-token:hover { background:rgba(255,255,255,.08); }
+/* Token is part of a pending (start selected, end not yet) range */
+.pb-token.pending { background:rgba(255,255,255,.15);outline:1px dashed rgba(255,255,255,.3); }
+/* Token is tagged */
+.pb-token.tagged {
+  border-radius:3px;padding:1px 2px;font-weight:700;cursor:pointer;
+}
+/* Whitespace between tokens — not interactive */
+.pb-space { display:inline; }
+
+/* Selection status bar */
+.pb-selection-status {
+  font-size:10px;letter-spacing:1px;color:var(--muted);margin-top:8px;
+  min-height:16px;transition:color .15s;
+}
+.pb-selection-status.active { color:var(--accent); }
+
+/* Tagged list */
+.pb-tagged-list { display:flex;flex-direction:column;gap:6px; }
+.pb-tagged-item {
+  display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:4px;border:1px solid transparent;
+}
+.pb-tagged-item-type {
+  font-size:9px;letter-spacing:2px;font-weight:700;white-space:nowrap;flex-shrink:0;
+}
+.pb-tagged-item-cat {
+  flex:0 0 auto;
+}
+.pb-tagged-item-cat select {
+  background:var(--bg);border:1px solid var(--border);border-radius:3px;
+  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:11px;
+  padding:2px 6px;outline:none;cursor:pointer;
+}
+.pb-tagged-item-text { flex:1;font-size:11px;font-style:italic;line-height:1.4; }
+.pb-tagged-item-del { cursor:pointer;opacity:.5;flex-shrink:0;font-size:14px;transition:opacity .1s; }
+.pb-tagged-item-del:hover { opacity:1; }
+
 </style>
 </head>
 <body>
+
+<!-- ═══════════════════════ MODALS (fixed, above all views) ═══════════════════════ -->
+
 <!-- RESTORE SESSION POPUP -->
 <div id="driveRestorePopup">
   <div class="restore-card">
@@ -615,46 +1258,233 @@ body.light .colourTuner { background:var(--surface2); }
   <img id="thumbPreviewImg" src="" alt="" style="display:none;">
   <div class="preview-source" id="thumbPreviewSource"></div>
 </div>
-<div class="app">
 
-<header>
-  <div class="title-line">
-    <h1 id="mainTitle">BEAST MODE</h1>
-    <span class="version">V3.0 // HYBRID ENGINE</span>
-    <button id="lightToggle" onclick="toggleLightMode()" style="margin-left:auto;">☀ LIGHT</button>
-  </div>
+<!-- LIGHTBOX -->
+<div id="libLightbox" onclick="closeLightbox()">
+  <button class="lb-close" onclick="closeLightbox()">✕ CLOSE</button>
+  <img id="libLightboxImg" src="" alt="">
+</div>
 
-  <!-- MODE TOGGLE -->
-  <div class="mode-toggle" style="margin-top:14px;">
-    <button class="mode-btn active" id="btnInsect" onclick="setMode('insect')">⬡ INSECT MODE</button>
-    <button class="mode-btn" id="btnBeast" onclick="setMode('beast')">☠ BEAST MODE</button>
-    <button class="mode-btn" id="btnFusion" onclick="setMode('fusion')">⚡ FUSION MODE</button>
-  </div>
-
-  <!-- STYLE PRESETS -->
-  <div style="margin-top:12px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-      <span style="font-size:10px;letter-spacing:3px;color:var(--muted);font-weight:700;">// STYLE PRESET</span>
-      <button class="btn btn-ghost" onclick="openStyleEditor()" style="padding:4px 12px;font-size:10px;display:flex;align-items:center;gap:5px;">✎ <span>CUSTOMISE STYLES</span></button>
+<!-- IMAGE UPLOAD MODAL -->
+<div id="imageUploadModal">
+  <div class="img-modal-card">
+    <div class="img-modal-header">
+      <div class="img-modal-title">// ADD REFERENCE IMAGE</div>
+      <button onclick="closeImageModal()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:3px 10px;cursor:pointer;font-size:12px;">✕</button>
     </div>
-    <div id="presetRow" style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;"></div>
-  </div>
-</header>
-
-<!-- DRIVE SYNC BAR -->
-<div class="drive-bar" id="driveBar">
-  <div id="driveSignedOut" style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
-    <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;">GOOGLE DRIVE SYNC</span>
-    <div id="googleSignInBtn"></div>
-  </div>
-  <div id="driveSignedIn" style="display:none;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
-    <img class="drive-avatar" id="driveAvatar" src="" alt="">
-    <span class="drive-name" id="driveName"></span>
-    <span class="drive-status" id="driveStatus">—</span>
-    <button class="btn btn-ghost" onclick="driveSync()" style="padding:4px 12px;font-size:10px;">↻ SYNC</button>
-    <button class="btn btn-ghost" onclick="driveSignOut()" style="padding:4px 10px;font-size:10px;">SIGN OUT</button>
+    <div class="img-modal-body">
+      <div id="imgDropZone" class="img-drop-zone" onclick="document.getElementById('imgFileInput').click()">
+        <span class="drop-icon">🖼</span>
+        <p>TAP TO UPLOAD IMAGE</p>
+        <p style="font-size:9px;opacity:.6;">JPG, PNG, WEBP — compressed to thumbnail</p>
+      </div>
+      <div id="imgPreviewWrap" class="img-preview-wrap" style="display:none;">
+        <img id="imgPreview" src="" alt="">
+        <button class="img-preview-remove" onclick="clearImageUpload()">✕ REMOVE</button>
+      </div>
+      <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="onImageFileSelected(event)">
+      <div class="img-modal-field">
+        <label>AI MODEL USED</label>
+        <select id="imgModelSelect" class="img-modal-input" onchange="onModelSelectChange()">
+          <option value="">— Select model —</option>
+          <optgroup label="Midjourney">
+            <option>Midjourney v7</option>
+            <option>Midjourney v6.1</option>
+            <option>Midjourney v6</option>
+            <option>Midjourney v5.2</option>
+          </optgroup>
+          <optgroup label="Flux">
+            <option>Flux 1.1 Pro</option>
+            <option>Flux Pro</option>
+            <option>Flux Dev</option>
+            <option>Flux Schnell</option>
+          </optgroup>
+          <optgroup label="Stable Diffusion">
+            <option>Stable Diffusion 3.5</option>
+            <option>Stable Diffusion XL</option>
+            <option>Stable Diffusion 2.1</option>
+          </optgroup>
+          <optgroup label="OpenAI">
+            <option>DALL-E 3</option>
+            <option>GPT-4o Image</option>
+          </optgroup>
+          <optgroup label="Adobe">
+            <option>Adobe Firefly 3</option>
+            <option>Adobe Firefly 2</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option>Ideogram v2</option>
+            <option>Ideogram v1</option>
+            <option>Leonardo AI</option>
+            <option>Playground v3</option>
+            <option>Kling</option>
+            <option>NightCafe</option>
+          </optgroup>
+          <option value="__custom__">+ Add custom model…</option>
+        </select>
+        <div id="customModelWrap" style="display:none;margin-top:8px;">
+          <input id="customModelInput" class="img-modal-input" placeholder="Enter model name…" style="margin-bottom:6px;">
+          <label style="font-size:9px;color:var(--muted);letter-spacing:1px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="saveModelCheck" style="accent-color:var(--accent);">
+            <span>Save to my models list</span>
+          </label>
+        </div>
+      </div>
+      <div class="img-modal-field">
+        <label>PROMPT TITLE (optional)</label>
+        <input id="imgTitleInput" class="img-modal-input" placeholder="e.g. Scorpion Hydra Fusion v2">
+      </div>
+      <div class="img-modal-field">
+        <label>RATING</label>
+        <div id="imgRatingStars" class="lib-card-stars" style="margin-top:4px;"></div>
+      </div>
+    </div>
+    <div class="img-modal-footer">
+      <button class="btn btn-primary" onclick="confirmImageSave()" style="flex:1;">✓ SAVE PROMPT</button>
+      <button class="btn btn-ghost" onclick="savePromptNoImage()">SAVE WITHOUT IMAGE</button>
+    </div>
   </div>
 </div>
+
+<!-- STYLE EDITOR MODAL -->
+<div id="styleEditorOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--surface);border:1px solid var(--accent);border-radius:4px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);">// STYLE PRESETS</div>
+      <button onclick="closeStyleEditor()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:3px 10px;cursor:pointer;font-size:12px;">✕</button>
+    </div>
+    <!-- Category tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;">
+      <button class="style-tab active" onclick="switchStyleTab('realism',this)">REALISM</button>
+      <button class="style-tab" onclick="switchStyleTab('horror',this)">HORROR</button>
+      <button class="style-tab" onclick="switchStyleTab('scifi',this)">SCI-FI</button>
+      <button class="style-tab" onclick="switchStyleTab('fantasy',this)">FANTASY</button>
+      <button class="style-tab" onclick="switchStyleTab('custom',this)">✦ CUSTOM</button>
+    </div>
+    <!-- Preset list -->
+    <div style="flex:1;overflow-y:auto;padding:16px 20px;" id="stylePresetList"></div>
+    <!-- New custom preset form -->
+    <div id="newPresetForm" style="display:none;padding:16px 20px;border-top:1px solid var(--border);flex-shrink:0;">
+      <div style="font-size:10px;letter-spacing:3px;color:var(--accent);font-weight:700;margin-bottom:12px;">// NEW CUSTOM PRESET</div>
+      <div style="display:grid;gap:8px;">
+        <div>
+          <label style="font-size:9px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">NAME</label>
+          <input id="newPresetName" placeholder="My Custom Style" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:13px;padding:7px 10px;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">DESCRIPTORS (injected mid-prompt)</label>
+          <textarea id="newPresetAdj" rows="2" placeholder="e.g. watercolour painting, loose brushwork, warm palette" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">RENDER SUFFIX (appended at end)</label>
+          <textarea id="newPresetSuffix" rows="2" placeholder="e.g. fine art print, gallery quality, artistic composition" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" onclick="saveNewPreset()" style="font-size:10px;padding:8px 16px;">✓ SAVE PRESET</button>
+          <button class="btn btn-ghost" onclick="cancelNewPreset()" style="font-size:10px;padding:8px 16px;">CANCEL</button>
+        </div>
+      </div>
+    </div>
+    <div id="addCustomBtn" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:none;">
+      <button class="btn btn-outline" onclick="showNewPresetForm()" style="font-size:10px;width:100%;">+ ADD CUSTOM PRESET</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ NAVIGATION BAR ═══════════════════════ -->
+<nav class="nav-bar">
+  <div class="nav-brand">
+    BEAST MODE
+    <span class="version">V4.0</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab" id="navLibrary" onclick="switchView('library')">
+      <span class="tab-icon">▤</span>
+      <span class="tab-label">LIBRARY</span>
+      <span class="tab-badge" id="libBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-tab active" id="navGenerator" onclick="switchView('generator')">
+      <span class="tab-icon">⌬</span>
+      <span class="tab-label">GENERATOR</span>
+    </button>
+    <button class="nav-tab" id="navBuilder" onclick="switchView('builder')">
+      <span class="tab-icon">⊛</span>
+      <span class="tab-label">PROMPT LAB <sup style="font-size:7px;letter-spacing:1px;opacity:.7;">β</sup></span>
+    </button>
+    <button class="nav-tab" id="navSettings" onclick="switchView('settings')">
+      <span class="tab-icon">⌘</span>
+      <span class="tab-label">SETTINGS</span>
+    </button>
+  </div>
+  <div class="nav-actions">
+    <button id="lightToggle" onclick="toggleLightMode()" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--muted);transition:all .2s;">☀</button>
+    <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════ LIBRARY VIEW ═══════════════════════ -->
+<div class="view" id="viewLibrary">
+  <div class="view-inner">
+    <header style="margin-bottom:20px;">
+      <div class="title-line">
+        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);">// PROMPT LIBRARY</h1>
+      </div>
+    </header>
+    <div class="lib-toolbar">
+      <input class="lib-search" id="libSearch" placeholder="Search prompts, creatures, models…" oninput="libSearchDebounced()">
+      <select class="lib-sort-select" id="libSort" onchange="renderLibrary()">
+        <option value="newest">NEWEST</option>
+        <option value="oldest">OLDEST</option>
+        <option value="rating">TOP RATED</option>
+        <option value="name">A–Z</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+      <div class="lib-filter-row" id="libFilters" style="margin-bottom:0;"></div>
+      <div class="lib-count" id="libCount"></div>
+    </div>
+    <div class="lib-grid" id="libGrid"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ GENERATOR VIEW ═══════════════════════ -->
+<div class="view active" id="viewGenerator">
+  <div class="view-inner">
+
+    <header>
+      <div class="title-line">
+        <h1 id="mainTitle" style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);">// BEAST MODE</h1>
+        <span class="version">HYBRID ENGINE</span>
+      </div>
+      <div class="mode-toggle" style="margin-top:14px;">
+        <button class="mode-btn active" id="btnInsect" onclick="setMode('insect')">⬡ INSECT MODE</button>
+        <button class="mode-btn" id="btnBeast" onclick="setMode('beast')">☠ BEAST MODE</button>
+        <button class="mode-btn" id="btnFusion" onclick="setMode('fusion')">⚡ FUSION MODE</button>
+      </div>
+      <div style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:10px;letter-spacing:3px;color:var(--muted);font-weight:700;">// STYLE PRESET</span>
+          <button class="btn btn-ghost" onclick="openStyleEditor()" style="padding:4px 12px;font-size:10px;">✎ CUSTOMISE STYLES</button>
+        </div>
+        <div id="presetRow" style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;"></div>
+      </div>
+    </header>
+
+    <!-- DRIVE SYNC BAR -->
+    <div class="drive-bar" id="driveBar">
+      <div id="driveSignedOut" style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
+        <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;">GOOGLE DRIVE SYNC</span>
+        <div id="googleSignInBtn"></div>
+      </div>
+      <div id="driveSignedIn" style="display:none;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
+        <img class="drive-avatar" id="driveAvatar" src="" alt="">
+        <span class="drive-name" id="driveName"></span>
+        <span class="drive-status" id="driveStatus">—</span>
+        <button class="btn btn-ghost" onclick="driveSync()" style="padding:4px 12px;font-size:10px;">↻ SYNC</button>
+        <button class="btn btn-ghost" onclick="driveSignOut()" style="padding:4px 10px;font-size:10px;">SIGN OUT</button>
+      </div>
+    </div>
 
 <!-- CONTROLS -->
 <div class="panel">
@@ -936,9 +1766,214 @@ body.light .colourTuner { background:var(--surface2); }
   </div>
 </div>
 
-</div><!-- /app -->
+
+  </div><!-- /view-inner -->
+</div><!-- /viewGenerator -->
+
+<!-- ═══════════════════════ SETTINGS VIEW ═══════════════════════ -->
+<div class="view" id="viewSettings">
+  <div class="view-inner">
+      <header style="margin-bottom:20px;">
+        <div class="title-line">
+          <h1 style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);">// SETTINGS</h1>
+        </div>
+      </header>
+    <div class="settings-grid">
+
+      <!-- Drive -->
+      <div class="settings-section">
+        <div class="settings-section-title">Google Drive</div>
+        <div id="settingsDriveStatus" style="font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
+        <div id="settingsDriveSignedIn" style="display:none;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <img class="drive-avatar" id="settingsAvatar" src="" alt="">
+            <div>
+              <div style="font-size:12px;font-weight:700;color:var(--text);" id="settingsName"></div>
+              <div style="font-size:10px;color:var(--muted);" id="settingsStatusLine">Connected</div>
+            </div>
+          </div>
+          <button class="btn btn-ghost" onclick="driveSync()" style="font-size:10px;margin-right:6px;">↻ SYNC NOW</button>
+          <button class="btn btn-ghost" onclick="driveSignOut()" style="font-size:10px;">SIGN OUT</button>
+        </div>
+        <div id="settingsDriveSignedOut" style="display:block;">
+          <div id="settingsSignInBtn" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- Appearance -->
+      <div class="settings-section">
+        <div class="settings-section-title">Appearance</div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Light Mode</div>
+            <div class="settings-desc">Switch to light colour scheme</div>
+          </div>
+          <button class="btn btn-ghost" onclick="toggleLightMode()" style="font-size:10px;" id="settingsLightBtn">☀ LIGHT</button>
+        </div>
+      </div>
+
+      <!-- Custom Models -->
+      <div class="settings-section">
+        <div class="settings-section-title">My AI Models</div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;line-height:1.6;">Custom models saved for reuse when tagging prompts.</div>
+        <div class="models-list" id="settingsModelsList"></div>
+        <div style="display:flex;gap:6px;margin-top:12px;">
+          <input id="settingsNewModel" class="img-modal-input" placeholder="Model name…" style="flex:1;font-size:12px;padding:6px 8px;">
+          <button class="btn btn-outline" onclick="addCustomModelFromSettings()" style="font-size:10px;padding:6px 12px;">+ ADD</button>
+        </div>
+      </div>
+
+      <!-- Style Presets -->
+      <div class="settings-section">
+        <div class="settings-section-title">Style Presets</div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:12px;line-height:1.6;">Manage built-in and custom style presets.</div>
+        <button class="btn btn-outline" onclick="openStyleEditor();switchView('generator')" style="font-size:10px;width:100%;">✎ OPEN STYLE EDITOR</button>
+      </div>
+
+      <!-- Export -->
+      <div class="settings-section" style="grid-column:1/-1;">
+        <div class="settings-section-title">Data &amp; Export</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline" onclick="exportAll()" style="font-size:10px;">⬇ EXPORT ALL PROMPTS .TXT</button>
+          <button class="btn btn-ghost" onclick="exportLibraryJSON()" style="font-size:10px;">⬇ EXPORT LIBRARY .JSON</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!-- ═══════════════════════════════════════════════════════ BUILDER VIEW ═══ -->
+<div class="view" id="viewBuilder">
+  <div class="view-inner">
+
+    <header style="margin-bottom:20px;">
+      <div class="title-line">
+        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</h1>
+        <span class="version" style="align-self:center;">β // PARTICLE FORMULA ENGINE</span>
+      </div>
+    </header>
+
+    <!-- Library selector + built-in toggle -->
+    <div class="pb-lib-bar">
+      <div class="pb-lib-tabs" id="pbLibTabs"></div>
+    </div>
+
+    <!-- Live assembled prompt -->
+    <div class="pb-output-wrap">
+      <div class="pb-section-label">// ASSEMBLED PROMPT</div>
+      <div class="pb-output" id="pbOutput">
+        <span class="pb-output-ph">Select particles below — prompt assembles automatically</span>
+        <button class="pb-copy-btn" onclick="pbCopyOutput()">⎘ COPY</button>
+      </div>
+    </div>
+
+    <!-- Type legend -->
+    <div class="pb-legend" id="pbLegend"></div>
+
+    <!-- Particle library -->
+    <div class="pb-library-header">
+      <div class="pb-section-label" style="margin-bottom:0;">// PARTICLE LIBRARY</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbRenderLibrary()">
+        <button class="btn btn-outline" style="font-size:10px;padding:6px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
+        <button class="btn btn-primary" style="font-size:10px;padding:6px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
+        <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()" title="Show or hide built-in example particles">HIDE BUILT-IN</button>
+      </div>
+    </div>
+
+    <!-- Global add form -->
+    <div class="pb-add-form" id="pbAddForm">
+      <div class="pb-add-row">
+        <div style="flex:2;min-width:180px;">
+          <label class="pb-field-label">PARTICLE TEXT</label>
+          <input class="pb-input" id="pbAddText" placeholder="e.g. rain-soaked neon city streets at midnight…" onkeydown="if(event.key==='Enter')pbSaveParticle()">
+        </div>
+        <div style="flex:1;min-width:130px;">
+          <label class="pb-field-label">TYPE</label>
+          <select class="pb-input" id="pbAddType" onchange="pbUpdateCategorySelect()"></select>
+        </div>
+        <div style="flex:1;min-width:130px;">
+          <label class="pb-field-label">CATEGORY</label>
+          <select class="pb-input" id="pbAddCategory"></select>
+        </div>
+        <div style="display:flex;gap:6px;align-self:flex-end;">
+          <button class="btn btn-primary" style="font-size:10px;padding:7px 14px;" onclick="pbSaveParticle()">SAVE</button>
+          <button class="btn btn-ghost" style="font-size:10px;padding:7px 12px;" onclick="pbToggleAddForm()">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Particle grid -->
+    <div id="pbGrid"></div>
+
+    <!-- Formula -->
+    <div style="margin-top:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="pb-section-label" style="margin-bottom:0;">// FORMULA</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost" style="font-size:10px;padding:5px 12px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
+          <button class="btn btn-ghost" style="font-size:10px;padding:5px 12px;" onclick="pbClearFormula()">✕ CLEAR</button>
+        </div>
+      </div>
+      <div class="pb-formula" id="pbFormula">
+        <span class="pb-formula-ph">Click particles above to build your formula…</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+
+
+<!-- ═══════════════════════════════ IMPORT PROMPT MODAL ════════════ -->
+<div id="pbImportModal" style="display:none;position:fixed;inset:0;z-index:10003;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div class="pb-import-card">
+
+    <div class="pb-import-header">
+      <div>
+        <div class="pb-import-title">// IMPORT &amp; TAG PROMPT</div>
+        <div class="pb-import-sub">Pick a type &nbsp;&middot;&nbsp; Select text &nbsp;&middot;&nbsp; Repeat &nbsp;&middot;&nbsp; Save</div>
+      </div>
+      <button class="pb-import-close" onclick="pbCloseImport()">&#x2715;</button>
+    </div>
+
+    <div class="pb-import-section">
+      <div class="pb-import-step">&#9312; ACTIVE PARTICLE TYPE &mdash; tap to activate</div>
+      <div class="pb-type-picker" id="pbTypePicker"></div>
+    </div>
+
+    <div class="pb-import-section" id="pbPasteSection">
+      <div class="pb-import-step">&#9313; PASTE YOUR PROMPT</div>
+      <textarea class="pb-import-textarea" id="pbImportTextarea" placeholder="Paste any prompt here&hellip;" oninput="pbImportOnInput()"></textarea>
+      <button class="btn btn-outline" style="font-size:10px;margin-top:8px;" onclick="pbImportCommit()">ANNOTATE &#x2192;</button>
+    </div>
+
+    <div class="pb-import-section" id="pbAnnotateSection" style="display:none;">
+      <div class="pb-import-step">③ TAP FIRST WORD — TAP LAST WORD — TAG IS APPLIED</div>
+      <div class="pb-annotated-wrap">
+        <div class="pb-annotated" id="pbAnnotated"></div>
+      </div>
+      <div class="pb-selection-status" id="pbSelStatus"></div>
+      <button class="btn btn-ghost" style="font-size:10px;margin-top:8px;" onclick="pbImportReset()">&#x2190; EDIT PROMPT</button>
+    </div>
+
+    <div class="pb-import-section" id="pbTaggedSection" style="display:none;">
+      <div class="pb-import-step">TAGGED SEGMENTS <span id="pbTaggedCount" style="opacity:.6;font-weight:400;"></span></div>
+      <div class="pb-tagged-list" id="pbTaggedList"></div>
+    </div>
+
+    <div class="pb-import-footer">
+      <button class="btn btn-ghost" style="font-size:10px;" onclick="pbClearTags()">&#x2715; CLEAR TAGS</button>
+      <button class="btn btn-primary" style="font-size:10px;" onclick="pbSaveTagged()" id="pbSaveTaggedBtn" disabled>&#x2713; SAVE ALL AS PARTICLES</button>
+    </div>
+
+  </div>
+</div>
+
 
 <script>
+
 // ═══════════════════════════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════════════════════════
@@ -2371,14 +3406,14 @@ init()
 // ═══════════════════════════════════════════════════════════════════
 function setMode(mode){
   currentMode = mode
-  const body = document.querySelector('.app').parentElement
+  const body = document.body
   body.className = body.className.replace(/mode-\w+/g,'').trim()
   body.classList.add('mode-'+mode)
   document.getElementById('btnInsect').classList.toggle('active', mode==='insect')
   document.getElementById('btnBeast').classList.toggle('active', mode==='beast')
   document.getElementById('btnFusion').classList.toggle('active', mode==='fusion')
   document.getElementById('modeLabel').textContent = mode.toUpperCase()
-  const titles = { insect:'INSECT MECH GENERATOR', beast:'BEAST MODE', fusion:'FUSION MODE' }
+  const titles = { insect:'// INSECT MODE', beast:'// BEAST MODE', fusion:'// FUSION MODE' }
   document.getElementById('mainTitle').textContent = titles[mode]
   populateDropdowns()
   driveSaveCurrentDebounced()
@@ -2432,7 +3467,7 @@ function setPreset(id) {
   const p = getPreset(id)
   if (p) STYLE_MODS[id] = { adj: p.adj, suffix: p.suffix }
 
-  const body = document.querySelector('.app').parentElement
+  const body = document.body
   body.className = body.className.replace(/preset-\w[\w-]*/g,'').trim()
   if (p?.accentClass) body.classList.add(p.accentClass)
 
@@ -2765,13 +3800,13 @@ function applySettings(s) {
   // Mode first — this re-populates creature dropdowns
   if (s.mode && ['insect','beast','fusion'].includes(s.mode)) {
     currentMode = s.mode
-    const body = document.querySelector('.app').parentElement
+    const body = document.body
     body.className = body.className.replace(/mode-\w+/g,'').trim()
     body.classList.add('mode-'+s.mode)
     ;['insect','beast','fusion'].forEach(m =>
       document.getElementById('btn'+m.charAt(0).toUpperCase()+m.slice(1)).classList.toggle('active', m===s.mode))
     document.getElementById('modeLabel').textContent = s.mode.toUpperCase()
-    const titles = { insect:'INSECT MECH GENERATOR', beast:'BEAST MODE', fusion:'FUSION MODE' }
+    const titles = { insect:'// INSECT MODE', beast:'// BEAST MODE', fusion:'// FUSION MODE' }
     document.getElementById('mainTitle').textContent = titles[s.mode]
     populateDropdowns()
   }
@@ -3237,6 +4272,11 @@ async function driveOnSignedIn() {
   await driveCustomPresetsLoad()
   await driveLoadAllPrompts()
   await driveLoadCurrentSettings()
+  await driveModelsLoad()
+  await pbParticlesLoad()
+  updateNavDriveDot()
+  updateLibBadge()
+  renderLibrary()
 }
 
 // ─── UI HELPERS ───────────────────────────────────────────────────
@@ -3463,6 +4503,1718 @@ function toggleLightMode() {
 })()
 
 window.addEventListener('load', () => { setTimeout(initDrive, 800); openLoadPanel() })
+
+
+// ═══════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+
+let currentView = 'generator'
+
+function switchView(view) {
+  currentView = view
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'))
+  document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
+  document.getElementById('nav' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
+  if (view === 'library') renderLibrary()
+  if (view === 'settings') renderSettingsView()
+  if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
+  window.scrollTo({top:0,behavior:'smooth'})
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROMPT METADATA — extends favourite objects
+// ═══════════════════════════════════════════════════════════════════
+
+// Built-in AI models (always in dropdown)
+const BUILTIN_MODELS = [
+  'Midjourney v7','Midjourney v6.1','Midjourney v6','Midjourney v5.2',
+  'Flux 1.1 Pro','Flux Pro','Flux Dev','Flux Schnell',
+  'Stable Diffusion 3.5','Stable Diffusion XL',
+  'DALL-E 3','GPT-4o Image',
+  'Adobe Firefly 3','Adobe Firefly 2',
+  'Ideogram v2','Leonardo AI','Playground v3',
+]
+let customModels = []   // user-saved, synced to Drive
+let pendingImageData = null  // base64 thumbnail while modal is open
+let pendingImageModalFavId = null  // fav id being edited, or null for new save
+let pendingRating = 0
+const MODELS_FILE = 'beast-mode-models.json'
+let driveModelsId = null
+
+function getAllModels() { return [...BUILTIN_MODELS, ...customModels] }
+
+// ═══════════════════════════════════════════════════════════════════
+// IMAGE UPLOAD MODAL
+// ═══════════════════════════════════════════════════════════════════
+
+function openImageModal(favId) {
+  pendingImageModalFavId = favId || null
+  pendingImageData = null
+  pendingRating = 0
+  document.getElementById('imgDropZone').style.display = 'flex'
+  document.getElementById('imgPreviewWrap').style.display = 'none'
+  document.getElementById('imgModelSelect').value = ''
+  document.getElementById('customModelWrap').style.display = 'none'
+  document.getElementById('customModelInput').value = ''
+  document.getElementById('saveModelCheck').checked = false
+  document.getElementById('imgTitleInput').value = favId
+    ? (favourites.find(f=>f.id===favId)?.title || '') : ''
+  renderRatingStars('imgRatingStars', pendingRating, r => { pendingRating = r })
+  document.getElementById('imageUploadModal').classList.add('open')
+
+  // Populate custom models in select
+  populateModelSelect()
+}
+
+function closeImageModal() {
+  document.getElementById('imageUploadModal').classList.remove('open')
+  pendingImageData = null
+  pendingImageModalFavId = null
+  document.getElementById('imgFileInput').value = ''
+}
+
+function populateModelSelect() {
+  const sel = document.getElementById('imgModelSelect')
+  // Remove old custom optgroup if present
+  const existing = sel.querySelector('optgroup[label="My Models"]')
+  if (existing) existing.remove()
+  if (customModels.length) {
+    const grp = document.createElement('optgroup')
+    grp.label = 'My Models'
+    customModels.forEach(m => {
+      const o = document.createElement('option')
+      o.value = m; o.textContent = m
+      grp.appendChild(o)
+    })
+    // Insert before the custom option
+    const customOpt = sel.querySelector('option[value="__custom__"]')
+    sel.insertBefore(grp, customOpt)
+  }
+}
+
+function onModelSelectChange() {
+  const val = document.getElementById('imgModelSelect').value
+  document.getElementById('customModelWrap').style.display = val === '__custom__' ? 'block' : 'none'
+}
+
+function onImageFileSelected(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    compressImage(e.target.result, 400, dataUrl => {
+      pendingImageData = dataUrl
+      document.getElementById('imgPreview').src = dataUrl
+      document.getElementById('imgPreviewWrap').style.display = 'block'
+      document.getElementById('imgDropZone').style.display = 'none'
+    })
+  }
+  reader.readAsDataURL(file)
+}
+
+function compressImage(dataUrl, maxSize, callback) {
+  const img = new Image()
+  img.onload = () => {
+    const canvas = document.createElement('canvas')
+    const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1)
+    canvas.width  = Math.round(img.width  * ratio)
+    canvas.height = Math.round(img.height * ratio)
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+    callback(canvas.toDataURL('image/jpeg', 0.82))
+  }
+  img.src = dataUrl
+}
+
+function clearImageUpload() {
+  pendingImageData = null
+  document.getElementById('imgPreviewWrap').style.display = 'none'
+  document.getElementById('imgDropZone').style.display = 'flex'
+  document.getElementById('imgFileInput').value = ''
+}
+
+function getModalModel() {
+  const sel = document.getElementById('imgModelSelect').value
+  if (sel === '__custom__') return document.getElementById('customModelInput').value.trim()
+  return sel
+}
+
+function confirmImageSave() {
+  const model  = getModalModel()
+  const title  = document.getElementById('imgTitleInput').value.trim()
+  const saveM  = document.getElementById('saveModelCheck').checked
+  const custom = document.getElementById('imgModelSelect').value === '__custom__'
+    ? document.getElementById('customModelInput').value.trim() : null
+
+  if (saveM && custom && !customModels.includes(custom)) {
+    customModels.push(custom)
+    driveModelsSync()
+    renderSettingsModelsList()
+  }
+
+  if (pendingImageModalFavId) {
+    // Editing existing fav
+    const f = favourites.find(x => x.id === pendingImageModalFavId)
+    if (f) {
+      if (pendingImageData) f.imageData = pendingImageData
+      if (model) f.model = model
+      if (title) f.title = title
+      f.rating = pendingRating
+      f.updatedAt = Date.now()
+      driveSavePrompt(f)
+    }
+  } else {
+    // New save from generator
+    doSaveFav(pendingImageData, model, title, pendingRating)
+  }
+
+  closeImageModal()
+  if (currentView === 'library') renderLibrary()
+}
+
+function savePromptNoImage() {
+  const model = getModalModel()
+  const title = document.getElementById('imgTitleInput').value.trim()
+  if (pendingImageModalFavId) {
+    const f = favourites.find(x => x.id === pendingImageModalFavId)
+    if (f) {
+      if (model) f.model = model
+      if (title) f.title = title
+      f.rating = pendingRating
+      f.updatedAt = Date.now()
+      driveSavePrompt(f)
+    }
+  } else {
+    doSaveFav(null, model, title, pendingRating)
+  }
+  closeImageModal()
+  if (currentView === 'library') renderLibrary()
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SAVE FLOW — opens modal instead of saving directly
+// ═══════════════════════════════════════════════════════════════════
+
+// Override saveFav to open the image/metadata modal
+function saveFav() {
+  const out = document.getElementById('output')
+  const visible = out.textContent
+  if (!visible || visible.startsWith('//')) return
+  // Store pending output for use after modal confirm
+  window._pendingOutput = { visible, full: out.dataset.full || '' }
+  openImageModal(null)
+}
+
+function doSaveFav(imageData, model, title, rating) {
+  const { visible, full: rawFull } = window._pendingOutput || {}
+  if (!visible) return
+  let full = rawFull
+  if (!full || !full.includes('---SETTINGS---')) {
+    full = visible + SETTINGS_DELIMITER + JSON.stringify(captureSettings())
+  }
+  const promptOnly = full.includes('---SETTINGS---')
+    ? full.slice(0, full.indexOf('---SETTINGS---')).trim() : visible
+
+  const fav = {
+    text: full, promptOnly,
+    mode: currentMode, preset: currentPreset,
+    id: Date.now(),
+    title: title || '',
+    model: model || '',
+    rating: rating || 0,
+    imageData: imageData || null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  favourites.unshift(fav)
+  renderFavs()
+  updateLibBadge()
+  driveSavePrompt(fav)
+  driveSaveCurrentDebounced()
+  // Switch to library to show the result
+  switchView('library')
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LIBRARY VIEW
+// ═══════════════════════════════════════════════════════════════════
+
+let libActiveFilter = ''
+let libSearchTimer  = null
+
+function libSearchDebounced() {
+  clearTimeout(libSearchTimer)
+  libSearchTimer = setTimeout(renderLibrary, 200)
+}
+
+function formatDate(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const now = new Date()
+  const diff = now - d
+  if (diff < 60000)  return 'just now'
+  if (diff < 3600000) return Math.floor(diff/60000) + 'm ago'
+  if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago'
+  if (diff < 604800000) return Math.floor(diff/86400000) + 'd ago'
+  return d.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})
+}
+
+function extractCreatures(f) {
+  const text = f.promptOnly || f.text || ''
+  const m = text.match(/inspired by (.+?) and (.+?) —/)
+  if (m) return { a: m[1].trim(), b: m[2].trim() }
+  return { a: f.creatureA || '', b: f.creatureB || '' }
+}
+
+function renderLibFilters() {
+  const row = document.getElementById('libFilters')
+  if (!row) return
+
+  const counts = {
+    '': favourites.length,
+    insect: favourites.filter(f=>f.mode==='insect').length,
+    beast:  favourites.filter(f=>f.mode==='beast').length,
+    fusion: favourites.filter(f=>f.mode==='fusion').length,
+    rated:  favourites.filter(f=>f.rating>0).length,
+    image:  favourites.filter(f=>f.imageData).length,
+  }
+
+  const filters = [
+    { id:'',      label:'ALL' },
+    { id:'insect',label:'⬡ INSECT' },
+    { id:'beast', label:'☠ BEAST'  },
+    { id:'fusion',label:'⚡ FUSION' },
+    { id:'rated', label:'★ RATED'  },
+    { id:'image', label:'🖼 IMAGE'  },
+  ]
+
+  row.innerHTML = ''
+  filters.forEach(f => {
+    if (f.id !== '' && counts[f.id] === 0) return // hide empty filters
+    const chip = document.createElement('button')
+    chip.className = 'lib-filter-chip' + (f.id === libActiveFilter ? ' active' : '')
+    chip.innerHTML = `${f.label} <span class="chip-count">${counts[f.id]}</span>`
+    chip.onclick = () => { libActiveFilter = f.id; renderLibFilters(); renderLibrary() }
+    row.appendChild(chip)
+  })
+}
+
+function renderLibrary() {
+  renderLibFilters()
+  const grid  = document.getElementById('libGrid')
+  const count = document.getElementById('libCount')
+  const query = (document.getElementById('libSearch')?.value || '').toLowerCase().trim()
+  const sort  = document.getElementById('libSort')?.value || 'newest'
+  if (!grid) return
+
+  let items = [...favourites]
+
+  // Filter
+  if (libActiveFilter === 'insect') items = items.filter(f => f.mode === 'insect')
+  if (libActiveFilter === 'beast')  items = items.filter(f => f.mode === 'beast')
+  if (libActiveFilter === 'fusion') items = items.filter(f => f.mode === 'fusion')
+  if (libActiveFilter === 'rated')  items = items.filter(f => f.rating > 0)
+  if (libActiveFilter === 'image')  items = items.filter(f => f.imageData)
+  if (query) {
+    items = items.filter(f =>
+      (f.promptOnly||f.text||'').toLowerCase().includes(query) ||
+      (f.title||'').toLowerCase().includes(query) ||
+      (f.model||'').toLowerCase().includes(query) ||
+      (f.mode||'').toLowerCase().includes(query) ||
+      (f.preset||'').toLowerCase().includes(query)
+    )
+  }
+
+  // Sort
+  if (sort === 'newest') items.sort((a,b) => (b.createdAt||b.id) - (a.createdAt||a.id))
+  if (sort === 'oldest') items.sort((a,b) => (a.createdAt||a.id) - (b.createdAt||b.id))
+  if (sort === 'rating') items.sort((a,b) => (b.rating||0) - (a.rating||0) || (b.createdAt||b.id) - (a.createdAt||a.id))
+  if (sort === 'name')   items.sort((a,b) => {
+    const na = a.title || buildAutoTitle(a)
+    const nb = b.title || buildAutoTitle(b)
+    return na.localeCompare(nb)
+  })
+
+  // Count
+  if (count) {
+    if (items.length === favourites.length) {
+      count.innerHTML = `<span>${favourites.length}</span> PROMPT${favourites.length !== 1 ? 'S' : ''}`
+    } else {
+      count.innerHTML = `<span>${items.length}</span> OF ${favourites.length} SHOWN`
+    }
+  }
+
+  grid.innerHTML = ''
+
+  if (!items.length) {
+    const empty = document.createElement('div')
+    empty.className = 'lib-empty'
+    if (favourites.length === 0) {
+      empty.innerHTML = `
+        <span class="lib-empty-icon">⚙</span>
+        <div class="lib-empty-title">YOUR LIBRARY IS EMPTY</div>
+        <div class="lib-empty-sub">Head to the Generator tab, build a mech,<br>and tap ♥ SAVE to add your first prompt.</div>
+        <div class="lib-empty-cta" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="switchView('generator')" style="font-size:11px;">⚙ GO TO GENERATOR</button>
+          <button class="btn btn-outline" onclick="switchView('builder');setTimeout(pbOpenImport,300)" style="font-size:11px;">⬆ IMPORT PROMPT</button>
+        </div>
+      `
+    } else {
+      empty.innerHTML = `
+        <span class="lib-empty-icon">🔍</span>
+        <div class="lib-empty-title">NO RESULTS</div>
+        <div class="lib-empty-sub">No prompts match your current search or filter.<br>Try clearing the search or switching filters.</div>
+      `
+    }
+    grid.appendChild(empty)
+    return
+  }
+
+  const frag = document.createDocumentFragment()
+  items.forEach(f => frag.appendChild(buildLibCard(f)))
+  grid.appendChild(frag)
+  updateLibBadge()
+}
+
+function buildLibCard(f) {
+  const card = document.createElement('div')
+  card.className = 'lib-card'
+  card.id = 'libCard_' + f.id
+
+  // ── Image ──────────────────────────────────────────────────
+  if (f.imageData) {
+    const img = document.createElement('img')
+    img.className = 'lib-card-image'
+    img.src = f.imageData
+    img.alt = f.title || buildAutoTitle(f)
+    img.loading = 'lazy'
+    img.onclick = e => { e.stopPropagation(); openLightbox(f.imageData) }
+    card.appendChild(img)
+  } else {
+    const ph = document.createElement('div')
+    ph.className = 'lib-card-image-ph'
+    ph.innerHTML = `<span class="ph-icon">🖼</span><span class="ph-label">ADD REFERENCE IMAGE</span>`
+    ph.onclick = e => { e.stopPropagation(); openImageModal(f.id) }
+    card.appendChild(ph)
+  }
+
+  // ── Body ───────────────────────────────────────────────────
+  const body = document.createElement('div')
+  body.className = 'lib-card-body'
+
+  // Header: title + date
+  const header = document.createElement('div')
+  header.className = 'lib-card-header'
+  const titleEl = document.createElement('input')
+  titleEl.className = 'lib-card-title'
+  titleEl.value = f.title || ''
+  titleEl.placeholder = buildAutoTitle(f)
+  titleEl.title = 'Click to rename'
+  titleEl.onclick  = e => e.stopPropagation()
+  titleEl.onkeydown = e => { if (e.key === 'Enter') titleEl.blur() }
+  titleEl.onblur   = () => {
+    const newTitle = titleEl.value.trim()
+    if (newTitle !== f.title) {
+      f.title = newTitle; f.updatedAt = Date.now(); driveSavePrompt(f)
+    }
+  }
+  const dateEl = document.createElement('div')
+  dateEl.className = 'lib-card-date'
+  dateEl.textContent = formatDate(f.createdAt || f.id)
+  header.appendChild(titleEl)
+  header.appendChild(dateEl)
+  body.appendChild(header)
+
+  // Creatures line
+  const cr = extractCreatures(f)
+  if (cr.a || cr.b) {
+    const crLine = document.createElement('div')
+    crLine.className = 'lib-card-creatures'
+    crLine.innerHTML = cr.a && cr.b
+      ? `<strong>${cr.a}</strong><span class="lib-card-creature-sep">×</span><strong>${cr.b}</strong>`
+      : `<strong>${cr.a || cr.b}</strong>`
+    body.appendChild(crLine)
+  }
+
+  // Tags
+  const tags = document.createElement('div')
+  tags.className = 'lib-card-tags'
+  const presetName = (getPreset(f.preset)?.name || f.preset || 'DEFAULT').toUpperCase()
+  tags.innerHTML = `
+    <span class="lib-tag mode-${f.mode}">${f.mode.toUpperCase()}</span>
+    <span class="lib-tag tag-style">${presetName}</span>
+    ${f.model ? `<span class="lib-tag tag-model">🤖 ${f.model}</span>` : ''}
+  `
+  body.appendChild(tags)
+
+  // Prompt (expandable)
+  const promptWrap = document.createElement('div')
+  promptWrap.className = 'lib-card-prompt-wrap'
+  const promptEl = document.createElement('div')
+  promptEl.className = 'lib-card-prompt'
+  const promptText = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/,'').trim()
+  promptEl.textContent = promptText
+  promptEl.onclick = e => { e.stopPropagation(); togglePromptExpand(promptEl, expandBtn) }
+  promptWrap.appendChild(promptEl)
+  const expandBtn = document.createElement('button')
+  expandBtn.className = 'lib-card-expand-btn'
+  expandBtn.textContent = '▸ SHOW FULL PROMPT'
+  expandBtn.onclick = e => { e.stopPropagation(); togglePromptExpand(promptEl, expandBtn) }
+  promptWrap.appendChild(expandBtn)
+  body.appendChild(promptWrap)
+
+  // Stars + meta
+  const meta = document.createElement('div')
+  meta.className = 'lib-card-meta'
+  const starsWrap = document.createElement('div')
+  starsWrap.className = 'lib-card-stars'
+  let currentRating = f.rating || 0
+  const rebuildStars = () => {
+    starsWrap.innerHTML = ''
+    for (let i = 1; i <= 5; i++) {
+      const star = document.createElement('span')
+      star.className = 'lib-star' + (i <= currentRating ? ' on' : '')
+      star.textContent = '★'
+      star.onclick = e => {
+        e.stopPropagation()
+        currentRating = currentRating === i ? 0 : i // click same star to clear
+        f.rating = currentRating; f.updatedAt = Date.now()
+        driveSavePrompt(f); rebuildStars()
+      }
+      starsWrap.appendChild(star)
+    }
+  }
+  rebuildStars()
+  meta.appendChild(starsWrap)
+  body.appendChild(meta)
+
+  card.appendChild(body)
+
+  // ── Image status toggles (only when image uploaded) ───────────
+  if (f.imageData) {
+    const statusRow = document.createElement('div')
+    statusRow.className = 'lib-card-img-status'
+
+    const toggleDefs = [
+      { key:'upscaled', label:'⬆ UPSCALED' },
+      { key:'edited',   label:'✎ EDITED'   },
+    ]
+    toggleDefs.forEach(t => {
+      const lbl = document.createElement('label')
+      lbl.className = 'img-status-toggle'
+      const chk = document.createElement('input')
+      chk.type = 'checkbox'
+      chk.checked = !!f[t.key]
+      chk.onclick = e => e.stopPropagation()
+      chk.onchange = () => {
+        f[t.key] = chk.checked
+        f.updatedAt = Date.now()
+        driveSavePrompt(f)
+      }
+      const pill = document.createElement('span')
+      pill.className = 'img-status-pill'
+      pill.textContent = t.label
+      lbl.appendChild(chk)
+      lbl.appendChild(pill)
+      statusRow.appendChild(lbl)
+    })
+    card.appendChild(statusRow)
+  }
+
+  // ── Actions bar ────────────────────────────────────────────
+  const actions = document.createElement('div')
+  actions.className = 'lib-card-actions'
+  const actionDefs = [
+    { label:'⬆ RESTORE', cls:'', fn: () => { restoreFav(f.id); switchView('generator') } },
+    { label:'⎘ COPY',    cls:'', fn: () => copyFav(f.id) },
+    { label:'🖼',         cls:'', fn: () => openImageModal(f.id), title:'Add / change image' },
+    { label:'✕',         cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() } },
+  ]
+  actionDefs.forEach(a => {
+    const btn = document.createElement('button')
+    btn.className = 'lib-action-btn' + (a.cls ? ' '+a.cls : '')
+    btn.textContent = a.label
+    if (a.title) btn.title = a.title
+    btn.onclick = e => { e.stopPropagation(); a.fn() }
+    actions.appendChild(btn)
+  })
+  card.appendChild(actions)
+  return card
+}
+
+function togglePromptExpand(promptEl, btn) {
+  const expanded = promptEl.classList.toggle('expanded')
+  btn.textContent = expanded ? '▾ SHOW LESS' : '▸ SHOW FULL PROMPT'
+}
+
+function buildAutoTitle(f) {
+  const cr = extractCreatures(f)
+  if (cr.a && cr.b) return `${cr.a} × ${cr.b}`
+  if (cr.a) return cr.a
+  return 'Untitled Mech'
+}
+
+function renderRatingStars(containerId, currentRating, onChange, containerEl) {
+  const wrap = containerEl || document.getElementById(containerId)
+  if (!wrap) return
+  wrap.innerHTML = ''
+  for (let i = 1; i <= 5; i++) {
+    const star = document.createElement('span')
+    star.className = 'lib-star' + (i <= currentRating ? ' on' : '')
+    star.textContent = '★'
+    star.onclick = e => {
+      e.stopPropagation()
+      currentRating = currentRating === i ? 0 : i
+      onChange(currentRating)
+      renderRatingStars(containerId, currentRating, onChange, containerEl || null)
+    }
+    wrap.appendChild(star)
+  }
+}
+
+function updateLibBadge() {
+  const badge = document.getElementById('libBadge')
+  if (!badge) return
+  badge.textContent = favourites.length
+  badge.style.display = favourites.length ? 'inline' : 'none'
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────
+function openLightbox(src) {
+  document.getElementById('libLightboxImg').src = src
+  document.getElementById('libLightbox').classList.add('open')
+}
+function closeLightbox() {
+  document.getElementById('libLightbox').classList.remove('open')
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLightbox()
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS VIEW
+// ═══════════════════════════════════════════════════════════════════
+
+function renderSettingsView() {
+  // Drive status
+  const signed = !!driveToken
+  document.getElementById('settingsDriveSignedIn').style.display  = signed ? 'block' : 'none'
+  document.getElementById('settingsDriveSignedOut').style.display = signed ? 'none'  : 'block'
+  if (signed) {
+    const session = JSON.parse(localStorage.getItem('bm_drive_session') || '{}')
+    document.getElementById('settingsName').textContent = session.name || 'Connected'
+    const av = document.getElementById('settingsAvatar')
+    if (session.picture) av.src = session.picture
+    document.getElementById('settingsStatusLine').textContent = '✓ Synced to Drive'
+  } else {
+    // Render sign-in button in settings
+    if (typeof google !== 'undefined' && document.getElementById('settingsSignInBtn').children.length === 0) {
+      google.accounts.id.renderButton(
+        document.getElementById('settingsSignInBtn'),
+        { theme:'outline', size:'medium', text:'signin_with', shape:'rectangular' }
+      )
+    }
+  }
+  // Light mode button
+  const lBtn = document.getElementById('settingsLightBtn')
+  if (lBtn) lBtn.textContent = document.body.classList.contains('light') ? '🌙 DARK' : '☀ LIGHT'
+
+  renderSettingsModelsList()
+}
+
+function renderSettingsModelsList() {
+  const list = document.getElementById('settingsModelsList')
+  if (!list) return
+  if (!customModels.length) {
+    list.innerHTML = '<span style="font-size:10px;color:var(--muted);letter-spacing:1px;">No custom models yet.</span>'
+    return
+  }
+  list.innerHTML = ''
+  customModels.forEach((m,i) => {
+    const tag = document.createElement('div')
+    tag.className = 'model-tag'
+    tag.innerHTML = `${m} <span class="del" onclick="removeCustomModel(${i})">✕</span>`
+    list.appendChild(tag)
+  })
+}
+
+function addCustomModelFromSettings() {
+  const inp = document.getElementById('settingsNewModel')
+  const val = inp.value.trim()
+  if (!val || customModels.includes(val)) return
+  customModels.push(val)
+  inp.value = ''
+  driveModelsSync()
+  renderSettingsModelsList()
+  populateModelSelect()
+}
+
+function removeCustomModel(i) {
+  customModels.splice(i, 1)
+  driveModelsSync()
+  renderSettingsModelsList()
+  populateModelSelect()
+}
+
+function exportLibraryJSON() {
+  const data = JSON.stringify(favourites, null, 2)
+  const blob = new Blob([data], {type:'application/json'})
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = 'beast-mode-library.json'
+  document.body.appendChild(a); a.click()
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url) }, 100)
+}
+
+// Nav drive dot
+function updateNavDriveDot() {
+  const dot = document.getElementById('navDriveStatus')
+  if (!dot) return
+  if (driveToken) {
+    dot.style.background = '#00cc88'
+    dot.title = 'Drive connected'
+  } else {
+    dot.style.background = 'var(--muted)'
+    dot.title = 'Drive not connected'
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CUSTOM MODELS — DRIVE SYNC
+// ═══════════════════════════════════════════════════════════════════
+
+async function driveModelsSync() {
+  if (!driveToken) return
+  try {
+    const body = JSON.stringify({ models: customModels, savedAt: new Date().toISOString() })
+    if (driveModelsId) {
+      await drivePatchFile(driveModelsId, body)
+    } else {
+      const files = await driveListFiles(`name='${MODELS_FILE}'`)
+      if (files.length) {
+        driveModelsId = files[0].id
+        await drivePatchFile(driveModelsId, body)
+      } else {
+        driveModelsId = await driveCreateFile(MODELS_FILE, body)
+      }
+    }
+  } catch(e) {}
+}
+
+async function driveModelsLoad() {
+  if (!driveToken) return
+  try {
+    const files = await driveListFiles(`name='${MODELS_FILE}'`)
+    if (!files.length) return
+    driveModelsId = files[0].id
+    const data = await driveReadFile(driveModelsId)
+    if (Array.isArray(data?.models)) {
+      customModels = data.models
+      populateModelSelect()
+    }
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PATCH: driveOnSignedIn — add models load + UI updates
+// ═══════════════════════════════════════════════════════════════════
+
+// Update nav drive dot on sign out
+const _origDriveSignOut = driveSignOut
+function driveSignOut() {
+  _origDriveSignOut()
+  updateNavDriveDot()
+}
+
+// Patch window load
+window.addEventListener('load', () => {
+  setTimeout(initDrive, 800)
+  openLoadPanel()
+  updateLibBadge()
+  renderLibFilters()
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// PARTICLE BUILDER
+// ═══════════════════════════════════════════════════════════════════
+
+const PB_TYPES = [
+  { id:1,  key:'subject',     label:'Subject',     color:'#ff3b3b',
+    cats:['Mech','Creature','Character'] },
+  { id:2,  key:'form',        label:'Form',        color:'#ff7c2a',
+    cats:['Structure','Armour','Features'] },
+  { id:3,  key:'action',      label:'Action',      color:'#ffd426',
+    cats:['Combat','Movement','Pose'] },
+  { id:4,  key:'material',    label:'Material',    color:'#22d46e',
+    cats:['Metal','Organic','Composite'] },
+  { id:5,  key:'colour',      label:'Colour',      color:'#38b6ff',
+    cats:['Monochrome','Vivid','Natural'] },
+  { id:6,  key:'environment', label:'Environment', color:'#a855f7',
+    cats:['Urban','Natural','Alien'] },
+  { id:7,  key:'lighting',    label:'Lighting',    color:'#f43f8e',
+    cats:['Natural','Artificial','Atmospheric'] },
+  { id:8,  key:'style',       label:'Style',       color:'#c8d8e4',
+    cats:['Realism','Painterly','Digital'] },
+  { id:9,  key:'reference',   label:'Reference',   color:'#d4a04a',
+    cats:['Anime·Manga','Film·Game','Artist'] },
+  { id:10, key:'technical',   label:'Technical',   color:'#8fa8b8',
+    cats:['Camera','Format','Render'] },
+]
+
+const PB_SEP = '—'
+
+// Particle library
+const PB_BUILTIN_PARTICLES = [
+  // Subject — Mech
+  { id:101, builtin:true, type:'subject', cat:'Mech',      text:'giant biomechanical hybrid mech' },
+  { id:102, builtin:true, type:'subject', cat:'Mech',      text:'colossal insectoid war machine' },
+  { id:103, builtin:true, type:'subject', cat:'Mech',      text:'sleek nano-engineered combat drone' },
+  // Subject — Creature
+  { id:104, builtin:true, type:'subject', cat:'Creature',  text:'ancient armoured battle creature' },
+  { id:105, builtin:true, type:'subject', cat:'Creature',  text:'biomechanical apex predator' },
+  // Subject — Character
+  { id:106, builtin:true, type:'subject', cat:'Character', text:'lone mech pilot in full exosuit' },
+  { id:107, builtin:true, type:'subject', cat:'Character', text:'enhanced cyber-soldier hybrid' },
+
+  // Form — Structure
+  { id:201, builtin:true, type:'form', cat:'Structure',  text:'scarab-shell chassis with segmented carapace' },
+  { id:202, builtin:true, type:'form', cat:'Structure',  text:'spider-mech eight-legged hydraulic frame' },
+  { id:203, builtin:true, type:'form', cat:'Structure',  text:'dragonfly twin-wing fuselage body' },
+  // Form — Armour
+  { id:204, builtin:true, type:'form', cat:'Armour',     text:'iridescent overlapping wing-case plates' },
+  { id:205, builtin:true, type:'form', cat:'Armour',     text:'urticating hair armour with quill spines' },
+  { id:206, builtin:true, type:'form', cat:'Armour',     text:'fused bone-chitin layered carapace' },
+  // Form — Features
+  { id:207, builtin:true, type:'form', cat:'Features',   text:'compound eye sensor array' },
+  { id:208, builtin:true, type:'form', cat:'Features',   text:'scorpion arc-reactor tail weapon' },
+  { id:209, builtin:true, type:'form', cat:'Features',   text:'mantis raptorial scythe forearms' },
+
+  // Action — Combat
+  { id:301, builtin:true, type:'action', cat:'Combat',   text:'poised mid-strike, claws fully extended' },
+  { id:302, builtin:true, type:'action', cat:'Combat',   text:'charging at full sprint, dust-cloud wake' },
+  { id:303, builtin:true, type:'action', cat:'Combat',   text:'locked in battle, weapons clashing' },
+  // Action — Movement
+  { id:304, builtin:true, type:'action', cat:'Movement', text:'hovering above ruined terrain, jets firing' },
+  { id:305, builtin:true, type:'action', cat:'Movement', text:'silent stalking approach, low to ground' },
+  { id:306, builtin:true, type:'action', cat:'Movement', text:'mid-leap, silhouetted against sky' },
+  // Action — Pose
+  { id:307, builtin:true, type:'action', cat:'Pose',     text:'coiled defensive stance, spines raised' },
+  { id:308, builtin:true, type:'action', cat:'Pose',     text:'rearing up, full scale revealed' },
+  { id:309, builtin:true, type:'action', cat:'Pose',     text:'static display pose, wings spread wide' },
+
+  // Material — Metal
+  { id:401, builtin:true, type:'material', cat:'Metal',     text:'kraken-ink blackened titanium alloy' },
+  { id:402, builtin:true, type:'material', cat:'Metal',     text:'liquid-metal adaptive plating' },
+  { id:403, builtin:true, type:'material', cat:'Metal',     text:'oxidised iron and carbon-nanotube weave' },
+  // Material — Organic
+  { id:404, builtin:true, type:'material', cat:'Organic',   text:'living chitin-steel hybrid' },
+  { id:405, builtin:true, type:'material', cat:'Organic',   text:'bone-fused carbon fibre composite' },
+  { id:406, builtin:true, type:'material', cat:'Organic',   text:'grown bio-ceramic exoskeleton' },
+  // Material — Composite
+  { id:407, builtin:true, type:'material', cat:'Composite', text:'obsidian-ceramic bioweapon shell' },
+  { id:408, builtin:true, type:'material', cat:'Composite', text:'crystal-lattice energy-reactive armour' },
+  { id:409, builtin:true, type:'material', cat:'Composite', text:'woven nano-silk over tungsten skeleton' },
+
+  // Colour — Monochrome
+  { id:501, builtin:true, type:'colour', cat:'Monochrome', text:'deep matte black and chalk white' },
+  { id:502, builtin:true, type:'colour', cat:'Monochrome', text:'oxidised silver and gun-metal grey' },
+  // Colour — Vivid
+  { id:503, builtin:true, type:'colour', cat:'Vivid',      text:'volcanic red and soot black' },
+  { id:504, builtin:true, type:'colour', cat:'Vivid',      text:'bioluminescent teal and deep ocean blue' },
+  { id:505, builtin:true, type:'colour', cat:'Vivid',      text:'ghost white and ultraviolet purple' },
+  // Colour — Natural
+  { id:506, builtin:true, type:'colour', cat:'Natural',    text:'bark brown and jungle green' },
+  { id:507, builtin:true, type:'colour', cat:'Natural',    text:'sand ochre and bone ivory' },
+  { id:508, builtin:true, type:'colour', cat:'Natural',    text:'blood crimson and rust orange' },
+
+  // Environment — Urban
+  { id:601, builtin:true, type:'environment', cat:'Urban',   text:'collapsed neon megalopolis ruins' },
+  { id:602, builtin:true, type:'environment', cat:'Urban',   text:'rain-soaked brutalist city streets' },
+  // Environment — Natural
+  { id:603, builtin:true, type:'environment', cat:'Natural', text:'subterranean crystal cave complex' },
+  { id:604, builtin:true, type:'environment', cat:'Natural', text:'volcanic wasteland under ash clouds' },
+  { id:605, builtin:true, type:'environment', cat:'Natural', text:'ancient overgrown jungle temple' },
+  // Environment — Alien
+  { id:606, builtin:true, type:'environment', cat:'Alien',   text:'toxic alien swampland at dusk' },
+  { id:607, builtin:true, type:'environment', cat:'Alien',   text:'deep ocean floor trench, zero visibility' },
+  { id:608, builtin:true, type:'environment', cat:'Alien',   text:'gas giant atmospheric platform' },
+
+  // Lighting — Natural
+  { id:701, builtin:true, type:'lighting', cat:'Natural',      text:'dramatic single shaft of sunlight through smoke' },
+  { id:702, builtin:true, type:'lighting', cat:'Natural',      text:'golden hour backlight, long shadows' },
+  // Lighting — Artificial
+  { id:703, builtin:true, type:'lighting', cat:'Artificial',   text:'harsh industrial floodlights from below' },
+  { id:704, builtin:true, type:'lighting', cat:'Artificial',   text:'neon city reflections on wet surfaces' },
+  { id:705, builtin:true, type:'lighting', cat:'Artificial',   text:'cold blue-white facility lighting' },
+  // Lighting — Atmospheric
+  { id:706, builtin:true, type:'lighting', cat:'Atmospheric',  text:'bioluminescent blue-green underglow' },
+  { id:707, builtin:true, type:'lighting', cat:'Atmospheric',  text:'aurora borealis glow, shifting curtains' },
+  { id:708, builtin:true, type:'lighting', cat:'Atmospheric',  text:'volcanic lava-glow from below' },
+
+  // Style — Realism
+  { id:801, builtin:true, type:'style', cat:'Realism',   text:'hyper-detailed photorealistic concept art, 8K render' },
+  { id:802, builtin:true, type:'style', cat:'Realism',   text:'documentary photography aesthetic, naturalistic' },
+  // Style — Painterly
+  { id:803, builtin:true, type:'style', cat:'Painterly', text:'dark fantasy oil painting, brooding atmosphere' },
+  { id:804, builtin:true, type:'style', cat:'Painterly', text:'watercolour and ink, loose expressive marks' },
+  { id:805, builtin:true, type:'style', cat:'Painterly', text:'epic matte painting, cinematic scale' },
+  // Style — Digital
+  { id:806, builtin:true, type:'style', cat:'Digital',   text:'cyberpunk aesthetic, greebled surfaces, HUD elements' },
+  { id:807, builtin:true, type:'style', cat:'Digital',   text:'anime mecha key visual, speed lines, vivid colour' },
+  { id:808, builtin:true, type:'style', cat:'Digital',   text:'biomechanical Giger organic-industrial fusion' },
+
+  // Reference — Anime·Manga
+  { id:901, builtin:true, type:'reference', cat:'Anime·Manga', text:'inspired by Neon Genesis Evangelion Unit-01' },
+  { id:902, builtin:true, type:'reference', cat:'Anime·Manga', text:'aesthetic of Armored Core VI' },
+  { id:903, builtin:true, type:'reference', cat:'Anime·Manga', text:'Studio Ghibli mechanical creature design' },
+  // Reference — Film·Game
+  { id:904, builtin:true, type:'reference', cat:'Film·Game',   text:'visual language of Pacific Rim Jaegers' },
+  { id:905, builtin:true, type:'reference', cat:'Film·Game',   text:'inspired by Zerg from StarCraft 2' },
+  { id:906, builtin:true, type:'reference', cat:'Film·Game',   text:'Xenomorph biomechanical aesthetic' },
+  // Reference — Artist
+  { id:907, builtin:true, type:'reference', cat:'Artist',      text:'in the style of H.R. Giger' },
+  { id:908, builtin:true, type:'reference', cat:'Artist',      text:'concept art by Yoji Shinkawa' },
+  { id:909, builtin:true, type:'reference', cat:'Artist',      text:'creature design by Neville Page' },
+
+  // Technical — Camera
+  { id:1001, builtin:true, type:'technical', cat:'Camera',  text:'cinematic composition, shallow depth of field' },
+  { id:1002, builtin:true, type:'technical', cat:'Camera',  text:'low angle hero shot, extreme foreshortening' },
+  { id:1003, builtin:true, type:'technical', cat:'Camera',  text:"bird's eye overhead view, dramatic scale" },
+  // Technical — Format
+  { id:1004, builtin:true, type:'technical', cat:'Format',  text:'16:9 widescreen, rule of thirds framing' },
+  { id:1005, builtin:true, type:'technical', cat:'Format',  text:'square 1:1 portrait, centred composition' },
+  { id:1006, builtin:true, type:'technical', cat:'Format',  text:'ultra-wide panoramic, sprawling environment' },
+  // Technical — Render
+  { id:1007, builtin:true, type:'technical', cat:'Render',  text:'octane render, ray-traced lighting, 16K' },
+  { id:1008, builtin:true, type:'technical', cat:'Render',  text:'unreal engine 5, photorealistic global illumination' },
+  { id:1009, builtin:true, type:'technical', cat:'Render',  text:'macro close-up, extreme surface micro-detail' },
+]
+
+// Active formula — ordered array of { uid, particleId }
+let pbFormula    = []
+let pbActiveCats = {}   // typeKey → category name
+let pbCollapsed  = {}   // typeKey → bool
+let pbDragIdx    = null
+let pbNextUid    = 1
+let pbShowBuiltin = true  // toggle built-in particles visibility
+let pbActiveLib   = 0     // 0-4
+
+// 5 named user libraries
+const PB_LIB_DEFAULTS = ['My Library','Projects','Experiments','Shared','Archive']
+let pbLibraries = PB_LIB_DEFAULTS.map((name,i) => ({ id:i, name, particles:[] }))
+
+// pbGetParticles() — working set = built-ins (if shown) + active library
+function pbGetParticles() {
+  const userParticles = pbLibraries[pbActiveLib]?.particles || []
+  return pbShowBuiltin ? [...PB_BUILTIN_PARTICLES, ...userParticles] : [...userParticles]
+}
+
+// Drive file for libraries
+const PB_LIBRARIES_FILE = 'beast-mode-particle-libraries.json'
+let pbLibDriveId = null
+
+// ── INIT ───────────────────────────────────────────────────────────
+function pbInit() {
+  PB_TYPES.forEach(t => { pbActiveCats[t.key] = t.cats[0] })
+  pbRenderLibBar()
+  pbRenderLegend()
+  pbRenderLibrary()
+  pbRenderFormula()
+  pbInitAddSelects()
+  pbRenderOutput()
+}
+
+// ── LEGEND ─────────────────────────────────────────────────────────
+function pbRenderLegend() {
+  const el = document.getElementById('pbLegend')
+  if (!el) return
+  el.innerHTML = ''
+  PB_TYPES.forEach(t => {
+    const chip = document.createElement('div')
+    chip.className = 'pb-legend-chip'
+    chip.style.color = t.color
+    chip.style.background = pbHexAlpha(t.color, 0.09)
+    chip.innerHTML = `<span class="pb-legend-dot" style="background:${t.color}"></span>${t.id}. ${t.label.toUpperCase()}`
+    chip.onclick = () => {
+      const el = document.getElementById('pbt_' + t.key)
+      if (el) { pbCollapsed[t.key] = false; pbRenderLibrary(); setTimeout(() => el.scrollIntoView({behavior:'smooth',block:'center'}), 50) }
+    }
+    el.appendChild(chip)
+  })
+}
+
+// ── LIBRARY ────────────────────────────────────────────────────────
+function pbRenderLibrary() {
+  const grid = document.getElementById('pbGrid')
+  if (!grid) return
+  const query = (document.getElementById('pbSearch')?.value || '').toLowerCase().trim()
+  grid.innerHTML = ''
+
+  PB_TYPES.forEach(t => {
+    const allItems   = pbGetParticles().filter(p => p.type === t.key)
+    const isOpen     = !pbCollapsed[t.key]
+    const activeCat  = pbActiveCats[t.key] || t.cats[0]
+
+    // Filter by search
+    const filtered = query
+      ? allItems.filter(p => p.text.toLowerCase().includes(query) || p.cat.toLowerCase().includes(query))
+      : allItems.filter(p => p.cat === activeCat)
+
+    const block = document.createElement('div')
+    block.className = 'pb-type-block'
+    block.id = 'pbt_' + t.key
+
+    // Header
+    const hdr = document.createElement('div')
+    hdr.className = 'pb-type-header'
+    hdr.style.borderLeft = `3px solid ${t.color}`
+    const totalCount = allItems.length
+    hdr.innerHTML = `
+      <span class="pb-type-dot" style="background:${t.color}"></span>
+      <span class="pb-type-name" style="color:${t.color}">${t.id}. ${t.label.toUpperCase()}</span>
+      <span class="pb-type-count">${totalCount} PARTICLE${totalCount!==1?'S':''}</span>
+      <span class="pb-type-arrow ${isOpen?'open':''}">▼</span>
+    `
+    hdr.onclick = () => { pbCollapsed[t.key] = isOpen; pbRenderLibrary() }
+    block.appendChild(hdr)
+
+    // Body
+    const body = document.createElement('div')
+    body.className = 'pb-type-body' + (isOpen ? '' : ' collapsed')
+
+    // Category tabs
+    const tabs = document.createElement('div')
+    tabs.className = 'pb-cat-tabs'
+    // Gather all cats including user-added
+    const allCats = [...new Set(allItems.map(p => p.cat).concat(t.cats))]
+    allCats.forEach(cat => {
+      const count = allItems.filter(p => p.cat === cat).length
+      const tab = document.createElement('button')
+      tab.className = 'pb-cat-tab' + (!query && cat === activeCat ? ' active' : '')
+      tab.style.setProperty('--tc', t.color)
+      tab.textContent = `${cat} ${count}`
+      if (!query && cat === activeCat) {
+        tab.style.color = t.color
+        tab.style.borderBottomColor = t.color
+      }
+      tab.onclick = e => {
+        e.stopPropagation()
+        pbActiveCats[t.key] = cat
+        pbRenderLibrary()
+      }
+
+      // Make tab a drop target for particles of this type
+      tab.addEventListener('dragover', e => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        tab.classList.add('drag-over')
+      })
+      tab.addEventListener('dragleave', () => tab.classList.remove('drag-over'))
+      tab.addEventListener('drop', e => {
+        e.preventDefault()
+        tab.classList.remove('drag-over')
+        const id = parseInt(e.dataTransfer.getData('pbParticleId'))
+        const srcType = e.dataTransfer.getData('pbParticleType')
+        if (!id || srcType !== t.key) return
+        // Only allow moving user-created particles (not built-ins)
+        const p = pbLibraries[pbActiveLib].particles.find(x => x.id === id)
+        if (!p || p.cat === cat) return
+        p.cat = cat
+        pbActiveCats[t.key] = cat
+        pbRenderLibBar()
+        pbRenderLibrary()
+        pbParticlesDriveSync()
+      })
+
+      tabs.appendChild(tab)
+    })
+    body.appendChild(tabs)
+
+    // Particles list
+    const list = document.createElement('div')
+    list.className = 'pb-particles'
+
+    filtered.forEach(p => {
+      const chip = document.createElement('div')
+      chip.className = 'pb-particle'
+      chip.style.background = pbHexAlpha(t.color, 0.1)
+      chip.style.color = t.color
+      chip.style.borderColor = pbHexAlpha(t.color, 0.2)
+      chip.title = p.text
+      chip.draggable = true
+      chip.innerHTML = `
+        <span class="pp-add">+</span>
+        <span class="pb-particle-text">${pbTrunc(p.text, 45)}</span>
+        <span class="pb-particle-del" title="Delete particle" onclick="pbDeleteParticle(${p.id},event)">×</span>
+      `
+      chip.addEventListener('click', () => pbAddToFormula(p))
+      chip.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('pbParticleId', p.id)
+        e.dataTransfer.setData('pbParticleType', p.type)
+        e.dataTransfer.effectAllowed = 'move'
+        chip.style.opacity = '.4'
+      })
+      chip.addEventListener('dragend', () => { chip.style.opacity = '' })
+      list.appendChild(chip)
+    })
+
+    if (!filtered.length) {
+      const empty = document.createElement('div')
+      empty.style.cssText = 'color:var(--muted);font-size:10px;letter-spacing:1px;padding:4px 0;'
+      empty.textContent = query ? 'No matches in this type.' : 'No particles in this category yet.'
+      list.appendChild(empty)
+    }
+
+    body.appendChild(list)
+
+    // Add inline row
+    const addRow = document.createElement('div')
+    addRow.className = 'pb-add-inline'
+    const inp = document.createElement('input')
+    inp.className = 'pb-inline-input'
+    inp.placeholder = `+ New ${t.label} particle…`
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && inp.value.trim()) pbAddInlineParticle(t.key, activeCat, inp)
+    })
+    const saveBtn = document.createElement('button')
+    saveBtn.className = 'pb-add-cat-btn'
+    saveBtn.style.borderColor = pbHexAlpha(t.color, 0.4)
+    saveBtn.style.color = t.color
+    saveBtn.textContent = 'SAVE'
+    saveBtn.onclick = () => { if (inp.value.trim()) pbAddInlineParticle(t.key, activeCat, inp) }
+    // Add new category button
+    const addCatBtn = document.createElement('button')
+    addCatBtn.className = 'pb-add-cat-btn'
+    addCatBtn.style.borderColor = pbHexAlpha(t.color, 0.25)
+    addCatBtn.style.color = pbHexAlpha(t.color, 0.6)
+    addCatBtn.textContent = '+ CATEGORY'
+    addCatBtn.onclick = () => pbAddCategory(t.key)
+    addRow.appendChild(inp)
+    addRow.appendChild(saveBtn)
+    addRow.appendChild(addCatBtn)
+    body.appendChild(addRow)
+
+    block.appendChild(body)
+    grid.appendChild(block)
+  })
+}
+
+function pbAddInlineParticle(typeKey, cat, inp) {
+  const text = inp.value.trim()
+  if (!text) return
+  const p = { id: Date.now(), type: typeKey, cat, text }
+  pbLibraries[pbActiveLib].particles.push(p)
+  inp.value = ''
+  pbAddToFormula(p)
+  pbRenderLibBar()
+  pbRenderLibrary()
+  pbParticlesDriveSync()
+}
+
+function pbDeleteParticle(id, e) {
+  e.stopPropagation()
+  pbLibraries[pbActiveLib].particles = pbLibraries[pbActiveLib].particles.filter(p => p.id !== id)
+  pbFormula = pbFormula.filter(f => f.particleId !== id)
+  pbRenderLibBar(); pbRenderLibrary(); pbRenderFormula(); pbRenderOutput()
+  pbParticlesDriveSync()
+}
+
+function pbAddCategory(typeKey) {
+  const name = prompt('New category name:')?.trim()
+  if (!name) return
+  const t = PB_TYPES.find(x => x.key === typeKey)
+  if (t && !t.cats.includes(name)) t.cats.push(name)
+  pbActiveCats[typeKey] = name
+  pbRenderLibrary()
+}
+
+// ── FORMULA ────────────────────────────────────────────────────────
+function pbAddToFormula(particle) {
+  pbFormula.push({ uid: pbNextUid++, particleId: particle.id })
+  pbRenderFormula()
+  pbRenderOutput()
+}
+
+function pbRemoveFromFormula(uid) {
+  pbFormula = pbFormula.filter(f => f.uid !== uid)
+  pbRenderFormula()
+  pbRenderOutput()
+}
+
+function pbRenderFormula() {
+  const bar = document.getElementById('pbFormula')
+  if (!bar) return
+  bar.innerHTML = ''
+
+  if (!pbFormula.length) {
+    const ph = document.createElement('span')
+    ph.className = 'pb-formula-ph'
+    ph.textContent = 'Click particles above to build your formula…'
+    bar.appendChild(ph)
+    return
+  }
+
+  pbFormula.forEach((entry, idx) => {
+    const p   = pbGetParticles().find(x => x.id === entry.particleId)
+    const t   = p ? PB_TYPES.find(x => x.key === p.type) : null
+    if (!p || !t) return
+
+    // Separator between chips
+    if (idx > 0) {
+      const sep = document.createElement('span')
+      sep.className = 'pb-formula-sep'
+      sep.textContent = PB_SEP
+      bar.appendChild(sep)
+    }
+
+    const chip = document.createElement('div')
+    chip.className = 'pb-formula-chip'
+    chip.style.background = pbHexAlpha(t.color, 0.18)
+    chip.style.color = t.color
+    chip.style.borderColor = pbHexAlpha(t.color, 0.3)
+    chip.title = p.text
+    chip.draggable = true
+    chip.dataset.uid = entry.uid
+    chip.innerHTML = `
+      <span class="pfc-type">${t.label}</span>
+      <span class="pfc-text">${pbTrunc(p.text, 28)}</span>
+      <span class="pfc-rm" onclick="pbRemoveFromFormula(${entry.uid})">×</span>
+    `
+
+    // Drag to reorder
+    chip.addEventListener('dragstart', e => {
+      pbDragIdx = idx
+      e.dataTransfer.effectAllowed = 'move'
+    })
+    chip.addEventListener('dragover', e => {
+      e.preventDefault()
+      chip.classList.add('drag-over')
+    })
+    chip.addEventListener('dragleave', () => chip.classList.remove('drag-over'))
+    chip.addEventListener('drop', e => {
+      e.preventDefault()
+      chip.classList.remove('drag-over')
+      if (pbDragIdx === null || pbDragIdx === idx) return
+      const moved = pbFormula.splice(pbDragIdx, 1)[0]
+      pbFormula.splice(idx, 0, moved)
+      pbDragIdx = null
+      pbRenderFormula(); pbRenderOutput()
+    })
+
+    bar.appendChild(chip)
+  })
+}
+
+// ── OUTPUT ─────────────────────────────────────────────────────────
+function pbRenderOutput() {
+  const box = document.getElementById('pbOutput')
+  if (!box) return
+
+  if (!pbFormula.length) {
+    box.innerHTML = `<span class="pb-output-ph">Select particles below — prompt assembles automatically</span><button class="pb-copy-btn" onclick="pbCopyOutput()">⎘ COPY</button>`
+    box.dataset.plain = ''
+    return
+  }
+
+  let html = '', plain = ''
+  pbFormula.forEach((entry, idx) => {
+    const p = pbGetParticles().find(x => x.id === entry.particleId)
+    const t = p ? PB_TYPES.find(x => x.key === p.type) : null
+    if (!p || !t) return
+    const sep = idx > 0 ? ` ${PB_SEP} ` : ''
+    html  += `${sep}<span class="pb-particle-span" style="background:${pbHexAlpha(t.color,.14)};color:${t.color};" title="${t.label}">${pbEsc(p.text)}</span>`
+    plain += (plain ? ` ${PB_SEP} ` : '') + p.text
+  })
+
+  box.dataset.plain = plain
+  box.innerHTML = html + `<button class="pb-copy-btn" onclick="pbCopyOutput()">⎘ COPY</button>`
+}
+
+function pbCopyOutput() {
+  const box = document.getElementById('pbOutput')
+  const text = box.dataset.plain || ''
+  if (!text) return
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'
+    document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); document.body.removeChild(ta)
+    const btn = box.querySelector('.pb-copy-btn')
+    const orig = btn.textContent; btn.textContent = '✓ COPIED'
+    setTimeout(() => btn.textContent = orig, 1500)
+  } catch(e) {}
+}
+
+// ── FORMULA CONTROLS ───────────────────────────────────────────────
+function pbRandomiseAll() {
+  pbFormula = []
+  PB_TYPES.forEach(t => {
+    const pool = pbGetParticles().filter(p => p.type === t.key)
+    if (pool.length) pbFormula.push({ uid: pbNextUid++, particleId: pool[Math.floor(Math.random()*pool.length)].id })
+  })
+  pbRenderFormula(); pbRenderOutput()
+}
+
+function pbClearFormula() {
+  pbFormula = []
+  pbRenderFormula(); pbRenderOutput()
+}
+
+// ── GLOBAL ADD FORM ────────────────────────────────────────────────
+function pbToggleAddForm() {
+  const form = document.getElementById('pbAddForm')
+  const open = form.classList.toggle('open')
+  if (open) document.getElementById('pbAddText')?.focus()
+}
+
+function pbInitAddSelects() {
+  const typeEl = document.getElementById('pbAddType')
+  if (!typeEl) return
+  PB_TYPES.forEach(t => {
+    const opt = document.createElement('option')
+    opt.value = t.key; opt.textContent = `${t.id}. ${t.label}`
+    typeEl.appendChild(opt)
+  })
+  pbUpdateCategorySelect()
+}
+
+function pbUpdateCategorySelect() {
+  const typeKey = document.getElementById('pbAddType')?.value
+  const catEl   = document.getElementById('pbAddCategory')
+  if (!catEl || !typeKey) return
+  catEl.innerHTML = ''
+  const t = PB_TYPES.find(x => x.key === typeKey)
+  if (!t) return
+  const allCats = [...new Set(pbGetParticles().filter(p=>p.type===typeKey).map(p=>p.cat).concat(t.cats))]
+  allCats.forEach(c => {
+    const opt = document.createElement('option'); opt.value = c; opt.textContent = c
+    catEl.appendChild(opt)
+  })
+}
+
+function pbSaveParticle() {
+  const text = document.getElementById('pbAddText')?.value.trim()
+  const type = document.getElementById('pbAddType')?.value
+  const cat  = document.getElementById('pbAddCategory')?.value
+  if (!text || !type || !cat) return
+  const p = { id: Date.now(), type, cat, text }
+  pbLibraries[pbActiveLib].particles.push(p)
+  document.getElementById('pbAddText').value = ''
+  pbAddToFormula(p)
+  pbRenderLibBar()
+  pbRenderLibrary()
+  document.getElementById('pbAddForm').classList.remove('open')
+  // Scroll to the type block
+  const el = document.getElementById('pbt_' + type)
+  if (el) { pbCollapsed[type] = false; setTimeout(() => el.scrollIntoView({behavior:'smooth',block:'center'}), 50) }
+  pbParticlesDriveSync()
+}
+
+// ── DRIVE SYNC ─────────────────────────────────────────────────────
+async function pbParticlesDriveSync() {
+  if (!driveToken) return
+  try {
+    const body = JSON.stringify({ libraries: pbLibraries, savedAt: new Date().toISOString() })
+    if (pbLibDriveId) {
+      await drivePatchFile(pbLibDriveId, body)
+    } else {
+      const files = await driveListFiles(`name='${PB_LIBRARIES_FILE}'`)
+      if (files.length) { pbLibDriveId = files[0].id; await drivePatchFile(pbLibDriveId, body) }
+      else { pbLibDriveId = await driveCreateFile(PB_LIBRARIES_FILE, body) }
+    }
+  } catch(e) {}
+}
+
+async function pbParticlesLoad() {
+  if (!driveToken) return
+  try {
+    const files = await driveListFiles(`name='${PB_LIBRARIES_FILE}'`)
+    if (!files.length) {
+      // Migrate old single-library format if it exists
+      const oldFiles = await driveListFiles(`name='${PB_PARTICLES_FILE}'`)
+      if (oldFiles.length) {
+        const old = await driveReadFile(oldFiles[0].id)
+        if (Array.isArray(old?.particles)) {
+          pbLibraries[0].particles = old.particles.filter(p => !p.builtin)
+          pbParticlesDriveSync()
+        }
+      }
+      pbRenderLibrary()
+      return
+    }
+    pbLibDriveId = files[0].id
+    const data = await driveReadFile(pbLibDriveId)
+    if (Array.isArray(data?.libraries) && data.libraries.length) {
+      // Merge saved libraries into default structure
+      data.libraries.forEach((saved, i) => {
+        if (i < pbLibraries.length) {
+          pbLibraries[i].name = saved.name || pbLibraries[i].name
+          pbLibraries[i].particles = Array.isArray(saved.particles) ? saved.particles.filter(p => !p.builtin) : []
+        }
+      })
+    }
+    pbRenderLibBar()
+    pbRenderLibrary()
+  } catch(e) {}
+}
+
+// ── UTILS ──────────────────────────────────────────────────────────
+function pbHexAlpha(hex, a) {
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16)
+  return `rgba(${r},${g},${b},${a})`
+}
+function pbTrunc(s, n) { return s.length > n ? s.slice(0,n)+'…' : s }
+function pbEsc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+// ── LIBRARY SELECTOR ───────────────────────────────────────────────
+function pbRenderLibBar() {
+  const tabs = document.getElementById('pbLibTabs')
+  const toggle = document.getElementById('pbBuiltinToggle')
+  if (!tabs) return
+
+  tabs.innerHTML = ''
+  pbLibraries.forEach((lib, i) => {
+    const tab = document.createElement('div')
+    tab.className = 'pb-lib-tab' + (i === pbActiveLib ? ' active' : '')
+
+    const nameEl = document.createElement('input')
+    nameEl.className = 'pb-lib-tab-name'
+    nameEl.value = lib.name
+    nameEl.title = 'Click to rename library'
+    nameEl.maxLength = 20
+    nameEl.onclick  = e => { if (i !== pbActiveLib) { pbSwitchLib(i); return } e.stopPropagation() }
+    nameEl.onkeydown = e => { if (e.key === 'Enter') nameEl.blur() }
+    nameEl.onblur   = () => {
+      const name = nameEl.value.trim() || PB_LIB_DEFAULTS[i]
+      if (name !== lib.name) { lib.name = name; pbParticlesDriveSync() }
+    }
+    // Prevent click on active tab input from bubbling to tab
+    nameEl.addEventListener('mousedown', e => { if (i === pbActiveLib) e.stopPropagation() })
+
+    const count = document.createElement('span')
+    count.className = 'pb-lib-tab-count'
+    count.textContent = lib.particles.length
+
+    tab.appendChild(nameEl)
+    tab.appendChild(count)
+    tab.onclick = () => pbSwitchLib(i)
+    tabs.appendChild(tab)
+  })
+
+  if (toggle) {
+    toggle.className = 'pb-builtin-toggle' + (pbShowBuiltin ? ' on' : '')
+    toggle.textContent = pbShowBuiltin ? 'HIDE BUILT-IN' : 'SHOW BUILT-IN'
+  }
+}
+
+function pbSwitchLib(i) {
+  pbActiveLib = i
+  pbRenderLibBar()
+  pbRenderLibrary()
+}
+
+function pbToggleBuiltin() {
+  pbShowBuiltin = !pbShowBuiltin
+  pbRenderLibBar()
+  pbRenderLibrary()
+}
+
+// pbInitDone flag declared at top of builder section
+let pbInitDone = false
+
+// ═══════════════════════════════════════════════════════════════════
+// IMPORT PROMPT MODAL
+// ═══════════════════════════════════════════════════════════════════
+
+let pbImportActiveType = PB_TYPES[0].key  // currently selected particle type
+let pbTagged = []  // { uid, type, cat, text } — segments the user has tagged
+
+function pbOpenImport() {
+  pbTagged = []
+  pbImportActiveType = PB_TYPES[0].key
+  document.getElementById('pbImportTextarea').value = ''
+  document.getElementById('pbPasteSection').style.display = 'block'
+  document.getElementById('pbAnnotateSection').style.display = 'none'
+  document.getElementById('pbTaggedSection').style.display = 'none'
+  document.getElementById('pbSaveTaggedBtn').disabled = true
+  document.getElementById('pbImportModal').style.display = 'flex'
+  pbRenderTypePicker()
+  pbRenderTaggedList()
+  setTimeout(() => document.getElementById('pbImportTextarea').focus(), 100)
+}
+
+function pbCloseImport() {
+  document.getElementById('pbImportModal').style.display = 'none'
+}
+
+function pbRenderTypePicker() {
+  const wrap = document.getElementById('pbTypePicker')
+  if (!wrap) return
+  wrap.innerHTML = ''
+  PB_TYPES.forEach(t => {
+    const btn = document.createElement('div')
+    btn.className = 'pb-type-pick-btn' + (t.key === pbImportActiveType ? ' active' : '')
+    btn.style.background = pbHexAlpha(t.color, 0.15)
+    btn.style.color = t.color
+    btn.style.borderColor = pbHexAlpha(t.color, t.key === pbImportActiveType ? 0.8 : 0.2)
+    btn.innerHTML = `<span class="pb-type-pick-dot" style="background:${t.color}"></span>${t.id}. ${t.label}`
+    btn.onclick = () => { pbImportActiveType = t.key; pbRenderTypePicker() }
+    wrap.appendChild(btn)
+  })
+}
+
+function pbImportOnInput() {
+  // Nothing needed — user will click Annotate when ready
+}
+
+// ── TOKEN-TAP ANNOTATION ENGINE ────────────────────────────────────
+// Splits prompt into tokens. User taps first token → pending state.
+// Taps second token → range is tagged with active particle type.
+// No native text selection involved — works perfectly on mobile.
+
+let pbTokens      = []   // array of { idx, text, isSpace }
+let pbPendingIdx  = null // index of first-tapped token (start of range)
+
+function pbImportCommit() {
+  const raw = document.getElementById('pbImportTextarea').value.trim()
+  if (!raw) return
+
+  // Tokenise: split into words and whitespace, preserving separators
+  const parts = raw.split(/(\s+)/)
+  pbTokens = []
+  let idx = 0
+  parts.forEach(part => {
+    if (/^\s+$/.test(part)) {
+      pbTokens.push({ idx: idx++, text: part, isSpace: true, tagUid: null })
+    } else if (part) {
+      pbTokens.push({ idx: idx++, text: part, isSpace: false, tagUid: null })
+    }
+  })
+
+  pbPendingIdx = null
+  pbRenderAnnotated()
+  document.getElementById('pbPasteSection').style.display = 'none'
+  document.getElementById('pbAnnotateSection').style.display = 'block'
+  pbUpdateSelStatus('Tap the first word of a phrase to start selecting')
+}
+
+function pbImportReset() {
+  pbPendingIdx = null
+  pbTokens = []
+  pbTagged = []
+  document.getElementById('pbPasteSection').style.display = 'block'
+  document.getElementById('pbAnnotateSection').style.display = 'none'
+  pbRenderTaggedList()
+}
+
+function pbRenderAnnotated() {
+  const container = document.getElementById('pbAnnotated')
+  if (!container) return
+  container.innerHTML = ''
+
+  pbTokens.forEach(tok => {
+    if (tok.isSpace) {
+      const sp = document.createElement('span')
+      sp.className = 'pb-space'
+      sp.textContent = tok.text
+      container.appendChild(sp)
+      return
+    }
+
+    const span = document.createElement('span')
+    span.className = 'pb-token'
+    span.dataset.idx = tok.idx
+    span.textContent = tok.text
+
+    if (tok.tagUid !== null) {
+      // Already tagged — find the tag
+      const tagged = pbTagged.find(t => t.uid === tok.tagUid)
+      if (tagged) {
+        const type = PB_TYPES.find(x => x.key === tagged.type)
+        if (type) {
+          span.classList.add('tagged')
+          span.style.background   = pbHexAlpha(type.color, 0.25)
+          span.style.color        = type.color
+          span.style.borderBottom = `2px solid ${type.color}`
+          span.title = `${type.label} — tap to remove tag`
+          span.onclick = () => pbRemoveTagFromToken(tok.tagUid)
+        }
+      }
+    } else if (tok.idx === pbPendingIdx) {
+      span.classList.add('pending')
+      span.title = 'Start of selection — tap end word'
+      span.onclick = () => pbTokenTap(tok.idx)
+    } else {
+      span.onclick = () => pbTokenTap(tok.idx)
+    }
+
+    container.appendChild(span)
+  })
+}
+
+function pbTokenTap(idx) {
+  const tok = pbTokens[idx]
+  if (!tok || tok.isSpace) return
+
+  // If tapping an already-tagged token, ignore (handled by pbRemoveTagFromToken)
+  if (tok.tagUid !== null) return
+
+  if (pbPendingIdx === null) {
+    // First tap — set start
+    pbPendingIdx = idx
+    pbUpdateSelStatus('Start selected — now tap the last word of your phrase')
+    pbRenderAnnotated()
+  } else {
+    // Second tap — apply tag to range
+    const start = Math.min(pbPendingIdx, idx)
+    const end   = Math.max(pbPendingIdx, idx)
+    pbApplyTag(start, end)
+    pbPendingIdx = null
+  }
+}
+
+function pbApplyTag(startIdx, endIdx) {
+  const t = PB_TYPES.find(x => x.key === pbImportActiveType)
+  if (!t) return
+
+  // Collect all word tokens in range
+  const rangeTokens = pbTokens.filter(tok => !tok.isSpace && tok.idx >= startIdx && tok.idx <= endIdx && tok.tagUid === null)
+  if (!rangeTokens.length) { pbUpdateSelStatus('No untagged words in range — try again'); return }
+
+  const text = rangeTokens.map(tok => tok.text).join(' ').trim()
+  if (!text) return
+
+  const uid = Date.now()
+  rangeTokens.forEach(tok => { tok.tagUid = uid })
+
+  pbTagged.push({ uid, type: t.key, cat: t.cats[0], text })
+  pbRenderAnnotated()
+  pbRenderTaggedList()
+  pbUpdateSelStatus(`Tagged: "${text.slice(0,40)}${text.length>40?'…':''}" as ${t.label}`)
+}
+
+function pbRemoveTagFromToken(uid) {
+  // Clear uid from all tokens
+  pbTokens.forEach(tok => { if (tok.tagUid === uid) tok.tagUid = null })
+  pbTagged = pbTagged.filter(t => t.uid !== uid)
+  pbPendingIdx = null
+  pbRenderAnnotated()
+  pbRenderTaggedList()
+  pbUpdateSelStatus('Tag removed')
+}
+
+function pbUpdateSelStatus(msg, isActive) {
+  const el = document.getElementById('pbSelStatus')
+  if (!el) return
+  el.textContent = msg
+  el.className = 'pb-selection-status' + (isActive !== false && msg ? ' active' : '')
+}
+
+function pbOnSelection() {} // no-op — kept for safety, not used
+
+function pbClearTags() {
+  pbTokens.forEach(tok => { tok.tagUid = null })
+  pbPendingIdx = null
+  pbTagged = []
+  pbRenderAnnotated()
+  pbRenderTaggedList()
+  pbUpdateSelStatus('All tags cleared')
+}
+
+function pbRenderTaggedList() {
+  const section = document.getElementById('pbTaggedSection')
+  const list    = document.getElementById('pbTaggedList')
+  const count   = document.getElementById('pbTaggedCount')
+  const saveBtn = document.getElementById('pbSaveTaggedBtn')
+  if (!list) return
+
+  if (!pbTagged.length) {
+    section.style.display = 'none'
+    saveBtn.disabled = true
+    return
+  }
+
+  section.style.display = 'block'
+  saveBtn.disabled = false
+  count.textContent = `(${pbTagged.length})`
+  list.innerHTML = ''
+
+  pbTagged.forEach(item => {
+    const t = PB_TYPES.find(x => x.key === item.type)
+    if (!t) return
+
+    const row = document.createElement('div')
+    row.className = 'pb-tagged-item'
+    row.style.background = pbHexAlpha(t.color, 0.08)
+    row.style.borderColor = pbHexAlpha(t.color, 0.2)
+
+    // Type label
+    const typeLabel = document.createElement('div')
+    typeLabel.className = 'pb-tagged-item-type'
+    typeLabel.style.color = t.color
+    typeLabel.innerHTML = `<span class="pb-type-pick-dot" style="background:${t.color};display:inline-block;margin-right:4px;"></span>${t.label.toUpperCase()}`
+
+    // Category select
+    const catWrap = document.createElement('div')
+    catWrap.className = 'pb-tagged-item-cat'
+    const catSel = document.createElement('select')
+    const allCats = [...new Set(pbGetParticles().filter(p=>p.type===item.type).map(p=>p.cat).concat(t.cats))]
+    allCats.forEach(c => {
+      const opt = document.createElement('option')
+      opt.value = c; opt.textContent = c
+      opt.selected = c === item.cat
+      catSel.appendChild(opt)
+    })
+    catSel.onchange = () => { item.cat = catSel.value }
+    catWrap.appendChild(catSel)
+
+    // Text preview
+    const textEl = document.createElement('div')
+    textEl.className = 'pb-tagged-item-text'
+    textEl.textContent = item.text.length > 60 ? item.text.slice(0,60)+'…' : item.text
+    textEl.title = item.text
+
+    // Delete
+    const del = document.createElement('span')
+    del.className = 'pb-tagged-item-del'
+    del.textContent = '×'
+    del.title = 'Remove this tagged segment'
+    del.onclick = () => pbRemoveTagFromToken(item.uid)
+
+    row.appendChild(typeLabel)
+    row.appendChild(catWrap)
+    row.appendChild(textEl)
+    row.appendChild(del)
+    list.appendChild(row)
+  })
+}
+
+function pbClearTags() {
+  // Restore annotated div to plain text
+  const annotated = document.getElementById('pbAnnotated')
+  if (annotated) annotated.textContent = annotated.textContent  // strips all HTML
+  pbTagged = []
+  pbRenderTaggedList()
+}
+
+function pbSaveTagged() {
+  if (!pbTagged.length) return
+  let added = 0
+  pbTagged.forEach(item => {
+    if (!item.text.trim()) return
+    const p = { id: Date.now() + added, type: item.type, cat: item.cat, text: item.text.trim() }
+    pbLibraries[pbActiveLib].particles.push(p)
+    pbAddToFormula(p)
+    added++
+  })
+  pbParticlesDriveSync()
+  pbRenderLibBar()
+  pbRenderLibrary()
+  pbRenderFormula()
+  pbRenderOutput()
+  pbCloseImport()
+}
 </script>
 </body>
 </html>
