@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Beast Mode</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap');
 
@@ -355,6 +357,22 @@ select:focus { border-color: var(--accent); }
 .hsl-input:focus { border-color:var(--accent); }
 .hsl-unit { font-size:10px;color:var(--muted);flex-shrink:0;width:10px; }
 
+/* DRIVE SYNC */
+.drive-bar {
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius);margin-bottom:16px;flex-wrap:wrap;
+}
+.drive-avatar {
+  width:26px;height:26px;border-radius:50%;border:1px solid var(--accent);flex-shrink:0;
+}
+.drive-name { font-size:11px;color:var(--text);letter-spacing:1px;flex:1; }
+.drive-status { font-size:10px;letter-spacing:2px;color:var(--muted); }
+.drive-status.ok  { color:#00cc88; }
+.drive-status.err { color:#ff4444; }
+.fav-restore { background:var(--surface2);color:var(--accent);border:1px solid var(--accent);padding:3px 8px;font-size:10px;letter-spacing:1px;cursor:pointer;border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700; }
+.fav-restore:hover { background:color-mix(in srgb,var(--accent) 15%,transparent); }
+
 /* anim */
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
 .generating { animation:pulse .6s ease infinite; }
@@ -396,6 +414,21 @@ select:focus { border-color: var(--accent); }
     <button class="preset-btn" onclick="setPreset('fantasy',this)">✦ FANTASY</button>
   </div>
 </header>
+
+<!-- DRIVE SYNC BAR -->
+<div class="drive-bar" id="driveBar">
+  <div id="driveSignedOut" style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
+    <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;">GOOGLE DRIVE SYNC</span>
+    <div id="googleSignInBtn"></div>
+  </div>
+  <div id="driveSignedIn" style="display:none;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
+    <img class="drive-avatar" id="driveAvatar" src="" alt="">
+    <span class="drive-name" id="driveName"></span>
+    <span class="drive-status" id="driveStatus">—</span>
+    <button class="btn btn-ghost" onclick="driveSync()" style="padding:4px 12px;font-size:10px;">↻ SYNC</button>
+    <button class="btn btn-ghost" onclick="driveSignOut()" style="padding:4px 10px;font-size:10px;">SIGN OUT</button>
+  </div>
+</div>
 
 <!-- CONTROLS -->
 <div class="panel">
@@ -2167,11 +2200,13 @@ function saveFav(){
   const promptOnly = text.includes('---SETTINGS---') ? text.slice(0, text.indexOf('---SETTINGS---')).trim() : text
   favourites.unshift({ text, promptOnly, mode: currentMode, preset: currentPreset, id: Date.now() })
   renderFavs()
+  driveSaveDebounced()
 }
 
 function deleteFav(id){
   favourites = favourites.filter(f => f.id !== id)
   renderFavs()
+  driveSaveDebounced()
 }
 
 function copyFav(id){
@@ -2204,6 +2239,7 @@ function renderFavs(){
       <span class="fav-tag" style="background:color-mix(in srgb,#ff6a00 15%,transparent);color:#ff9a40;">${f.preset.toUpperCase()}</span>
       <span class="fav-text">${display}${ellipsis}</span>
       <div class="fav-actions">
+        <button class="fav-restore" onclick="restoreFav(${f.id})">⬆ RESTORE</button>
         <button class="fav-btn fav-copy" onclick="copyFav(${f.id})">COPY</button>
         <button class="fav-btn fav-del" onclick="deleteFav(${f.id})">✕</button>
       </div>
@@ -2287,6 +2323,169 @@ function exportAll(){
     if(w){ w.document.write('<pre>' + full.replace(/</g,'&lt;') + '</pre>'); w.document.title = 'Mech Prompts Export' }
   }
 }
+
+function restoreFav(id) {
+  const f = favourites.find(x => x.id === id)
+  if (!f) return
+  const s = extractSettings(f.text)
+  if (s) {
+    applySettings(s)
+    const promptOnly = f.text.includes('---SETTINGS---')
+      ? f.text.slice(0, f.text.indexOf('---SETTINGS---')).trim()
+      : f.text
+    document.getElementById('output').textContent = promptOnly
+  } else {
+    document.getElementById('output').textContent = f.promptOnly || f.text
+  }
+  window.scrollTo({ top:0, behavior:'smooth' })
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GOOGLE DRIVE INTEGRATION
+// ═══════════════════════════════════════════════════════════════════
+const DRIVE_CLIENT_ID = '115162218034-eoub6c46sqcmhamb72hoj3l69ov1321d.apps.googleusercontent.com'
+const DRIVE_SCOPES    = 'https://www.googleapis.com/auth/drive.appdata'
+const DRIVE_FILE_NAME = 'beast-mode-favourites.json'
+
+let driveToken     = null
+let driveSaveTimer = null
+let driveFileId    = null
+
+function initDrive() {
+  if (typeof google === 'undefined') { setTimeout(initDrive, 600); return }
+  google.accounts.id.initialize({ client_id: DRIVE_CLIENT_ID, callback: onGoogleSignIn })
+  google.accounts.id.renderButton(
+    document.getElementById('googleSignInBtn'),
+    { theme:'outline', size:'medium', text:'signin_with', shape:'rectangular' }
+  )
+  // Restore previous session
+  try {
+    const saved = JSON.parse(localStorage.getItem('bm_drive_session') || 'null')
+    if (saved && saved.expires > Date.now()) {
+      driveToken = saved.token
+      showDriveSignedIn(saved.name, saved.picture)
+      driveSync()
+      return
+    }
+  } catch(e) {}
+  localStorage.removeItem('bm_drive_session')
+}
+
+function onGoogleSignIn(response) {
+  let payload
+  try { payload = JSON.parse(atob(response.credential.split('.')[1])) }
+  catch(e) { setDriveStatus('✗ AUTH ERROR','err'); return }
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: DRIVE_CLIENT_ID,
+    scope: DRIVE_SCOPES,
+    callback: tokenResp => {
+      if (tokenResp.error) { setDriveStatus('✗ AUTH FAILED','err'); return }
+      driveToken = tokenResp.access_token
+      localStorage.setItem('bm_drive_session', JSON.stringify({
+        token:   driveToken,
+        name:    payload.name,
+        picture: payload.picture,
+        expires: Date.now() + (tokenResp.expires_in - 60) * 1000,
+      }))
+      showDriveSignedIn(payload.name, payload.picture)
+      driveSync()
+    }
+  })
+  tokenClient.requestAccessToken({ prompt:'' })
+}
+
+function showDriveSignedIn(name, picture) {
+  document.getElementById('driveSignedOut').style.display = 'none'
+  document.getElementById('driveSignedIn').style.display  = 'flex'
+  document.getElementById('driveName').textContent = name
+  if (picture) document.getElementById('driveAvatar').src = picture
+}
+
+function driveSignOut() {
+  driveToken = null; driveFileId = null
+  localStorage.removeItem('bm_drive_session')
+  document.getElementById('driveSignedOut').style.display = 'flex'
+  document.getElementById('driveSignedIn').style.display  = 'none'
+  setDriveStatus('—')
+}
+
+function setDriveStatus(msg, type='') {
+  const el = document.getElementById('driveStatus')
+  el.textContent = msg
+  el.className = 'drive-status' + (type ? ' '+type : '')
+}
+
+async function driveGetFileId() {
+  if (driveFileId) return driveFileId
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27${DRIVE_FILE_NAME}%27&fields=files(id)`,
+    { headers: { Authorization: `Bearer ${driveToken}` } }
+  )
+  const data = await res.json()
+  driveFileId = data.files?.[0]?.id || null
+  return driveFileId
+}
+
+// Auto-save — debounced 2s after any change
+function driveSaveDebounced() {
+  if (!driveToken) return
+  clearTimeout(driveSaveTimer)
+  driveSaveTimer = setTimeout(driveSaveFavourites, 2000)
+}
+
+async function driveSaveFavourites() {
+  if (!driveToken) return
+  setDriveStatus('SAVING…')
+  try {
+    const body = JSON.stringify({ favourites, savedAt: new Date().toISOString() })
+    const fileId = await driveGetFileId()
+    if (fileId) {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${driveToken}`, 'Content-Type': 'application/json' },
+        body
+      })
+    } else {
+      const meta = JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] })
+      const form = new FormData()
+      form.append('metadata', new Blob([meta], {type:'application/json'}))
+      form.append('file',     new Blob([body], {type:'application/json'}))
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST', headers: { Authorization: `Bearer ${driveToken}` }, body: form
+      })
+      driveFileId = (await res.json()).id
+    }
+    setDriveStatus('✓ SAVED','ok')
+  } catch(e) { setDriveStatus('✗ SAVE FAILED','err') }
+}
+
+async function driveLoadFavourites() {
+  if (!driveToken) return
+  setDriveStatus('LOADING…')
+  try {
+    const fileId = await driveGetFileId()
+    if (!fileId) { setDriveStatus('✓ READY','ok'); return }
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${driveToken}` }
+    })
+    const data = await res.json()
+    if (Array.isArray(data.favourites)) {
+      // Merge: Drive is source of truth; keep any local items not yet saved
+      const driveIds = new Set(data.favourites.map(f => f.id))
+      const localOnly = favourites.filter(f => !driveIds.has(f.id))
+      favourites = [...data.favourites, ...localOnly]
+      renderFavs()
+    }
+    setDriveStatus('✓ SYNCED','ok')
+  } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
+}
+
+async function driveSync() {
+  await driveLoadFavourites()
+  if (favourites.length) await driveSaveFavourites()
+}
+
+window.addEventListener('load', () => setTimeout(initDrive, 800))
 </script>
 </body>
 </html>
