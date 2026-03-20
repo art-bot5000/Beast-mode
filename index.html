@@ -542,7 +542,7 @@ select:focus { border-color: var(--accent); }
             <div class="hsl-row"><label class="hsl-lbl">L</label><input type="range" class="hsl-slider" id="colAL" min="0" max="100" value="0" oninput="onHSLChange('A')"><input type="number" class="hsl-input" id="colALv" min="0" max="100" value="0" oninput="onValueInput('A','L')"><span class="hsl-unit">%</span></div>
             <div style="margin-top:8px;">
               <div style="font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;">MODIFIER</div>
-              <select id="modA" style="width:100%" onchange="updateTunerSummary()"></select>
+              <select id="modA" style="width:100%" onchange="updateTunerSummary();driveSaveCurrentDebounced()"></select>
             </div>
           </div>
           <!-- Colour B -->
@@ -557,7 +557,7 @@ select:focus { border-color: var(--accent); }
             <div class="hsl-row"><label class="hsl-lbl">L</label><input type="range" class="hsl-slider" id="colBL" min="0" max="100" value="0" oninput="onHSLChange('B')"><input type="number" class="hsl-input" id="colBLv" min="0" max="100" value="0" oninput="onValueInput('B','L')"><span class="hsl-unit">%</span></div>
             <div style="margin-top:8px;">
               <div style="font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;">MODIFIER</div>
-              <select id="modB" style="width:100%" onchange="updateTunerSummary()"></select>
+              <select id="modB" style="width:100%" onchange="updateTunerSummary();driveSaveCurrentDebounced()"></select>
             </div>
           </div>
         </div>
@@ -573,15 +573,15 @@ select:focus { border-color: var(--accent); }
     </div>
     <div class="field">
       <label>Material</label>
-      <select id="materialSel"></select>
+      <select id="materialSel" onchange="driveSaveCurrentDebounced()"></select>
     </div>
     <div class="field">
       <label>Environment</label>
-      <select id="envSel"></select>
+      <select id="envSel" onchange="driveSaveCurrentDebounced()"></select>
     </div>
     <div class="field">
       <label>Environment Lighting</label>
-      <select id="lightSel"></select>
+      <select id="lightSel" onchange="driveSaveCurrentDebounced()"></select>
     </div>
     <div class="field">
       <label>Mech Inspiration 1</label>
@@ -1259,7 +1259,7 @@ function onHSLChange(slot) {
   const l = +document.getElementById('col'+slot+'L').value
   const hex = hslToHex(h,s,l)
   colState[slot] = hex
-  colState['name'+slot] = ''  // clear seeded name — auto-name takes over
+  colState['name'+slot] = ''
   document.getElementById('col'+slot+'Hv').value = h
   document.getElementById('col'+slot+'Sv').value = s
   document.getElementById('col'+slot+'Lv').value = l
@@ -1268,6 +1268,7 @@ function onHSLChange(slot) {
   document.getElementById('swatch'+slot).style.background = hex
   document.getElementById('preview'+slot).style.background = hex
   updateTunerSummary()
+  driveSaveCurrentDebounced()
 }
 
 function onValueInput(slot, channel) {
@@ -1281,18 +1282,19 @@ function onValueInput(slot, channel) {
   const l = +document.getElementById('col'+slot+'Lv').value
   const hex = hslToHex(h,s,l)
   colState[slot] = hex
-  colState['name'+slot] = ''  // clear seeded name — auto-name takes over
+  colState['name'+slot] = ''
   document.getElementById('col'+slot+'Hex').textContent = hex.toUpperCase()
   document.getElementById('col'+slot+'Label').textContent = hexToName(hex)
   document.getElementById('swatch'+slot).style.background = hex
   document.getElementById('preview'+slot).style.background = hex
   updateTunerSummary()
+  driveSaveCurrentDebounced()
 }
 
 function onPaletteChange() {
   const val = document.getElementById('colourSel').value
   const tuner = document.getElementById('colourTuner')
-  if (!val) { tuner.style.display='none'; return }
+  if (!val) { tuner.style.display='none'; driveSaveCurrentDebounced(); return }
   tuner.style.display = 'block'
   const seed = PALETTE_SEEDS[val]
   if (seed) {
@@ -1308,6 +1310,7 @@ function onPaletteChange() {
     updatePickerUI('A', '#888888')
     updatePickerUI('B', '#444444')
   }
+  driveSaveCurrentDebounced()
 }
 
 function getColourString() {
@@ -1809,8 +1812,8 @@ function selectSDOption(id, value) {
   document.getElementById('sdVal'+id).textContent = value
   document.getElementById('creature'+id).value = value
   closeSD(id)
-  // re-render to update .selected highlight
   renderSDList(id)
+  driveSaveCurrentDebounced()
 }
 
 function renderSDList(id) {
@@ -1894,6 +1897,7 @@ function selectInspOption(id, value) {
   document.getElementById('insp'+id.slice(1)+'Sel').value = value
   closeInsp(id)
   renderInspList(id, inspState[id].query)
+  driveSaveCurrentDebounced()
 }
 
 function renderInspList(id, query) {
@@ -2013,6 +2017,7 @@ function setMode(mode){
   const titles = { insect:'INSECT MECH GENERATOR', beast:'BEAST MODE', fusion:'FUSION MODE' }
   document.getElementById('mainTitle').textContent = titles[mode]
   populateDropdowns()
+  driveSaveCurrentDebounced()
 }
 
 function setPreset(preset, btn){
@@ -2023,6 +2028,7 @@ function setPreset(preset, btn){
   body.className = body.className.replace(/preset-\w+/g,'').trim()
   if(preset !== 'default') body.classList.add('preset-'+preset)
   document.getElementById('styleLabel').textContent = preset.toUpperCase()
+  driveSaveCurrentDebounced()
 }
 
 // ═══════════════════════════════════════════════════════════════════
