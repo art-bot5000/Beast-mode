@@ -357,6 +357,28 @@ select:focus { border-color: var(--accent); }
 .hsl-input:focus { border-color:var(--accent); }
 .hsl-unit { font-size:10px;color:var(--muted);flex-shrink:0;width:10px; }
 
+/* ACCORDION */
+.accordion-header {
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  user-select:none;
+}
+.accordion-header:hover .panel-title { color:var(--text); }
+.accordion-arrow {
+  font-size:10px;color:var(--muted);transition:transform .2s;flex-shrink:0;
+}
+.accordion-arrow.open { transform:rotate(180deg); }
+.accordion-body { overflow:hidden;transition:max-height .3s ease, opacity .2s ease; }
+.accordion-body.collapsed { max-height:0 !important;opacity:0;pointer-events:none; }
+.accordion-body.expanded  { opacity:1; }
+
+/* Drive sync badge on load panel header */
+.accordion-drive-badge {
+  font-size:9px;letter-spacing:2px;padding:2px 7px;border-radius:2px;
+  background:color-mix(in srgb,#00cc88 15%,transparent);color:#00cc88;font-weight:700;
+  display:none;
+}
+.accordion-drive-badge.show { display:inline; }
+
 /* DRIVE SYNC */
 .drive-bar {
   display:flex;align-items:center;gap:10px;padding:10px 14px;
@@ -604,21 +626,30 @@ select:focus { border-color: var(--accent); }
 
 <!-- LOAD SETTINGS -->
 <div class="panel" id="loadPanel">
-  <div class="panel-title">// LOAD SETTINGS FROM PROMPT</div>
-  <div style="font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;line-height:1.6;">
-    Paste a saved prompt below, or import a .txt file. The app will detect the embedded settings block and restore all fields.
+  <div class="accordion-header" onclick="toggleLoadPanel()">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="panel-title" style="margin-bottom:0;">// LOAD SETTINGS FROM PROMPT</div>
+      <span class="accordion-drive-badge" id="loadDriveBadge">DRIVE CONNECTED</span>
+    </div>
+    <span class="accordion-arrow" id="loadArrow">▼</span>
   </div>
-  <textarea id="loadTextarea" placeholder="// Paste a saved prompt here..." style="
-    width:100%;height:90px;background:#000;border:1px solid var(--border);border-radius:var(--radius);
-    color:#8ecfb8;font-family:'Rajdhani',sans-serif;font-size:12px;padding:10px;
-    outline:none;resize:vertical;line-height:1.6;
-  " oninput="onLoadTextareaInput()"></textarea>
-  <input type="file" id="loadFileInput" accept=".txt" style="display:none" onchange="onFileImport(event)">
-  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
-    <button class="btn btn-primary" id="loadBtn" onclick="loadFromText()" disabled style="opacity:.4;">⬆ RESTORE SETTINGS</button>
-    <button class="btn btn-outline" onclick="document.getElementById('loadFileInput').click()">📂 IMPORT .TXT</button>
-    <button class="btn btn-ghost" onclick="clearLoadPanel()">✕ CLEAR</button>
-    <span id="loadStatus" style="font-size:10px;letter-spacing:2px;color:var(--muted);"></span>
+  <div class="accordion-body collapsed" id="loadBody" style="max-height:0;">
+    <div style="height:14px;"></div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;line-height:1.6;">
+      Paste a saved prompt below, or import a .txt file. The app will detect the embedded settings block and restore all fields.
+    </div>
+    <textarea id="loadTextarea" placeholder="// Paste a saved prompt here..." style="
+      width:100%;height:90px;background:#000;border:1px solid var(--border);border-radius:var(--radius);
+      color:#8ecfb8;font-family:'Rajdhani',sans-serif;font-size:12px;padding:10px;
+      outline:none;resize:vertical;line-height:1.6;
+    " oninput="onLoadTextareaInput()"></textarea>
+    <input type="file" id="loadFileInput" accept=".txt" style="display:none" onchange="onFileImport(event)">
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="loadBtn" onclick="loadFromText()" disabled style="opacity:.4;">⬆ RESTORE SETTINGS</button>
+      <button class="btn btn-outline" onclick="document.getElementById('loadFileInput').click()">📂 IMPORT .TXT</button>
+      <button class="btn btn-ghost" onclick="clearLoadPanel()">✕ CLEAR</button>
+      <span id="loadStatus" style="font-size:10px;letter-spacing:2px;color:var(--muted);"></span>
+    </div>
   </div>
 </div>
 
@@ -2084,8 +2115,12 @@ function generateSingle(){
   setTimeout(()=>{
     out.classList.remove('generating')
     const prompt = buildPrompt(aName,bName,colour,material,env,lighting,insp1,insp2)
+    const header = `[${currentMode.toUpperCase()} // ${currentPreset.toUpperCase()}]`
     const settings = JSON.stringify(captureSettings())
-    out.textContent = `[${currentMode.toUpperCase()} // ${currentPreset.toUpperCase()}]\n\n${prompt}${SETTINGS_DELIMITER}${settings}`
+    const full = `${header}\n\n${prompt}${SETTINGS_DELIMITER}${settings}`
+    // Show only the clean prompt — settings block hidden from view
+    out.textContent = `${header}\n\n${prompt}`
+    out.dataset.full = full
   }, 200)
 }
 
@@ -2195,10 +2230,15 @@ function randomiseAll(){
 }
 
 function saveFav(){
-  const text = document.getElementById('output').textContent
-  if(!text || text.startsWith('//')) return
-  const promptOnly = text.includes('---SETTINGS---') ? text.slice(0, text.indexOf('---SETTINGS---')).trim() : text
-  favourites.unshift({ text, promptOnly, mode: currentMode, preset: currentPreset, id: Date.now() })
+  const out = document.getElementById('output')
+  const visible = out.textContent
+  if(!visible || visible.startsWith('//')) return
+  // Use full text (with settings block) if available, else visible text
+  const full = out.dataset.full || visible
+  const promptOnly = visible.includes('---SETTINGS---')
+    ? visible.slice(0, visible.indexOf('---SETTINGS---')).trim()
+    : visible
+  favourites.unshift({ text: full, promptOnly, mode: currentMode, preset: currentPreset, id: Date.now() })
   renderFavs()
   driveSaveDebounced()
 }
@@ -2248,54 +2288,44 @@ function renderFavs(){
 }
 
 function copyPromptOnly(){
+  // textContent is already the clean prompt — settings block is never shown
   const text = document.getElementById('output').textContent
   if(!text || text.startsWith('//')) return
-  const clean = text.includes('---SETTINGS---') ? text.slice(0, text.indexOf('---SETTINGS---')).trim() : text
   const btn = document.getElementById('copyPromptBtn')
   try {
     const ta = document.createElement('textarea')
-    ta.value = clean
+    ta.value = text
     ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    const orig = btn.textContent
-    btn.textContent = '✓ COPIED'
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
+    const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(()=> btn.textContent = orig, 1500)
-  } catch(e) {
-    btn.textContent = '✗ FAILED'
-    setTimeout(()=> btn.textContent = '⎘ COPY PROMPT', 1500)
-  }
+  } catch(e) { btn.textContent = '✗ FAILED'; setTimeout(()=> btn.textContent = '⎘ COPY PROMPT', 1500) }
 }
 
 function copyOutput(){
-  const text = document.getElementById('output').textContent
+  // COPY ALL includes the settings block from data-full
+  const out = document.getElementById('output')
+  const text = out.dataset.full || out.textContent
   if(!text || text.startsWith('//')) return
   const btn = document.getElementById('copyOutBtn')
   try {
     const ta = document.createElement('textarea')
     ta.value = text
     ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    const orig = btn.textContent
-    btn.textContent = '✓ COPIED'
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
+    const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(()=> btn.textContent = orig, 1500)
-  } catch(e) {
-    btn.textContent = '✗ FAILED'
-    setTimeout(()=> btn.textContent = '⎘ COPY', 1500)
-  }
+  } catch(e) { btn.textContent = '✗ FAILED'; setTimeout(()=> btn.textContent = '⎘ COPY', 1500) }
 }
 
 function exportAll(){
-  const output = document.getElementById('output').textContent
+  const out = document.getElementById('output')
+  // Use full text (with settings) for export so it can be re-imported
+  const outputFull = out.dataset.full || out.textContent
   const favText = favourites.length
     ? '\n\n═══════════════════\nSAVED PROMPTS\n═══════════════════\n\n' + favourites.map((f,i)=>`[${i+1}] ${f.text}`).join('\n\n')
     : ''
-  const full = `BEAST MODE // EXPORT\nGenerated: ${new Date().toLocaleString()}\n\n${output}${favText}`
+  const full = `BEAST MODE // EXPORT\nGenerated: ${new Date().toLocaleString()}\n\n${outputFull}${favText}`
 
   // Build meaningful filename
   const slugify = str => (str || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24)
@@ -2394,11 +2424,49 @@ function onGoogleSignIn(response) {
   tokenClient.requestAccessToken({ prompt:'' })
 }
 
+function toggleLoadPanel() {
+  const body  = document.getElementById('loadBody')
+  const arrow = document.getElementById('loadArrow')
+  const isOpen = body.classList.contains('expanded')
+  if (isOpen) {
+    body.style.maxHeight = body.scrollHeight + 'px'
+    requestAnimationFrame(()=>{ body.style.maxHeight = '0'; body.classList.remove('expanded'); body.classList.add('collapsed') })
+    arrow.classList.remove('open')
+  } else {
+    body.classList.remove('collapsed'); body.classList.add('expanded')
+    body.style.maxHeight = body.scrollHeight + 'px'
+    setTimeout(()=> body.style.maxHeight = 'none', 320)
+    arrow.classList.add('open')
+  }
+}
+
+function openLoadPanel() {
+  const body  = document.getElementById('loadBody')
+  const arrow = document.getElementById('loadArrow')
+  if (body.classList.contains('expanded')) return
+  body.classList.remove('collapsed'); body.classList.add('expanded')
+  body.style.maxHeight = body.scrollHeight + 'px'
+  setTimeout(()=> body.style.maxHeight = 'none', 320)
+  arrow.classList.add('open')
+}
+
+function collapseLoadPanel() {
+  const body  = document.getElementById('loadBody')
+  const arrow = document.getElementById('loadArrow')
+  if (body.classList.contains('collapsed')) return
+  body.style.maxHeight = body.scrollHeight + 'px'
+  requestAnimationFrame(()=>{ body.style.maxHeight = '0'; body.classList.remove('expanded'); body.classList.add('collapsed') })
+  arrow.classList.remove('open')
+}
+
 function showDriveSignedIn(name, picture) {
   document.getElementById('driveSignedOut').style.display = 'none'
   document.getElementById('driveSignedIn').style.display  = 'flex'
   document.getElementById('driveName').textContent = name
   if (picture) document.getElementById('driveAvatar').src = picture
+  // Collapse load panel and show Drive badge
+  collapseLoadPanel()
+  document.getElementById('loadDriveBadge').classList.add('show')
 }
 
 function driveSignOut() {
@@ -2406,6 +2474,8 @@ function driveSignOut() {
   localStorage.removeItem('bm_drive_session')
   document.getElementById('driveSignedOut').style.display = 'flex'
   document.getElementById('driveSignedIn').style.display  = 'none'
+  document.getElementById('loadDriveBadge').classList.remove('show')
+  openLoadPanel()
   setDriveStatus('—')
 }
 
@@ -2485,7 +2555,11 @@ async function driveSync() {
   if (favourites.length) await driveSaveFavourites()
 }
 
-window.addEventListener('load', () => setTimeout(initDrive, 800))
+window.addEventListener('load', () => {
+  setTimeout(initDrive, 800)
+  // Open load panel by default (Drive may collapse it once signed in)
+  openLoadPanel()
+})
 </script>
 </body>
 </html>
