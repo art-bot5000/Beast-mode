@@ -132,7 +132,8 @@ h1 {
   .field-checks { grid-template-columns:1fr 1fr; }
 
   /* Preset category dropdowns */
-  .preset-cat-panel { left:0;right:auto;min-width:160px;max-width:calc(100vw - 24px); }
+  /* Preset selects on mobile — stack if needed */
+  .preset-cat-select { font-size:12px; }
 
   /* Header */
   h1 { font-size:28px;letter-spacing:2px; }
@@ -534,37 +535,31 @@ body.light .colourTuner { background:var(--surface2); }
 .fav-restore { background:var(--surface2);color:var(--accent);border:1px solid var(--accent);padding:3px 8px;font-size:10px;letter-spacing:1px;cursor:pointer;border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700; }
 .fav-restore:hover { background:color-mix(in srgb,var(--accent) 15%,transparent); }
 
-/* PRESET CATEGORY DROPDOWNS */
-.preset-cat-wrap {
-  position:relative;display:inline-block;flex:1;min-width:0;
-}
-.preset-cat-btn {
-  width:100%;padding:7px 10px;cursor:pointer;border-radius:var(--radius);
+/* PRESET CATEGORY SELECTS */
+.preset-cat-select {
+  flex:1;min-width:0;
+  padding:7px 28px 7px 10px;cursor:pointer;border-radius:var(--radius);
   font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
-  letter-spacing:1px;border:1px solid var(--border);background:transparent;
-  color:var(--muted);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:4px;
-  white-space:nowrap;
+  letter-spacing:1px;border:1px solid var(--border);
+  background:var(--surface2);
+  color:var(--muted);
+  transition:border-color .15s, color .15s;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+  width:100%;
 }
-.preset-cat-btn:hover { border-color:var(--accent);color:var(--accent); }
-.preset-cat-btn.has-active { border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent); }
-.preset-cat-btn .cat-arrow { font-size:8px;transition:transform .15s; }
-.preset-cat-btn.open .cat-arrow { transform:rotate(180deg); }
-.preset-cat-panel {
-  display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:500;
-  background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);
-  min-width:200px;width:max-content;max-width:calc(100vw - 40px);
-  box-shadow:0 8px 24px rgba(0,0,0,.7);overflow:hidden;
+.preset-cat-select:hover { border-color:var(--accent);color:var(--accent); }
+.preset-cat-select.has-active {
+  border-color:var(--accent);color:var(--accent);
+  background-color:color-mix(in srgb,var(--accent) 10%,transparent);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23e8ff00'/%3E%3C/svg%3E");
 }
-.preset-cat-panel.open { display:block; }
-.preset-cat-option {
-  padding:8px 14px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;
-  cursor:pointer;color:var(--text);letter-spacing:.5px;transition:background .1s;
-  display:flex;flex-direction:column;gap:2px;
-}
-.preset-cat-option:hover { background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent); }
-.preset-cat-option.active { color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent); }
-.preset-cat-option.active::before { content:'▸ '; }
-.preset-cat-desc { font-size:9px;color:var(--muted);font-weight:400;letter-spacing:0;line-height:1.3; }
+.preset-cat-select:focus { outline:none;border-color:var(--accent); }
+.mode-insect .preset-cat-select.has-active { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2300ffb0'/%3E%3C/svg%3E"); }
+.mode-beast  .preset-cat-select.has-active { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23ff6a00'/%3E%3C/svg%3E"); }
+.mode-fusion .preset-cat-select.has-active { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c800ff'/%3E%3C/svg%3E"); }
+
 
 /* STYLE EDITOR */
 .style-tab {
@@ -2390,67 +2385,45 @@ function setMode(mode){
 }
 
 // Close all preset dropdowns
-function closeAllPresetDrops() {
-  document.querySelectorAll('.preset-cat-btn').forEach(b => b.classList.remove('open'))
-  document.querySelectorAll('.preset-cat-panel').forEach(p => p.classList.remove('open'))
-}
-
-// Close on outside click
-document.addEventListener('click', e => {
-  if (!e.target.closest('.preset-cat-wrap')) closeAllPresetDrops()
-})
-
 function renderPresetRow() {
   const row = document.getElementById('presetRow')
   if (!row) return
   row.innerHTML = ''
-
-  const activePreset = getPreset(currentPreset)
 
   PRESET_CATEGORIES.forEach(cat => {
     const presets = cat.id === 'custom'
       ? customPresets
       : BUILTIN_PRESETS.filter(p => p.category === cat.id)
 
-    // Don't show Custom dropdown if no custom presets exist
-    if (cat.id === 'custom' && presets.length === 0) return
+    if (presets.length === 0) return
 
     const catHasActive = presets.some(p => p.id === currentPreset)
 
-    const wrap = document.createElement('div')
-    wrap.className = 'preset-cat-wrap'
+    const sel = document.createElement('select')
+    sel.className = 'preset-cat-select' + (catHasActive ? ' has-active' : '')
+    sel.title = cat.label
 
-    const btn = document.createElement('button')
-    btn.className = 'preset-cat-btn' + (catHasActive ? ' has-active' : '')
-    btn.innerHTML = `${catHasActive ? '▸ ' : ''}${cat.label} <span class="cat-arrow">▼</span>`
-    btn.addEventListener('click', e => {
-      e.stopPropagation()
-      const isOpen = btn.classList.contains('open')
-      closeAllPresetDrops()
-      if (!isOpen) {
-        btn.classList.add('open')
-        panel.classList.add('open')
-      }
-    })
-
-    const panel = document.createElement('div')
-    panel.className = 'preset-cat-panel'
+    // Category label as first disabled option
+    const labelOpt = document.createElement('option')
+    labelOpt.value = ''
+    labelOpt.textContent = cat.label
+    labelOpt.disabled = true
+    labelOpt.selected = !catHasActive
+    sel.appendChild(labelOpt)
 
     presets.forEach(p => {
-      const opt = document.createElement('div')
-      opt.className = 'preset-cat-option' + (p.id === currentPreset ? ' active' : '')
-      opt.innerHTML = `${p.name}<span class="preset-cat-desc">${p.adj.slice(0,60)}${p.adj.length>60?'…':''}</span>`
-      opt.addEventListener('click', e => {
-        e.stopPropagation()
-        setPreset(p.id)
-        closeAllPresetDrops()
-      })
-      panel.appendChild(opt)
+      const opt = document.createElement('option')
+      opt.value = p.id
+      opt.textContent = (p.id === currentPreset ? '▸ ' : '') + p.name
+      opt.selected = p.id === currentPreset
+      sel.appendChild(opt)
     })
 
-    wrap.appendChild(btn)
-    wrap.appendChild(panel)
-    row.appendChild(wrap)
+    sel.addEventListener('change', function() {
+      if (this.value) setPreset(this.value)
+    })
+
+    row.appendChild(sel)
   })
 }
 
