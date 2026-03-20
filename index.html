@@ -2233,11 +2233,20 @@ function saveFav(){
   const out = document.getElementById('output')
   const visible = out.textContent
   if(!visible || visible.startsWith('//')) return
-  // Use full text (with settings block) if available, else visible text
-  const full = out.dataset.full || visible
-  const promptOnly = visible.includes('---SETTINGS---')
-    ? visible.slice(0, visible.indexOf('---SETTINGS---')).trim()
+
+  let full = out.dataset.full || ''
+
+  // If no full text stored (e.g. output was set without a settings block),
+  // generate a fresh settings block and embed it now
+  if (!full || !full.includes('---SETTINGS---')) {
+    const settings = JSON.stringify(captureSettings())
+    full = visible + SETTINGS_DELIMITER + settings
+  }
+
+  const promptOnly = full.includes('---SETTINGS---')
+    ? full.slice(0, full.indexOf('---SETTINGS---')).trim()
     : visible
+
   favourites.unshift({ text: full, promptOnly, mode: currentMode, preset: currentPreset, id: Date.now() })
   renderFavs()
   driveSaveDebounced()
@@ -2358,14 +2367,26 @@ function restoreFav(id) {
   const f = favourites.find(x => x.id === id)
   if (!f) return
   const s = extractSettings(f.text)
+  const out = document.getElementById('output')
+
   if (s) {
+    // Full restore: apply all settings and show clean prompt
     applySettings(s)
     const promptOnly = f.text.includes('---SETTINGS---')
       ? f.text.slice(0, f.text.indexOf('---SETTINGS---')).trim()
-      : f.text
-    document.getElementById('output').textContent = promptOnly
+      : (f.promptOnly || f.text)
+    out.textContent = promptOnly
+    out.dataset.full = f.text   // preserve full text so re-save keeps settings
   } else {
-    document.getElementById('output').textContent = f.promptOnly || f.text
+    // No settings block — show prompt only, settings cannot be restored
+    out.textContent = f.promptOnly || f.text
+    out.dataset.full = ''
+    // If this came from an old save without a settings block, let the user know
+    const hasOldFormat = !f.text.includes('---SETTINGS---')
+    if (hasOldFormat) {
+      setDriveStatus('⚠ PROMPT ONLY — no settings block', 'err')
+      setTimeout(() => setDriveStatus('✓ SYNCED', 'ok'), 3000)
+    }
   }
   window.scrollTo({ top:0, behavior:'smooth' })
 }
