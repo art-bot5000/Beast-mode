@@ -92,6 +92,9 @@ h1 {
   border-radius:var(--radius);
   padding: 20px;
   margin-bottom: 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
 }
 .panel-title {
   font-size:10px;letter-spacing:4px;color:var(--accent);font-weight:700;
@@ -100,8 +103,11 @@ h1 {
 }
 
 /* GRID CONTROLS */
-.controls-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+.controls-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%; }
 .controls-grid.three { grid-template-columns:1fr 1fr 1fr; }
+.controls-grid > * { min-width:0; }
+.field { min-width:0; }
+select, .sd-display { max-width:100%;box-sizing:border-box; }
 
 @media(max-width:640px){
   /* Fix root overflow */
@@ -156,7 +162,7 @@ h1 {
   .hsl-input { width:42px; }
 
   /* Colour tuner grid → single column */
-  #colourTuner > div:nth-child(2) { grid-template-columns:1fr !important; }
+  #colourTuner > div:nth-child(2), #colourTunerGrid { grid-template-columns:1fr !important; }
 
   /* Preview popup — slide up from bottom on mobile */
   #thumbPreviewBackdrop { display:none; }
@@ -630,7 +636,7 @@ body.light .colourTuner { background:var(--surface2); }
 /* Views */
 .view { display:none;min-height:60vh; }
 .view.active { display:block; }
-.view-inner { max-width:900px;margin:0 auto;padding:24px 20px; }
+.view-inner { max-width:900px;margin:0 auto;padding:24px 20px;overflow-x:hidden; }
 
 /* Bottom tab bar on mobile */
 @media(max-width:640px){
@@ -1288,10 +1294,16 @@ body.light .colourTuner { background:var(--surface2); }
         <select id="imgModelSelect" class="img-modal-input" onchange="onModelSelectChange()">
           <option value="">— Select model —</option>
           <optgroup label="Midjourney">
+            <option>Midjourney v8</option>
             <option>Midjourney v7</option>
             <option>Midjourney v6.1</option>
             <option>Midjourney v6</option>
             <option>Midjourney v5.2</option>
+          </optgroup>
+          <optgroup label="Google">
+            <option>Nano Banana 2</option>
+            <option>Nano Banana Pro</option>
+            <option>Nano Banana</option>
           </optgroup>
           <optgroup label="Flux">
             <option>Flux 1.1 Pro</option>
@@ -1410,7 +1422,7 @@ body.light .colourTuner { background:var(--surface2); }
     </button>
     <button class="nav-tab" id="navBuilder" onclick="switchView('builder')">
       <span class="tab-icon">⊛</span>
-      <span class="tab-label">PROMPT LAB <sup style="font-size:7px;letter-spacing:1px;opacity:.7;">β</sup></span>
+      <span class="tab-label">PROMPT LAB</span>
     </button>
     <button class="nav-tab" id="navSettings" onclick="switchView('settings')">
       <span class="tab-icon">⌘</span>
@@ -1560,7 +1572,7 @@ body.light .colourTuner { background:var(--surface2); }
       <!-- COLOUR TUNER PANEL -->
       <div id="colourTuner" style="display:none;margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
         <div style="font-size:9px;letter-spacing:3px;color:var(--accent);font-weight:700;margin-bottom:12px;">// FINE-TUNE COLOURS</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;min-width:0;width:100%;"  id="colourTunerGrid">
           <!-- Colour A -->
           <div>
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -1849,7 +1861,7 @@ body.light .colourTuner { background:var(--surface2); }
     <header style="margin-bottom:20px;">
       <div class="title-line">
         <h1 style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</h1>
-        <span class="version" style="align-self:center;">β // PARTICLE FORMULA ENGINE</span>
+        <span class="version" style="align-self:center;">// PARTICLE FORMULA ENGINE</span>
       </div>
     </header>
 
@@ -1864,6 +1876,9 @@ body.light .colourTuner { background:var(--surface2); }
       <div class="pb-output" id="pbOutput">
         <span class="pb-output-ph">Select particles below — prompt assembles automatically</span>
         <button class="pb-copy-btn" onclick="pbCopyOutput()">⎘ COPY</button>
+      </div>
+      <div style="margin-top:8px;">
+        <button class="btn btn-primary" style="font-size:10px;padding:7px 16px;" onclick="pbSaveToLibrary()">♥ SAVE TO LIBRARY</button>
       </div>
     </div>
 
@@ -1946,7 +1961,10 @@ body.light .colourTuner { background:var(--surface2); }
     <div class="pb-import-section" id="pbPasteSection">
       <div class="pb-import-step">&#9313; PASTE YOUR PROMPT</div>
       <textarea class="pb-import-textarea" id="pbImportTextarea" placeholder="Paste any prompt here&hellip;" oninput="pbImportOnInput()"></textarea>
-      <button class="btn btn-outline" style="font-size:10px;margin-top:8px;" onclick="pbImportCommit()">ANNOTATE &#x2192;</button>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline" style="font-size:10px;" onclick="pbImportCommit()">TAG AS PARTICLES &#x2192;</button>
+        <button class="btn btn-ghost" style="font-size:10px;" onclick="pbSavePlainPrompt()">&#x2665; SAVE AS PLAIN PROMPT</button>
+      </div>
     </div>
 
     <div class="pb-import-section" id="pbAnnotateSection" style="display:none;">
@@ -4511,7 +4529,16 @@ window.addEventListener('load', () => { setTimeout(initDrive, 800); openLoadPane
 
 let currentView = 'generator'
 
-function switchView(view) {
+// Hash ↔ view name mapping
+const VIEW_HASHES = {
+  'library':   'library',
+  'generator': 'generator',
+  'builder':   'prompt-lab',
+  'settings':  'settings',
+}
+const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) => [h,v]))
+
+function switchView(view, pushState = true) {
   currentView = view
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'))
@@ -4520,8 +4547,24 @@ function switchView(view) {
   if (view === 'library') renderLibrary()
   if (view === 'settings') renderSettingsView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
+  if (pushState) {
+    try {
+      const hash = VIEW_HASHES[view] || 'generator'
+      history.pushState({ view }, '', '#' + hash)
+    } catch(e) {}
+  }
   window.scrollTo({top:0,behavior:'smooth'})
 }
+
+// Restore view from hash on load / back-forward navigation
+function switchViewFromHash() {
+  const hash = location.hash.replace('#', '') || 'generator'
+  const view = HASH_TO_VIEW[hash] || 'generator'
+  switchView(view, false)
+}
+
+window.addEventListener('popstate', switchViewFromHash)
+window.addEventListener('hashchange', switchViewFromHash)
 
 // ═══════════════════════════════════════════════════════════════════
 // PROMPT METADATA — extends favourite objects
@@ -4529,7 +4572,8 @@ function switchView(view) {
 
 // Built-in AI models (always in dropdown)
 const BUILTIN_MODELS = [
-  'Midjourney v7','Midjourney v6.1','Midjourney v6','Midjourney v5.2',
+  'Midjourney v8','Midjourney v7','Midjourney v6.1','Midjourney v6','Midjourney v5.2',
+  'Nano Banana 2','Nano Banana Pro','Nano Banana',
   'Flux 1.1 Pro','Flux Pro','Flux Dev','Flux Schnell',
   'Stable Diffusion 3.5','Stable Diffusion XL',
   'DALL-E 3','GPT-4o Image',
@@ -5028,6 +5072,7 @@ function buildLibCard(f) {
   const actionDefs = [
     { label:'⬆ RESTORE', cls:'', fn: () => { restoreFav(f.id); switchView('generator') } },
     { label:'⎘ COPY',    cls:'', fn: () => copyFav(f.id) },
+    { label:'⊛ PARTICLES', cls:'', fn: () => sendToParticleLab(f), title:'Open in Prompt Lab to tag as particles' },
     { label:'🖼',         cls:'', fn: () => openImageModal(f.id), title:'Add / change image' },
     { label:'✕',         cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() } },
   ]
@@ -5233,6 +5278,8 @@ window.addEventListener('load', () => {
   openLoadPanel()
   updateLibBadge()
   renderLibFilters()
+  // Restore view from URL hash if present
+  if (location.hash) switchViewFromHash()
 })
 
 // ═══════════════════════════════════════════════════════════════════
@@ -6196,6 +6243,42 @@ function pbClearTags() {
   if (annotated) annotated.textContent = annotated.textContent  // strips all HTML
   pbTagged = []
   pbRenderTaggedList()
+}
+
+function sendToParticleLab(f) {
+  const text = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
+  if (!text) return
+  switchView('builder')
+  // Wait for builder to init, then open import modal pre-populated
+  setTimeout(() => {
+    pbOpenImport()
+    setTimeout(() => {
+      const ta = document.getElementById('pbImportTextarea')
+      if (ta) { ta.value = text; ta.dispatchEvent(new Event('input')) }
+    }, 100)
+  }, pbInitDone ? 0 : 400)
+}
+
+function sendToParticleLabById(id) {
+  const f = favourites.find(x => x.id === id)
+  if (f) sendToParticleLab(f)
+}
+
+function pbSaveToLibrary() {
+  const box = document.getElementById('pbOutput')
+  const text = box.dataset.plain || ''
+  if (!text) return
+  // Use the saveFav flow — set pending output and open the image/metadata modal
+  window._pendingOutput = { visible: text, full: text }
+  openImageModal(null)
+}
+
+function pbSavePlainPrompt() {
+  const text = document.getElementById('pbImportTextarea')?.value.trim()
+  if (!text) return
+  window._pendingOutput = { visible: text, full: text }
+  openImageModal(null)
+  pbCloseImport()
 }
 
 function pbSaveTagged() {
