@@ -1205,6 +1205,201 @@ body.light .colourTuner { background:var(--surface2); }
 }
 .pb-creature-detail-add:hover { opacity:.8;background:color-mix(in srgb,currentColor 10%,transparent); }
 
+/* ── PROMPT LAB VIEW ─────────────────────────────────────────────── */
+#viewBuilder .view-inner { padding-right:40px; padding-bottom:160px; }
+
+/* Embedded type nav */
+.pb-type-nav-embedded {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.pb-type-nav-embedded .pb-type-nav-btn {
+  width:100%;
+  padding:7px 10px;
+  border-radius:4px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.5px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:transparent;
+  border:1px solid transparent;
+  color:var(--muted);
+  cursor:pointer;
+  transition:all .12s;
+  text-align:left;
+}
+.pb-type-nav-embedded .pb-type-nav-btn:hover {
+  background:var(--surface2);
+  border-color:var(--border);
+  color:var(--text);
+}
+.pb-type-nav-embedded .pb-type-nav-btn.hidden-type {
+  opacity:.25;
+  pointer-events:none;
+}
+.pb-type-nav-embedded .pb-type-nav-dot {
+  width:9px;height:9px;border-radius:50%;flex-shrink:0;
+}
+.pb-type-nav-embedded .pb-type-nav-sep {
+  height:1px;background:var(--border);margin:4px 0;
+}
+
+/* Hide floating nav on desktop — it's always shown, remove the hide rule */
+@media(min-width:901px){
+  .pb-bottom-bar { display:none !important; }
+}
+
+/* ── MOBILE LAYOUT ───────────────────────────────────────────────── */
+@media(max-width:900px){
+  /* Mobile bottom bar */
+  .pb-bottom-bar {
+    position:fixed;
+    bottom:0;left:0;right:0;
+    z-index:150;
+    background:var(--surface);
+    border-top:2px solid var(--border);
+    padding:10px 14px;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom));
+    box-shadow:0 -6px 24px rgba(0,0,0,.6);
+    transition:max-height .25s ease;
+  }
+  .pb-bottom-bar-inner {
+    display:flex;flex-direction:column;gap:8px;
+    max-width:900px;margin:0 auto;
+  }
+  .pb-bottom-bar-chips {
+    flex:1;min-width:0;
+    display:flex;flex-wrap:wrap;gap:5px;align-items:flex-start;
+    overflow:hidden;
+    max-height:calc(6 * 26px + 5 * 5px);
+    transition:max-height .25s ease;
+  }
+  .pb-bottom-bar-chips.expanded { max-height:none; }
+  .pb-bottom-bar-chips::-webkit-scrollbar { display:none; }
+  .pb-bottom-bar-ph {
+    font-size:11px;color:var(--muted);letter-spacing:1px;
+    align-self:center;padding:4px 0;
+  }
+  .pb-bottom-chip {
+    display:inline-flex;align-items:center;padding:4px 9px;border-radius:4px;
+    font-size:11px;font-weight:600;letter-spacing:.3px;
+    cursor:pointer;transition:opacity .1s, filter .1s;
+    line-height:1.4;word-break:break-word;
+  }
+  .pb-bottom-chip:active { opacity:.6; }
+  .pb-bottom-chip:hover { filter:brightness(1.15); }
+  .pb-bottom-bar-actions {
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+  .pb-bottom-bar-expand {
+    flex:1;padding:5px 10px;border-radius:4px;border:1px solid var(--border);
+    background:transparent;color:var(--muted);font-family:'Rajdhani',sans-serif;
+    font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;
+    text-align:left;transition:all .15s;
+  }
+  .pb-bottom-bar-expand:hover { border-color:var(--accent);color:var(--accent); }
+  .pb-bottom-bar-btns { display:flex;gap:6px;flex-shrink:0; }
+  .pb-bottom-bar-btn {
+    height:32px;padding:0 12px;border-radius:4px;border:1px solid var(--border);
+    background:var(--surface2);color:var(--muted);cursor:pointer;
+    display:flex;align-items:center;gap:5px;
+    font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;
+    transition:all .15s;
+  }
+  .pb-bottom-bar-btn:hover { border-color:var(--accent);color:var(--accent); }
+  .pb-bottom-bar-save { background:color-mix(in srgb,var(--accent) 15%,transparent);border-color:var(--accent);color:var(--accent); }
+  .pb-type-nav { right:6px;padding:4px 3px;gap:2px; }
+  .pb-type-nav-btn { width:22px;height:22px; }
+  .pb-type-nav-btn .pb-type-nav-dot { width:6px;height:6px; }
+}
+
+/* ── FLOATING TYPE NAV (right edge, expandable) ──────────────────── */
+.pb-type-nav {
+  position:fixed;right:12px;top:50%;transform:translateY(-50%);
+  z-index:100;display:flex;flex-direction:column;gap:3px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:6px;
+  box-shadow:0 4px 20px rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .2s, width .2s ease;
+  overflow:hidden;
+  width:36px;
+}
+.pb-type-nav.visible { opacity:1;pointer-events:auto; }
+.pb-type-nav.expanded { width:150px; }
+.pb-type-nav.expanded .pb-type-nav-btn { justify-content:flex-start; }
+/* Toggle button at top of nav */
+.pb-type-nav-toggle {
+  display:flex;align-items:center;justify-content:center;
+  padding:4px 0;cursor:pointer;border:none;background:transparent;
+  color:var(--muted);font-size:11px;letter-spacing:1px;
+  font-family:'Rajdhani',sans-serif;font-weight:700;
+  transition:color .15s;border-bottom:1px solid var(--border);
+  margin-bottom:3px;padding-bottom:6px;width:100%;
+}
+.pb-type-nav-toggle:hover { color:var(--accent); }
+.pb-type-nav-btn {
+  display:flex;align-items:center;gap:7px;
+  padding:4px 5px;border-radius:4px;cursor:pointer;
+  border:none;background:transparent;width:100%;
+  transition:background .12s;
+}
+.pb-type-nav-btn:hover { background:var(--surface2); }
+.pb-type-nav-btn.hidden-type { opacity:.25;pointer-events:none; }
+.pb-type-nav-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.pb-type-nav-label {
+  font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.5px;white-space:nowrap;color:inherit;
+  display:none;
+}
+.pb-type-nav.expanded .pb-type-nav-label { display:inline; }
+.pb-type-nav-sep { height:1px;background:var(--border);margin:2px 0; }
+.pb-type-nav-tip {
+  position:absolute;right:calc(100% + 8px);top:50%;transform:translateY(-50%);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:3px;padding:3px 8px;white-space:nowrap;
+  font-size:10px;letter-spacing:1px;color:var(--text);
+  pointer-events:none;opacity:0;transition:opacity .15s;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
+.pb-type-nav:not(.expanded) .pb-type-nav-btn:hover .pb-type-nav-tip { opacity:1; }
+
+.pb-type-nav.visible { opacity:1;pointer-events:auto; }
+.pb-type-nav-btn {
+  width:28px;height:28px;border-radius:4px;cursor:pointer;
+  border:none;background:transparent;display:flex;align-items:center;
+  justify-content:center;font-size:10px;font-weight:700;
+  font-family:'Rajdhani',sans-serif;letter-spacing:.5px;
+  transition:all .12s;position:relative;color:var(--muted);
+}
+.pb-type-nav-btn:hover { background:var(--surface2); }
+.pb-type-nav-btn .pb-type-nav-dot {
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  transition:transform .12s;
+}
+.pb-type-nav-btn:hover .pb-type-nav-dot { transform:scale(1.4); }
+.pb-type-nav-btn.hidden-type { opacity:.2; }
+.pb-type-nav-tip {
+  position:absolute;right:36px;top:50%;transform:translateY(-50%);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:3px;padding:3px 8px;white-space:nowrap;
+  font-size:10px;letter-spacing:1px;color:var(--text);
+  pointer-events:none;opacity:0;transition:opacity .15s;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
+.pb-type-nav-btn:hover .pb-type-nav-tip { opacity:1; }
+.pb-type-nav-sep {
+  height:1px;background:var(--border);margin:2px 0;
+}
+@media(max-width:640px){
+  .pb-type-nav { right:6px;padding:4px 3px;gap:2px; }
+  .pb-type-nav-btn { width:22px;height:22px; }
+  .pb-type-nav-btn .pb-type-nav-dot { width:6px;height:6px; }
+  .pb-type-nav-tip { display:none; }
+}
+
 /* Mode filter buttons for Subject type */
 .pb-mode-filter-row {
   display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;
@@ -1382,6 +1577,143 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-tagged-item-text { flex:1;font-size:11px;font-style:italic;line-height:1.4; }
 .pb-tagged-item-del { cursor:pointer;opacity:.5;flex-shrink:0;font-size:14px;transition:opacity .1s; }
 .pb-tagged-item-del:hover { opacity:1; }
+
+/* ── LIBRARY LAYOUT WITH FOLDER SIDEBAR ─────────────────────────── */
+.lib-layout { display:flex;gap:0;align-items:flex-start; }
+.lib-folders {
+  width:180px;flex-shrink:0;padding-right:14px;
+  border-right:1px solid var(--border);margin-right:18px;
+}
+.lib-folder-header {
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:8px;
+}
+.lib-folder-title {
+  font-size:9px;letter-spacing:3px;color:var(--muted);font-weight:700;
+}
+.lib-folder-add {
+  width:20px;height:20px;border-radius:3px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-size:14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;line-height:1;
+  transition:all .15s;padding:0;
+}
+.lib-folder-add:hover { border-color:var(--accent);color:var(--accent); }
+.lib-main { flex:1;min-width:0; }
+.lib-folder-item {
+  display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:4px;
+  cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.3px;
+  color:var(--muted);border:1px solid transparent;
+  transition:all .15s;margin-bottom:2px;
+  user-select:none;
+}
+.lib-folder-item:hover { background:var(--surface2);color:var(--text); }
+.lib-folder-item.active {
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 30%,transparent);
+  color:var(--accent);
+}
+.lib-folder-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.lib-folder-count { font-size:9px;margin-left:auto;opacity:.5; }
+.lib-folder-item .lib-folder-del {
+  opacity:0;font-size:12px;margin-left:2px;cursor:pointer;
+  transition:opacity .1s;color:var(--muted);
+}
+.lib-folder-item:hover .lib-folder-del { opacity:.5; }
+.lib-folder-item .lib-folder-del:hover { opacity:1;color:#ff4444; }
+@media(max-width:640px){
+  .lib-layout { flex-direction:column; }
+  .lib-folders { width:100%;padding-right:0;border-right:none;margin-right:0;
+    border-bottom:1px solid var(--border);margin-bottom:14px;padding-bottom:10px; }
+  .lib-folder-item { display:inline-flex;width:auto; }
+  #libFolderList { display:flex;flex-wrap:wrap;gap:4px; }
+}
+
+/* ── STARRED BUTTON ON CARD ─────────────────────────────────────── */
+.lib-star-btn {
+  background:none;border:none;cursor:pointer;font-size:16px;
+  padding:0;line-height:1;transition:transform .15s;color:var(--border);
+}
+.lib-star-btn.starred { color:#ffcc00; }
+.lib-star-btn:hover { transform:scale(1.2); }
+
+/* ── MODAL SHARED STYLES ────────────────────────────────────────── */
+.modal-card {
+  background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  width:100%;display:flex;flex-direction:column;overflow:hidden;
+  margin:0 auto;
+}
+.modal-header {
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:14px 18px;border-bottom:1px solid var(--border);
+  background:var(--surface2);flex-shrink:0;
+}
+.modal-title {
+  font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;
+  color:var(--accent);
+}
+.modal-close {
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:3px;padding:4px 10px;cursor:pointer;font-size:13px;
+  transition:all .15s;flex-shrink:0;
+}
+.modal-close:hover { border-color:var(--text);color:var(--text); }
+.modal-body { padding:16px 18px;overflow-y:auto;max-height:70vh; }
+.modal-footer {
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  padding:12px 18px;border-top:1px solid var(--border);background:var(--surface2);
+  flex-shrink:0;
+}
+
+/* ── VERSION HISTORY ────────────────────────────────────────────── */
+.version-item {
+  display:flex;align-items:flex-start;gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--border);
+}
+.version-item:last-child { border-bottom:none; }
+.version-meta { flex-shrink:0;width:110px; }
+.version-label { font-size:11px;font-weight:700;color:var(--text);margin-bottom:2px; }
+.version-date { font-size:10px;color:var(--muted);letter-spacing:.5px; }
+.version-text { flex:1;font-size:11px;color:var(--muted);line-height:1.6;font-style:italic; }
+.version-restore { flex-shrink:0;font-size:9px;padding:4px 8px; }
+
+/* ── ITERATE ────────────────────────────────────────────────────── */
+.iterate-step { margin-bottom:14px; }
+.iterate-step-label {
+  font-size:9px;letter-spacing:3px;color:var(--muted);font-weight:700;
+  margin-bottom:8px;text-transform:uppercase;
+}
+.iter-particle-pick {
+  padding:5px 10px;border-radius:4px;font-size:11px;font-weight:700;
+  cursor:pointer;border:1px solid transparent;transition:all .12s;
+  user-select:none;
+}
+.iter-particle-pick.selected { outline:2px solid #fff;outline-offset:1px; }
+.iter-result-item {
+  background:var(--surface2);border:1px solid var(--border);border-radius:4px;
+  padding:12px;margin-bottom:8px;
+}
+.iter-result-label { font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:6px; }
+.iter-result-text { font-size:12px;color:var(--text);line-height:1.7;margin-bottom:8px; }
+.iter-result-actions { display:flex;gap:6px; }
+
+/* ── DRIVE PHOTO PICKER ─────────────────────────────────────────── */
+.drive-photo-item {
+  border:1px solid var(--border);border-radius:4px;overflow:hidden;
+  cursor:pointer;transition:border-color .15s,transform .1s;
+  display:flex;flex-direction:column;
+}
+.drive-photo-item:hover { border-color:var(--accent);transform:scale(1.02); }
+.drive-photo-thumb {
+  width:100%;aspect-ratio:1;object-fit:cover;background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+}
+.drive-photo-name {
+  padding:4px 6px;font-size:9px;color:var(--muted);letter-spacing:.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* ── CARD FOLDER BADGE ──────────────────────────────────────────── */
+.lib-tag.tag-folder { background:var(--surface2);color:var(--muted);border:1px solid var(--border); }
 
 </style>
 </head>
@@ -1591,20 +1923,38 @@ body.light .colourTuner { background:var(--surface2); }
         <h1 style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);">// PROMPT LIBRARY</h1>
       </div>
     </header>
-    <div class="lib-toolbar">
-      <input class="lib-search" id="libSearch" placeholder="Search prompts, creatures, models…" oninput="libSearchDebounced()">
-      <select class="lib-sort-select" id="libSort" onchange="renderLibrary()">
-        <option value="newest">NEWEST</option>
-        <option value="oldest">OLDEST</option>
-        <option value="rating">TOP RATED</option>
-        <option value="name">A–Z</option>
-      </select>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
-      <div class="lib-filter-row" id="libFilters" style="margin-bottom:0;"></div>
-      <div class="lib-count" id="libCount"></div>
-    </div>
-    <div class="lib-grid" id="libGrid"></div>
+
+    <!-- Library layout: folder sidebar + main -->
+    <div class="lib-layout">
+
+      <!-- Folder sidebar -->
+      <div class="lib-folders" id="libFolderSidebar">
+        <div class="lib-folder-header">
+          <span class="lib-folder-title">FOLDERS</span>
+          <button class="lib-folder-add" onclick="libAddFolder()" title="New folder">+</button>
+        </div>
+        <div id="libFolderList"></div>
+      </div>
+
+      <!-- Main content -->
+      <div class="lib-main">
+        <div class="lib-toolbar">
+          <input class="lib-search" id="libSearch" placeholder="Search prompts, creatures, models…" oninput="libSearchDebounced()">
+          <select class="lib-sort-select" id="libSort" onchange="renderLibrary()">
+            <option value="newest">NEWEST</option>
+            <option value="oldest">OLDEST</option>
+            <option value="rating">TOP RATED</option>
+            <option value="name">A–Z</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+          <div class="lib-filter-row" id="libFilters" style="margin-bottom:0;"></div>
+          <div class="lib-count" id="libCount"></div>
+        </div>
+        <div class="lib-grid" id="libGrid"></div>
+      </div>
+
+    </div><!-- /lib-layout -->
   </div>
 </div>
 
@@ -2013,40 +2363,35 @@ body.light .colourTuner { background:var(--surface2); }
       </div>
     </header>
 
-    <!-- Library selector + built-in toggle -->
-    <div class="pb-lib-bar">
+    <!-- Library selector -->
+    <div class="pb-lib-bar" style="margin-bottom:16px;">
       <div class="pb-lib-tabs" id="pbLibTabs"></div>
     </div>
 
-    <!-- Live assembled prompt -->
-    <!-- Unified assembled prompt / formula -->
-    <div class="pb-assembled-wrap">
+    <!-- Assembled prompt at top -->
+    <div class="pb-assembled-wrap" style="margin-bottom:20px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
         <div class="pb-section-label" style="margin-bottom:0;">// ASSEMBLED PROMPT</div>
-        <div style="display:flex;gap:6px;align-items:center;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
           <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
           <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbCopyOutput()">⎘ COPY</button>
           <button class="btn btn-primary" style="font-size:10px;padding:5px 12px;" onclick="pbSaveToLibrary()">♥ SAVE</button>
         </div>
       </div>
-      <!-- Formula chips ARE the assembled prompt -->
       <div class="pb-formula pb-formula-output" id="pbFormula">
         <span class="pb-formula-ph">Click particles below to build your prompt…</span>
       </div>
     </div>
 
-    <!-- Type legend -->
-    <div class="pb-legend" id="pbLegend"></div>
-
-    <!-- Particle library -->
+    <!-- Particle library header -->
     <div class="pb-library-header">
       <div class="pb-section-label" style="margin-bottom:0;">// PARTICLE LIBRARY</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbRenderLibrary()">
         <button class="btn btn-outline" style="font-size:10px;padding:6px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
         <button class="btn btn-primary" style="font-size:10px;padding:6px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
-        <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()" title="Show or hide built-in example particles">HIDE BUILT-IN</button>
+        <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
       </div>
     </div>
 
@@ -2055,13 +2400,13 @@ body.light .colourTuner { background:var(--surface2); }
       <div class="pb-add-row">
         <div style="flex:2;min-width:180px;">
           <label class="pb-field-label">PARTICLE TEXT</label>
-          <input class="pb-input" id="pbAddText" placeholder="e.g. rain-soaked neon city streets at midnight…" onkeydown="if(event.key==='Enter')pbSaveParticle()">
+          <input class="pb-input" id="pbAddText" placeholder="e.g. rain-soaked neon city streets…" onkeydown="if(event.key==='Enter')pbSaveParticle()">
         </div>
-        <div style="flex:1;min-width:130px;">
+        <div style="flex:1;min-width:120px;">
           <label class="pb-field-label">TYPE</label>
           <select class="pb-input" id="pbAddType" onchange="pbUpdateCategorySelect()"></select>
         </div>
-        <div style="flex:1;min-width:130px;">
+        <div style="flex:1;min-width:120px;">
           <label class="pb-field-label">CATEGORY</label>
           <select class="pb-input" id="pbAddCategory"></select>
         </div>
@@ -2075,6 +2420,25 @@ body.light .colourTuner { background:var(--surface2); }
     <!-- Particle grid -->
     <div id="pbGrid"></div>
 
+    <!-- Floating type nav (right edge, expandable) -->
+    <div class="pb-type-nav" id="pbTypeNav"></div>
+
+  </div><!-- /view-inner -->
+</div>
+
+<!-- Mobile bottom prompt bar -->
+<div id="pbBottomBar" class="pb-bottom-bar" style="display:none;">
+  <div class="pb-bottom-bar-inner">
+    <div class="pb-bottom-bar-chips" id="pbBottomChips">
+      <span class="pb-bottom-bar-ph">Build your prompt below…</span>
+    </div>
+    <div class="pb-bottom-bar-actions">
+      <button class="pb-bottom-bar-expand" id="pbBottomExpand" onclick="pbToggleBottomExpand()">▲ SHOW ALL</button>
+      <div class="pb-bottom-bar-btns">
+        <button class="pb-bottom-bar-btn" onclick="pbCopyOutput()" title="Copy prompt">⎘ COPY</button>
+        <button class="pb-bottom-bar-btn pb-bottom-bar-save" onclick="pbSaveToLibrary()" title="Save prompt">♥ SAVE</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2126,6 +2490,88 @@ body.light .colourTuner { background:var(--surface2); }
       <button class="btn btn-primary" style="font-size:10px;" onclick="pbSaveTagged()" id="pbSaveTaggedBtn" disabled>&#x2713; SAVE ALL AS PARTICLES</button>
     </div>
 
+  </div>
+</div>
+
+<!-- ═══════════════════════ VERSION HISTORY MODAL ═══════════════════════ -->
+<div id="versionHistoryModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+  <div class="modal-card" style="max-width:600px;">
+    <div class="modal-header">
+      <div class="modal-title">// VERSION HISTORY</div>
+      <button class="modal-close" onclick="closeVersionHistory()">✕</button>
+    </div>
+    <div class="modal-body" id="versionHistoryBody"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ITERATE MODAL ═══════════════════════ -->
+<div id="iterateModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div class="modal-card" style="max-width:700px;width:100%;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">// PARTICLE ITERATE</div>
+        <div style="font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:3px;">Select text to replace · choose particles · generate variants</div>
+      </div>
+      <button class="modal-close" onclick="closeIterate()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: source prompt display -->
+      <div class="iterate-step" id="iterStep1">
+        <div class="iterate-step-label">① TAP THE PART OF THE PROMPT TO REPLACE</div>
+        <div class="pb-annotated-wrap" style="margin-bottom:10px;">
+          <div class="pb-annotated" id="iterAnnotated" onmouseup="iterOnSelection()" ontouchend="iterOnSelection()"></div>
+        </div>
+        <div id="iterSelStatus" class="pb-selection-status"></div>
+      </div>
+      <!-- Step 2: particle type + selection -->
+      <div class="iterate-step" id="iterStep2" style="display:none;">
+        <div class="iterate-step-label">② CHOOSE PARTICLE TYPE</div>
+        <div class="pb-type-picker" id="iterTypePicker" style="margin-bottom:12px;"></div>
+        <div class="iterate-step-label">③ SELECT UP TO 10 PARTICLES <span id="iterPickCount" style="opacity:.6;font-weight:400;"></span></div>
+        <div id="iterParticleList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;max-height:280px;overflow-y:auto;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" style="font-size:10px;" onclick="iterRandomise()">⚄ RANDOMISE 10</button>
+          <button class="btn btn-ghost" style="font-size:10px;" onclick="iterClearPicks()">✕ CLEAR</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="font-size:10px;" onclick="iterBack()" id="iterBackBtn" style="display:none;">← BACK</button>
+      <button class="btn btn-primary" style="font-size:10px;" onclick="iterGenerate()" id="iterGenBtn" disabled>⚙ GENERATE VARIANTS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Iterate results panel (appears below iterate modal trigger) -->
+<div id="iterResultsModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div class="modal-card" style="max-width:700px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">// VARIANTS</div>
+      <button class="modal-close" onclick="document.getElementById('iterResultsModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body" id="iterResultsBody"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ DRIVE PHOTO PICKER MODAL ═══════════════════════ -->
+<div id="drivePhotoModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+  <div class="modal-card" style="max-width:640px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">// SELECT FROM GOOGLE DRIVE</div>
+        <div style="font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:3px;" id="driveFolderPath">My Drive</div>
+      </div>
+      <button class="modal-close" onclick="closeDrivePhoto()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-ghost" style="font-size:10px;" id="drivePhotoBack" onclick="drivePhotoBrowseParent()" disabled>← BACK</button>
+        <button class="btn btn-ghost" style="font-size:10px;" onclick="drivePhotoGoHome()">⌂ ROOT</button>
+        <button class="btn btn-outline" style="font-size:10px;" onclick="setDriveDefaultFolder()" id="driveSetDefaultBtn">★ SET AS DEFAULT</button>
+        <span id="driveDefaultLabel" style="font-size:9px;color:var(--muted);letter-spacing:1px;"></span>
+      </div>
+      <div id="drivePhotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;min-height:200px;"></div>
+    </div>
   </div>
 </div>
 
@@ -2863,6 +3309,16 @@ function getColourString() {
 let currentMode = 'insect'
 let currentPreset = 'default'
 let favourites = []
+
+// ── FOLDERS ───────────────────────────────────────────────────────
+const FOLDERS_FILE      = 'beast-mode-folders.json'
+let libFolders          = []        // [{id, name, color}]
+let libDriveFoldersId   = null
+let libActiveFolderId   = '__all__' // '__all__' | '__starred__' | folderId
+const VIRTUAL_FOLDERS   = [
+  { id:'__starred__', name:'⭐ Starred',      color:'#ffcc00', virtual:true },
+  { id:'__all__',     name:'All Prompts',    color:'var(--accent)', virtual:true },
+]
 
 const FIELD_DEFS = [
   { key:'body',     label:'Body',     defaultA:true,  defaultB:false },
@@ -4432,9 +4888,11 @@ async function driveOnSignedIn() {
   await driveLoadCurrentSettings()
   await driveModelsLoad()
   await pbParticlesLoad()
+  await libFoldersLoad()
   updateNavDriveDot()
   updateLibBadge()
   renderLibrary()
+  renderFolderSidebar()
 }
 
 // ─── UI HELPERS ───────────────────────────────────────────────────
@@ -4523,6 +4981,8 @@ async function driveLoadCurrentSettings() {
 // ─── INDIVIDUAL PROMPT FILES ──────────────────────────────────────
 async function driveSavePrompt(fav) {
   if (!driveToken) return
+  // Ensure versions array exists
+  if (!fav.versions) fav.versions = [{ text: fav.text, savedAt: fav.createdAt || fav.id, label: 'Original' }]
   setDriveStatus('SAVING…')
   try {
     const fname = PROMPT_FILE_PREFIX + fav.id + '.json'
@@ -4687,6 +5147,14 @@ function switchView(view, pushState = true) {
   if (view === 'library') renderLibrary()
   if (view === 'settings') renderSettingsView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
+  if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar() }
+  else {
+    const nav = document.getElementById('pbTypeNav')
+    if (nav) nav.classList.remove('visible')
+  }
+  // Show bottom bar only in builder on mobile
+  const bb = document.getElementById('pbBottomBar')
+  if (bb) bb.style.display = (view === 'builder') ? '' : 'none'
   if (pushState) {
     try {
       const hash = VIEW_HASHES[view] || 'generator'
@@ -4705,6 +5173,9 @@ function switchViewFromHash() {
 
 window.addEventListener('popstate', switchViewFromHash)
 window.addEventListener('hashchange', switchViewFromHash)
+window.addEventListener('resize', () => {
+  if (currentView === 'builder') pbRenderTypeNav()
+})
 
 // ═══════════════════════════════════════════════════════════════════
 // PROMPT METADATA — extends favourite objects
@@ -4907,6 +5378,10 @@ function doSaveFav(imageData, model, title, rating) {
     title: title || '',
     model: model || '',
     rating: rating || 0,
+    starred: false,
+    folderId: libActiveFolderId === '__all__' || libActiveFolderId === '__starred__'
+      ? null : libActiveFolderId,
+    versions: [{ text: full, savedAt: Date.now(), label: 'Original' }],
     imageData: imageData || null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -4986,6 +5461,7 @@ function renderLibFilters() {
 
 function renderLibrary() {
   renderLibFilters()
+  renderFolderSidebar()
   const grid  = document.getElementById('libGrid')
   const count = document.getElementById('libCount')
   const query = (document.getElementById('libSearch')?.value || '').toLowerCase().trim()
@@ -4993,6 +5469,10 @@ function renderLibrary() {
   if (!grid) return
 
   let items = [...favourites]
+
+  // Folder filter
+  if (libActiveFolderId === '__starred__') items = items.filter(f => f.starred)
+  else if (libActiveFolderId !== '__all__') items = items.filter(f => f.folderId === libActiveFolderId)
 
   // Filter
   if (libActiveFilter === 'insect') items = items.filter(f => f.mode === 'insect')
@@ -5087,9 +5567,25 @@ function buildLibCard(f) {
   const body = document.createElement('div')
   body.className = 'lib-card-body'
 
-  // Header: title + date
+  // Header: title + star + date
   const header = document.createElement('div')
   header.className = 'lib-card-header'
+
+  // Star button
+  const starBtn = document.createElement('button')
+  starBtn.className = 'lib-star-btn' + (f.starred ? ' starred' : '')
+  starBtn.textContent = '★'
+  starBtn.title = f.starred ? 'Unstar' : 'Star'
+  starBtn.onclick = e => {
+    e.stopPropagation()
+    f.starred = !f.starred
+    f.updatedAt = Date.now()
+    starBtn.className = 'lib-star-btn' + (f.starred ? ' starred' : '')
+    starBtn.title = f.starred ? 'Unstar' : 'Star'
+    driveSavePrompt(f)
+    // Re-render folder sidebar counts
+    renderFolderSidebar()
+  }
   const titleEl = document.createElement('input')
   titleEl.className = 'lib-card-title'
   titleEl.value = f.title || ''
@@ -5106,6 +5602,7 @@ function buildLibCard(f) {
   const dateEl = document.createElement('div')
   dateEl.className = 'lib-card-date'
   dateEl.textContent = formatDate(f.createdAt || f.id)
+  header.appendChild(starBtn)
   header.appendChild(titleEl)
   header.appendChild(dateEl)
   body.appendChild(header)
@@ -5125,10 +5622,13 @@ function buildLibCard(f) {
   const tags = document.createElement('div')
   tags.className = 'lib-card-tags'
   const presetName = (getPreset(f.preset)?.name || f.preset || 'DEFAULT').toUpperCase()
+  const folder = f.folderId ? libFolders.find(x => x.id === f.folderId) : null
   tags.innerHTML = `
     <span class="lib-tag mode-${f.mode}">${f.mode.toUpperCase()}</span>
     <span class="lib-tag tag-style">${presetName}</span>
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${f.model}</span>` : ''}
+    ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
+    ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
   `
   body.appendChild(tags)
 
@@ -5210,11 +5710,15 @@ function buildLibCard(f) {
   const actions = document.createElement('div')
   actions.className = 'lib-card-actions'
   const actionDefs = [
-    { label:'⬆ RESTORE', cls:'', fn: () => { restoreFav(f.id); switchView('generator') } },
-    { label:'⎘ COPY',    cls:'', fn: () => copyFav(f.id) },
-    { label:'⊛ PARTICLES', cls:'', fn: () => sendToParticleLab(f), title:'Open in Prompt Lab to tag as particles' },
-    { label:'🖼',         cls:'', fn: () => openImageModal(f.id), title:'Add / change image' },
-    { label:'✕',         cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() } },
+    { label:'⬆ RESTORE',  cls:'', fn: () => { restoreFav(f.id); switchView('generator') } },
+    { label:'⎘ COPY',     cls:'', fn: () => copyFav(f.id) },
+    { label:'⟳ ITERATE',  cls:'', fn: () => openIterate(f.id), title:'Generate variants by swapping a particle' },
+    { label:'⊛ PARTICLES',cls:'', fn: () => sendToParticleLab(f), title:'Open in Prompt Lab' },
+    { label:'🕒',          cls:'', fn: () => openVersionHistory(f.id), title:'Version history' },
+    { label:'🖼',          cls:'', fn: () => openImageModal(f.id), title:'Upload image' },
+    { label:'☁',          cls:'', fn: () => openDrivePhoto(f.id), title:'Pick image from Google Drive' },
+    { label:'📁',          cls:'', fn: () => libShowMoveMenu(f.id), title:'Move to folder' },
+    { label:'✕',          cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() } },
   ]
   actionDefs.forEach(a => {
     const btn = document.createElement('button')
@@ -5265,7 +5769,547 @@ function updateLibBadge() {
   badge.style.display = favourites.length ? 'inline' : 'none'
 }
 
-// ── Lightbox ──────────────────────────────────────────────────────
+function updateLibBadge() {
+  const badge = document.getElementById('libBadge')
+  if (!badge) return
+  badge.textContent = favourites.length
+  badge.style.display = favourites.length ? 'inline' : 'none'
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FOLDERS
+// ═══════════════════════════════════════════════════════════════════
+
+const FOLDER_COLORS = ['#ff6b6b','#ffa94d','#ffd43b','#69db7c','#4dabf7','#cc5de8','#f783ac','#a9e34b']
+let _folderColorIdx = 0
+
+function renderFolderSidebar() {
+  const list = document.getElementById('libFolderList')
+  if (!list) return
+  list.innerHTML = ''
+  const allFolders = [
+    ...VIRTUAL_FOLDERS,
+    ...libFolders
+  ]
+  allFolders.forEach(folder => {
+    const count = folder.id === '__starred__'
+      ? favourites.filter(f => f.starred).length
+      : folder.id === '__all__'
+        ? favourites.length
+        : favourites.filter(f => f.folderId === folder.id).length
+
+    const item = document.createElement('div')
+    item.className = 'lib-folder-item' + (folder.id === libActiveFolderId ? ' active' : '')
+    item.innerHTML = `
+      <span class="lib-folder-dot" style="background:${folder.color}"></span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${folder.name}</span>
+      <span class="lib-folder-count">${count}</span>
+      ${!folder.virtual ? `<span class="lib-folder-del" onclick="libDeleteFolder('${folder.id}',event)">×</span>` : ''}
+    `
+    item.onclick = () => { libActiveFolderId = folder.id; renderLibrary() }
+    list.appendChild(item)
+  })
+}
+
+function libAddFolder() {
+  const name = prompt('Folder name:')?.trim()
+  if (!name) return
+  const color = FOLDER_COLORS[_folderColorIdx++ % FOLDER_COLORS.length]
+  const folder = { id: 'f_' + Date.now(), name, color }
+  libFolders.push(folder)
+  libFoldersSync()
+  renderFolderSidebar()
+}
+
+function libDeleteFolder(id, e) {
+  e?.stopPropagation()
+  if (!confirm('Delete folder? Prompts will move to All Prompts.')) return
+  libFolders = libFolders.filter(f => f.id !== id)
+  favourites.forEach(f => { if (f.folderId === id) { f.folderId = null; driveSavePrompt(f) } })
+  if (libActiveFolderId === id) libActiveFolderId = '__all__'
+  libFoldersSync()
+  renderLibrary()
+}
+
+function libMoveFavToFolder(favId, folderId) {
+  const f = favourites.find(x => x.id === favId)
+  if (!f) return
+  f.folderId = folderId || null
+  f.updatedAt = Date.now()
+  driveSavePrompt(f)
+  renderLibrary()
+}
+
+// Folder Drive sync
+async function libFoldersSync() {
+  if (!driveToken) return
+  try {
+    const body = JSON.stringify({ folders: libFolders, savedAt: new Date().toISOString() })
+    if (libDriveFoldersId) {
+      await drivePatchFile(libDriveFoldersId, body)
+    } else {
+      const files = await driveListFiles(`name='${FOLDERS_FILE}'`)
+      if (files.length) { libDriveFoldersId = files[0].id; await drivePatchFile(libDriveFoldersId, body) }
+      else { libDriveFoldersId = await driveCreateFile(FOLDERS_FILE, body) }
+    }
+  } catch(e) {}
+}
+
+async function libFoldersLoad() {
+  if (!driveToken) return
+  try {
+    const files = await driveListFiles(`name='${FOLDERS_FILE}'`)
+    if (!files.length) return
+    libDriveFoldersId = files[0].id
+    const data = await driveReadFile(libDriveFoldersId)
+    if (Array.isArray(data?.folders)) libFolders = data.folders
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VERSION HISTORY
+// ═══════════════════════════════════════════════════════════════════
+
+let versionFavId = null
+
+function openVersionHistory(favId) {
+  versionFavId = favId
+  const f = favourites.find(x => x.id === favId)
+  if (!f) return
+  const body = document.getElementById('versionHistoryBody')
+  body.innerHTML = ''
+  const versions = (f.versions || [{ text: f.text, savedAt: f.createdAt || f.id, label: 'Original' }])
+  ;[...versions].reverse().forEach((v, idx) => {
+    const isLatest = idx === 0
+    const row = document.createElement('div')
+    row.className = 'version-item'
+    const promptOnly = v.text?.includes('---SETTINGS---')
+      ? v.text.slice(0, v.text.indexOf('---SETTINGS---')).trim() : (v.text || '')
+    row.innerHTML = `
+      <div class="version-meta">
+        <div class="version-label">${v.label || 'Version ' + (versions.length - idx)}</div>
+        <div class="version-date">${formatDate(v.savedAt)}</div>
+        ${isLatest ? '<div style="font-size:9px;color:var(--accent);margin-top:3px;letter-spacing:1px;">CURRENT</div>' : ''}
+      </div>
+      <div class="version-text">${promptOnly.slice(0, 200)}${promptOnly.length > 200 ? '…' : ''}</div>
+      ${!isLatest ? `<button class="btn btn-ghost version-restore" onclick="restoreVersion(${favId},${idx})">⬆ RESTORE</button>` : ''}
+    `
+    body.appendChild(row)
+  })
+  document.getElementById('versionHistoryModal').style.display = 'flex'
+}
+
+function closeVersionHistory() {
+  document.getElementById('versionHistoryModal').style.display = 'none'
+}
+
+function restoreVersion(favId, reversedIdx) {
+  const f = favourites.find(x => x.id === favId)
+  if (!f) return
+  const versions = [...(f.versions || [])].reverse()
+  const v = versions[reversedIdx]
+  if (!v) return
+  const label = `Restored from ${v.label || 'earlier version'}`
+  pbAddVersion(f, v.text, label)
+  f.text = v.text
+  f.promptOnly = v.text?.includes('---SETTINGS---')
+    ? v.text.slice(0, v.text.indexOf('---SETTINGS---')).trim() : v.text
+  f.updatedAt = Date.now()
+  driveSavePrompt(f)
+  closeVersionHistory()
+  renderLibrary()
+}
+
+function pbAddVersion(fav, text, label) {
+  if (!fav.versions) fav.versions = []
+  fav.versions.push({ text, savedAt: Date.now(), label: label || 'Edit' })
+  // Keep max 20 versions
+  if (fav.versions.length > 20) fav.versions = fav.versions.slice(-20)
+}
+
+// Patch driveSavePrompt to always append version on text change
+// Versions array is initialised in driveSavePrompt directly
+
+// ═══════════════════════════════════════════════════════════════════
+// PARTICLE ITERATE
+// ═══════════════════════════════════════════════════════════════════
+
+let iterFavId       = null
+let iterTokens      = []
+let iterPendingIdx  = null
+let iterSelStart    = null
+let iterSelEnd      = null
+let iterActiveType  = 'subject'
+let iterPicked      = []   // array of particle ids
+
+function openIterate(favId) {
+  iterFavId    = favId
+  iterPicked   = []
+  iterSelStart = null
+  iterSelEnd   = null
+  iterTokens   = []
+  const f = favourites.find(x => x.id === favId)
+  if (!f) return
+  const text = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/,'').trim()
+  // Tokenise
+  const parts = text.split(/(\s+)/)
+  let idx = 0
+  parts.forEach(part => {
+    if (/^\s+$/.test(part)) {
+      iterTokens.push({ idx: idx++, text: part, isSpace: true })
+    } else if (part) {
+      iterTokens.push({ idx: idx++, text: part, isSpace: false })
+    }
+  })
+  // Render annotated
+  iterRenderAnnotated()
+  // Type picker
+  iterRenderTypePicker()
+  // Show step 1
+  document.getElementById('iterStep1').style.display = 'block'
+  document.getElementById('iterStep2').style.display = 'none'
+  document.getElementById('iterBackBtn').style.display = 'none'
+  document.getElementById('iterGenBtn').disabled = true
+  document.getElementById('iterModal').style.display = 'flex'
+}
+
+function closeIterate() {
+  document.getElementById('iterModal').style.display = 'none'
+}
+
+function iterRenderAnnotated() {
+  const container = document.getElementById('iterAnnotated')
+  if (!container) return
+  container.innerHTML = ''
+  iterTokens.forEach(tok => {
+    if (tok.isSpace) { container.appendChild(document.createTextNode(tok.text)); return }
+    const span = document.createElement('span')
+    span.className = 'pb-token'
+    span.dataset.idx = tok.idx
+    span.textContent = tok.text
+    const inSel = iterSelStart !== null && iterSelEnd !== null
+      && tok.idx >= iterSelStart && tok.idx <= iterSelEnd
+    if (inSel) {
+      span.style.background = pbHexAlpha(PB_TYPES.find(t=>t.key===iterActiveType)?.color||'#38b6ff', 0.3)
+      span.style.borderRadius = '3px'
+    }
+    if (tok.idx === iterSelStart && iterSelEnd === null) span.classList.add('pending')
+    span.onclick = () => iterTokenTap(tok.idx)
+    container.appendChild(span)
+  })
+  const status = document.getElementById('iterSelStatus')
+  if (status) {
+    if (iterSelStart === null) status.textContent = 'Tap the first word of the phrase to replace'
+    else if (iterSelEnd === null) status.textContent = 'Now tap the last word of the phrase'
+    else {
+      const words = iterTokens.filter(t => !t.isSpace && t.idx >= iterSelStart && t.idx <= iterSelEnd)
+      status.textContent = `Selected: "${words.map(t=>t.text).join(' ')}" — scroll down to choose particles`
+      // Show step 2
+      document.getElementById('iterStep2').style.display = 'block'
+      document.getElementById('iterBackBtn').style.display = ''
+    }
+  }
+}
+
+function iterTokenTap(idx) {
+  if (iterSelStart === null) {
+    iterSelStart = idx; iterSelEnd = null
+  } else if (iterSelEnd === null) {
+    iterSelEnd = Math.max(iterSelStart, idx)
+    iterSelStart = Math.min(iterSelStart, idx)
+  } else {
+    // Reset
+    iterSelStart = idx; iterSelEnd = null
+    iterPicked = []; iterRenderParticleList()
+  }
+  iterRenderAnnotated()
+}
+
+function iterBack() {
+  iterSelStart = null; iterSelEnd = null
+  iterPicked = []
+  document.getElementById('iterStep2').style.display = 'none'
+  document.getElementById('iterBackBtn').style.display = 'none'
+  document.getElementById('iterGenBtn').disabled = true
+  iterRenderAnnotated()
+}
+
+function iterRenderTypePicker() {
+  const wrap = document.getElementById('iterTypePicker')
+  if (!wrap) return
+  wrap.innerHTML = ''
+  PB_TYPES.forEach(t => {
+    const btn = document.createElement('div')
+    btn.className = 'pb-type-pick-btn' + (t.key === iterActiveType ? ' active' : '')
+    btn.style.background = pbHexAlpha(t.color, 0.15)
+    btn.style.color = t.color
+    btn.style.borderColor = pbHexAlpha(t.color, t.key === iterActiveType ? 0.8 : 0.2)
+    btn.innerHTML = `<span class="pb-type-pick-dot" style="background:${t.color}"></span>${t.id}. ${t.label}`
+    btn.onclick = () => { iterActiveType = t.key; iterRenderTypePicker(); iterRenderParticleList() }
+    wrap.appendChild(btn)
+  })
+}
+
+function iterRenderParticleList() {
+  const list = document.getElementById('iterParticleList')
+  const countEl = document.getElementById('iterPickCount')
+  if (!list) return
+  const t = PB_TYPES.find(x => x.key === iterActiveType)
+  const pool = pbGetParticles().filter(p => p.type === iterActiveType)
+  list.innerHTML = ''
+  pool.slice(0, 80).forEach(p => {
+    const chip = document.createElement('div')
+    chip.className = 'iter-particle-pick' + (iterPicked.includes(p.id) ? ' selected' : '')
+    chip.style.background = pbHexAlpha(t.color, iterPicked.includes(p.id) ? 0.3 : 0.1)
+    chip.style.color = t.color
+    chip.style.borderColor = pbHexAlpha(t.color, iterPicked.includes(p.id) ? 0.7 : 0.2)
+    chip.textContent = pbTrunc(p.text, 40)
+    chip.title = p.text
+    chip.onclick = () => {
+      if (iterPicked.includes(p.id)) {
+        iterPicked = iterPicked.filter(x => x !== p.id)
+      } else if (iterPicked.length < 10) {
+        iterPicked.push(p.id)
+      }
+      iterRenderParticleList()
+      document.getElementById('iterGenBtn').disabled = iterPicked.length === 0
+    }
+    list.appendChild(chip)
+  })
+  if (countEl) countEl.textContent = `(${iterPicked.length}/10 selected)`
+}
+
+function iterRandomise() {
+  const pool = pbGetParticles().filter(p => p.type === iterActiveType)
+  const shuffled = [...pool].sort(() => Math.random() - 0.5)
+  iterPicked = shuffled.slice(0, 10).map(p => p.id)
+  iterRenderParticleList()
+  document.getElementById('iterGenBtn').disabled = iterPicked.length === 0
+}
+
+function iterClearPicks() {
+  iterPicked = []
+  iterRenderParticleList()
+  document.getElementById('iterGenBtn').disabled = true
+}
+
+function iterGenerate() {
+  if (!iterPicked.length || iterSelStart === null || iterSelEnd === null) return
+  const selectedWords = iterTokens.filter(t => !t.isSpace && t.idx >= iterSelStart && t.idx <= iterSelEnd).map(t=>t.text).join(' ')
+  const beforeTokens = iterTokens.filter(t => t.idx < iterSelStart)
+  const afterTokens  = iterTokens.filter(t => t.idx > iterSelEnd)
+  const before = beforeTokens.map(t=>t.text).join('')
+  const after  = afterTokens.map(t=>t.text).join('')
+
+  const body = document.getElementById('iterResultsBody')
+  body.innerHTML = ''
+  iterPicked.forEach((pid, i) => {
+    const p = pbGetParticles().find(x => x.id === pid)
+    if (!p) return
+    const variant = (before + p.text + after).trim()
+    const item = document.createElement('div')
+    item.className = 'iter-result-item'
+    item.innerHTML = `
+      <div class="iter-result-label">VARIANT ${i+1} — ${p.text.slice(0,50)}</div>
+      <div class="iter-result-text">${variant}</div>
+      <div class="iter-result-actions">
+        <button class="btn btn-ghost" style="font-size:10px;" onclick="iterCopyVariant(this)">⎘ COPY</button>
+        <button class="btn btn-primary" style="font-size:10px;" onclick="iterSaveVariant('${encodeURIComponent(variant)}',${iterFavId})">♥ SAVE</button>
+      </div>
+    `
+    body.appendChild(item)
+  })
+  document.getElementById('iterModal').style.display = 'none'
+  document.getElementById('iterResultsModal').style.display = 'flex'
+}
+
+function iterCopyVariant(btn) {
+  const text = btn.closest('.iter-result-item').querySelector('.iter-result-text').textContent
+  try {
+    const ta = document.createElement('textarea'); ta.value = text
+    ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta)
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
+    const orig = btn.textContent; btn.textContent = '✓ COPIED'
+    setTimeout(() => btn.textContent = orig, 1500)
+  } catch(e) {}
+}
+
+function iterSaveVariant(encodedText, srcFavId) {
+  const text = decodeURIComponent(encodedText)
+  const srcFav = favourites.find(x => x.id === srcFavId)
+  const fav = {
+    ...srcFav,
+    id: Date.now(),
+    text: text, promptOnly: text,
+    title: (srcFav?.title || '') + ' (variant)',
+    versions: [{ text, savedAt: Date.now(), label: 'Particle variant' }],
+    createdAt: Date.now(), updatedAt: Date.now(),
+    starred: false,
+  }
+  favourites.unshift(fav)
+  driveSavePrompt(fav)
+  renderLibrary()
+  updateLibBadge()
+  const btn = event?.target
+  if (btn) { btn.textContent = '✓ SAVED'; btn.disabled = true }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DRIVE PHOTO PICKER
+// ═══════════════════════════════════════════════════════════════════
+
+let drivePhotoFavId      = null
+let drivePhotoCurFolder  = 'root'
+let drivePhotoFolderStack = []
+let driveDefaultFolderId = localStorage.getItem('bm_default_drive_folder') || null
+
+function openDrivePhoto(favId) {
+  if (!driveToken) { alert('Please connect Google Drive first'); return }
+  drivePhotoFavId = favId
+  const startFolder = driveDefaultFolderId || localStorage.getItem('bm_last_drive_folder') || 'root'
+  drivePhotoFolderStack = []
+  drivePhotoBrowse(startFolder)
+  document.getElementById('drivePhotoModal').style.display = 'flex'
+  updateDriveDefaultLabel()
+}
+
+function closeDrivePhoto() {
+  document.getElementById('drivePhotoModal').style.display = 'none'
+}
+
+async function drivePhotoBrowse(folderId) {
+  drivePhotoCurFolder = folderId
+  localStorage.setItem('bm_last_drive_folder', folderId)
+  const grid = document.getElementById('drivePhotoGrid')
+  const backBtn = document.getElementById('drivePhotoBack')
+  if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:11px;letter-spacing:1px;padding:20px;">Loading…</div>'
+  if (backBtn) backBtn.disabled = drivePhotoFolderStack.length === 0
+
+  try {
+    // List folders and images in this folder
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
+        `'${folderId}' in parents and trashed=false and (mimeType='application/vnd.google-apps.folder' or mimeType contains 'image/')`
+      )}&fields=files(id,name,mimeType,thumbnailLink)&pageSize=50&orderBy=name`,
+      { headers: { Authorization: 'Bearer ' + driveToken } }
+    )
+    const data = await res.json()
+    const files = data.files || []
+
+    // Update breadcrumb
+    const pathEl = document.getElementById('driveFolderPath')
+    if (pathEl) pathEl.textContent = folderId === 'root' ? 'My Drive' : `My Drive / …`
+
+    grid.innerHTML = ''
+    if (!files.length) {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:20px;">No images or folders here.</div>'
+      return
+    }
+
+    files.forEach(file => {
+      const item = document.createElement('div')
+      item.className = 'drive-photo-item'
+      const isFolder = file.mimeType === 'application/vnd.google-apps.folder'
+
+      if (isFolder) {
+        item.innerHTML = `
+          <div class="drive-photo-thumb" style="font-size:28px;">📁</div>
+          <div class="drive-photo-name">${file.name}</div>
+        `
+        item.onclick = () => {
+          drivePhotoFolderStack.push(drivePhotoCurFolder)
+          drivePhotoBrowse(file.id)
+        }
+      } else {
+        const thumb = file.thumbnailLink || ''
+        item.innerHTML = `
+          ${thumb ? `<img class="drive-photo-thumb" src="${thumb}" alt="${file.name}" style="object-fit:cover;">` : `<div class="drive-photo-thumb">🖼</div>`}
+          <div class="drive-photo-name">${file.name}</div>
+        `
+        item.onclick = () => drivePhotoSelect(file.id, file.name)
+      }
+      grid.appendChild(item)
+    })
+  } catch(e) {
+    grid.innerHTML = '<div style="color:#ff4444;font-size:11px;padding:20px;">Failed to load Drive contents.</div>'
+  }
+}
+
+function drivePhotoBrowseParent() {
+  if (!drivePhotoFolderStack.length) return
+  drivePhotoBrowse(drivePhotoFolderStack.pop())
+}
+
+function drivePhotoGoHome() {
+  drivePhotoFolderStack = []
+  drivePhotoBrowse('root')
+}
+
+async function drivePhotoSelect(fileId, fileName) {
+  // Download the image and compress to thumbnail
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: 'Bearer ' + driveToken } }
+    )
+    const blob = await res.blob()
+    const reader = new FileReader()
+    reader.onload = e => {
+      compressImage(e.target.result, 400, dataUrl => {
+        const f = favourites.find(x => x.id === drivePhotoFavId)
+        if (f) {
+          f.imageData = dataUrl
+          f.updatedAt = Date.now()
+          driveSavePrompt(f)
+          renderLibrary()
+        }
+        closeDrivePhoto()
+      })
+    }
+    reader.readAsDataURL(blob)
+  } catch(e) {
+    alert('Could not load image from Drive. Try a different file.')
+  }
+}
+
+function setDriveDefaultFolder() {
+  driveDefaultFolderId = drivePhotoCurFolder
+  localStorage.setItem('bm_default_drive_folder', drivePhotoCurFolder)
+  updateDriveDefaultLabel()
+  const btn = document.getElementById('driveSetDefaultBtn')
+  if (btn) { btn.textContent = '✓ DEFAULT SET'; setTimeout(() => btn.textContent = '★ SET AS DEFAULT', 2000) }
+}
+
+function updateDriveDefaultLabel() {
+  const el = document.getElementById('driveDefaultLabel')
+  if (!el) return
+  el.textContent = driveDefaultFolderId
+    ? 'Default folder set'
+    : 'No default — using last visited'
+}
+
+// libFoldersLoad called from canonical driveOnSignedIn below
+
+function libShowMoveMenu(favId) {
+  const f = favourites.find(x => x.id === favId)
+  if (!f) return
+  const options = [
+    { label: '— No folder (All Prompts)', value: null },
+    ...libFolders.map(folder => ({ label: folder.name, value: folder.id }))
+  ]
+  const choice = options.find(o => {
+    const label = o.value === null ? '— No folder (All Prompts)' : o.label
+    return window.confirm ? null : label
+  })
+  // Simple prompt-based selection for now
+  const names  = options.map((o,i) => `${i+1}. ${o.label}`).join('\n')
+  const input  = prompt(`Move to folder:\n\n${names}\n\nEnter number:`)
+  if (!input) return
+  const idx = parseInt(input) - 1
+  if (isNaN(idx) || idx < 0 || idx >= options.length) return
+  libMoveFavToFolder(favId, options[idx].value)
+}
+
 function openLightbox(src) {
   document.getElementById('libLightboxImg').src = src
   document.getElementById('libLightbox').classList.add('open')
@@ -5447,6 +6491,8 @@ const PB_TYPES = [
     cats:['Anime·Manga','Film·Game','Artist'] },
   { id:10, key:'technical',   label:'Technical',   color:'#8fa8b8',
     cats:['Camera','Format','Render'] },
+  { id:11, key:'connector',   label:'Connector',   color:'#e8d5b0',
+    cats:['Origin','Composition','Setting','Motion','Style'] },
 ]
 
 const PB_SEP = '—'
@@ -5576,6 +6622,55 @@ const PB_BUILTIN_PARTICLES = [
   { id:1007, builtin:true, type:'technical', cat:'Render',  text:'octane render, ray-traced lighting, 16K' },
   { id:1008, builtin:true, type:'technical', cat:'Render',  text:'unreal engine 5, photorealistic global illumination' },
   { id:1009, builtin:true, type:'technical', cat:'Render',  text:'macro close-up, extreme surface micro-detail' },
+
+  // ── CONNECTORS ───────────────────────────────────────────────────
+  // Origin — where the design comes from
+  { id:1101, builtin:true, type:'connector', cat:'Origin', text:'inspired by' },
+  { id:1102, builtin:true, type:'connector', cat:'Origin', text:'evolved from' },
+  { id:1103, builtin:true, type:'connector', cat:'Origin', text:'based on the anatomy of' },
+  { id:1104, builtin:true, type:'connector', cat:'Origin', text:'fusing the design of' },
+  { id:1105, builtin:true, type:'connector', cat:'Origin', text:'derived from' },
+  { id:1106, builtin:true, type:'connector', cat:'Origin', text:'a biomechanical reimagining of' },
+  { id:1107, builtin:true, type:'connector', cat:'Origin', text:'in the tradition of' },
+
+  // Composition — how parts relate
+  { id:1111, builtin:true, type:'connector', cat:'Composition', text:'constructed from' },
+  { id:1112, builtin:true, type:'connector', cat:'Composition', text:'armoured with' },
+  { id:1113, builtin:true, type:'connector', cat:'Composition', text:'bristling with' },
+  { id:1114, builtin:true, type:'connector', cat:'Composition', text:'fused with' },
+  { id:1115, builtin:true, type:'connector', cat:'Composition', text:'encased in' },
+  { id:1116, builtin:true, type:'connector', cat:'Composition', text:'wrapped in' },
+  { id:1117, builtin:true, type:'connector', cat:'Composition', text:'layered with' },
+  { id:1118, builtin:true, type:'connector', cat:'Composition', text:'wielding' },
+  { id:1119, builtin:true, type:'connector', cat:'Composition', text:'bearing' },
+
+  // Setting — spatial relationships
+  { id:1121, builtin:true, type:'connector', cat:'Setting', text:'deployed in' },
+  { id:1122, builtin:true, type:'connector', cat:'Setting', text:'emerging from' },
+  { id:1123, builtin:true, type:'connector', cat:'Setting', text:'towering over' },
+  { id:1124, builtin:true, type:'connector', cat:'Setting', text:'against a backdrop of' },
+  { id:1125, builtin:true, type:'connector', cat:'Setting', text:'lurking within' },
+  { id:1126, builtin:true, type:'connector', cat:'Setting', text:'ascending from' },
+  { id:1127, builtin:true, type:'connector', cat:'Setting', text:'silhouetted against' },
+  { id:1128, builtin:true, type:'connector', cat:'Setting', text:'embedded in the landscape of' },
+
+  // Motion — how it moves or acts
+  { id:1131, builtin:true, type:'connector', cat:'Motion', text:'with the movement of' },
+  { id:1132, builtin:true, type:'connector', cat:'Motion', text:'moving like' },
+  { id:1133, builtin:true, type:'connector', cat:'Motion', text:'stalking through' },
+  { id:1134, builtin:true, type:'connector', cat:'Motion', text:'charging across' },
+  { id:1135, builtin:true, type:'connector', cat:'Motion', text:'hovering above' },
+  { id:1136, builtin:true, type:'connector', cat:'Motion', text:'coiled and ready to strike in' },
+  { id:1137, builtin:true, type:'connector', cat:'Motion', text:'scuttling through' },
+
+  // Style — artistic framing
+  { id:1141, builtin:true, type:'connector', cat:'Style', text:'rendered in the style of' },
+  { id:1142, builtin:true, type:'connector', cat:'Style', text:'painted in the manner of' },
+  { id:1143, builtin:true, type:'connector', cat:'Style', text:'photographed as if by' },
+  { id:1144, builtin:true, type:'connector', cat:'Style', text:'drawn in the aesthetic of' },
+  { id:1145, builtin:true, type:'connector', cat:'Style', text:'lit as in the films of' },
+  { id:1146, builtin:true, type:'connector', cat:'Style', text:'with the colour palette of' },
+  { id:1147, builtin:true, type:'connector', cat:'Style', text:'with the texture quality of' },
 ]
 
 // Active formula — ordered array of { uid, particleId }
@@ -5606,6 +6701,7 @@ function pbInit() {
   pbRenderFormula()
   pbInitAddSelects()
   pbRenderOutput()
+  pbUpdateBottomBar()
 }
 
 // ── LEGEND ─────────────────────────────────────────────────────────
@@ -5618,13 +6714,29 @@ function pbRenderLegend() {
     chip.className = 'pb-legend-chip'
     chip.style.color = t.color
     chip.style.background = pbHexAlpha(t.color, 0.09)
+    chip.style.cursor = 'pointer'
+    chip.title = `Jump to ${t.label}`
     chip.innerHTML = `<span class="pb-legend-dot" style="background:${t.color}"></span>${t.id}. ${t.label.toUpperCase()}`
-    chip.onclick = () => {
-      const el = document.getElementById('pbt_' + t.key)
-      if (el) { pbCollapsed[t.key] = false; pbRenderLibrary(); setTimeout(() => el.scrollIntoView({behavior:'smooth',block:'center'}), 50) }
-    }
+    chip.onclick = () => pbJumpToType(t.key)
     el.appendChild(chip)
   })
+}
+
+function pbJumpToType(typeKey) {
+  // Expand if collapsed
+  if (pbCollapsed[typeKey]) {
+    pbCollapsed[typeKey] = false
+    pbRenderLibrary()
+  }
+  setTimeout(() => {
+    const target = document.getElementById('pbt_' + typeKey)
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // Brief highlight flash on the block
+    target.style.transition = 'box-shadow .15s'
+    target.style.boxShadow = `0 0 0 2px ${PB_TYPES.find(t => t.key === typeKey)?.color || 'var(--accent)'}`
+    setTimeout(() => { target.style.boxShadow = '' }, 900)
+  }, pbCollapsed[typeKey] ? 80 : 0)
 }
 
 // ── LIBRARY ────────────────────────────────────────────────────────
@@ -5648,6 +6760,9 @@ function pbRenderLibrary() {
     const isSubject = t.key === 'subject'
     const isOpen    = !pbCollapsed[t.key]
     const activeCat = pbActiveCats[t.key] || t.cats[0]
+
+    // Skip block only during search when nothing matches
+    if (!allItems.length && query) return
 
     // Filter by search — activeCat used here; allCats computed later in category tabs
     const filtered = query
@@ -5706,27 +6821,26 @@ function pbRenderLibrary() {
       }
     }
 
-    // Category tabs
+    // Category tabs — show cats with items, PLUS always show default cats so user can add to them
     const tabs = document.createElement('div')
     tabs.className = 'pb-cat-tabs'
-    // Gather cats that have items (plus default cats for user-add purposes)
-    const allCats = [...new Set(allItems.map(p => p.cat).concat(
-      isSubject ? [] : t.cats  // don't force-show empty generator cats for subject
-    ))].filter(cat => allItems.some(p => p.cat === cat))
+    const catsWithItems = [...new Set(allItems.map(p => p.cat))]
+    const allCats = [...new Set([...catsWithItems, ...t.cats])]
 
-    // If activeCat has no items in current mode, reset to first available
-    if (!allCats.includes(activeCat) && allCats.length) {
-      pbActiveCats[t.key] = allCats[0]
+    // If activeCat has no items, reset to first cat with items or first default
+    if (!allCats.includes(activeCat)) {
+      pbActiveCats[t.key] = catsWithItems[0] || t.cats[0]
     }
-    const resolvedCat = pbActiveCats[t.key] || allCats[0]
+    const resolvedCat = pbActiveCats[t.key] || t.cats[0]
 
     allCats.forEach(cat => {
       const count = allItems.filter(p => p.cat === cat).length
-      if (!count) return
+      // Always show default cats; skip non-default empty cats
       const tab = document.createElement('button')
       tab.className = 'pb-cat-tab' + (!query && cat === resolvedCat ? ' active' : '')
       tab.style.setProperty('--tc', t.color)
-      tab.textContent = `${cat} ${count}`
+      tab.textContent = count > 0 ? `${cat} ${count}` : cat
+      if (count === 0) tab.style.opacity = '.4'
       if (!query && cat === resolvedCat) {
         tab.style.color = t.color
         tab.style.borderBottomColor = t.color
@@ -5892,6 +7006,69 @@ function pbRenderLibrary() {
     }
     block.appendChild(body)
     grid.appendChild(block)
+  })
+  // Render floating type nav after grid is built
+  pbRenderTypeNav()
+}
+
+let pbNavExpanded = false
+
+function pbRenderTypeNav() {
+  const nav = document.getElementById('pbTypeNav')
+  if (!nav) return
+  nav.innerHTML = ''
+
+  const isBuilderActive = document.getElementById('viewBuilder')?.classList.contains('active')
+  nav.classList.toggle('visible', !!isBuilderActive)
+  if (!isBuilderActive) return
+
+  nav.classList.toggle('expanded', pbNavExpanded)
+
+  // Expand/collapse toggle at top
+  const toggle = document.createElement('button')
+  toggle.className = 'pb-type-nav-toggle'
+  toggle.textContent = pbNavExpanded ? '»' : '«'
+  toggle.title = pbNavExpanded ? 'Collapse' : 'Show labels'
+  toggle.onclick = () => {
+    pbNavExpanded = !pbNavExpanded
+    pbRenderTypeNav()
+  }
+  nav.appendChild(toggle)
+
+  PB_TYPES.forEach((t, idx) => {
+    const hasParticles = !!document.getElementById('pbt_' + t.key)
+
+    const btn = document.createElement('button')
+    btn.className = 'pb-type-nav-btn' + (hasParticles ? '' : ' hidden-type')
+
+    const dot = document.createElement('span')
+    dot.className = 'pb-type-nav-dot'
+    dot.style.background = hasParticles ? t.color : 'var(--muted)'
+    btn.appendChild(dot)
+
+    // Label (visible when expanded)
+    const lbl = document.createElement('span')
+    lbl.className = 'pb-type-nav-label'
+    lbl.style.color = t.color
+    lbl.textContent = `${t.id}. ${t.label}`
+    btn.appendChild(lbl)
+
+    // Tooltip (visible when collapsed, on hover)
+    const tip = document.createElement('span')
+    tip.className = 'pb-type-nav-tip'
+    tip.textContent = `${t.id}. ${t.label.toUpperCase()}`
+    tip.style.color = t.color
+    btn.appendChild(tip)
+
+    btn.onclick = () => { if (hasParticles) pbJumpToType(t.key) }
+
+    if (idx === 9) {
+      const sep = document.createElement('div')
+      sep.className = 'pb-type-nav-sep'
+      nav.appendChild(sep)
+    }
+
+    nav.appendChild(btn)
   })
 }
 
@@ -6073,12 +7250,58 @@ function pbBuildSubGroup(name, particles, t, defaultOpen = false, key = null) {
 function pbAddToFormula(particle) {
   pbFormula.push({ uid: pbNextUid++, particleId: particle.id })
   pbRenderFormula()
-  pbRenderOutput()
+  pbUpdateBottomBar()
 }
 
 function pbRemoveFromFormula(uid) {
   pbFormula = pbFormula.filter(f => f.uid !== uid)
   pbRenderFormula()
+  pbUpdateBottomBar()
+}
+
+function pbUpdateBottomBar() {
+  const bar    = document.getElementById('pbBottomChips')
+  const expand = document.getElementById('pbBottomExpand')
+  if (!bar) return
+  bar.innerHTML = ''
+  if (!pbFormula.length) {
+    const ph = document.createElement('span')
+    ph.className = 'pb-bottom-bar-ph'
+    ph.textContent = 'Build your prompt below…'
+    bar.appendChild(ph)
+    if (expand) expand.style.display = 'none'
+    return
+  }
+  if (expand) expand.style.display = ''
+  pbFormula.forEach((entry, idx) => {
+    const p = pbGetParticles().find(x => x.id === entry.particleId)
+    const t = p ? PB_TYPES.find(x => x.key === p.type) : null
+    if (!p || !t) return
+    if (idx > 0) {
+      const sep = document.createElement('span')
+      sep.style.cssText = 'color:var(--muted);font-size:11px;padding:0 1px;align-self:center;'
+      sep.textContent = '—'
+      bar.appendChild(sep)
+    }
+    const chip = document.createElement('span')
+    chip.className = 'pb-bottom-chip'
+    chip.style.background = pbHexAlpha(t.color, 0.18)
+    chip.style.color = t.color
+    chip.textContent = p.text  // full text — no truncation
+    chip.title = 'Tap to remove'
+    chip.onclick = () => pbRemoveFromFormula(entry.uid)
+    bar.appendChild(chip)
+  })
+}
+
+let pbBottomExpanded = false
+function pbToggleBottomExpand() {
+  pbBottomExpanded = !pbBottomExpanded
+  const chips  = document.getElementById('pbBottomChips')
+  const btn    = document.getElementById('pbBottomExpand')
+  if (!chips || !btn) return
+  chips.classList.toggle('expanded', pbBottomExpanded)
+  btn.textContent = pbBottomExpanded ? '▼ COLLAPSE' : '▲ SHOW ALL'
 }
 
 function pbRenderFormula() {
@@ -6186,12 +7409,12 @@ function pbRandomiseAll() {
     const pool = pbGetParticles().filter(p => p.type === t.key)
     if (pool.length) pbFormula.push({ uid: pbNextUid++, particleId: pool[Math.floor(Math.random()*pool.length)].id })
   })
-  pbRenderFormula(); pbRenderOutput()
+  pbRenderFormula(); pbRenderOutput(); pbUpdateBottomBar()
 }
 
 function pbClearFormula() {
   pbFormula = []
-  pbRenderFormula(); pbRenderOutput()
+  pbRenderFormula(); pbRenderOutput(); pbUpdateBottomBar()
 }
 
 // ── GLOBAL ADD FORM ────────────────────────────────────────────────
@@ -8155,6 +9378,23 @@ function pbAddCustomColour() {
   pbRenderLibBar()
   pbRenderLibrary()
   pbParticlesDriveSync()
+}
+
+// ── DRAWER TOGGLE ──────────────────────────────────────────────────
+let pbDrawerOpen = true
+
+function pbToggleDrawer() {
+  pbDrawerOpen = !pbDrawerOpen
+  const pane   = document.getElementById('pbLeftPane')
+  const toggle = document.getElementById('pbDrawerToggle')
+  if (!pane || !toggle) return
+  pane.classList.toggle('collapsed', !pbDrawerOpen)
+  toggle.textContent = pbDrawerOpen ? '‹‹' : '›› '
+  toggle.title = pbDrawerOpen ? 'Collapse panel' : 'Expand panel'
+  // Flip border side
+  toggle.style.borderLeft  = pbDrawerOpen ? 'none' : '1px solid var(--border)'
+  toggle.style.borderRight = pbDrawerOpen ? '1px solid var(--border)' : 'none'
+  toggle.style.borderRadius = pbDrawerOpen ? '0 4px 4px 0' : '4px 0 0 4px'
 }
 
 function pbSetSubjectMode(mode) {
