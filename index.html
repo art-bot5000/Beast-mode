@@ -2505,38 +2505,50 @@ body.light .colourTuner { background:var(--surface2); }
 </div>
 
 <!-- ═══════════════════════ ITERATE MODAL ═══════════════════════ -->
-<div id="iterateModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+<div id="iterModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
   <div class="modal-card" style="max-width:700px;width:100%;">
     <div class="modal-header">
       <div>
         <div class="modal-title">// PARTICLE ITERATE</div>
-        <div style="font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:3px;">Select text to replace · choose particles · generate variants</div>
+        <div style="font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:3px;">Select text · choose particles · generate variants</div>
       </div>
       <button class="modal-close" onclick="closeIterate()">✕</button>
     </div>
     <div class="modal-body">
-      <!-- Step 1: source prompt display -->
+
+      <!-- Step 1: choose particle type -->
       <div class="iterate-step" id="iterStep1">
-        <div class="iterate-step-label">① TAP THE PART OF THE PROMPT TO REPLACE</div>
-        <div class="pb-annotated-wrap" style="margin-bottom:10px;">
-          <div class="pb-annotated" id="iterAnnotated" onmouseup="iterOnSelection()" ontouchend="iterOnSelection()"></div>
+        <div class="iterate-step-label">① CHOOSE PARTICLE TYPE TO REPLACE WITH</div>
+        <div class="pb-type-picker" id="iterTypePicker" style="margin-bottom:14px;"></div>
+        <button class="btn btn-primary" style="font-size:10px;" onclick="iterGoToStep2()">SELECT TEXT IN PROMPT →</button>
+      </div>
+
+      <!-- Step 2: tap to select text in prompt -->
+      <div class="iterate-step" id="iterStep2" style="display:none;">
+        <div class="iterate-step-label">② TAP FIRST WORD — TAP LAST WORD — TO SELECT PHRASE TO REPLACE</div>
+        <div class="pb-annotated-wrap" style="margin-bottom:8px;">
+          <div class="pb-annotated" id="iterAnnotated"></div>
         </div>
         <div id="iterSelStatus" class="pb-selection-status"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-ghost" style="font-size:10px;" onclick="iterGoToStep1()">← BACK</button>
+          <button class="btn btn-primary" style="font-size:10px;" id="iterToStep3Btn" onclick="iterGoToStep3()" disabled>CHOOSE PARTICLES →</button>
+        </div>
       </div>
-      <!-- Step 2: particle type + selection -->
-      <div class="iterate-step" id="iterStep2" style="display:none;">
-        <div class="iterate-step-label">② CHOOSE PARTICLE TYPE</div>
-        <div class="pb-type-picker" id="iterTypePicker" style="margin-bottom:12px;"></div>
+
+      <!-- Step 3: pick particles -->
+      <div class="iterate-step" id="iterStep3" style="display:none;">
         <div class="iterate-step-label">③ SELECT UP TO 10 PARTICLES <span id="iterPickCount" style="opacity:.6;font-weight:400;"></span></div>
-        <div id="iterParticleList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;max-height:280px;overflow-y:auto;"></div>
+        <div id="iterParticleList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;max-height:280px;overflow-y:auto;padding:2px;"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" style="font-size:10px;" onclick="iterGoToStep2()">← BACK</button>
           <button class="btn btn-ghost" style="font-size:10px;" onclick="iterRandomise()">⚄ RANDOMISE 10</button>
           <button class="btn btn-ghost" style="font-size:10px;" onclick="iterClearPicks()">✕ CLEAR</button>
         </div>
       </div>
+
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" style="font-size:10px;" onclick="iterBack()" id="iterBackBtn" style="display:none;">← BACK</button>
       <button class="btn btn-primary" style="font-size:10px;" onclick="iterGenerate()" id="iterGenBtn" disabled>⚙ GENERATE VARIANTS</button>
     </div>
   </div>
@@ -5934,13 +5946,16 @@ function pbAddVersion(fav, text, label) {
 // PARTICLE ITERATE
 // ═══════════════════════════════════════════════════════════════════
 
-let iterFavId       = null
-let iterTokens      = []
-let iterPendingIdx  = null
-let iterSelStart    = null
-let iterSelEnd      = null
-let iterActiveType  = 'subject'
-let iterPicked      = []   // array of particle ids
+// ═══════════════════════════════════════════════════════════════════
+// PARTICLE ITERATE
+// ═══════════════════════════════════════════════════════════════════
+
+let iterFavId      = null
+let iterTokens     = []
+let iterSelStart   = null
+let iterSelEnd     = null
+let iterActiveType = 'subject'
+let iterPicked     = []
 
 function openIterate(favId) {
   iterFavId    = favId
@@ -5950,26 +5965,16 @@ function openIterate(favId) {
   iterTokens   = []
   const f = favourites.find(x => x.id === favId)
   if (!f) return
-  const text = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/,'').trim()
-  // Tokenise
+  const text = (f.promptOnly || f.text || '')
+    .replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
+  // Tokenise into word/space tokens
   const parts = text.split(/(\s+)/)
   let idx = 0
   parts.forEach(part => {
-    if (/^\s+$/.test(part)) {
-      iterTokens.push({ idx: idx++, text: part, isSpace: true })
-    } else if (part) {
-      iterTokens.push({ idx: idx++, text: part, isSpace: false })
-    }
+    if (/^\s+$/.test(part)) iterTokens.push({ idx: idx++, text: part, isSpace: true })
+    else if (part)           iterTokens.push({ idx: idx++, text: part, isSpace: false })
   })
-  // Render annotated
-  iterRenderAnnotated()
-  // Type picker
-  iterRenderTypePicker()
-  // Show step 1
-  document.getElementById('iterStep1').style.display = 'block'
-  document.getElementById('iterStep2').style.display = 'none'
-  document.getElementById('iterBackBtn').style.display = 'none'
-  document.getElementById('iterGenBtn').disabled = true
+  iterGoToStep1()
   document.getElementById('iterModal').style.display = 'flex'
 }
 
@@ -5977,63 +5982,31 @@ function closeIterate() {
   document.getElementById('iterModal').style.display = 'none'
 }
 
-function iterRenderAnnotated() {
-  const container = document.getElementById('iterAnnotated')
-  if (!container) return
-  container.innerHTML = ''
-  iterTokens.forEach(tok => {
-    if (tok.isSpace) { container.appendChild(document.createTextNode(tok.text)); return }
-    const span = document.createElement('span')
-    span.className = 'pb-token'
-    span.dataset.idx = tok.idx
-    span.textContent = tok.text
-    const inSel = iterSelStart !== null && iterSelEnd !== null
-      && tok.idx >= iterSelStart && tok.idx <= iterSelEnd
-    if (inSel) {
-      span.style.background = pbHexAlpha(PB_TYPES.find(t=>t.key===iterActiveType)?.color||'#38b6ff', 0.3)
-      span.style.borderRadius = '3px'
-    }
-    if (tok.idx === iterSelStart && iterSelEnd === null) span.classList.add('pending')
-    span.onclick = () => iterTokenTap(tok.idx)
-    container.appendChild(span)
-  })
-  const status = document.getElementById('iterSelStatus')
-  if (status) {
-    if (iterSelStart === null) status.textContent = 'Tap the first word of the phrase to replace'
-    else if (iterSelEnd === null) status.textContent = 'Now tap the last word of the phrase'
-    else {
-      const words = iterTokens.filter(t => !t.isSpace && t.idx >= iterSelStart && t.idx <= iterSelEnd)
-      status.textContent = `Selected: "${words.map(t=>t.text).join(' ')}" — scroll down to choose particles`
-      // Show step 2
-      document.getElementById('iterStep2').style.display = 'block'
-      document.getElementById('iterBackBtn').style.display = ''
-    }
-  }
-}
-
-function iterTokenTap(idx) {
-  if (iterSelStart === null) {
-    iterSelStart = idx; iterSelEnd = null
-  } else if (iterSelEnd === null) {
-    iterSelEnd = Math.max(iterSelStart, idx)
-    iterSelStart = Math.min(iterSelStart, idx)
-  } else {
-    // Reset
-    iterSelStart = idx; iterSelEnd = null
-    iterPicked = []; iterRenderParticleList()
-  }
-  iterRenderAnnotated()
-}
-
-function iterBack() {
-  iterSelStart = null; iterSelEnd = null
-  iterPicked = []
+// ── Step navigation ────────────────────────────────────────────────
+function iterGoToStep1() {
+  document.getElementById('iterStep1').style.display = 'block'
   document.getElementById('iterStep2').style.display = 'none'
-  document.getElementById('iterBackBtn').style.display = 'none'
+  document.getElementById('iterStep3').style.display = 'none'
   document.getElementById('iterGenBtn').disabled = true
+  iterRenderTypePicker()
+}
+
+function iterGoToStep2() {
+  document.getElementById('iterStep1').style.display = 'none'
+  document.getElementById('iterStep2').style.display = 'block'
+  document.getElementById('iterStep3').style.display = 'none'
   iterRenderAnnotated()
 }
 
+function iterGoToStep3() {
+  if (iterSelStart === null || iterSelEnd === null) return
+  document.getElementById('iterStep1').style.display = 'none'
+  document.getElementById('iterStep2').style.display = 'none'
+  document.getElementById('iterStep3').style.display = 'block'
+  iterRenderParticleList()
+}
+
+// ── Step 1: type picker ────────────────────────────────────────────
 function iterRenderTypePicker() {
   const wrap = document.getElementById('iterTypePicker')
   if (!wrap) return
@@ -6041,29 +6014,85 @@ function iterRenderTypePicker() {
   PB_TYPES.forEach(t => {
     const btn = document.createElement('div')
     btn.className = 'pb-type-pick-btn' + (t.key === iterActiveType ? ' active' : '')
-    btn.style.background = pbHexAlpha(t.color, 0.15)
-    btn.style.color = t.color
-    btn.style.borderColor = pbHexAlpha(t.color, t.key === iterActiveType ? 0.8 : 0.2)
+    btn.style.background   = pbHexAlpha(t.color, 0.15)
+    btn.style.color        = t.color
+    btn.style.borderColor  = pbHexAlpha(t.color, t.key === iterActiveType ? 0.8 : 0.2)
     btn.innerHTML = `<span class="pb-type-pick-dot" style="background:${t.color}"></span>${t.id}. ${t.label}`
-    btn.onclick = () => { iterActiveType = t.key; iterRenderTypePicker(); iterRenderParticleList() }
+    btn.onclick = () => { iterActiveType = t.key; iterRenderTypePicker() }
     wrap.appendChild(btn)
   })
 }
 
+// ── Step 2: token-tap selection ────────────────────────────────────
+function iterRenderAnnotated() {
+  const container = document.getElementById('iterAnnotated')
+  if (!container) return
+  container.innerHTML = ''
+  const activeColor = PB_TYPES.find(t => t.key === iterActiveType)?.color || '#38b6ff'
+
+  iterTokens.forEach(tok => {
+    if (tok.isSpace) { container.appendChild(document.createTextNode(tok.text)); return }
+    const span = document.createElement('span')
+    span.className = 'pb-token'
+    span.textContent = tok.text
+    const inSel = iterSelStart !== null && iterSelEnd !== null
+      && tok.idx >= iterSelStart && tok.idx <= iterSelEnd
+    if (inSel) {
+      span.style.background   = pbHexAlpha(activeColor, 0.3)
+      span.style.color        = activeColor
+      span.style.borderRadius = '3px'
+    } else if (tok.idx === iterSelStart && iterSelEnd === null) {
+      span.classList.add('pending')
+    }
+    span.onclick = () => iterTokenTap(tok.idx)
+    container.appendChild(span)
+  })
+
+  const status = document.getElementById('iterSelStatus')
+  const toStep3 = document.getElementById('iterToStep3Btn')
+  if (iterSelStart === null) {
+    if (status) status.textContent = 'Tap the first word of the phrase to replace'
+    if (toStep3) toStep3.disabled = true
+  } else if (iterSelEnd === null) {
+    if (status) status.textContent = 'Now tap the last word of the phrase'
+    if (toStep3) toStep3.disabled = true
+  } else {
+    const words = iterTokens.filter(t => !t.isSpace && t.idx >= iterSelStart && t.idx <= iterSelEnd)
+    if (status) status.textContent = `✓ Selected: "${words.map(t=>t.text).join(' ')}"`
+    if (status) status.className = 'pb-selection-status active'
+    if (toStep3) toStep3.disabled = false
+  }
+}
+
+function iterTokenTap(idx) {
+  if (iterSelStart === null) {
+    iterSelStart = idx; iterSelEnd = null
+  } else if (iterSelEnd === null) {
+    iterSelEnd   = Math.max(iterSelStart, idx)
+    iterSelStart = Math.min(iterSelStart, idx)
+  } else {
+    // Reset — start new selection
+    iterSelStart = idx; iterSelEnd = null
+  }
+  iterRenderAnnotated()
+}
+
+// ── Step 3: particle picks ─────────────────────────────────────────
 function iterRenderParticleList() {
-  const list = document.getElementById('iterParticleList')
+  const list    = document.getElementById('iterParticleList')
   const countEl = document.getElementById('iterPickCount')
   if (!list) return
-  const t = PB_TYPES.find(x => x.key === iterActiveType)
+  const t    = PB_TYPES.find(x => x.key === iterActiveType)
   const pool = pbGetParticles().filter(p => p.type === iterActiveType)
   list.innerHTML = ''
-  pool.slice(0, 80).forEach(p => {
+  pool.forEach(p => {
     const chip = document.createElement('div')
-    chip.className = 'iter-particle-pick' + (iterPicked.includes(p.id) ? ' selected' : '')
-    chip.style.background = pbHexAlpha(t.color, iterPicked.includes(p.id) ? 0.3 : 0.1)
-    chip.style.color = t.color
-    chip.style.borderColor = pbHexAlpha(t.color, iterPicked.includes(p.id) ? 0.7 : 0.2)
-    chip.textContent = pbTrunc(p.text, 40)
+    const sel  = iterPicked.includes(p.id)
+    chip.className = 'iter-particle-pick' + (sel ? ' selected' : '')
+    chip.style.background  = pbHexAlpha(t.color, sel ? 0.3 : 0.1)
+    chip.style.color       = t.color
+    chip.style.borderColor = pbHexAlpha(t.color, sel ? 0.7 : 0.2)
+    chip.textContent = p.text
     chip.title = p.text
     chip.onclick = () => {
       if (iterPicked.includes(p.id)) {
@@ -6080,11 +6109,11 @@ function iterRenderParticleList() {
 }
 
 function iterRandomise() {
-  const pool = pbGetParticles().filter(p => p.type === iterActiveType)
+  const pool    = pbGetParticles().filter(p => p.type === iterActiveType)
   const shuffled = [...pool].sort(() => Math.random() - 0.5)
-  iterPicked = shuffled.slice(0, 10).map(p => p.id)
+  iterPicked    = shuffled.slice(0, 10).map(p => p.id)
   iterRenderParticleList()
-  document.getElementById('iterGenBtn').disabled = iterPicked.length === 0
+  document.getElementById('iterGenBtn').disabled = false
 }
 
 function iterClearPicks() {
@@ -6093,13 +6122,14 @@ function iterClearPicks() {
   document.getElementById('iterGenBtn').disabled = true
 }
 
+// ── Generate variants ──────────────────────────────────────────────
 function iterGenerate() {
   if (!iterPicked.length || iterSelStart === null || iterSelEnd === null) return
-  const selectedWords = iterTokens.filter(t => !t.isSpace && t.idx >= iterSelStart && t.idx <= iterSelEnd).map(t=>t.text).join(' ')
-  const beforeTokens = iterTokens.filter(t => t.idx < iterSelStart)
-  const afterTokens  = iterTokens.filter(t => t.idx > iterSelEnd)
-  const before = beforeTokens.map(t=>t.text).join('')
-  const after  = afterTokens.map(t=>t.text).join('')
+
+  const beforeToks = iterTokens.filter(t => t.idx < iterSelStart)
+  const afterToks  = iterTokens.filter(t => t.idx > iterSelEnd)
+  const before     = beforeToks.map(t => t.text).join('')
+  const after      = afterToks.map(t => t.text).join('')
 
   const body = document.getElementById('iterResultsBody')
   body.innerHTML = ''
@@ -6110,13 +6140,14 @@ function iterGenerate() {
     const item = document.createElement('div')
     item.className = 'iter-result-item'
     item.innerHTML = `
-      <div class="iter-result-label">VARIANT ${i+1} — ${p.text.slice(0,50)}</div>
-      <div class="iter-result-text">${variant}</div>
+      <div class="iter-result-label">VARIANT ${i+1} — ${pbEsc(pbTrunc(p.text, 50))}</div>
+      <div class="iter-result-text">${pbEsc(variant)}</div>
       <div class="iter-result-actions">
         <button class="btn btn-ghost" style="font-size:10px;" onclick="iterCopyVariant(this)">⎘ COPY</button>
-        <button class="btn btn-primary" style="font-size:10px;" onclick="iterSaveVariant('${encodeURIComponent(variant)}',${iterFavId})">♥ SAVE</button>
+        <button class="btn btn-primary" style="font-size:10px;" onclick="iterSaveVariant(this,${iterFavId})">♥ SAVE</button>
       </div>
     `
+    item.dataset.variantText = variant
     body.appendChild(item)
   })
   document.getElementById('iterModal').style.display = 'none'
@@ -6124,34 +6155,34 @@ function iterGenerate() {
 }
 
 function iterCopyVariant(btn) {
-  const text = btn.closest('.iter-result-item').querySelector('.iter-result-text').textContent
+  const text = btn.closest('.iter-result-item').dataset.variantText || ''
   try {
-    const ta = document.createElement('textarea'); ta.value = text
-    ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta)
-    ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
+    const ta = document.createElement('textarea')
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'
+    document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); document.body.removeChild(ta)
     const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(() => btn.textContent = orig, 1500)
   } catch(e) {}
 }
 
-function iterSaveVariant(encodedText, srcFavId) {
-  const text = decodeURIComponent(encodedText)
+function iterSaveVariant(btn, srcFavId) {
+  const text   = btn.closest('.iter-result-item').dataset.variantText || ''
   const srcFav = favourites.find(x => x.id === srcFavId)
   const fav = {
-    ...srcFav,
+    ...(srcFav || {}),
     id: Date.now(),
-    text: text, promptOnly: text,
-    title: (srcFav?.title || '') + ' (variant)',
+    text, promptOnly: text,
+    title: ((srcFav?.title || '') + ' (variant)').trim(),
     versions: [{ text, savedAt: Date.now(), label: 'Particle variant' }],
-    createdAt: Date.now(), updatedAt: Date.now(),
     starred: false,
+    createdAt: Date.now(), updatedAt: Date.now(),
   }
   favourites.unshift(fav)
   driveSavePrompt(fav)
   renderLibrary()
   updateLibBadge()
-  const btn = event?.target
-  if (btn) { btn.textContent = '✓ SAVED'; btn.disabled = true }
+  btn.textContent = '✓ SAVED'; btn.disabled = true
 }
 
 // ═══════════════════════════════════════════════════════════════════
