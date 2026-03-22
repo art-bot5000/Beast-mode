@@ -1688,7 +1688,40 @@ body.light .colourTuner { background:var(--surface2); }
   user-select:none;
 }
 .iter-particle-pick.selected { outline:2px solid #fff;outline-offset:1px; }
-.iter-result-item {
+.pp-star {
+  font-size:11px;color:var(--border);cursor:pointer;flex-shrink:0;
+  transition:color .15s, transform .15s;padding:0 2px;user-select:none;
+}
+.pp-star:hover, .pp-star.fav { color:#ffcc00; }
+.pp-star:hover { transform:scale(1.2); }
+.pb-creature-star {
+  background:none;border:none;cursor:pointer;font-size:12px;
+  color:var(--border);padding:0 3px;flex-shrink:0;
+  transition:color .15s, transform .15s;line-height:1;
+}
+.pb-creature-star:hover, .pb-creature-star.fav { color:#ffcc00; }
+.pb-creature-star:hover { transform:scale(1.2); }
+
+
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 12px;font-family:'Rajdhani',sans-serif;font-size:12px;
+  line-height:1.7;color:var(--muted);max-height:120px;overflow-y:auto;
+  font-style:italic;
+}
+.iter-mode-tabs {
+  display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
+}
+.iter-mode-tab {
+  flex:1;padding:7px 4px;text-align:center;font-family:'Rajdhani',sans-serif;
+  font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;
+  border:none;background:transparent;color:var(--muted);transition:all .15s;
+  border-right:1px solid var(--border);
+}
+.iter-mode-tab:last-child { border-right:none; }
+.iter-mode-tab:hover { color:var(--text);background:var(--surface2); }
+.iter-mode-tab.active { background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent); }
+
+
   background:var(--surface2);border:1px solid var(--border);border-radius:4px;
   padding:12px;margin-bottom:8px;
 }
@@ -2516,11 +2549,13 @@ body.light .colourTuner { background:var(--surface2); }
     </div>
     <div class="modal-body">
 
-      <!-- Step 1: choose particle type -->
+      <!-- Step 1: choose particle type + see prompt -->
       <div class="iterate-step" id="iterStep1">
         <div class="iterate-step-label">① CHOOSE PARTICLE TYPE TO REPLACE WITH</div>
         <div class="pb-type-picker" id="iterTypePicker" style="margin-bottom:14px;"></div>
-        <button class="btn btn-primary" style="font-size:10px;" onclick="iterGoToStep2()">SELECT TEXT IN PROMPT →</button>
+        <div class="iterate-step-label" style="margin-top:4px;">PROMPT</div>
+        <div class="iter-prompt-preview" id="iterPromptPreview"></div>
+        <button class="btn btn-primary" style="font-size:10px;margin-top:12px;" onclick="iterGoToStep2()">SELECT TEXT IN PROMPT →</button>
       </div>
 
       <!-- Step 2: tap to select text in prompt -->
@@ -2536,9 +2571,10 @@ body.light .colourTuner { background:var(--surface2); }
         </div>
       </div>
 
-      <!-- Step 3: pick particles -->
+      <!-- Step 3: pick particles with mode tabs -->
       <div class="iterate-step" id="iterStep3" style="display:none;">
         <div class="iterate-step-label">③ SELECT UP TO 10 PARTICLES <span id="iterPickCount" style="opacity:.6;font-weight:400;"></span></div>
+        <div class="iter-mode-tabs" id="iterModeTabs" style="margin-bottom:10px;"></div>
         <div id="iterParticleList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;max-height:280px;overflow-y:auto;padding:2px;"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-ghost" style="font-size:10px;" onclick="iterGoToStep2()">← BACK</button>
@@ -4901,6 +4937,7 @@ async function driveOnSignedIn() {
   await driveModelsLoad()
   await pbParticlesLoad()
   await libFoldersLoad()
+  await pbFavParticlesLoad()
   updateNavDriveDot()
   updateLibBadge()
   renderLibrary()
@@ -5983,12 +6020,22 @@ function closeIterate() {
 }
 
 // ── Step navigation ────────────────────────────────────────────────
+let iterParticleMode = 'favs'  // 'favs' | 'mine' | 'insect' | 'beast' | 'all'
+
 function iterGoToStep1() {
   document.getElementById('iterStep1').style.display = 'block'
   document.getElementById('iterStep2').style.display = 'none'
   document.getElementById('iterStep3').style.display = 'none'
   document.getElementById('iterGenBtn').disabled = true
   iterRenderTypePicker()
+  // Show prompt preview
+  const f = favourites.find(x => x.id === iterFavId)
+  const preview = document.getElementById('iterPromptPreview')
+  if (preview && f) {
+    const text = (f.promptOnly || f.text || '')
+      .replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
+    preview.textContent = text
+  }
 }
 
 function iterGoToStep2() {
@@ -6003,7 +6050,28 @@ function iterGoToStep3() {
   document.getElementById('iterStep1').style.display = 'none'
   document.getElementById('iterStep2').style.display = 'none'
   document.getElementById('iterStep3').style.display = 'block'
+  iterRenderModeTabs()
   iterRenderParticleList()
+}
+
+function iterRenderModeTabs() {
+  const wrap = document.getElementById('iterModeTabs')
+  if (!wrap) return
+  const tabs = [
+    { key:'favs',   label:'⭐ FAVOURITES' },
+    { key:'mine',   label:'MY PARTICLES' },
+    { key:'insect', label:'⬡ INSECT' },
+    { key:'beast',  label:'☠ BEAST' },
+    { key:'all',    label:'ALL' },
+  ]
+  wrap.innerHTML = ''
+  tabs.forEach(tab => {
+    const btn = document.createElement('button')
+    btn.className = 'iter-mode-tab' + (iterParticleMode === tab.key ? ' active' : '')
+    btn.textContent = tab.label
+    btn.onclick = () => { iterParticleMode = tab.key; iterRenderModeTabs(); iterRenderParticleList() }
+    wrap.appendChild(btn)
+  })
 }
 
 // ── Step 1: type picker ────────────────────────────────────────────
@@ -6083,11 +6151,30 @@ function iterRenderParticleList() {
   const countEl = document.getElementById('iterPickCount')
   if (!list) return
   const t    = PB_TYPES.find(x => x.key === iterActiveType)
-  const pool = pbGetParticles().filter(p => p.type === iterActiveType)
+  const allP = pbGetParticles().filter(p => p.type === iterActiveType)
+
+  // Filter by mode tab
+  let pool
+  if (iterParticleMode === 'favs') {
+    const favIds = pbFavParticles[iterActiveType] || []
+    pool = pbGetParticles().filter(p => p.type === iterActiveType && favIds.includes(p.id))
+  } else if (iterParticleMode === 'mine') {
+    pool = allP.filter(p => !p.builtin)
+  } else if (iterParticleMode === 'insect') {
+    pool = allP.filter(p => p.mode === 'insect')
+  } else if (iterParticleMode === 'beast') {
+    pool = allP.filter(p => p.mode === 'beast')
+  } else {
+    pool = allP
+  }
+
   list.innerHTML = ''
+  if (!pool.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:8px;letter-spacing:1px;">No particles in this filter.</div>'
+  }
   pool.forEach(p => {
-    const chip = document.createElement('div')
     const sel  = iterPicked.includes(p.id)
+    const chip = document.createElement('div')
     chip.className = 'iter-particle-pick' + (sel ? ' selected' : '')
     chip.style.background  = pbHexAlpha(t.color, sel ? 0.3 : 0.1)
     chip.style.color       = t.color
@@ -6095,11 +6182,8 @@ function iterRenderParticleList() {
     chip.textContent = p.text
     chip.title = p.text
     chip.onclick = () => {
-      if (iterPicked.includes(p.id)) {
-        iterPicked = iterPicked.filter(x => x !== p.id)
-      } else if (iterPicked.length < 10) {
-        iterPicked.push(p.id)
-      }
+      if (iterPicked.includes(p.id)) iterPicked = iterPicked.filter(x => x !== p.id)
+      else if (iterPicked.length < 10) iterPicked.push(p.id)
       iterRenderParticleList()
       document.getElementById('iterGenBtn').disabled = iterPicked.length === 0
     }
@@ -6109,11 +6193,16 @@ function iterRenderParticleList() {
 }
 
 function iterRandomise() {
-  const pool    = pbGetParticles().filter(p => p.type === iterActiveType)
+  const allP = pbGetParticles().filter(p => p.type === iterActiveType)
+  let pool
+  if (iterParticleMode === 'mine')        pool = allP.filter(p => !p.builtin)
+  else if (iterParticleMode === 'insect') pool = allP.filter(p => p.mode === 'insect')
+  else if (iterParticleMode === 'beast')  pool = allP.filter(p => p.mode === 'beast')
+  else pool = allP
   const shuffled = [...pool].sort(() => Math.random() - 0.5)
-  iterPicked    = shuffled.slice(0, 10).map(p => p.id)
+  iterPicked = shuffled.slice(0, 10).map(p => p.id)
   iterRenderParticleList()
-  document.getElementById('iterGenBtn').disabled = false
+  document.getElementById('iterGenBtn').disabled = iterPicked.length === 0
 }
 
 function iterClearPicks() {
@@ -6720,8 +6809,12 @@ let pbLibraries = PB_LIB_DEFAULTS.map((name,i) => ({ id:i, name, particles:[] })
 // pbGetParticles() — working set = built-ins (if shown) + active library
 
 // Drive file for libraries
-const PB_LIBRARIES_FILE = 'beast-mode-particle-libraries.json'
-let pbLibDriveId = null
+const PB_LIBRARIES_FILE    = 'beast-mode-particle-libraries.json'
+const PB_FAV_PARTICLES_FILE = 'beast-mode-fav-particles.json'
+let pbLibDriveId     = null
+let pbFavDriveId     = null
+// pbFavParticles: { typeKey → Set of particle ids (stored as arrays) }
+let pbFavParticles   = {}  // e.g. { subject: [101, 202], form: [305] }
 
 // ── INIT ───────────────────────────────────────────────────────────
 function pbInit() {
@@ -6795,10 +6888,17 @@ function pbRenderLibrary() {
     // Skip block only during search when nothing matches
     if (!allItems.length && query) return
 
-    // Filter by search — activeCat used here; allCats computed later in category tabs
-    const filtered = query
-      ? allItems.filter(p => p.text.toLowerCase().includes(query) || p.cat.toLowerCase().includes(query))
-      : allItems.filter(p => p.cat === activeCat)
+    // Filter by search or active category (Favourites uses fav ids lookup)
+    const activeCatForFilter = pbActiveCats[t.key] || t.cats[0]
+    let filtered
+    if (query) {
+      filtered = allItems.filter(p => p.text.toLowerCase().includes(query) || p.cat.toLowerCase().includes(query))
+    } else if (activeCatForFilter === 'Favourites') {
+      const favIds = pbFavParticles[t.key] || []
+      filtered = pbGetParticles().filter(p => p.type === t.key && favIds.includes(p.id))
+    } else {
+      filtered = allItems.filter(p => p.cat === activeCatForFilter)
+    }
 
     const block = document.createElement('div')
     block.className = 'pb-type-block'
@@ -6852,11 +6952,11 @@ function pbRenderLibrary() {
       }
     }
 
-    // Category tabs — show cats with items, PLUS always show default cats so user can add to them
+    // Category tabs — Favourites always first, then cats with items, then default cats
     const tabs = document.createElement('div')
     tabs.className = 'pb-cat-tabs'
     const catsWithItems = [...new Set(allItems.map(p => p.cat))]
-    const allCats = [...new Set([...catsWithItems, ...t.cats])]
+    const allCats = ['Favourites', ...new Set([...catsWithItems, ...t.cats])]
 
     // If activeCat has no items, reset to first cat with items or first default
     if (!allCats.includes(activeCat)) {
@@ -6865,12 +6965,17 @@ function pbRenderLibrary() {
     const resolvedCat = pbActiveCats[t.key] || t.cats[0]
 
     allCats.forEach(cat => {
-      const count = allItems.filter(p => p.cat === cat).length
-      // Always show default cats; skip non-default empty cats
+      const isFavCat = cat === 'Favourites'
+      const favIds   = pbFavParticles[t.key] || []
+      const count    = isFavCat
+        ? favIds.filter(id => pbGetParticles().some(p => p.id === id && p.type === t.key)).length
+        : allItems.filter(p => p.cat === cat).length
       const tab = document.createElement('button')
       tab.className = 'pb-cat-tab' + (!query && cat === resolvedCat ? ' active' : '')
       tab.style.setProperty('--tc', t.color)
-      tab.textContent = count > 0 ? `${cat} ${count}` : cat
+      tab.textContent = isFavCat
+        ? (count > 0 ? `⭐ ${count}` : '⭐')
+        : (count > 0 ? `${cat} ${count}` : cat)
       if (count === 0) tab.style.opacity = '.4'
       if (!query && cat === resolvedCat) {
         tab.style.color = t.color
@@ -6882,27 +6987,32 @@ function pbRenderLibrary() {
         pbRenderLibrary()
       }
 
-      // Make tab a drop target for particles of this type
+      // Drop target — Favourites tab: add to favs; other tabs: move user particle
       tab.addEventListener('dragover', e => {
         e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
+        e.dataTransfer.dropEffect = 'copy'
         tab.classList.add('drag-over')
       })
       tab.addEventListener('dragleave', () => tab.classList.remove('drag-over'))
       tab.addEventListener('drop', e => {
         e.preventDefault()
         tab.classList.remove('drag-over')
-        const id = parseInt(e.dataTransfer.getData('pbParticleId'))
+        const id      = parseInt(e.dataTransfer.getData('pbParticleId'))
         const srcType = e.dataTransfer.getData('pbParticleType')
         if (!id || srcType !== t.key) return
-        // Only allow moving user-created particles (not built-ins)
-        const p = pbLibraries[pbActiveLib].particles.find(x => x.id === id)
-        if (!p || p.cat === cat) return
-        p.cat = cat
-        pbActiveCats[t.key] = cat
-        pbRenderLibBar()
-        pbRenderLibrary()
-        pbParticlesDriveSync()
+        if (isFavCat) {
+          // Add any particle (built-in or user) to favourites
+          pbAddFavParticle(t.key, id)
+        } else {
+          // Move user particle to different category
+          const p = pbLibraries[pbActiveLib].particles.find(x => x.id === id)
+          if (!p || p.cat === cat) return
+          p.cat = cat
+          pbActiveCats[t.key] = cat
+          pbRenderLibBar()
+          pbRenderLibrary()
+          pbParticlesDriveSync()
+        }
       })
 
       tabs.appendChild(tab)
@@ -7144,16 +7254,29 @@ function pbBuildParticleChip(p, t) {
   chip.style.borderColor = pbHexAlpha(t.color, 0.2)
   chip.title    = p.text
   chip.draggable = true
+
+  const isFav = pbIsFav(t.key, p.id)
+  const star = document.createElement('span')
+  star.className = 'pp-star' + (isFav ? ' fav' : '')
+  star.textContent = '★'
+  star.title = isFav ? 'Remove from Favourites' : 'Add to Favourites'
+  star.addEventListener('click', e => {
+    e.stopPropagation()
+    pbToggleFavParticle(t.key, p.id)
+  })
+
   chip.innerHTML = `
     <span class="pp-add">+</span>
     <span class="pb-particle-text">${pbTrunc(p.text, 45)}</span>
     <span class="pb-particle-del" title="Delete particle" onclick="pbDeleteParticle(${p.id},event)">×</span>
   `
+  chip.insertBefore(star, chip.querySelector('.pp-add'))
+
   chip.addEventListener('click', () => pbAddToFormula(p))
   chip.addEventListener('dragstart', e => {
     e.dataTransfer.setData('pbParticleId', p.id)
     e.dataTransfer.setData('pbParticleType', p.type)
-    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.effectAllowed = 'copy'
     chip.style.opacity = '.4'
   })
   chip.addEventListener('dragend', () => { chip.style.opacity = '' })
@@ -7187,12 +7310,24 @@ function pbBuildCreatureRow(creatureName, particles, t) {
     particles.forEach(p => pbAddToFormula(p))
   }
 
+  // Star button — fav all particles for this creature+type
+  const allFav = particles.every(p => pbIsFav(t.key, p.id))
+  const starBtn = document.createElement('button')
+  starBtn.className = 'pb-creature-star' + (allFav ? ' fav' : '')
+  starBtn.textContent = '★'
+  starBtn.title = allFav ? 'Remove from Favourites' : 'Add to Favourites'
+  starBtn.onclick = e => {
+    e.stopPropagation()
+    particles.forEach(p => pbToggleFavParticle(t.key, p.id))
+  }
+
   // Arrow for expand
   const arrow = document.createElement('span')
   arrow.className = 'pb-sub-group-arrow' + (isOpen ? ' open' : '')
   arrow.textContent = '▾'
 
   hdr.appendChild(nameEl)
+  hdr.appendChild(starBtn)
   hdr.appendChild(addBtn)
   hdr.appendChild(arrow)
 
@@ -7509,6 +7644,59 @@ async function pbParticlesDriveSync() {
       const files = await driveListFiles(`name='${PB_LIBRARIES_FILE}'`)
       if (files.length) { pbLibDriveId = files[0].id; await drivePatchFile(pbLibDriveId, body) }
       else { pbLibDriveId = await driveCreateFile(PB_LIBRARIES_FILE, body) }
+    }
+  } catch(e) {}
+}
+
+// ── FAV PARTICLES ──────────────────────────────────────────────────
+function pbIsFav(typeKey, particleId) {
+  return (pbFavParticles[typeKey] || []).includes(particleId)
+}
+
+function pbToggleFavParticle(typeKey, particleId) {
+  if (!pbFavParticles[typeKey]) pbFavParticles[typeKey] = []
+  const idx = pbFavParticles[typeKey].indexOf(particleId)
+  if (idx === -1) pbFavParticles[typeKey].push(particleId)
+  else            pbFavParticles[typeKey].splice(idx, 1)
+  pbFavParticlesSync()
+  pbRenderLibrary()
+}
+
+function pbAddFavParticle(typeKey, particleId) {
+  if (!pbFavParticles[typeKey]) pbFavParticles[typeKey] = []
+  if (!pbFavParticles[typeKey].includes(particleId)) {
+    pbFavParticles[typeKey].push(particleId)
+    pbFavParticlesSync()
+    pbRenderLibrary()
+  }
+}
+
+async function pbFavParticlesSync() {
+  if (!driveToken) return
+  try {
+    // Serialise sets to plain arrays
+    const data = {}
+    Object.entries(pbFavParticles).forEach(([k,v]) => { data[k] = [...v] })
+    const body = JSON.stringify({ favs: data, savedAt: new Date().toISOString() })
+    if (pbFavDriveId) {
+      await drivePatchFile(pbFavDriveId, body)
+    } else {
+      const files = await driveListFiles(`name='${PB_FAV_PARTICLES_FILE}'`)
+      if (files.length) { pbFavDriveId = files[0].id; await drivePatchFile(pbFavDriveId, body) }
+      else { pbFavDriveId = await driveCreateFile(PB_FAV_PARTICLES_FILE, body) }
+    }
+  } catch(e) {}
+}
+
+async function pbFavParticlesLoad() {
+  if (!driveToken) return
+  try {
+    const files = await driveListFiles(`name='${PB_FAV_PARTICLES_FILE}'`)
+    if (!files.length) return
+    pbFavDriveId = files[0].id
+    const data = await driveReadFile(pbFavDriveId)
+    if (data?.favs && typeof data.favs === 'object') {
+      pbFavParticles = data.favs
     }
   } catch(e) {}
 }
