@@ -2165,18 +2165,22 @@ body.light .colourTuner { background:var(--surface2); }
       </div>
     </header>
 
-    <!-- DRIVE SYNC BAR -->
+    <!-- SYNC BAR — updates based on active provider -->
     <div class="drive-bar" id="driveBar">
+      <!-- Not connected -->
       <div id="driveSignedOut" style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
-        <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;" id="navSyncLabel">GOOGLE DRIVE SYNC</span>
+        <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;" id="navSyncLabel">CLOUD SYNC</span>
         <div id="googleSignInBtn"></div>
+        <button id="navDropboxConnectBtn" style="display:none;font-size:10px;" class="btn btn-ghost" onclick="dbxSignIn()">CONNECT DROPBOX</button>
       </div>
+      <!-- Connected -->
       <div id="driveSignedIn" style="display:none;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
-        <img class="drive-avatar" id="driveAvatar" src="" alt="">
+        <img class="drive-avatar" id="driveAvatar" src="" alt="" style="display:none;">
+        <span style="font-size:12px;margin-right:2px;" id="navSyncProviderIcon">▲</span>
         <span class="drive-name" id="driveName"></span>
         <span class="drive-status" id="driveStatus">—</span>
-        <button class="btn btn-ghost" onclick="driveSync()" style="padding:4px 12px;font-size:10px;">↻ SYNC</button>
-        <button class="btn btn-ghost" onclick="driveSignOut()" style="padding:4px 10px;font-size:10px;">SIGN OUT</button>
+        <button class="btn btn-ghost" onclick="cloudSync()" style="padding:4px 12px;font-size:10px;">↻ SYNC</button>
+        <button class="btn btn-ghost" onclick="driveSignOut()" style="padding:4px 10px;font-size:10px;" id="navSignOutBtn">SIGN OUT</button>
       </div>
     </div>
 
@@ -5256,7 +5260,16 @@ function dbxShowSignedIn() {
   document.getElementById('dbxSignedIn').style.display  = 'flex'
   document.getElementById('dbxSignedOut').style.display = 'none'
   document.getElementById('dbxStatus').textContent = '✓ Connected'
+  // Flip nav bar to connected state
+  const so = document.getElementById('driveSignedOut')
+  const si = document.getElementById('driveSignedIn')
+  if (so) so.style.display = 'none'
+  if (si) si.style.display = 'flex'
+  const nm = document.getElementById('driveName')
+  if (nm) nm.textContent = dbxAccountName || 'Dropbox'
+  document.getElementById('loadDriveBadge')?.classList.add('show')
   updateNavDriveDot()
+  updateLocalWarning()
 }
 
 // ── Dropbox file operations ────────────────────────────────────────
@@ -5489,12 +5502,18 @@ async function driveOnSignedIn() {
 
 // ─── UI HELPERS ───────────────────────────────────────────────────
 function showDriveSignedIn(name, picture) {
-  document.getElementById('driveSignedOut').style.display = 'none'
-  document.getElementById('driveSignedIn').style.display  = 'flex'
-  document.getElementById('driveName').textContent = name
-  if (picture) document.getElementById('driveAvatar').src = picture
+  // Generator panel
+  const so = document.getElementById('driveSignedOut')
+  const si = document.getElementById('driveSignedIn')
+  if (so) so.style.display = 'none'
+  if (si) si.style.display = 'flex'
+  const nm = document.getElementById('driveName')
+  if (nm) nm.textContent = name
+  const av = document.getElementById('driveAvatar')
+  if (av && picture) { av.src = picture; av.style.display = '' }
   collapseLoadPanel()
-  document.getElementById('loadDriveBadge').classList.add('show')
+  document.getElementById('loadDriveBadge')?.classList.add('show')
+  updateNavDriveDot()
 }
 
 function driveSignOut() {
@@ -7082,25 +7101,53 @@ document.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════════════════
 
 function renderSettingsView() {
-  // Drive status
-  const signed = !!driveToken
-  document.getElementById('settingsDriveSignedIn').style.display  = signed ? 'block' : 'none'
-  document.getElementById('settingsDriveSignedOut').style.display = signed ? 'none'  : 'block'
-  if (signed) {
+  // Sync the provider selector buttons
+  document.getElementById('providerBtnGdrive')?.classList.toggle('active', cloudProvider === 'gdrive')
+  document.getElementById('providerBtnDropbox')?.classList.toggle('active', cloudProvider === 'dropbox')
+  document.getElementById('cloudPanelGdrive').style.display  = cloudProvider === 'gdrive'  ? '' : 'none'
+  document.getElementById('cloudPanelDropbox').style.display = cloudProvider === 'dropbox' ? '' : 'none'
+
+  // Google Drive panel
+  const gdriveSigned = !!driveToken
+  const ssi = document.getElementById('settingsDriveSignedIn')
+  const sso = document.getElementById('settingsDriveSignedOut')
+  if (ssi) ssi.style.display = gdriveSigned ? 'block' : 'none'
+  if (sso) sso.style.display = gdriveSigned ? 'none'  : 'block'
+  if (gdriveSigned) {
     const session = JSON.parse(localStorage.getItem('bm_drive_session') || '{}')
-    document.getElementById('settingsName').textContent = session.name || 'Connected'
+    const nm = document.getElementById('settingsName')
     const av = document.getElementById('settingsAvatar')
-    if (session.picture) av.src = session.picture
-    document.getElementById('settingsStatusLine').textContent = '✓ Synced to Drive'
+    if (nm) nm.textContent = session.name || 'Connected'
+    if (av && session.picture) av.src = session.picture
+    const sl = document.getElementById('settingsStatusLine')
+    if (sl) sl.textContent = '✓ Connected to Google Drive'
   } else {
-    // Render sign-in button in settings
-    if (typeof google !== 'undefined' && document.getElementById('settingsSignInBtn').children.length === 0) {
-      google.accounts.id.renderButton(
-        document.getElementById('settingsSignInBtn'),
-        { theme:'outline', size:'medium', text:'signin_with', shape:'rectangular' }
-      )
+    // Re-render the Google sign-in button each time so it always appears
+    const container = document.getElementById('settingsSignInBtn')
+    if (container && typeof google !== 'undefined') {
+      container.innerHTML = ''
+      google.accounts.id.renderButton(container, {
+        theme: 'outline', size: 'medium', text: 'signin_with', shape: 'rectangular'
+      })
     }
   }
+
+  // Dropbox panel
+  const dbxSigned = !!dbxToken
+  const dsi = document.getElementById('dbxSignedIn')
+  const dso = document.getElementById('dbxSignedOut')
+  if (dsi) dsi.style.display = dbxSigned ? 'flex' : 'none'
+  if (dso) dso.style.display = dbxSigned ? 'none' : 'block'
+  if (dbxSigned) {
+    const nm = document.getElementById('dbxName')
+    if (nm) nm.textContent = dbxAccountName || 'Dropbox'
+    const st = document.getElementById('dbxStatus')
+    if (st) st.textContent = '✓ Connected'
+  }
+
+  updateNavDriveDot()
+  updateLocalWarning()
+
   // Light mode button
   const lBtn = document.getElementById('settingsLightBtn')
   if (lBtn) lBtn.textContent = document.body.classList.contains('light') ? '🌙 DARK' : '☀ LIGHT'
@@ -7154,14 +7201,41 @@ function exportLibraryJSON() {
 
 // Nav drive dot
 function updateNavDriveDot() {
-  const dot = document.getElementById('navDriveStatus')
-  const lbl = document.getElementById('navSyncLabel')
-  if (!dot) return
-  const connected = cloudIsConnected()
-  const label = cloudProvider === 'dropbox' ? 'Dropbox' : 'Google Drive'
-  dot.style.background = connected ? '#00cc88' : 'var(--muted)'
-  dot.title = connected ? `${label} connected` : `${label} not connected`
-  if (lbl) lbl.textContent = (label + ' sync').toUpperCase()
+  const dot       = document.getElementById('navDriveStatus')
+  const lbl       = document.getElementById('navSyncLabel')
+  const icon      = document.getElementById('navSyncProviderIcon')
+  const avatar    = document.getElementById('driveAvatar')
+  const gBtn      = document.getElementById('googleSignInBtn')
+  const dbxBtn    = document.getElementById('navDropboxConnectBtn')
+  const signOutBtn = document.getElementById('navSignOutBtn')
+
+  const connected  = cloudIsConnected()
+  const isDropbox  = cloudProvider === 'dropbox'
+  const isGdrive   = cloudProvider === 'gdrive'
+  const label      = isDropbox ? 'Dropbox' : 'Google Drive'
+
+  if (dot) {
+    dot.style.background = connected ? '#00cc88' : 'var(--muted)'
+    dot.title = connected ? `${label} connected` : `${label} not connected`
+  }
+  if (lbl) lbl.textContent = connected ? `${label.toUpperCase()} SYNC` : 'CLOUD SYNC'
+  if (icon) { icon.textContent = isDropbox ? '⬡' : '▲'; icon.style.display = connected ? '' : 'none' }
+  if (avatar) avatar.style.display = (connected && isGdrive) ? '' : 'none'
+
+  // Show correct connect button when not connected
+  if (gBtn)   gBtn.style.display   = (!connected && isGdrive) ? '' : 'none'
+  if (dbxBtn) dbxBtn.style.display = (!connected && isDropbox) ? '' : 'none'
+
+  // Sign out routes to right provider
+  if (signOutBtn) signOutBtn.onclick = isDropbox ? dbxSignOut : driveSignOut
+
+  // Update name shown when Dropbox connected
+  if (connected && isDropbox) {
+    const nameEl = document.getElementById('driveName')
+    if (nameEl && dbxAccountName) nameEl.textContent = dbxAccountName
+  }
+
+  if (lbl) lbl.textContent = (isDropbox ? 'DROPBOX' : 'GOOGLE DRIVE') + (connected ? ' SYNC' : ' — NOT CONNECTED')
 }
 
 // ═══════════════════════════════════════════════════════════════════
