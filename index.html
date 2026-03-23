@@ -5350,7 +5350,7 @@ async function dbxSync() {
   if (!dbxToken) return
   await dbxEnsureFolder()
   setDriveStatus('SYNCING…')
-  await driveOnSignedIn()  // reuses the same load sequence
+  await driveOnSignedIn()  // reuses the same load+refresh sequence
 }
 
 // ── Init — check for OAuth callback or restore session ────────────
@@ -5543,8 +5543,10 @@ function driveSignOut() {
 
 function setDriveStatus(msg, type='') {
   const el = document.getElementById('driveStatus')
-  el.textContent = msg
-  el.className = 'drive-status' + (type ? ' '+type : '')
+  if (el) { el.textContent = msg; el.className = 'drive-status' + (type ? ' '+type : '') }
+  // Mirror to settings status line
+  const sl = document.getElementById('settingsStatusLine')
+  if (sl && cloudIsConnected()) sl.textContent = msg
 }
 
 // ─── RESTORE SESSION POPUP ────────────────────────────────────────
@@ -7482,15 +7484,29 @@ async function driveCustomPresetsSync() {
   return _lsOrigPresetsSync()
 }
 
-// driveOnSignedIn override — after cloud loads, merge with localStorage,
-// then save merged result back to localStorage
+// driveOnSignedIn override — syncs cloud → local, refreshes all UI
 async function driveOnSignedIn() {
+  setDriveStatus('SYNCING…')
   await _origDriveOnSignedIn()
-  // Cloud data is now loaded — save merged result to localStorage
+  // Merge cloud data back to localStorage
   lsSaveAll()
+  // Full UI refresh
+  renderFavs()
+  renderLibrary()
+  renderFolderSidebar()
+  updateLibBadge()
+  if (typeof pbRenderLibBar === 'function') pbRenderLibBar()
+  // Update settings view if open
+  if (currentView === 'settings') renderSettingsView()
+  // Update nav bar and status
   closeSyncGate()
   updateLocalWarning()
+  updateNavDriveDot()
   setDriveStatus('✓ SYNCED', 'ok')
+  // Clear the synced message after 4 seconds, leave just provider name
+  setTimeout(() => {
+    if (cloudIsConnected()) setDriveStatus('✓ CONNECTED', 'ok')
+  }, 4000)
 }
 
 // ═══════════════════════════════════════════════════════════════════
