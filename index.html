@@ -1908,11 +1908,11 @@ body.light .colourTuner { background:var(--surface2); }
 <!-- RESTORE SESSION POPUP -->
 <div id="driveRestorePopup">
   <div class="restore-card">
-    <h3>// RESTORE SESSION?</h3>
-    <p>A previous session was found in Google Drive. Restore it to pick up exactly where you left off — all settings, mode, creatures, colours and inspirations will be applied.</p>
+    <h3>// RESTORE GENERATOR SETTINGS?</h3>
+    <p>Your prompts, particles and library have been synced. Would you also like to restore your previous Generator settings — mode, creatures, colours, materials and inspirations?</p>
     <div class="restore-btns">
-      <button class="btn btn-primary" onclick="driveRestoreAccept()">✓ RESTORE SESSION</button>
-      <button class="btn btn-ghost" onclick="driveRestoreDecline()">✕ START FRESH</button>
+      <button class="btn btn-primary" onclick="driveRestoreAccept()">✓ RESTORE SETTINGS</button>
+      <button class="btn btn-ghost" onclick="driveRestoreDecline()">✕ KEEP CURRENT</button>
     </div>
   </div>
 </div>
@@ -5408,8 +5408,8 @@ function initDrive() {
       // Schedule silent refresh before token expires
       setTimeout(() => driveTokenClient.requestAccessToken({ prompt:'' }),
         (tokenResp.expires_in - 120) * 1000)
-      // Load Drive data if not already done (first sign-in)
-      if (!session.token) driveOnSignedIn()
+      // Always sync on token receipt
+      driveOnSignedIn()
     }
   })
 
@@ -5596,8 +5596,12 @@ async function driveLoadCurrentSettings() {
     if (!files.length) { setDriveStatus('✓ READY','ok'); return }
     driveCurrentId = files[0].id
     const data = await cloudReadFile(driveCurrentId)
-    if (data?.settings) showRestorePopup(data.settings)
-    else setDriveStatus('✓ READY','ok')
+    if (data?.settings) {
+      // Store settings for deferred restore — only prompt when Generator is opened
+      window._pendingCloudSettings = data.settings
+    } else {
+      setDriveStatus('✓ READY','ok')
+    }
   } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
 }
 
@@ -5782,6 +5786,15 @@ function switchView(view, pushState = true) {
   if (view === 'settings') renderSettingsView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
   if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
+  if (view === 'generator' && window._pendingCloudSettings) {
+    // Deferred settings restore — prompt user only when they open the Generator
+    setTimeout(() => {
+      if (window._pendingCloudSettings) {
+        showRestorePopup(window._pendingCloudSettings)
+        window._pendingCloudSettings = null
+      }
+    }, 300)
+  }
   else {
     const nav = document.getElementById('pbTypeNav')
     if (nav) nav.classList.remove('visible')
