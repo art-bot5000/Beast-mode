@@ -1317,7 +1317,19 @@ body.light .colourTuner { background:var(--surface2); }
   .pb-type-nav-btn .pb-type-nav-dot { width:6px;height:6px; }
 }
 
-/* ── LAB MODE TOGGLE ─────────────────────────────────────────────── */
+.pb-expand-toggle {
+  display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
+}
+.pb-expand-btn {
+  padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;border:none;background:transparent;
+  color:var(--muted);transition:all .12s;border-right:1px solid var(--border);
+}
+.pb-expand-btn:last-child { border-right:none; }
+.pb-expand-btn:hover { color:var(--text);background:var(--surface2); }
+.pb-expand-btn.active { background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent); }
+
+
 .pb-mode-toggle {
   display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
   flex-shrink:0;
@@ -2671,6 +2683,14 @@ body.light .colourTuner { background:var(--surface2); }
       </div>
     </div>
 
+    <!-- Expand/Minimise All -->
+    <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;">
+      <div class="pb-expand-toggle" id="pbExpandToggle">
+        <button class="pb-expand-btn active" id="pbExpandAllBtn" onclick="pbSetAllCollapsed(false)">▼ EXPAND ALL</button>
+        <button class="pb-expand-btn" id="pbCollapseAllBtn" onclick="pbSetAllCollapsed(true)">▲ MINIMISE ALL</button>
+      </div>
+    </div>
+
     <!-- Particle grid -->
     <div id="pbGrid"></div>
 
@@ -2742,7 +2762,7 @@ body.light .colourTuner { background:var(--surface2); }
 
     <div class="pb-import-footer">
       <button class="btn btn-ghost" style="font-size:10px;" onclick="pbClearTags()">&#x2715; CLEAR TAGS</button>
-      <button class="btn btn-primary" style="font-size:10px;" onclick="pbSaveTagged()" id="pbSaveTaggedBtn" disabled>&#x2713; SAVE ALL AS PARTICLES</button>
+      <button class="btn btn-primary" style="font-size:10px;" onclick="pbSaveTagged()" id="pbSaveTaggedBtn" disabled>⊛ SAVE PARTICLES &amp; IMPORT PROMPT</button>
     </div>
 
   </div>
@@ -8309,6 +8329,7 @@ function pbRenderLibrary() {
   })
   // Render floating type nav after grid is built
   pbRenderTypeNav()
+  pbSyncExpandToggle()
 }
 
 let pbNavExpanded = false
@@ -10875,6 +10896,20 @@ function pbToggleDrawer() {
   toggle.style.borderRadius = pbDrawerOpen ? '0 4px 4px 0' : '4px 0 0 4px'
 }
 
+function pbSetAllCollapsed(collapse) {
+  PB_TYPES.forEach(t => { pbCollapsed[t.key] = collapse })
+  document.getElementById('pbExpandAllBtn')?.classList.toggle('active', !collapse)
+  document.getElementById('pbCollapseAllBtn')?.classList.toggle('active', collapse)
+  pbRenderLibrary()
+}
+
+function pbSyncExpandToggle() {
+  // Reflect actual state: if all collapsed → minimise active; if any open → expand active
+  const allCollapsed = PB_TYPES.every(t => pbCollapsed[t.key])
+  document.getElementById('pbExpandAllBtn')?.classList.toggle('active', !allCollapsed)
+  document.getElementById('pbCollapseAllBtn')?.classList.toggle('active', allCollapsed)
+}
+
 function pbSetSubjectMode(mode) {
   pbSubjectMode = mode
   pbRenderLibrary()
@@ -11194,12 +11229,15 @@ function pbSavePlainPrompt() {
 
 function pbSaveTagged() {
   if (!pbTagged.length) return
+
+  // 1. Save each tagged segment as a particle and add to formula
   let added = 0
+  pbFormula = []  // start fresh formula with these particles
   pbTagged.forEach(item => {
     if (!item.text.trim()) return
     const p = { id: Date.now() + added, type: item.type, cat: item.cat, text: item.text.trim() }
     pbLibraries[pbActiveLib].particles.push(p)
-    pbAddToFormula(p)
+    pbFormula.push({ uid: pbNextUid++, particleId: p.id })
     added++
   })
   pbParticlesDriveSync()
@@ -11207,7 +11245,18 @@ function pbSaveTagged() {
   pbRenderLibrary()
   pbRenderFormula()
   pbRenderOutput()
-  pbCloseImport()
+  pbUpdateBottomBar()
+
+  // 2. Save the full original prompt text to the Prompt Library
+  const fullText = document.getElementById('pbImportTextarea')?.value.trim() || ''
+  if (fullText) {
+    window._pendingOutput = { visible: fullText, full: fullText }
+    pbCloseImport()
+    // Open the image/metadata modal to let user title and tag the prompt
+    openImageModal(null)
+  } else {
+    pbCloseImport()
+  }
 }
 </script>
 <!-- ═══════════════════ SYNC GATE MODAL ═══════════════════ -->
