@@ -4833,10 +4833,13 @@ function restoreFav(id) {
 // ═══════════════════════════════════════════════════════════════════
 const DRIVE_CLIENT_ID       = '115162218034-eoub6c46sqcmhamb72hoj3l69ov1321d.apps.googleusercontent.com'
 const DRIVE_SCOPES          = 'https://www.googleapis.com/auth/drive.appdata'
+const DRIVE_PHOTO_SCOPES    = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.readonly'
 const CURRENT_SETTINGS_FILE = 'beast-mode-current-settings.json'
 const PROMPT_FILE_PREFIX    = 'beast-mode-prompt-'
 
 let driveToken       = null
+let drivePhotoToken  = null   // separate token with drive.readonly for photo browsing
+let drivePhotoTokenClient = null
 let driveCurrentId   = null
 let driveCurrentTimer = null
 let drivePromptIds   = {}
@@ -4873,6 +4876,25 @@ function initDrive() {
         (tokenResp.expires_in - 120) * 1000)
       // Load Drive data if not already done (first sign-in)
       if (!session.token) driveOnSignedIn()
+    }
+  })
+
+  // Photo token client — requests drive.readonly in addition to appdata
+  drivePhotoTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: DRIVE_CLIENT_ID,
+    scope: DRIVE_PHOTO_SCOPES,
+    prompt: '',
+    callback: tokenResp => {
+      if (tokenResp.error) {
+        if (tokenResp.error === 'interaction_required' || tokenResp.error === 'access_denied') {
+          drivePhotoTokenClient.requestAccessToken({ prompt: 'consent' })
+        }
+        return
+      }
+      drivePhotoToken = tokenResp.access_token
+      // Now browse — the token is ready
+      const startFolder = driveDefaultFolderId || localStorage.getItem('bm_last_drive_folder') || 'root'
+      drivePhotoBrowse(startFolder)
     }
   })
 
@@ -6286,11 +6308,21 @@ let driveDefaultFolderId = localStorage.getItem('bm_default_drive_folder') || nu
 function openDrivePhoto(favId) {
   if (!driveToken) { alert('Please connect Google Drive first'); return }
   drivePhotoFavId = favId
-  const startFolder = driveDefaultFolderId || localStorage.getItem('bm_last_drive_folder') || 'root'
   drivePhotoFolderStack = []
-  drivePhotoBrowse(startFolder)
   document.getElementById('drivePhotoModal').style.display = 'flex'
   updateDriveDefaultLabel()
+
+  const grid = document.getElementById('drivePhotoGrid')
+  if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:11px;letter-spacing:1px;padding:20px;">Requesting Drive access…</div>'
+
+  // Request the photo token (includes drive.readonly)
+  // If already have a valid photo token, browse immediately
+  if (drivePhotoToken) {
+    const startFolder = driveDefaultFolderId || localStorage.getItem('bm_last_drive_folder') || 'root'
+    drivePhotoBrowse(startFolder)
+  } else {
+    drivePhotoTokenClient.requestAccessToken({ prompt: '' })
+  }
 }
 
 function closeDrivePhoto() {
@@ -6300,25 +6332,37 @@ function closeDrivePhoto() {
 async function drivePhotoBrowse(folderId) {
   drivePhotoCurFolder = folderId
   localStorage.setItem('bm_last_drive_folder', folderId)
-  const grid = document.getElementById('drivePhotoGrid')
+  const grid    = document.getElementById('drivePhotoGrid')
   const backBtn = document.getElementById('drivePhotoBack')
   if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:11px;letter-spacing:1px;padding:20px;">Loading…</div>'
   if (backBtn) backBtn.disabled = drivePhotoFolderStack.length === 0
 
+  const token = drivePhotoToken || driveToken
   try {
-    // List folders and images in this folder
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
         `'${folderId}' in parents and trashed=false and (mimeType='application/vnd.google-apps.folder' or mimeType contains 'image/')`
       )}&fields=files(id,name,mimeType,thumbnailLink)&pageSize=50&orderBy=name`,
-      { headers: { Authorization: 'Bearer ' + driveToken } }
+      { headers: { Authorization: 'Bearer ' + token } }
     )
-    const data = await res.json()
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      if (res.status === 403 || res.status === 401) {
+        grid.innerHTML = `<div style="color:#ff4444;font-size:11px;padding:20px;line-height:1.6;">
+          <strong>Drive permission needed.</strong><br>
+          Click the button below to grant access to your Drive files.
+          <br><br>
+          <button class="btn btn-primary" style="font-size:10px;" onclick="drivePhotoTokenClient.requestAccessToken({prompt:'consent'})">Grant Drive Access</button>
+        </div>`
+        return
+      }
+      throw new Error(err.error?.message || 'Request failed')
+    }
+    const data  = await res.json()
     const files = data.files || []
 
-    // Update breadcrumb
     const pathEl = document.getElementById('driveFolderPath')
-    if (pathEl) pathEl.textContent = folderId === 'root' ? 'My Drive' : `My Drive / …`
+    if (pathEl) pathEl.textContent = folderId === 'root' ? 'My Drive' : 'My Drive / …'
 
     grid.innerHTML = ''
     if (!files.length) {
@@ -6330,20 +6374,13 @@ async function drivePhotoBrowse(folderId) {
       const item = document.createElement('div')
       item.className = 'drive-photo-item'
       const isFolder = file.mimeType === 'application/vnd.google-apps.folder'
-
       if (isFolder) {
-        item.innerHTML = `
-          <div class="drive-photo-thumb" style="font-size:28px;">📁</div>
-          <div class="drive-photo-name">${file.name}</div>
-        `
-        item.onclick = () => {
-          drivePhotoFolderStack.push(drivePhotoCurFolder)
-          drivePhotoBrowse(file.id)
-        }
+        item.innerHTML = `<div class="drive-photo-thumb" style="font-size:28px;">📁</div><div class="drive-photo-name">${file.name}</div>`
+        item.onclick = () => { drivePhotoFolderStack.push(drivePhotoCurFolder); drivePhotoBrowse(file.id) }
       } else {
         const thumb = file.thumbnailLink || ''
         item.innerHTML = `
-          ${thumb ? `<img class="drive-photo-thumb" src="${thumb}" alt="${file.name}" style="object-fit:cover;">` : `<div class="drive-photo-thumb">🖼</div>`}
+          ${thumb ? `<img class="drive-photo-thumb" src="${thumb}" alt="${file.name}" style="object-fit:cover;">` : `<div class="drive-photo-thumb" style="font-size:24px;">🖼</div>`}
           <div class="drive-photo-name">${file.name}</div>
         `
         item.onclick = () => drivePhotoSelect(file.id, file.name)
@@ -6351,7 +6388,7 @@ async function drivePhotoBrowse(folderId) {
       grid.appendChild(item)
     })
   } catch(e) {
-    grid.innerHTML = '<div style="color:#ff4444;font-size:11px;padding:20px;">Failed to load Drive contents.</div>'
+    grid.innerHTML = `<div style="color:#ff4444;font-size:11px;padding:20px;">Failed to load Drive contents.<br><small>${e.message}</small></div>`
   }
 }
 
@@ -6366,20 +6403,23 @@ function drivePhotoGoHome() {
 }
 
 async function drivePhotoSelect(fileId, fileName) {
-  // Download the image and compress to thumbnail
+  const grid  = document.getElementById('drivePhotoGrid')
+  if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:20px;letter-spacing:1px;">Downloading image…</div>'
+  const token = drivePhotoToken || driveToken
   try {
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-      { headers: { Authorization: 'Bearer ' + driveToken } }
+      { headers: { Authorization: 'Bearer ' + token } }
     )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const blob = await res.blob()
     const reader = new FileReader()
     reader.onload = e => {
       compressImage(e.target.result, 400, dataUrl => {
         const f = favourites.find(x => x.id === drivePhotoFavId)
         if (f) {
-          f.imageData = dataUrl
-          f.updatedAt = Date.now()
+          f.imageData  = dataUrl
+          f.updatedAt  = Date.now()
           driveSavePrompt(f)
           renderLibrary()
         }
@@ -6388,7 +6428,7 @@ async function drivePhotoSelect(fileId, fileName) {
     }
     reader.readAsDataURL(blob)
   } catch(e) {
-    alert('Could not load image from Drive. Try a different file.')
+    if (grid) grid.innerHTML = `<div style="color:#ff4444;font-size:11px;padding:20px;">Could not download image.<br><small>${e.message}</small></div>`
   }
 }
 
