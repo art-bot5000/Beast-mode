@@ -5504,7 +5504,7 @@ async function driveOnSignedIn() {
 
 // ─── UI HELPERS ───────────────────────────────────────────────────
 function showDriveSignedIn(name, picture) {
-  // Generator panel
+  // Generator bar
   const so = document.getElementById('driveSignedOut')
   const si = document.getElementById('driveSignedIn')
   if (so) so.style.display = 'none'
@@ -5515,7 +5515,21 @@ function showDriveSignedIn(name, picture) {
   if (av && picture) { av.src = picture; av.style.display = '' }
   collapseLoadPanel()
   document.getElementById('loadDriveBadge')?.classList.add('show')
+
+  // Settings panel
+  const sso = document.getElementById('settingsDriveSignedOut')
+  const ssi = document.getElementById('settingsDriveSignedIn')
+  if (sso) sso.style.display = 'none'
+  if (ssi) ssi.style.display = 'block'
+  const snm = document.getElementById('settingsName')
+  if (snm) snm.textContent = name
+  const sav = document.getElementById('settingsAvatar')
+  if (sav && picture) sav.src = picture
+  const ssl = document.getElementById('settingsStatusLine')
+  if (ssl) ssl.textContent = '✓ Connected to Google Drive'
+
   updateNavDriveDot()
+  updateLocalWarning()
 }
 
 function driveSignOut() {
