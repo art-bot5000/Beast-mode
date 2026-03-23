@@ -4488,6 +4488,7 @@ const CUSTOM_PRESETS_FILE = 'beast-mode-custom-presets.json'
 let driveCustomPresetsId  = null
 
 async function driveCustomPresetsSync() {
+  lsSave(LS.PRESETS, customPresets)
   if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ presets: customPresets, savedAt: new Date().toISOString() })
@@ -4941,6 +4942,7 @@ function saveFav(){
 
 function deleteFav(id){
   favourites = favourites.filter(f => f.id !== id)
+  lsSave(LS.FAVS, favourites)
   renderFavs()
   driveDeletePrompt(id)
 }
@@ -5509,7 +5511,7 @@ function onGoogleSignIn(response) {
 }
 
 async function driveOnSignedIn() {
-  setDriveStatus('LOADING…')
+  setDriveStatus('SYNCING…')
   await driveCustomPresetsLoad()
   await driveLoadAllPrompts()
   await driveLoadCurrentSettings()
@@ -5517,10 +5519,20 @@ async function driveOnSignedIn() {
   await pbParticlesLoad()
   await libFoldersLoad()
   await pbFavParticlesLoad()
+  // Save merged cloud data to localStorage
+  lsSaveAll()
+  // Full UI refresh
   updateNavDriveDot()
   updateLibBadge()
+  renderFavs()
   renderLibrary()
   renderFolderSidebar()
+  if (typeof pbRenderLibBar === 'function') pbRenderLibBar()
+  if (currentView === 'settings') renderSettingsView()
+  closeSyncGate()
+  updateLocalWarning()
+  setDriveStatus('✓ SYNCED', 'ok')
+  setTimeout(() => { if (cloudIsConnected()) setDriveStatus('✓ CONNECTED', 'ok') }, 4000)
 }
 
 // ─── UI HELPERS ───────────────────────────────────────────────────
@@ -5609,6 +5621,7 @@ function driveRestoreDecline() {
 
 // ─── CURRENT SETTINGS ─────────────────────────────────────────────
 async function driveSaveCurrentSettings() {
+  lsSave(LS.SETTINGS, captureSettings())
   if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ settings: captureSettings(), savedAt: new Date().toISOString() })
@@ -6073,9 +6086,9 @@ function doSaveFav(imageData, model, title, rating) {
   favourites.unshift(fav)
   renderFavs()
   updateLibBadge()
+  lsSave(LS.FAVS, favourites)
   driveSavePrompt(fav)
   driveSaveCurrentDebounced()
-  // Switch to library to show the result
   switchView('library')
 }
 
@@ -6526,6 +6539,7 @@ function libMoveFavToFolder(favId, folderId) {
 
 // Folder Drive sync
 async function libFoldersSync() {
+  lsSave(LS.FOLDERS, libFolders)
   if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ folders: libFolders, savedAt: new Date().toISOString() })
@@ -7295,6 +7309,7 @@ function updateNavDriveDot() {
 // ═══════════════════════════════════════════════════════════════════
 
 async function driveModelsSync() {
+  lsSave(LS.MODELS, customModels)
   if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ models: customModels, savedAt: new Date().toISOString() })
@@ -7409,8 +7424,7 @@ function updateLocalWarning() {
   if (warn) warn.style.display = cloudIsConnected() ? 'none' : 'block'
 }
 
-// Also hide warning when cloud connects
-const _origDriveOnSignedIn = driveOnSignedIn
+// Also hide warning when cloud connects — handled inside driveOnSignedIn directly
 // ═══════════════════════════════════════════════════════════════════
 // LOCAL PERSISTENCE — localStorage as working copy
 // ═══════════════════════════════════════════════════════════════════
@@ -7480,84 +7494,11 @@ function lsRestoreAll() {
 // Patch all mutation points to auto-save to localStorage ──────────
 
 // Favourites mutations
-const _lsOrigDoSaveFav = doSaveFav
-function doSaveFav(imageData, model, title, rating) {
-  _lsOrigDoSaveFav(imageData, model, title, rating)
-  lsSave(LS.FAVS, favourites)
-}
+// localStorage saves are inlined directly into doSaveFav and deleteFav below
 
-const _lsOrigDeleteFav = deleteFav
-function deleteFav(id) {
-  _lsOrigDeleteFav(id)
-  lsSave(LS.FAVS, favourites)
-}
 
-// Particle library sync — patch to also save locally
-const _lsOrigPbSync = pbParticlesDriveSync
-async function pbParticlesDriveSync() {
-  lsSave(LS.PB_LIBS, pbLibraries)
-  return _lsOrigPbSync()
-}
 
-// Fav particles sync
-const _lsOrigFavSync = pbFavParticlesSync
-async function pbFavParticlesSync() {
-  lsSave(LS.PB_FAVS, pbFavParticles)
-  return _lsOrigFavSync()
-}
 
-// Folders sync
-const _lsOrigFolderSync = libFoldersSync
-async function libFoldersSync() {
-  lsSave(LS.FOLDERS, libFolders)
-  return _lsOrigFolderSync()
-}
-
-// Models sync
-const _lsOrigModelsSync = driveModelsSync
-async function driveModelsSync() {
-  lsSave(LS.MODELS, customModels)
-  return _lsOrigModelsSync()
-}
-
-// Settings — save on every debounced write
-const _lsOrigSaveSettings = driveSaveCurrentSettings
-async function driveSaveCurrentSettings() {
-  lsSave(LS.SETTINGS, captureSettings())
-  return _lsOrigSaveSettings()
-}
-
-// Custom presets
-const _lsOrigPresetsSync = driveCustomPresetsSync
-async function driveCustomPresetsSync() {
-  lsSave(LS.PRESETS, customPresets)
-  return _lsOrigPresetsSync()
-}
-
-// driveOnSignedIn override — syncs cloud → local, refreshes all UI
-async function driveOnSignedIn() {
-  setDriveStatus('SYNCING…')
-  await _origDriveOnSignedIn()
-  // Merge cloud data back to localStorage
-  lsSaveAll()
-  // Full UI refresh
-  renderFavs()
-  renderLibrary()
-  renderFolderSidebar()
-  updateLibBadge()
-  if (typeof pbRenderLibBar === 'function') pbRenderLibBar()
-  // Update settings view if open
-  if (currentView === 'settings') renderSettingsView()
-  // Update nav bar and status
-  closeSyncGate()
-  updateLocalWarning()
-  updateNavDriveDot()
-  setDriveStatus('✓ SYNCED', 'ok')
-  // Clear the synced message after 4 seconds, leave just provider name
-  setTimeout(() => {
-    if (cloudIsConnected()) setDriveStatus('✓ CONNECTED', 'ok')
-  }, 4000)
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // ZIP EXPORT / IMPORT
@@ -8851,6 +8792,7 @@ function pbSaveParticle() {
 
 // ── DRIVE SYNC ─────────────────────────────────────────────────────
 async function pbParticlesDriveSync() {
+  lsSave(LS.PB_LIBS, pbLibraries)
   if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ libraries: pbLibraries, savedAt: new Date().toISOString() })
@@ -8888,6 +8830,7 @@ function pbAddFavParticle(typeKey, particleId) {
 }
 
 async function pbFavParticlesSync() {
+  lsSave(LS.PB_FAVS, pbFavParticles)
   if (!cloudIsConnected()) return
   try {
     // Serialise sets to plain arrays
