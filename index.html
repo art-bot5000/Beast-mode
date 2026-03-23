@@ -2646,14 +2646,15 @@ body.light .colourTuner { background:var(--surface2); }
 
     <!-- CREATOR MODE controls -->
     <div id="pbCreatorControls" class="pb-library-header" style="display:none;margin-bottom:12px;">
-      <!-- Base filter: Personal vs Built-in -->
+      <!-- Base filter: Personal / Built-in / All -->
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
         <button class="pb-creator-btn" id="pbCreatorPersonalBtn" onclick="pbCreatorSetFilter('mine')">👤 PERSONAL</button>
         <button class="pb-creator-btn active" id="pbCreatorBuiltinBtn" onclick="pbCreatorSetFilter('builtin')">◈ BUILT-IN</button>
-        <!-- Favourites toggle — separate, right-aligned feel -->
+        <button class="pb-creator-btn" id="pbCreatorAllFilterBtn" onclick="pbCreatorSetFilter('all')">◈+👤 ALL</button>
+        <!-- Favourites toggle -->
         <button class="pb-creator-btn pb-creator-fav-toggle" id="pbCreatorFavBtn" onclick="pbCreatorToggleFavs()">⭐ FAVOURITES</button>
       </div>
-      <!-- Sub-filter row — only when built-in active -->
+      <!-- Sub-filter row — shown for built-in and all -->
       <div id="pbCreatorSubfilter" style="display:flex;gap:5px;flex-wrap:wrap;">
         <button class="pb-creator-sub active" id="pbCreatorAllBtn" onclick="pbCreatorSetSub('all')">ALL</button>
         <button class="pb-creator-sub" id="pbCreatorInsectBtn" onclick="pbCreatorSetSub('insect')">⬡ INSECT</button>
@@ -8181,7 +8182,10 @@ function pbRenderLibrary() {
 
     const GROUP_THRESHOLD = 20
     const hasGeneratorParticles = filtered.some(p => p.source === 'generator')
-    const useGroups = !query && pbLabMode !== 'creator' && hasGeneratorParticles && filtered.length >= GROUP_THRESHOLD
+    // Use groups in editor mode, and also in creator mode when showing built-in or all
+    const creatorNeedsGroups = isCreator && (pbCreatorFilter === 'builtin' || pbCreatorFilter === 'all')
+    const useGroups = !query && hasGeneratorParticles && filtered.length >= GROUP_THRESHOLD
+      && (pbLabMode !== 'creator' || creatorNeedsGroups)
 
     if (useGroups) {
       // Separate user particles from generator particles
@@ -9031,19 +9035,19 @@ function pbSetLabMode(mode) {
     pbCreatorFavsOn = false
     document.getElementById('pbCreatorFavBtn')?.classList.remove('active')
     const sub = document.getElementById('pbCreatorSubfilter')
-    if (sub) sub.style.display = pbCreatorFilter === 'builtin' ? 'flex' : 'none'
+    if (sub) sub.style.display = (pbCreatorFilter === 'builtin' || pbCreatorFilter === 'all') ? 'flex' : 'none'
   }
   pbRenderLibrary()
 }
 
 function pbCreatorSetFilter(filter) {
   pbCreatorFilter = filter
-  // Update button states
   document.getElementById('pbCreatorPersonalBtn')?.classList.toggle('active', filter === 'mine')
   document.getElementById('pbCreatorBuiltinBtn')?.classList.toggle('active', filter === 'builtin')
-  // Sub-filter always visible (built-in always shows it; personal hides it)
+  document.getElementById('pbCreatorAllFilterBtn')?.classList.toggle('active', filter === 'all')
+  // Sub-filter visible for built-in and all, hidden for personal
   const sub = document.getElementById('pbCreatorSubfilter')
-  if (sub) sub.style.display = filter === 'builtin' ? 'flex' : 'none'
+  if (sub) sub.style.display = (filter === 'builtin' || filter === 'all') ? 'flex' : 'none'
   pbRenderLibrary()
 }
 
@@ -9074,6 +9078,19 @@ function pbApplyCreatorFilter(particles, typeKey) {
     pool = pool.filter(p => p.builtin || p.source === 'generator')
     if (pbCreatorSub === 'insect') pool = pool.filter(p => !p.mode || p.mode === 'insect')
     if (pbCreatorSub === 'beast')  pool = pool.filter(p => p.mode === 'beast')
+  } else if (pbCreatorFilter === 'all') {
+    // All particles — apply sub-filter to built-in portion
+    if (pbCreatorSub === 'insect') {
+      pool = pool.filter(p => {
+        const isBuiltin = p.builtin || p.source === 'generator'
+        return !isBuiltin || !p.mode || p.mode === 'insect'
+      })
+    } else if (pbCreatorSub === 'beast') {
+      pool = pool.filter(p => {
+        const isBuiltin = p.builtin || p.source === 'generator'
+        return !isBuiltin || p.mode === 'beast'
+      })
+    }
   }
   // Favourites toggle — overlay on top of base filter
   if (pbCreatorFavsOn) {
@@ -10776,7 +10793,9 @@ function pbGetCreatureFieldParticles() {
 
 function pbGetParticles() {
   const userParticles = pbLibraries[pbActiveLib]?.particles || []
-  const builtins = pbShowBuiltin
+  // Hide built-in only applies in editor mode — creator mode manages visibility via its own filter
+  const showBuiltins = pbLabMode === 'creator' || pbShowBuiltin
+  const builtins = showBuiltins
     ? [...PB_BUILTIN_PARTICLES, ...pbGetGeneratorParticles(), ...pbGetCreatureFieldParticles()]
     : []
   return [...builtins, ...userParticles]
