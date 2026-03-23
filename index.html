@@ -6,6 +6,7 @@
 <title>Beast Mode // Prompt Manager</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap');
 
@@ -1660,6 +1661,33 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-tagged-item-del { cursor:pointer;opacity:.5;flex-shrink:0;font-size:14px;transition:opacity .1s; }
 .pb-tagged-item-del:hover { opacity:1; }
 
+/* ── SYNC GATE ───────────────────────────────────────────────────── */
+.sync-gate-btn {
+  display:flex;align-items:center;gap:14px;width:100%;
+  padding:14px 16px;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface2);cursor:pointer;text-align:left;
+  font-family:'Rajdhani',sans-serif;color:var(--text);
+  transition:all .15s;
+}
+.sync-gate-btn:hover { border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent); }
+.sync-gate-btn-secondary { opacity:.7; }
+.sync-gate-btn-secondary:hover { opacity:1; }
+.sync-gate-icon {
+  width:42px;height:42px;border-radius:8px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+}
+/* ── ZIP IMPORT ──────────────────────────────────────────────────── */
+.zip-drop-zone {
+  border:2px dashed var(--border);border-radius:6px;
+  padding:28px 20px;text-align:center;cursor:pointer;
+  transition:border-color .15s, background .15s;
+  font-family:'Rajdhani',sans-serif;letter-spacing:.5px;
+}
+.zip-drop-zone:hover, .zip-drop-zone.drag-over {
+  border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 5%,transparent);
+}
+
 /* Cloud provider selector */
 .cloud-provider-row {
   display:flex;gap:8px;flex-wrap:wrap;
@@ -2535,8 +2563,17 @@ body.light .colourTuner { background:var(--surface2); }
       <!-- Export -->
       <div class="settings-section" style="grid-column:1/-1;">
         <div class="settings-section-title">Data &amp; Export</div>
+        <!-- Local storage warning when not synced -->
+        <div id="localStorageWarning" style="display:none;background:color-mix(in srgb,#ff9900 12%,transparent);border:1px solid #ff9900;border-radius:4px;padding:10px 12px;margin-bottom:14px;font-size:10px;color:#ff9900;letter-spacing:.5px;line-height:1.7;">
+          ⚠ <strong>No cloud sync active.</strong> Data is stored in your browser only and may be lost if browser storage is cleared. We strongly recommend connecting Google Drive or Dropbox in the Cloud Sync section above.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="btn btn-primary" onclick="exportZip()" style="font-size:10px;">📦 DOWNLOAD FULL BACKUP (.ZIP)</button>
+          <button class="btn btn-outline" onclick="document.getElementById('zipImportModal').style.display='flex'" style="font-size:10px;">⬆ RESTORE FROM ZIP</button>
+        </div>
+        <div style="height:1px;background:var(--border);margin:10px 0;"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-outline" onclick="exportAll()" style="font-size:10px;">⬇ EXPORT ALL PROMPTS .TXT</button>
+          <button class="btn btn-ghost" onclick="exportAll()" style="font-size:10px;">⬇ EXPORT PROMPTS .TXT</button>
           <button class="btn btn-ghost" onclick="exportLibraryJSON()" style="font-size:10px;">⬇ EXPORT LIBRARY .JSON</button>
         </div>
       </div>
@@ -7166,11 +7203,231 @@ function driveSignOut() {
 // Patch window load
 window.addEventListener('load', () => {
   setTimeout(initDrive, 800)
+  initDropbox()
+  cloudSetProvider(cloudProvider)
   openLoadPanel()
   updateLibBadge()
   renderLibFilters()
-  // Restore view from URL hash if present
   if (location.hash) switchViewFromHash()
+  // Show sync gate after a brief delay so Drive init can restore session first
+  setTimeout(syncGateCheck, 1200)
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// SYNC GATE
+// ═══════════════════════════════════════════════════════════════════
+
+function syncGateCheck() {
+  // If already connected to either provider, or user previously dismissed, skip
+  if (cloudIsConnected()) return
+  if (getCookie('bm_sync_dismissed')) { updateLocalWarning(); return }
+  document.getElementById('syncGateModal').style.display = 'flex'
+}
+
+function syncGateChooseGdrive() {
+  closeSyncGate()
+  cloudSetProvider('gdrive')
+  switchView('settings')
+  // Trigger Google sign-in
+  setTimeout(() => {
+    const btn = document.getElementById('settingsSignInBtn')?.querySelector('button,div[role=button]')
+    if (btn) btn.click()
+  }, 400)
+}
+
+function syncGateChooseDropbox() {
+  closeSyncGate()
+  cloudSetProvider('dropbox')
+  dbxSignIn()
+}
+
+function syncGateImportZip() {
+  closeSyncGate()
+  document.getElementById('zipImportModal').style.display = 'flex'
+}
+
+function syncGateSkip() {
+  closeSyncGate()
+  // Set cookie so gate doesn't show again this session (expires 7 days)
+  setCookie('bm_sync_dismissed', '1', 7)
+  updateLocalWarning()
+}
+
+function closeSyncGate() {
+  document.getElementById('syncGateModal').style.display = 'none'
+}
+
+function updateLocalWarning() {
+  const warn = document.getElementById('localStorageWarning')
+  if (warn) warn.style.display = cloudIsConnected() ? 'none' : 'block'
+}
+
+// Also hide warning when cloud connects
+const _origDriveOnSignedIn = driveOnSignedIn
+async function driveOnSignedIn() {
+  await _origDriveOnSignedIn()
+  closeSyncGate()
+  updateLocalWarning()
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ZIP EXPORT / IMPORT
+// ═══════════════════════════════════════════════════════════════════
+
+function closeZipImport() {
+  document.getElementById('zipImportModal').style.display = 'none'
+  document.getElementById('zipImportStatus').textContent = ''
+}
+
+async function exportZip() {
+  if (typeof JSZip === 'undefined') {
+    alert('JSZip library not loaded. Please check your connection and try again.')
+    return
+  }
+  const zip = new JSZip()
+  const folder = zip.folder('beast-mode-backup')
+
+  // Prompts
+  favourites.forEach(f => {
+    folder.file(`${PROMPT_FILE_PREFIX}${f.id}.json`, JSON.stringify({ fav: f, savedAt: new Date().toISOString() }))
+  })
+  // Current settings
+  folder.file(CURRENT_SETTINGS_FILE, JSON.stringify({ settings: captureSettings(), savedAt: new Date().toISOString() }))
+  // Custom presets
+  if (customPresets.length) {
+    folder.file(CUSTOM_PRESETS_FILE, JSON.stringify({ presets: customPresets, savedAt: new Date().toISOString() }))
+  }
+  // Particle libraries
+  folder.file(PB_LIBRARIES_FILE, JSON.stringify({ libraries: pbLibraries, savedAt: new Date().toISOString() }))
+  // Fav particles
+  folder.file(PB_FAV_PARTICLES_FILE, JSON.stringify({ favs: pbFavParticles, savedAt: new Date().toISOString() }))
+  // Folders
+  if (libFolders.length) {
+    folder.file(FOLDERS_FILE, JSON.stringify({ folders: libFolders, savedAt: new Date().toISOString() }))
+  }
+  // Models
+  folder.file(MODELS_FILE, JSON.stringify({ models: customModels || [], savedAt: new Date().toISOString() }))
+
+  // Manifest
+  folder.file('manifest.json', JSON.stringify({
+    version: 4, exportedAt: new Date().toISOString(),
+    counts: { prompts: favourites.length, libraries: pbLibraries.length }
+  }))
+
+  const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', compressionOptions:{ level:6 } })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `beast-mode-backup-${new Date().toISOString().slice(0,10)}.zip`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function handleZipFile(file) {
+  if (!file) return
+  if (!file.name.endsWith('.zip')) {
+    document.getElementById('zipImportStatus').textContent = '✗ Please select a .zip file'
+    return
+  }
+  if (typeof JSZip === 'undefined') {
+    document.getElementById('zipImportStatus').textContent = '✗ JSZip not loaded. Check connection.'
+    return
+  }
+  const status = document.getElementById('zipImportStatus')
+  status.textContent = 'Reading zip…'
+
+  try {
+    const zip   = await JSZip.loadAsync(file)
+    const files = zip.files
+    let imported = { prompts: 0, settings: false, presets: false, particles: false }
+
+    // Helper to read a file from zip (tries with and without folder prefix)
+    async function readZipJSON(name) {
+      const key1 = `beast-mode-backup/${name}`
+      const key2 = name
+      const entry = files[key1] || files[key2]
+      if (!entry) return null
+      try { return JSON.parse(await entry.async('text')) } catch(e) { return null }
+    }
+
+    // Prompts
+    for (const [path, entry] of Object.entries(files)) {
+      const fname = path.split('/').pop()
+      if (fname.startsWith(PROMPT_FILE_PREFIX) && fname.endsWith('.json')) {
+        const data = JSON.parse(await entry.async('text'))
+        if (data?.fav) {
+          const exists = favourites.find(f => f.id === data.fav.id)
+          if (!exists) { favourites.unshift(data.fav); imported.prompts++ }
+        }
+      }
+    }
+
+    // Settings
+    const settingsData = await readZipJSON(CURRENT_SETTINGS_FILE)
+    if (settingsData?.settings) {
+      showRestorePopup(settingsData.settings)
+      imported.settings = true
+    }
+
+    // Custom presets
+    const presetsData = await readZipJSON(CUSTOM_PRESETS_FILE)
+    if (Array.isArray(presetsData?.presets)) {
+      customPresets = presetsData.presets
+      imported.presets = true
+    }
+
+    // Particle libraries
+    const libsData = await readZipJSON(PB_LIBRARIES_FILE)
+    if (Array.isArray(libsData?.libraries)) {
+      libsData.libraries.forEach((saved, i) => {
+        if (i < pbLibraries.length) {
+          pbLibraries[i].name = saved.name || pbLibraries[i].name
+          pbLibraries[i].particles = Array.isArray(saved.particles) ? saved.particles.filter(p => !p.builtin) : []
+        }
+      })
+      imported.particles = true
+    }
+
+    // Fav particles
+    const favData = await readZipJSON(PB_FAV_PARTICLES_FILE)
+    if (favData?.favs) pbFavParticles = favData.favs
+
+    // Folders
+    const foldersData = await readZipJSON(FOLDERS_FILE)
+    if (Array.isArray(foldersData?.folders)) libFolders = foldersData.folders
+
+    // Models
+    const modelsData = await readZipJSON(MODELS_FILE)
+    if (Array.isArray(modelsData?.models)) customModels = modelsData.models
+
+    // Re-render everything
+    renderFavs()
+    renderLibrary()
+    updateLibBadge()
+    if (typeof pbRenderLibrary === 'function') pbRenderLibrary()
+
+    const msg = `✓ Imported: ${imported.prompts} prompts${imported.settings ? ', settings' : ''}${imported.particles ? ', particles' : ''}${imported.presets ? ', presets' : ''}`
+    status.textContent = msg
+    status.style.color = 'var(--accent)'
+    setTimeout(() => closeZipImport(), 3000)
+
+  } catch(e) {
+    status.textContent = '✗ Failed to read zip: ' + e.message
+    status.style.color = '#ff4444'
+  }
+}
+
+// Drag-and-drop on zip drop zone
+document.addEventListener('DOMContentLoaded', () => {
+  const zone = document.getElementById('zipDropZone')
+  if (!zone) return
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over') })
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'))
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over')
+    const file = e.dataTransfer.files[0]
+    if (file) handleZipFile(file)
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════
@@ -10683,5 +10940,81 @@ function pbSaveTagged() {
   pbCloseImport()
 }
 </script>
+<!-- ═══════════════════ SYNC GATE MODAL ═══════════════════ -->
+<div id="syncGateModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
+  <div class="modal-card" style="max-width:480px;width:100%;">
+    <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      <div class="modal-title">// CONNECT CLOUD SYNC</div>
+      <div style="font-size:10px;letter-spacing:1.5px;color:var(--muted);line-height:1.7;">
+        Your prompts, particles and settings sync across devices.<br>
+        Choose a service to get started.
+      </div>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+      <!-- Google Drive -->
+      <button class="sync-gate-btn" onclick="syncGateChooseGdrive()" id="syncGateGdriveBtn">
+        <span class="sync-gate-icon" style="background:color-mix(in srgb,#4285F4 20%,transparent);color:#4285F4;">▲</span>
+        <div>
+          <div style="font-weight:700;letter-spacing:.5px;">Google Drive</div>
+          <div style="font-size:10px;opacity:.6;margin-top:2px;">Sign in with your Google account</div>
+        </div>
+      </button>
+      <!-- Dropbox -->
+      <button class="sync-gate-btn" onclick="syncGateChooseDropbox()">
+        <span class="sync-gate-icon" style="background:color-mix(in srgb,#0061FF 20%,transparent);color:#0061FF;">⬡</span>
+        <div>
+          <div style="font-weight:700;letter-spacing:.5px;">Dropbox</div>
+          <div style="font-size:10px;opacity:.6;margin-top:2px;">Connect your Dropbox account</div>
+        </div>
+      </button>
+      <!-- Divider -->
+      <div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <span style="font-size:9px;letter-spacing:2px;color:var(--muted);">OR</span>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      <!-- Import ZIP -->
+      <button class="sync-gate-btn sync-gate-btn-secondary" onclick="syncGateImportZip()">
+        <span class="sync-gate-icon" style="background:var(--surface2);color:var(--muted);">⬆</span>
+        <div>
+          <div style="font-weight:700;letter-spacing:.5px;">Import from ZIP backup</div>
+          <div style="font-size:10px;opacity:.6;margin-top:2px;">Restore a previously exported backup</div>
+        </div>
+      </button>
+      <!-- Skip -->
+      <div style="text-align:center;padding-top:4px;">
+        <button onclick="syncGateSkip()" style="background:none;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);text-decoration:underline;padding:6px;">
+          Continue without sync (not recommended)
+        </button>
+        <div style="font-size:9px;color:var(--muted);opacity:.6;margin-top:4px;line-height:1.6;">
+          ⚠ Data stored locally may be lost if browser storage is cleared
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ ZIP IMPORT MODAL ═══════════════════ -->
+<div id="zipImportModal" style="display:none;position:fixed;inset:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
+  <div class="modal-card" style="max-width:480px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">// IMPORT FROM ZIP</div>
+      <button class="modal-close" onclick="closeZipImport()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.8;margin-bottom:16px;">
+        Upload a <code>.zip</code> file previously exported from this app. All prompts, particles, settings and folders will be restored.
+      </div>
+      <div class="zip-drop-zone" id="zipDropZone" onclick="document.getElementById('zipFileInput').click()">
+        <div style="font-size:24px;margin-bottom:8px;">📦</div>
+        <div style="font-size:11px;letter-spacing:1px;font-weight:700;">DROP ZIP HERE OR CLICK TO BROWSE</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">Only .zip files exported from this app</div>
+        <input type="file" id="zipFileInput" accept=".zip" style="display:none;" onchange="handleZipFile(this.files[0])">
+      </div>
+      <div id="zipImportStatus" style="margin-top:12px;font-size:11px;color:var(--muted);text-align:center;min-height:24px;"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
