@@ -1695,7 +1695,34 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-tagged-item-del { cursor:pointer;opacity:.5;flex-shrink:0;font-size:18px;transition:opacity .1s; }
 .pb-tagged-item-del:hover { opacity:1; }
 
-/* ── SYNC GATE ───────────────────────────────────────────────────── */
+.lib-card-particles {
+  display:flex;flex-wrap:wrap;gap:3px;align-items:center;
+}
+.lib-particle-chip {
+  display:inline-block;padding:2px 6px;border-radius:3px;
+  font-size:11px;font-weight:700;letter-spacing:.2px;
+  background:color-mix(in srgb,var(--tc,var(--accent)) 12%,transparent);
+  color:var(--tc,var(--accent));
+  border:1px solid color-mix(in srgb,var(--tc,var(--accent)) 25%,transparent);
+}
+.lib-particle-sep {
+  color:var(--muted);font-size:11px;opacity:.5;padding:0 1px;align-self:center;
+}
+.iter-particle-select-chip {
+  display:inline-block;padding:5px 10px;border-radius:4px;
+  font-size:13px;font-weight:700;letter-spacing:.3px;cursor:pointer;
+  background:color-mix(in srgb,var(--tc,var(--accent)) 12%,transparent);
+  color:var(--tc,var(--accent));
+  border:1px solid color-mix(in srgb,var(--tc,var(--accent)) 25%,transparent);
+  transition:all .12s;
+}
+.iter-particle-select-chip:hover {
+  background:color-mix(in srgb,var(--tc,var(--accent)) 25%,transparent);
+  border-color:color-mix(in srgb,var(--tc,var(--accent)) 60%,transparent);
+  transform:translateY(-1px);
+}
+
+
 .sync-gate-btn {
   display:flex;align-items:center;gap:14px;width:100%;
   padding:14px 16px;border-radius:6px;border:1px solid var(--border);
@@ -4693,9 +4720,13 @@ function deleteFav(id){
 function copyFav(id){
   const f = favourites.find(x => x.id === id)
   if(!f) return
+  // Copy only the prompt text — strip everything from ---SETTINGS--- onwards
+  const text = f.promptOnly || (f.text.includes('---SETTINGS---')
+    ? f.text.slice(0, f.text.indexOf('---SETTINGS---')).trim()
+    : f.text)
   try {
     const ta = document.createElement('textarea')
-    ta.value = f.text
+    ta.value = text
     ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
     document.body.appendChild(ta)
     ta.select()
@@ -5799,7 +5830,7 @@ function saveFav() {
 }
 
 function doSaveFav(imageData, model, title, rating) {
-  const { visible, full: rawFull } = window._pendingOutput || {}
+  const { visible, full: rawFull, particles } = window._pendingOutput || {}
   if (!visible) return
   let full = rawFull
   if (!full || !full.includes('---SETTINGS---')) {
@@ -5822,6 +5853,8 @@ function doSaveFav(imageData, model, title, rating) {
     imageData: imageData || null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    // Particle structure from Prompt Lab (if saved from there)
+    particles: (particles && particles.length) ? particles : null,
   }
   favourites.unshift(fav)
   renderFavs()
@@ -6084,7 +6117,31 @@ function buildLibCard(f) {
   const promptEl = document.createElement('div')
   promptEl.className = 'lib-card-prompt'
   const promptText = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/,'').trim()
-  promptEl.textContent = promptText
+
+  if (f.particles && f.particles.length) {
+    // Render coloured particle chips matching Prompt Lab colours
+    const chipWrap = document.createElement('div')
+    chipWrap.className = 'lib-card-particles'
+    f.particles.forEach((p, i) => {
+      const t = PB_TYPES.find(x => x.key === p.type)
+      if (i > 0) {
+        const sep = document.createElement('span')
+        sep.className = 'lib-particle-sep'
+        sep.textContent = '—'
+        chipWrap.appendChild(sep)
+      }
+      const chip = document.createElement('span')
+      chip.className = 'lib-particle-chip'
+      if (t) chip.style.setProperty('--tc', t.color)
+      chip.textContent = p.text
+      chip.title = t ? `${t.label} · ${p.cat}` : p.type
+      chipWrap.appendChild(chip)
+    })
+    promptEl.appendChild(chipWrap)
+  } else {
+    promptEl.textContent = promptText
+  }
+
   promptEl.onclick = e => { e.stopPropagation(); togglePromptExpand(promptEl, expandBtn) }
   promptWrap.appendChild(promptEl)
   const expandBtn = document.createElement('button')
@@ -6417,8 +6474,75 @@ function openIterate(favId) {
     if (/^\s+$/.test(part)) iterTokens.push({ idx: idx++, text: part, isSpace: true })
     else if (part)           iterTokens.push({ idx: idx++, text: part, isSpace: false })
   })
-  iterGoToStep1()
-  document.getElementById('iterModal').style.display = 'flex'
+
+  if (f.particles && f.particles.length) {
+    // Has particle structure — skip step 1, go straight to particle selection
+    iterGoToStep1()
+    document.getElementById('iterModal').style.display = 'flex'
+    // Auto-advance to step 2 which now shows particle chips
+    setTimeout(() => iterGoToParticleSelect(f), 50)
+  } else {
+    iterGoToStep1()
+    document.getElementById('iterModal').style.display = 'flex'
+  }
+}
+
+function iterGoToParticleSelect(f) {
+  // Show step 2 with clickable coloured particle chips instead of token tapping
+  document.getElementById('iterStep1').style.display = 'none'
+  document.getElementById('iterStep2').style.display = 'block'
+  document.getElementById('iterStep3').style.display = 'none'
+
+  const annotated = document.getElementById('iterAnnotated')
+  if (!annotated) return
+
+  annotated.innerHTML = ''
+
+  const intro = document.createElement('div')
+  intro.style.cssText = 'font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;'
+  intro.textContent = 'TAP A PARTICLE TO SELECT IT FOR SWAPPING'
+  annotated.appendChild(intro)
+
+  const chipWrap = document.createElement('div')
+  chipWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;'
+
+  f.particles.forEach(p => {
+    const t = PB_TYPES.find(x => x.key === p.type)
+    const chip = document.createElement('span')
+    chip.className = 'iter-particle-select-chip'
+    if (t) chip.style.setProperty('--tc', t.color)
+    chip.textContent = p.text
+    chip.title = t ? `${t.label}: ${p.cat}` : p.type
+    chip.onclick = () => {
+      // Select this particle — find its token range in the prompt text
+      const text = (f.promptOnly || f.text || '')
+        .replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
+      const pStart = text.indexOf(p.text)
+      if (pStart !== -1) {
+        // Map char positions to token indices
+        let charPos = 0
+        let firstTok = null, lastTok = null
+        iterTokens.forEach(tok => {
+          if (!tok.isSpace) {
+            if (charPos >= pStart && charPos < pStart + p.text.length) {
+              if (firstTok === null) firstTok = tok.idx
+              lastTok = tok.idx
+            }
+          }
+          charPos += tok.text.length
+        })
+        iterSelStart = firstTok ?? 0
+        iterSelEnd   = lastTok  ?? 0
+      }
+      iterActiveType = p.type || 'subject'
+      document.getElementById('iterGenBtn').disabled = false
+      document.getElementById('iterStep2').style.display = 'none'
+      iterGoToStep3()
+    }
+    chipWrap.appendChild(chip)
+  })
+
+  annotated.appendChild(chipWrap)
 }
 
 function closeIterate() {
@@ -10834,7 +10958,12 @@ function sendToParticleLabById(id) {
 function pbSaveToLibrary() {
   const text = pbGetPlainText()
   if (!text) return
-  window._pendingOutput = { visible: text, full: text }
+  // Resolve current formula to particle objects for library card display
+  const particles = pbFormula
+    .map(e => pbGetParticles().find(x => x.id === e.particleId))
+    .filter(Boolean)
+    .map(p => ({ id: p.id, type: p.type, cat: p.cat, text: p.text }))
+  window._pendingOutput = { visible: text, full: text, particles }
   openImageModal(null)
 }
 
@@ -10869,9 +10998,13 @@ function pbSaveTagged() {
   // 2. Save the full original prompt text to the Prompt Library
   const fullText = document.getElementById('pbImportTextarea')?.value.trim() || ''
   if (fullText) {
-    window._pendingOutput = { visible: fullText, full: fullText }
+    // Resolve newly created particles for library display
+    const particles = pbFormula
+      .map(e => pbGetParticles().find(x => x.id === e.particleId))
+      .filter(Boolean)
+      .map(p => ({ id: p.id, type: p.type, cat: p.cat, text: p.text }))
+    window._pendingOutput = { visible: fullText, full: fullText, particles }
     pbCloseImport()
-    // Open the image/metadata modal to let user title and tag the prompt
     openImageModal(null)
   } else {
     pbCloseImport()
