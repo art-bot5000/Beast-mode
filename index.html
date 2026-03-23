@@ -2170,8 +2170,10 @@ body.light .colourTuner { background:var(--surface2); }
       <!-- Not connected -->
       <div id="driveSignedOut" style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
         <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;" id="navSyncLabel">CLOUD SYNC</span>
-        <div id="googleSignInBtn"></div>
-        <button id="navDropboxConnectBtn" style="display:none;font-size:10px;" class="btn btn-ghost" onclick="dbxSignIn()">CONNECT DROPBOX</button>
+        <button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;" onclick="switchView('settings')">CONNECT ↗</button>
+        <!-- Hidden Google button still needed for auth flow, kept off-screen -->
+        <div id="googleSignInBtn" style="position:absolute;opacity:0;pointer-events:none;"></div>
+        <div id="navDropboxConnectBtn" style="display:none;"></div>
       </div>
       <!-- Connected -->
       <div id="driveSignedIn" style="display:none;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
@@ -6860,7 +6862,7 @@ function iterSaveVariant(btn, srcFavId) {
     ...(srcFav || {}),
     id: Date.now(),
     text, promptOnly: text,
-    title: ((srcFav?.title || '') + ' (variant)').trim(),
+    title: (srcFav?.title ? `${srcFav.title} (variant)` : '(variant)'),
     versions: [{ text, savedAt: Date.now(), label: 'Particle variant' }],
     starred: false,
     createdAt: Date.now(), updatedAt: Date.now(),
