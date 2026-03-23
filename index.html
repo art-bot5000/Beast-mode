@@ -948,6 +948,9 @@ body.light .colourTuner { background:var(--surface2); }
   font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:.3px;
   border:1px solid transparent;user-select:none;cursor:grab;max-width:280px;
   transition:transform .1s;
+  background: color-mix(in srgb, var(--tc, var(--accent)) 18%, transparent);
+  color: var(--tc, var(--accent));
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 30%, transparent);
 }
 .pb-formula-chip:active { cursor:grabbing;transform:scale(.95); }
 .pb-formula-chip .pfc-text {
@@ -999,9 +1002,11 @@ body.light .colourTuner { background:var(--surface2); }
   display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:10px;
   font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;
   border:1px solid transparent;transition:all .15s;user-select:none;
+  background: color-mix(in srgb, var(--tc, var(--accent)) 9%, transparent);
+  color: var(--tc, var(--accent));
 }
 .pb-legend-chip:hover { opacity:.8; }
-.pb-legend-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
+.pb-legend-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; background:var(--tc, var(--accent)); }
 
 /* Library header */
 .pb-library-header {
@@ -1034,14 +1039,15 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-type-block {
   background:var(--surface);border:1px solid var(--border);border-radius:6px;
   overflow:hidden;margin-bottom:10px;
+  border-left:3px solid var(--tc, var(--border));
 }
 .pb-type-header {
   display:flex;align-items:center;gap:10px;padding:10px 14px;
   cursor:pointer;user-select:none;
 }
 .pb-type-header:hover { background:var(--surface2); }
-.pb-type-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
-.pb-type-name { font-size:11px;font-weight:700;letter-spacing:2px;flex:1; }
+.pb-type-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; background:var(--tc, var(--accent)); }
+.pb-type-name { font-size:11px;font-weight:700;letter-spacing:2px;flex:1; color:var(--tc, var(--text)); }
 .pb-type-count { font-size:9px;color:var(--muted);letter-spacing:1px; }
 .pb-type-arrow { font-size:9px;color:var(--muted);transition:transform .2s;flex-shrink:0; }
 .pb-type-arrow.open { transform:rotate(180deg); }
@@ -1073,8 +1079,16 @@ body.light .colourTuner { background:var(--surface2); }
   border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.3px;
   cursor:pointer;border:1px solid transparent;transition:all .12s;
   position:relative;max-width:320px;
+  /* --tc set per-element in JS; all color variants derive from it */
+  background: color-mix(in srgb, var(--tc, var(--accent)) 10%, transparent);
+  color: var(--tc, var(--accent));
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 20%, transparent);
 }
-.pb-particle:hover { transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.3); }
+.pb-particle:hover {
+  transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.3);
+  background: color-mix(in srgb, var(--tc, var(--accent)) 16%, transparent);
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 35%, transparent);
+}
 .pb-particle .pp-add { font-size:10px;opacity:.5;flex-shrink:0;margin-right:1px; }
 .pb-particle-text { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .pb-particle-del {
@@ -1289,6 +1303,8 @@ body.light .colourTuner { background:var(--surface2); }
     font-size:11px;font-weight:600;letter-spacing:.3px;
     cursor:pointer;transition:opacity .1s, filter .1s;
     line-height:1.4;word-break:break-word;
+    background: color-mix(in srgb, var(--tc, var(--accent)) 18%, transparent);
+    color: var(--tc, var(--accent));
   }
   .pb-bottom-chip:active { opacity:.6; }
   .pb-bottom-chip:hover { filter:brightness(1.15); }
@@ -1344,6 +1360,8 @@ body.light .colourTuner { background:var(--surface2); }
   background:color-mix(in srgb,var(--accent) 18%,transparent);
   color:var(--accent);
 }
+.pb-hidden { display:none !important; }
+
 /* Hero-size mode toggle under header */
 .pb-mode-toggle-hero {
   width:100%;
@@ -1607,10 +1625,14 @@ body.light .colourTuner { background:var(--surface2); }
   display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:4px;
   font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;
   cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none;
+  background: color-mix(in srgb, var(--tc, var(--accent)) 15%, transparent);
+  color: var(--tc, var(--accent));
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 20%, transparent);
 }
 .pb-type-pick-btn:hover { filter:brightness(1.2); }
-.pb-type-pick-btn.active { outline:2px solid #fff;outline-offset:2px; }
-.pb-type-pick-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.pb-type-pick-btn.active,
+.pb-type-pick-btn.active-type { border-color:color-mix(in srgb, var(--tc, var(--accent)) 80%, transparent); outline:2px solid #fff;outline-offset:2px; }
+.pb-type-pick-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; background:var(--tc, var(--accent)); }
 
 /* Paste textarea */
 .pb-import-textarea {
@@ -1826,8 +1848,15 @@ body.light .colourTuner { background:var(--surface2); }
   padding:3px 5px;border-radius:3px;font-size:11px;font-weight:700;
   cursor:pointer;border:1px solid transparent;transition:all .12s;
   user-select:none;
+  background: color-mix(in srgb, var(--tc, var(--accent)) 10%, transparent);
+  color: var(--tc, var(--accent));
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 25%, transparent);
 }
-.iter-particle-pick.selected { outline:2px solid #fff;outline-offset:1px; }
+.iter-particle-pick.selected {
+  background: color-mix(in srgb, var(--tc, var(--accent)) 30%, transparent);
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 70%, transparent);
+  outline:2px solid #fff;outline-offset:1px;
+}
 .pp-star {
   font-size:11px;color:var(--border);cursor:pointer;flex-shrink:0;
   transition:color .15s, transform .15s;padding:0 2px;user-select:none;
@@ -2211,7 +2240,7 @@ body.light .colourTuner { background:var(--surface2); }
         </div>
         <div class="sd-panel" id="sdPanelA">
           <div class="sd-search-row">
-            <input class="sd-search" id="sdSearchA" placeholder="Search species…" oninput="filterSD('A')" onclick="event.stopPropagation()">
+            <input class="sd-search" id="sdSearchA" placeholder="Search species…" oninput="filterSDDebounced('A')" onclick="event.stopPropagation()">
             <button class="sd-sort-btn active" id="sdSortGroupA" onclick="setSortSD('A','group')">GROUPED</button>
             <button class="sd-sort-btn" id="sdSortAzA" onclick="setSortSD('A','az')">A–Z</button>
           </div>
@@ -2243,7 +2272,7 @@ body.light .colourTuner { background:var(--surface2); }
         </div>
         <div class="sd-panel" id="sdPanelB">
           <div class="sd-search-row">
-            <input class="sd-search" id="sdSearchB" placeholder="Search species…" oninput="filterSD('B')" onclick="event.stopPropagation()">
+            <input class="sd-search" id="sdSearchB" placeholder="Search species…" oninput="filterSDDebounced('B')" onclick="event.stopPropagation()">
             <button class="sd-sort-btn active" id="sdSortGroupB" onclick="setSortSD('B','group')">GROUPED</button>
             <button class="sd-sort-btn" id="sdSortAzB" onclick="setSortSD('B','az')">A–Z</button>
           </div>
@@ -2335,7 +2364,7 @@ body.light .colourTuner { background:var(--surface2); }
         </div>
         <div class="sd-panel" id="sdPanelI1">
           <div class="sd-search-row">
-            <input class="sd-search" id="sdSearchI1" placeholder="Search inspirations…" oninput="filterInsp('I1')" onclick="event.stopPropagation()">
+            <input class="sd-search" id="sdSearchI1" placeholder="Search inspirations…" oninput="filterInspDebounced('I1')" onclick="event.stopPropagation()">
           </div>
           <div class="sd-list" id="sdListI1"></div>
         </div>
@@ -2351,7 +2380,7 @@ body.light .colourTuner { background:var(--surface2); }
         </div>
         <div class="sd-panel" id="sdPanelI2">
           <div class="sd-search-row">
-            <input class="sd-search" id="sdSearchI2" placeholder="Search inspirations…" oninput="filterInsp('I2')" onclick="event.stopPropagation()">
+            <input class="sd-search" id="sdSearchI2" placeholder="Search inspirations…" oninput="filterInspDebounced('I2')" onclick="event.stopPropagation()">
           </div>
           <div class="sd-list" id="sdListI2"></div>
         </div>
@@ -2638,7 +2667,7 @@ body.light .colourTuner { background:var(--surface2); }
 
     <!-- EDITOR MODE controls -->
     <div id="pbEditorControls" class="pb-library-header" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
-      <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbRenderLibrary()">
+      <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbSearchDebounced()">
       <button class="btn btn-outline" style="font-size:10px;padding:6px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
       <button class="btn btn-primary" style="font-size:10px;padding:6px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
       <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
@@ -5815,6 +5844,15 @@ function libSearchDebounced() {
   libSearchTimer = setTimeout(renderLibrary, 200)
 }
 
+// ── Reusable debounce ─────────────────────────────────────────────
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms) }
+}
+
+const filterSDDebounced    = debounce(filterSD, 180)
+const filterInspDebounced  = debounce(filterInsp, 180)
+const pbSearchDebounced    = debounce(() => pbRenderLibrary(), 200)
+
 function formatDate(ts) {
   if (!ts) return ''
   const d = new Date(ts)
@@ -6450,10 +6488,9 @@ function iterRenderTypePicker() {
   PB_TYPES.forEach(t => {
     const btn = document.createElement('div')
     btn.className = 'pb-type-pick-btn' + (t.key === iterActiveType ? ' active' : '')
-    btn.style.background   = pbHexAlpha(t.color, 0.15)
-    btn.style.color        = t.color
-    btn.style.borderColor  = pbHexAlpha(t.color, t.key === iterActiveType ? 0.8 : 0.2)
-    btn.innerHTML = `<span class="pb-type-pick-dot" style="background:${t.color}"></span>${t.id}. ${t.label}`
+    btn.style.setProperty('--tc', t.color)
+    btn.classList.toggle('active-type', t.key === iterActiveType)
+    btn.innerHTML = `<span class="pb-type-pick-dot"></span>${t.id}. ${t.label}`
     btn.onclick = () => { iterActiveType = t.key; iterRenderTypePicker() }
     wrap.appendChild(btn)
   })
@@ -6544,9 +6581,7 @@ function iterRenderParticleList() {
     const sel  = iterPicked.includes(p.id)
     const chip = document.createElement('div')
     chip.className = 'iter-particle-pick' + (sel ? ' selected' : '')
-    chip.style.background  = pbHexAlpha(t.color, sel ? 0.3 : 0.1)
-    chip.style.color       = t.color
-    chip.style.borderColor = pbHexAlpha(t.color, sel ? 0.7 : 0.2)
+    chip.style.setProperty('--tc', t.color)
     chip.textContent = p.text
     chip.title = p.text
     chip.onclick = () => {
@@ -7486,11 +7521,10 @@ function pbRenderLegend() {
   PB_TYPES.forEach(t => {
     const chip = document.createElement('div')
     chip.className = 'pb-legend-chip'
-    chip.style.color = t.color
-    chip.style.background = pbHexAlpha(t.color, 0.09)
+    chip.style.setProperty('--tc', t.color)
     chip.style.cursor = 'pointer'
     chip.title = `Jump to ${t.label}`
-    chip.innerHTML = `<span class="pb-legend-dot" style="background:${t.color}"></span>${t.id}. ${t.label.toUpperCase()}`
+    chip.innerHTML = `<span class="pb-legend-dot"></span>${t.id}. ${t.label.toUpperCase()}`
     chip.onclick = () => pbJumpToType(t.key)
     el.appendChild(chip)
   })
@@ -7514,10 +7548,50 @@ function pbJumpToType(typeKey) {
 }
 
 // ── LIBRARY ────────────────────────────────────────────────────────
+let _pbLastFullRebuildKey = ''  // tracks what triggered last full rebuild
+
 function pbRenderLibrary() {
   const grid = document.getElementById('pbGrid')
   if (!grid) return
   const query = (document.getElementById('pbSearch')?.value || '').toLowerCase().trim()
+
+  // Build a key representing everything that affects structure (not search text)
+  const structKey = [
+    pbLabMode, pbCreatorFilter, pbCreatorFavsOn, pbCreatorSub,
+    pbSubjectMode, pbShowBuiltin, pbActiveLib,
+    JSON.stringify(pbCollapsed), JSON.stringify(pbActiveCats)
+  ].join('|')
+
+  // If structure hasn't changed and the grid is already populated, do a fast
+  // visibility-toggle pass instead of a full rebuild — much faster on search
+  if (structKey === _pbLastFullRebuildKey && grid.children.length > 0 && !query.length) {
+    // Query cleared — show everything again without rebuild
+    grid.querySelectorAll('.pb-particle, .pb-type-block').forEach(el => el.classList.remove('pb-hidden'))
+    pbRenderTypeNav()
+    pbSyncExpandToggle()
+    return
+  }
+
+  if (structKey === _pbLastFullRebuildKey && grid.children.length > 0 && query.length) {
+    // Search-only change — toggle visibility of chips in place
+    let anyVisible = false
+    grid.querySelectorAll('.pb-type-block').forEach(block => {
+      let blockHasMatch = false
+      block.querySelectorAll('.pb-particle').forEach(chip => {
+        const text = (chip.title || '').toLowerCase()
+        const matches = text.includes(query)
+        chip.classList.toggle('pb-hidden', !matches)
+        if (matches) blockHasMatch = true
+      })
+      // Hide/show the whole type block based on whether any chip matched
+      block.classList.toggle('pb-hidden', !blockHasMatch)
+    })
+    pbSyncExpandToggle()
+    return
+  }
+
+  // Full rebuild needed (structure changed)
+  _pbLastFullRebuildKey = structKey
   grid.innerHTML = ''
 
   // Single delegated listener for all particle chip clicks and drags
@@ -7595,11 +7669,11 @@ function pbRenderLibrary() {
     // Header
     const hdr = document.createElement('div')
     hdr.className = 'pb-type-header'
-    hdr.style.borderLeft = `3px solid ${t.color}`
+    block.style.setProperty('--tc', t.color)
     const totalCount = allItems.length
     hdr.innerHTML = `
-      <span class="pb-type-dot" style="background:${t.color}"></span>
-      <span class="pb-type-name" style="color:${t.color}">${t.id}. ${t.label.toUpperCase()}</span>
+      <span class="pb-type-dot"></span>
+      <span class="pb-type-name">${t.id}. ${t.label.toUpperCase()}</span>
       <span class="pb-type-count">${totalCount} PARTICLE${totalCount!==1?'S':''}</span>
       <span class="pb-type-arrow ${isOpen?'open':''}">▼</span>
     `
@@ -7908,7 +7982,8 @@ function pbRenderTypeNav() {
 
     const dot = document.createElement('span')
     dot.className = 'pb-type-nav-dot'
-    dot.style.background = hasParticles ? t.color : 'var(--muted)'
+    dot.style.setProperty('--tc', hasParticles ? t.color : 'var(--muted)')
+    dot.style.background = 'var(--tc)'
     btn.appendChild(dot)
 
     // Label (visible when expanded)
@@ -7973,9 +8048,7 @@ const pbSubGroupCollapsed = {}  // groupKey → bool
 function pbBuildParticleChip(p, t) {
   const chip = document.createElement('div')
   chip.className = 'pb-particle'
-  chip.style.background  = pbHexAlpha(t.color, 0.1)
-  chip.style.color       = t.color
-  chip.style.borderColor = pbHexAlpha(t.color, 0.2)
+  chip.style.setProperty('--tc', t.color)
   chip.title     = p.text
   chip.draggable = true
   // Data attributes used by delegated grid click/drag handlers
@@ -8170,8 +8243,7 @@ function pbUpdateBottomBar() {
     }
     const chip = document.createElement('span')
     chip.className = 'pb-bottom-chip'
-    chip.style.background = pbHexAlpha(t.color, 0.18)
-    chip.style.color = t.color
+    chip.style.setProperty('--tc', t.color)
     chip.textContent = p.text
     chip.title = 'Tap to remove'
     chip.onclick = () => pbRemoveFromFormula(entry.uid)
@@ -8238,9 +8310,7 @@ function pbRenderFormula() {
 
     const chip = document.createElement('div')
     chip.className = 'pb-formula-chip'
-    chip.style.background  = pbHexAlpha(t.color, 0.18)
-    chip.style.color       = t.color
-    chip.style.borderColor = pbHexAlpha(t.color, 0.3)
+    chip.style.setProperty('--tc', t.color)
     chip.title     = p.text
     chip.draggable = true
     chip.dataset.uid = entry.uid
@@ -8552,6 +8622,7 @@ let pbCreatorSub     = 'all'      // 'all' | 'insect' | 'beast'  (only when buil
 
 function pbSetLabMode(mode) {
   pbLabMode = mode
+  _pbLastFullRebuildKey = ''  // force full rebuild on next render
   document.getElementById('pbModeEditorBtn').classList.toggle('active', mode === 'editor')
   document.getElementById('pbModeCreatorBtn').classList.toggle('active', mode === 'creator')
   document.getElementById('pbEditorControls').style.display  = mode === 'editor'  ? '' : 'none'
@@ -10498,8 +10569,9 @@ function pbRenderTypePicker() {
     btn.className = 'pb-type-pick-btn' + (t.key === pbImportActiveType ? ' active' : '')
     btn.style.background = pbHexAlpha(t.color, 0.15)
     btn.style.color = t.color
-    btn.style.borderColor = pbHexAlpha(t.color, t.key === pbImportActiveType ? 0.8 : 0.2)
-    btn.innerHTML = `<span class="pb-type-pick-dot" style="background:${t.color}"></span>${t.id}. ${t.label}`
+    btn.style.setProperty('--tc', t.color)
+    btn.classList.toggle('active-type', t.key === pbImportActiveType)
+    btn.innerHTML = `<span class="pb-type-pick-dot"></span>${t.id}. ${t.label}`
     btn.onclick = () => { pbImportActiveType = t.key; pbRenderTypePicker() }
     wrap.appendChild(btn)
   })
@@ -10694,7 +10766,8 @@ function pbRenderTaggedList() {
     const typeLabel = document.createElement('div')
     typeLabel.className = 'pb-tagged-item-type'
     typeLabel.style.color = t.color
-    typeLabel.innerHTML = `<span class="pb-type-pick-dot" style="background:${t.color};display:inline-block;margin-right:4px;"></span>${t.label.toUpperCase()}`
+    typeLabel.style.setProperty('--tc', t.color)
+    typeLabel.innerHTML = `<span class="pb-type-pick-dot"></span>${t.label.toUpperCase()}`
 
     // Category select
     const catWrap = document.createElement('div')
