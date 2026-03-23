@@ -1064,20 +1064,20 @@ body.light .colourTuner { background:var(--surface2); }
 
 /* Particle chips in library */
 .pb-particles {
-  display:flex;flex-wrap:wrap;gap:7px;padding:12px 14px;
-  min-height:44px;
+  display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;
+  min-height:36px;
 }
 .pb-particle {
-  display:flex;align-items:center;gap:5px;padding:5px 10px 5px 8px;
-  border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.3px;
+  display:flex;align-items:center;gap:3px;padding:3px 4px 3px 4px;
+  border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.3px;
   cursor:pointer;border:1px solid transparent;transition:all .12s;
   position:relative;max-width:320px;
 }
 .pb-particle:hover { transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.3); }
-.pb-particle .pp-add { font-size:11px;opacity:.5;flex-shrink:0;margin-right:2px; }
+.pb-particle .pp-add { font-size:10px;opacity:.5;flex-shrink:0;margin-right:1px; }
 .pb-particle-text { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .pb-particle-del {
-  margin-left:4px;opacity:0;font-size:11px;flex-shrink:0;transition:opacity .1s;
+  margin-left:2px;opacity:0;font-size:10px;flex-shrink:0;transition:opacity .1s;
   cursor:pointer;color:rgba(0,0,0,.5);
 }
 .pb-particle:hover .pb-particle-del { opacity:.6; }
@@ -1316,7 +1316,66 @@ body.light .colourTuner { background:var(--surface2); }
   .pb-type-nav-btn .pb-type-nav-dot { width:6px;height:6px; }
 }
 
-/* ── FLOATING TYPE NAV (right edge, expandable) ──────────────────── */
+/* ── LAB MODE TOGGLE ─────────────────────────────────────────────── */
+.pb-mode-toggle {
+  display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
+  flex-shrink:0;
+}
+.pb-mode-btn {
+  padding:5px 14px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;border:none;background:transparent;
+  color:var(--muted);transition:all .15s;border-right:1px solid var(--border);
+}
+.pb-mode-btn:last-child { border-right:none; }
+.pb-mode-btn.active {
+  background:color-mix(in srgb,var(--accent) 18%,transparent);
+  color:var(--accent);
+}
+/* Hero-size mode toggle under header */
+.pb-mode-toggle-hero {
+  width:100%;
+  border-radius:6px;
+}
+.pb-mode-toggle-hero .pb-mode-btn {
+  flex:1;
+  padding:10px 20px;
+  font-size:13px;
+  letter-spacing:2px;
+}
+
+
+.pb-creator-btn {
+  padding:8px 16px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;border:1px solid var(--border);
+  background:var(--surface2);color:var(--muted);border-radius:4px;
+  transition:all .15s;
+}
+.pb-creator-btn:hover { border-color:var(--accent);color:var(--accent); }
+.pb-creator-btn.active {
+  background:color-mix(in srgb,var(--accent) 15%,transparent);
+  border-color:var(--accent);color:var(--accent);
+}
+/* Fav toggle has a gold active state */
+.pb-creator-fav-toggle.active {
+  background:color-mix(in srgb,#ffcc00 15%,transparent);
+  border-color:#ffcc00;color:#ffcc00;
+}
+
+
+.pb-creator-sub {
+  padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;border:1px solid var(--border);
+  background:transparent;color:var(--muted);border-radius:20px;
+  transition:all .15s;
+}
+.pb-creator-sub:hover { color:var(--text); }
+.pb-creator-sub.active {
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 40%,transparent);
+  color:var(--accent);
+}
+
+
 .pb-type-nav {
   position:fixed;right:12px;top:50%;transform:translateY(-50%);
   z-index:100;display:flex;flex-direction:column;gap:3px;
@@ -1398,6 +1457,29 @@ body.light .colourTuner { background:var(--surface2); }
   .pb-type-nav-btn { width:22px;height:22px; }
   .pb-type-nav-btn .pb-type-nav-dot { width:6px;height:6px; }
   .pb-type-nav-tip { display:none; }
+}
+
+/* Bottom bar scroll-aware states (mobile only) */
+@media(max-width:900px){
+  .pb-bottom-bar {
+    transition:transform .3s ease, box-shadow .3s ease;
+  }
+  /* Collapsed — assembled prompt still visible, bar peeks as a thin handle */
+  .pb-bottom-bar.peek {
+    transform:translateY(calc(100% - 32px));
+    box-shadow:none;
+  }
+  .pb-bottom-bar.peek .pb-bottom-bar-chips { display:none; }
+  .pb-bottom-bar.peek .pb-bottom-bar-expand { display:none; }
+  .pb-bottom-bar.peek .pb-bottom-bar-inner { flex-direction:row; align-items:center; }
+  .pb-bottom-peek-handle {
+    flex:1;text-align:center;cursor:pointer;padding:6px 0;
+    font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;
+    letter-spacing:2px;color:var(--muted);
+    display:none;
+  }
+  .pb-bottom-bar.peek .pb-bottom-peek-handle { display:block; }
+  .pb-bottom-bar.peek .pb-bottom-bar-btns { display:none; }
 }
 
 /* Mode filter buttons for Subject type */
@@ -1578,7 +1660,25 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-tagged-item-del { cursor:pointer;opacity:.5;flex-shrink:0;font-size:14px;transition:opacity .1s; }
 .pb-tagged-item-del:hover { opacity:1; }
 
-/* ── LIBRARY LAYOUT WITH FOLDER SIDEBAR ─────────────────────────── */
+/* Cloud provider selector */
+.cloud-provider-row {
+  display:flex;gap:8px;flex-wrap:wrap;
+}
+.cloud-provider-btn {
+  display:flex;align-items:center;gap:7px;padding:8px 16px;
+  border-radius:4px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--muted);cursor:pointer;
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;
+  transition:all .15s;
+}
+.cloud-provider-btn:hover { border-color:var(--accent);color:var(--text); }
+.cloud-provider-btn.active {
+  background:color-mix(in srgb,var(--accent) 15%,transparent);
+  border-color:var(--accent);color:var(--accent);
+}
+.cloud-provider-icon { font-size:14px; }
+
+
 .lib-layout { display:flex;gap:0;align-items:flex-start; }
 .lib-folders {
   width:180px;flex-shrink:0;padding-right:14px;
@@ -1683,7 +1783,7 @@ body.light .colourTuner { background:var(--surface2); }
   margin-bottom:8px;text-transform:uppercase;
 }
 .iter-particle-pick {
-  padding:5px 10px;border-radius:4px;font-size:11px;font-weight:700;
+  padding:3px 5px;border-radius:3px;font-size:11px;font-weight:700;
   cursor:pointer;border:1px solid transparent;transition:all .12s;
   user-select:none;
 }
@@ -1730,7 +1830,30 @@ body.light .colourTuner { background:var(--surface2); }
 .iter-result-actions { display:flex;gap:6px; }
 
 /* ── DRIVE PHOTO PICKER ─────────────────────────────────────────── */
-.drive-photo-item {
+.drive-photo-sub {
+  padding:2px 6px 4px;font-size:8px;color:var(--muted);letter-spacing:.3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+  display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
+}
+.drive-sort-tab {
+  padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.5px;cursor:pointer;border:none;background:transparent;
+  color:var(--muted);transition:all .12s;border-right:1px solid var(--border);
+}
+.drive-sort-tab:last-child { border-right:none; }
+.drive-sort-tab:hover { color:var(--text);background:var(--surface2); }
+.drive-sort-tab.active { background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent); }
+.drive-sort-dir {
+  width:28px;height:28px;border:1px solid var(--border);border-radius:4px;
+  background:transparent;color:var(--muted);cursor:pointer;font-size:14px;
+  display:flex;align-items:center;justify-content:center;transition:all .12s;
+  padding:0;
+}
+.drive-sort-dir:hover { border-color:var(--accent);color:var(--accent); }
+
+
   border:1px solid var(--border);border-radius:4px;overflow:hidden;
   cursor:pointer;transition:border-color .15s,transform .1s;
   display:flex;flex-direction:column;
@@ -2017,7 +2140,7 @@ body.light .colourTuner { background:var(--surface2); }
     <!-- DRIVE SYNC BAR -->
     <div class="drive-bar" id="driveBar">
       <div id="driveSignedOut" style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
-        <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;">GOOGLE DRIVE SYNC</span>
+        <span style="font-size:10px;letter-spacing:2px;color:var(--muted);flex:1;" id="navSyncLabel">GOOGLE DRIVE SYNC</span>
         <div id="googleSignInBtn"></div>
       </div>
       <div id="driveSignedIn" style="display:none;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
@@ -2323,23 +2446,59 @@ body.light .colourTuner { background:var(--surface2); }
       </header>
     <div class="settings-grid">
 
-      <!-- Drive -->
-      <div class="settings-section">
-        <div class="settings-section-title">Google Drive</div>
-        <div id="settingsDriveStatus" style="font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
-        <div id="settingsDriveSignedIn" style="display:none;">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-            <img class="drive-avatar" id="settingsAvatar" src="" alt="">
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--text);" id="settingsName"></div>
-              <div style="font-size:10px;color:var(--muted);" id="settingsStatusLine">Connected</div>
-            </div>
+      <!-- Cloud Sync -->
+      <div class="settings-section" style="grid-column:1/-1;">
+        <div class="settings-section-title">Cloud Sync</div>
+
+        <!-- Provider selector -->
+        <div style="margin-bottom:14px;">
+          <div style="font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;font-weight:700;">SYNC SERVICE</div>
+          <div class="cloud-provider-row" id="cloudProviderRow">
+            <button class="cloud-provider-btn active" id="providerBtnGdrive" onclick="cloudSetProvider('gdrive')">
+              <span class="cloud-provider-icon">▲</span>Google Drive
+            </button>
+            <button class="cloud-provider-btn" id="providerBtnDropbox" onclick="cloudSetProvider('dropbox')">
+              <span class="cloud-provider-icon">⬡</span>Dropbox
+            </button>
           </div>
-          <button class="btn btn-ghost" onclick="driveSync()" style="font-size:10px;margin-right:6px;">↻ SYNC NOW</button>
-          <button class="btn btn-ghost" onclick="driveSignOut()" style="font-size:10px;">SIGN OUT</button>
         </div>
-        <div id="settingsDriveSignedOut" style="display:block;">
-          <div id="settingsSignInBtn" style="margin-top:8px;"></div>
+
+        <!-- Google Drive auth panel -->
+        <div id="cloudPanelGdrive">
+          <div id="settingsDriveStatus" style="font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
+          <div id="settingsDriveSignedIn" style="display:none;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <img class="drive-avatar" id="settingsAvatar" src="" alt="">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:var(--text);" id="settingsName"></div>
+                <div style="font-size:10px;color:var(--muted);" id="settingsStatusLine">Connected</div>
+              </div>
+            </div>
+            <button class="btn btn-ghost" onclick="driveSync()" style="font-size:10px;margin-right:6px;">↻ SYNC NOW</button>
+            <button class="btn btn-ghost" onclick="driveSignOut()" style="font-size:10px;">SIGN OUT</button>
+          </div>
+          <div id="settingsDriveSignedOut" style="display:block;">
+            <div id="settingsSignInBtn" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- Dropbox auth panel -->
+        <div id="cloudPanelDropbox" style="display:none;">
+          <div id="dbxStatus" style="font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
+          <div id="dbxSignedIn" style="display:none;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;">⬡</div>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:var(--text);" id="dbxName"></div>
+                <div style="font-size:10px;color:var(--muted);">Dropbox connected</div>
+              </div>
+            </div>
+            <button class="btn btn-ghost" onclick="cloudSync()" style="font-size:10px;margin-right:6px;">↻ SYNC NOW</button>
+            <button class="btn btn-ghost" onclick="dbxSignOut()" style="font-size:10px;">SIGN OUT</button>
+          </div>
+          <div id="dbxSignedOut" style="display:block;">
+            <button class="btn btn-primary" onclick="dbxSignIn()" style="font-size:10px;margin-top:8px;">CONNECT DROPBOX</button>
+          </div>
         </div>
       </div>
 
@@ -2389,42 +2548,61 @@ body.light .colourTuner { background:var(--surface2); }
 <div class="view" id="viewBuilder">
   <div class="view-inner">
 
-    <header style="margin-bottom:20px;">
+    <!-- Header + mode toggle -->
+    <header style="margin-bottom:16px;">
       <div class="title-line">
         <h1 style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</h1>
         <span class="version" style="align-self:center;">// PARTICLE FORMULA ENGINE</span>
       </div>
+      <!-- Mode toggle — large, directly below subheading -->
+      <div class="pb-mode-toggle pb-mode-toggle-hero" id="pbModeToggle" style="margin-top:12px;">
+        <button class="pb-mode-btn active" id="pbModeEditorBtn" onclick="pbSetLabMode('editor')">✏ EDITOR</button>
+        <button class="pb-mode-btn" id="pbModeCreatorBtn" onclick="pbSetLabMode('creator')">⚡ CREATOR</button>
+      </div>
     </header>
 
-    <!-- Library selector -->
+    <!-- // PARTICLE LIBRARY label + library tabs -->
+    <div class="pb-section-label" style="margin-bottom:8px;">// PARTICLE LIBRARY</div>
     <div class="pb-lib-bar" style="margin-bottom:16px;">
       <div class="pb-lib-tabs" id="pbLibTabs"></div>
     </div>
 
-    <!-- Assembled prompt at top -->
-    <div class="pb-assembled-wrap" style="margin-bottom:20px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-        <div class="pb-section-label" style="margin-bottom:0;">// ASSEMBLED PROMPT</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
-          <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
-          <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbCopyOutput()">⎘ COPY</button>
-          <button class="btn btn-primary" style="font-size:10px;padding:5px 12px;" onclick="pbSaveToLibrary()">♥ SAVE</button>
-        </div>
-      </div>
+    <!-- // ASSEMBLED PROMPT — formula box, buttons below -->
+    <div class="pb-assembled-wrap" id="pbAssembledWrap" style="margin-bottom:20px;">
+      <div class="pb-section-label" style="margin-bottom:8px;">// ASSEMBLED PROMPT</div>
       <div class="pb-formula pb-formula-output" id="pbFormula">
         <span class="pb-formula-ph">Click particles below to build your prompt…</span>
       </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
+        <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
+        <button class="btn btn-ghost" style="font-size:10px;padding:5px 10px;" onclick="pbCopyOutput()">⎘ COPY</button>
+        <button class="btn btn-primary" style="font-size:10px;padding:5px 12px;" onclick="pbSaveToLibrary()">♥ SAVE</button>
+      </div>
     </div>
 
-    <!-- Particle library header -->
-    <div class="pb-library-header">
-      <div class="pb-section-label" style="margin-bottom:0;">// PARTICLE LIBRARY</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbRenderLibrary()">
-        <button class="btn btn-outline" style="font-size:10px;padding:6px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
-        <button class="btn btn-primary" style="font-size:10px;padding:6px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
-        <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
+    <!-- EDITOR MODE controls -->
+    <div id="pbEditorControls" class="pb-library-header" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+      <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbRenderLibrary()">
+      <button class="btn btn-outline" style="font-size:10px;padding:6px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
+      <button class="btn btn-primary" style="font-size:10px;padding:6px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
+      <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
+    </div>
+
+    <!-- CREATOR MODE controls -->
+    <div id="pbCreatorControls" class="pb-library-header" style="display:none;margin-bottom:12px;">
+      <!-- Base filter: Personal vs Built-in -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
+        <button class="pb-creator-btn" id="pbCreatorPersonalBtn" onclick="pbCreatorSetFilter('mine')">👤 PERSONAL</button>
+        <button class="pb-creator-btn active" id="pbCreatorBuiltinBtn" onclick="pbCreatorSetFilter('builtin')">◈ BUILT-IN</button>
+        <!-- Favourites toggle — separate, right-aligned feel -->
+        <button class="pb-creator-btn pb-creator-fav-toggle" id="pbCreatorFavBtn" onclick="pbCreatorToggleFavs()">⭐ FAVOURITES</button>
+      </div>
+      <!-- Sub-filter row — only when built-in active -->
+      <div id="pbCreatorSubfilter" style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button class="pb-creator-sub active" id="pbCreatorAllBtn" onclick="pbCreatorSetSub('all')">ALL</button>
+        <button class="pb-creator-sub" id="pbCreatorInsectBtn" onclick="pbCreatorSetSub('insect')">⬡ INSECT</button>
+        <button class="pb-creator-sub" id="pbCreatorBeastBtn" onclick="pbCreatorSetSub('beast')">☠ BEAST</button>
       </div>
     </div>
 
@@ -2462,6 +2640,7 @@ body.light .colourTuner { background:var(--surface2); }
 <!-- Mobile bottom prompt bar -->
 <div id="pbBottomBar" class="pb-bottom-bar" style="display:none;">
   <div class="pb-bottom-bar-inner">
+    <div class="pb-bottom-peek-handle" onclick="pbPeekTap()">▲ PROMPT</div>
     <div class="pb-bottom-bar-chips" id="pbBottomChips">
       <span class="pb-bottom-bar-ph">Build your prompt below…</span>
     </div>
@@ -2603,7 +2782,7 @@ body.light .colourTuner { background:var(--surface2); }
 
 <!-- ═══════════════════════ DRIVE PHOTO PICKER MODAL ═══════════════════════ -->
 <div id="drivePhotoModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
-  <div class="modal-card" style="max-width:640px;">
+  <div class="modal-card" style="max-width:700px;">
     <div class="modal-header">
       <div>
         <div class="modal-title">// SELECT FROM GOOGLE DRIVE</div>
@@ -2612,13 +2791,20 @@ body.light .colourTuner { background:var(--surface2); }
       <button class="modal-close" onclick="closeDrivePhoto()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+      <!-- Nav + sort row -->
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
         <button class="btn btn-ghost" style="font-size:10px;" id="drivePhotoBack" onclick="drivePhotoBrowseParent()" disabled>← BACK</button>
         <button class="btn btn-ghost" style="font-size:10px;" onclick="drivePhotoGoHome()">⌂ ROOT</button>
-        <button class="btn btn-outline" style="font-size:10px;" onclick="setDriveDefaultFolder()" id="driveSetDefaultBtn">★ SET AS DEFAULT</button>
-        <span id="driveDefaultLabel" style="font-size:9px;color:var(--muted);letter-spacing:1px;"></span>
+        <button class="btn btn-outline" style="font-size:10px;" onclick="setDriveDefaultFolder()" id="driveSetDefaultBtn">★ DEFAULT</button>
+        <span id="driveDefaultLabel" style="font-size:9px;color:var(--muted);letter-spacing:1px;flex:1;"></span>
       </div>
-      <div id="drivePhotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;min-height:200px;"></div>
+      <!-- Sort controls -->
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px;">
+        <span style="font-size:9px;letter-spacing:2px;color:var(--muted);font-weight:700;flex-shrink:0;">SORT</span>
+        <div class="drive-sort-tabs" id="driveSortTabs"></div>
+        <button class="drive-sort-dir" id="driveSortDir" onclick="driveToggleSortDir()" title="Toggle direction">↑</button>
+      </div>
+      <div id="drivePhotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;min-height:200px;"></div>
     </div>
   </div>
 </div>
@@ -4238,7 +4424,7 @@ const CUSTOM_PRESETS_FILE = 'beast-mode-custom-presets.json'
 let driveCustomPresetsId  = null
 
 async function driveCustomPresetsSync() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ presets: customPresets, savedAt: new Date().toISOString() })
     if (driveCustomPresetsId) {
@@ -4257,12 +4443,12 @@ async function driveCustomPresetsSync() {
 }
 
 async function driveCustomPresetsLoad() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
-    const files = await driveListFiles(`name='${CUSTOM_PRESETS_FILE}'`)
+    const files = await cloudListFiles(CUSTOM_PRESETS_FILE)
     if (!files.length) return
     driveCustomPresetsId = files[0].id
-    const data = await driveReadFile(driveCustomPresetsId)
+    const data = await cloudReadFile(driveCustomPresetsId)
     if (Array.isArray(data?.presets)) {
       customPresets = data.presets
       customPresets.forEach(p => { STYLE_MODS[p.id] = { adj: p.adj, suffix: p.suffix } })
@@ -4829,6 +5015,291 @@ function restoreFav(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// CLOUD SYNC — ABSTRACTION LAYER
+// Provider: 'gdrive' | 'dropbox'
+// Cookie: bm_sync_provider
+// ═══════════════════════════════════════════════════════════════════
+
+const DROPBOX_CLIENT_ID = '6r09winapojrvbm'
+const DROPBOX_REDIRECT   = window.location.href.split('?')[0].split('#')[0]
+const DBX_APP_FOLDER     = '/Apps/BeastModeMechMyRide'  // Dropbox app folder path
+
+let cloudProvider  = getCookie('bm_sync_provider') || 'gdrive'
+let dbxToken       = null
+let dbxAccountName = null
+
+// ── Cookie helpers ─────────────────────────────────────────────────
+function setCookie(name, value, days = 365) {
+  const d = new Date(); d.setTime(d.getTime() + days * 86400000)
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${d.toUTCString()};path=/;SameSite=Strict`
+}
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
+  return m ? decodeURIComponent(m[1]) : null
+}
+function deleteCookie(name) {
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/`
+}
+
+// ── Provider switching ─────────────────────────────────────────────
+function cloudSetProvider(p) {
+  cloudProvider = p
+  setCookie('bm_sync_provider', p)
+  document.getElementById('providerBtnGdrive')?.classList.toggle('active', p === 'gdrive')
+  document.getElementById('providerBtnDropbox')?.classList.toggle('active', p === 'dropbox')
+  document.getElementById('cloudPanelGdrive').style.display  = p === 'gdrive'  ? '' : 'none'
+  document.getElementById('cloudPanelDropbox').style.display = p === 'dropbox' ? '' : 'none'
+  updateNavDriveDot()
+}
+
+function cloudIsConnected() {
+  return cloudProvider === 'gdrive' ? !!driveToken : !!dbxToken
+}
+
+// ── Abstract cloud ops — route to active provider ─────────────────
+async function cloudListFiles(nameOrPrefix) {
+  if (cloudProvider === 'gdrive') return driveListFiles(`name='${nameOrPrefix}'`)
+  return dbxListFiles(nameOrPrefix)
+}
+async function cloudReadFile(id) {
+  if (cloudProvider === 'gdrive') return driveReadFile(id)
+  return dbxReadFile(id)
+}
+async function cloudCreateFile(name, body) {
+  if (cloudProvider === 'gdrive') return driveCreateFile(name, body)
+  return dbxWriteFile(name, body)
+}
+async function cloudPatchFile(id, body) {
+  if (cloudProvider === 'gdrive') return drivePatchFile(id, body)
+  return dbxWriteFile(id, body)  // Dropbox uses path as id; overwrite = patch
+}
+async function cloudDeleteFile(id) {
+  if (cloudProvider === 'gdrive') return driveDeletePrompt(id)
+  return dbxDeleteFile(id)
+}
+async function cloudSync() {
+  if (cloudProvider === 'gdrive') return driveSync()
+  return dbxSync()
+}
+
+// ── Nav dot reflects active provider ──────────────────────────────
+// (updateNavDriveDot already exists, override to check both)
+const _origUpdateNavDot = typeof updateNavDriveDot === 'function' ? updateNavDriveDot : () => {}
+
+// ═══════════════════════════════════════════════════════════════════
+// DROPBOX INTEGRATION
+// Uses PKCE OAuth + Dropbox API v2
+// ═══════════════════════════════════════════════════════════════════
+
+// ── PKCE helpers ───────────────────────────────────────────────────
+async function dbxGenCodeVerifier() {
+  const arr = new Uint8Array(64)
+  crypto.getRandomValues(arr)
+  return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')
+}
+async function dbxCodeChallenge(verifier) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')
+}
+
+// ── Auth ───────────────────────────────────────────────────────────
+async function dbxSignIn() {
+  const verifier   = await dbxGenCodeVerifier()
+  const challenge  = await dbxCodeChallenge(verifier)
+  sessionStorage.setItem('dbx_verifier', verifier)
+  const params = new URLSearchParams({
+    client_id:             DROPBOX_CLIENT_ID,
+    response_type:         'code',
+    code_challenge:        challenge,
+    code_challenge_method: 'S256',
+    redirect_uri:          DROPBOX_REDIRECT,
+    token_access_type:     'offline',
+  })
+  window.location.href = 'https://www.dropbox.com/oauth2/authorize?' + params
+}
+
+async function dbxHandleCallback() {
+  const params   = new URLSearchParams(window.location.search)
+  const code     = params.get('code')
+  const verifier = sessionStorage.getItem('dbx_verifier')
+  if (!code || !verifier) return
+
+  // Clean URL
+  history.replaceState({}, '', window.location.pathname)
+  sessionStorage.removeItem('dbx_verifier')
+
+  try {
+    const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, grant_type: 'authorization_code',
+        client_id: DROPBOX_CLIENT_ID,
+        redirect_uri: DROPBOX_REDIRECT,
+        code_verifier: verifier,
+      })
+    })
+    const data = await res.json()
+    if (data.access_token) {
+      dbxToken = data.access_token
+      // Store refresh token for session restoration
+      const session = { token: data.access_token, refresh: data.refresh_token, expires: Date.now() + (data.expires_in - 60) * 1000 }
+      localStorage.setItem('bm_dbx_session', JSON.stringify(session))
+      await dbxGetAccount()
+      dbxShowSignedIn()
+      if (cloudProvider === 'dropbox') dbxSync()
+    }
+  } catch(e) { console.error('Dropbox auth error', e) }
+}
+
+async function dbxRestoreSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('bm_dbx_session') || 'null')
+    if (!saved) return false
+    if (saved.expires && saved.expires > Date.now()) {
+      dbxToken = saved.token
+      await dbxGetAccount()
+      dbxShowSignedIn()
+      return true
+    } else if (saved.refresh) {
+      // Refresh
+      const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: saved.refresh, client_id: DROPBOX_CLIENT_ID })
+      })
+      const data = await res.json()
+      if (data.access_token) {
+        dbxToken = data.access_token
+        localStorage.setItem('bm_dbx_session', JSON.stringify({ ...saved, token: data.access_token, expires: Date.now() + (data.expires_in - 60) * 1000 }))
+        await dbxGetAccount()
+        dbxShowSignedIn()
+        return true
+      }
+    }
+  } catch(e) {}
+  return false
+}
+
+function dbxSignOut() {
+  dbxToken = null; dbxAccountName = null
+  localStorage.removeItem('bm_dbx_session')
+  document.getElementById('dbxSignedIn').style.display  = 'none'
+  document.getElementById('dbxSignedOut').style.display = 'block'
+  document.getElementById('dbxStatus').textContent = 'Not connected'
+  updateNavDriveDot()
+}
+
+async function dbxGetAccount() {
+  if (!dbxToken) return
+  try {
+    const res = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + dbxToken }
+    })
+    const data = await res.json()
+    dbxAccountName = data.name?.display_name || data.email || 'Dropbox'
+    document.getElementById('dbxName').textContent = dbxAccountName
+  } catch(e) {}
+}
+
+function dbxShowSignedIn() {
+  document.getElementById('dbxSignedIn').style.display  = 'flex'
+  document.getElementById('dbxSignedOut').style.display = 'none'
+  document.getElementById('dbxStatus').textContent = '✓ Connected'
+  updateNavDriveDot()
+}
+
+// ── Dropbox file operations ────────────────────────────────────────
+// Dropbox uses file paths as IDs. Files stored in /Apps/BeastModeMechMyRide/
+async function dbxListFiles(nameOrPrefix) {
+  if (!dbxToken) return []
+  try {
+    const res = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + dbxToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: DBX_APP_FOLDER, recursive: false })
+    })
+    const data = await res.json()
+    const entries = data.entries || []
+    // Filter by name prefix/exact, return as {id, name} like Drive
+    return entries
+      .filter(e => e['.tag'] === 'file' && (e.name === nameOrPrefix || e.name.startsWith(nameOrPrefix)))
+      .map(e => ({ id: e.path_lower, name: e.name }))
+  } catch(e) { return [] }
+}
+
+async function dbxReadFile(path) {
+  if (!dbxToken) return null
+  try {
+    const res = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + dbxToken,
+        'Dropbox-API-Arg': JSON.stringify({ path }),
+      }
+    })
+    return await res.json()
+  } catch(e) { return null }
+}
+
+async function dbxWriteFile(pathOrName, body) {
+  if (!dbxToken) return null
+  // If pathOrName is just a filename (no /), prepend app folder
+  const path = pathOrName.startsWith('/') ? pathOrName : `${DBX_APP_FOLDER}/${pathOrName}`
+  try {
+    const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + dbxToken,
+        'Content-Type': 'application/octet-stream',
+        'Dropbox-API-Arg': JSON.stringify({ path, mode: 'overwrite', autorename: false }),
+      },
+      body: typeof body === 'string' ? body : JSON.stringify(body)
+    })
+    const data = await res.json()
+    return data.path_lower || path  // return path as the "id"
+  } catch(e) { return null }
+}
+
+async function dbxDeleteFile(path) {
+  if (!dbxToken) return
+  try {
+    await fetch('https://api.dropboxapi.com/2/files/delete_v2', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + dbxToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    })
+  } catch(e) {}
+}
+
+async function dbxEnsureFolder() {
+  if (!dbxToken) return
+  try {
+    await fetch('https://api.dropboxapi.com/2/files/create_folder_v2', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + dbxToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: DBX_APP_FOLDER, autorename: false })
+    })
+  } catch(e) {}  // ignore if already exists
+}
+
+async function dbxSync() {
+  if (!dbxToken) return
+  await dbxEnsureFolder()
+  setDriveStatus('SYNCING…')
+  await driveOnSignedIn()  // reuses the same load sequence
+}
+
+// ── Init — check for OAuth callback or restore session ────────────
+async function initDropbox() {
+  if (window.location.search.includes('code=')) {
+    await dbxHandleCallback()
+  } else {
+    await dbxRestoreSession()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // GOOGLE DRIVE INTEGRATION — per-file architecture
 // ═══════════════════════════════════════════════════════════════════
 const DRIVE_CLIENT_ID       = '115162218034-eoub6c46sqcmhamb72hoj3l69ov1321d.apps.googleusercontent.com'
@@ -5020,13 +5491,13 @@ function driveRestoreDecline() {
 
 // ─── CURRENT SETTINGS ─────────────────────────────────────────────
 async function driveSaveCurrentSettings() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ settings: captureSettings(), savedAt: new Date().toISOString() })
     if (driveCurrentId) {
-      await drivePatchFile(driveCurrentId, body)
+      await cloudPatchFile(driveCurrentId, body)
     } else {
-      driveCurrentId = await driveCreateFile(CURRENT_SETTINGS_FILE, body)
+      driveCurrentId = await cloudCreateFile(CURRENT_SETTINGS_FILE, body)
     }
   } catch(e) {}
 }
@@ -5038,12 +5509,12 @@ function driveSaveCurrentDebounced() {
 }
 
 async function driveLoadCurrentSettings() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
-    const files = await driveListFiles("name='" + CURRENT_SETTINGS_FILE + "'")
+    const files = await cloudListFiles("name='" + CURRENT_SETTINGS_FILE + "'")
     if (!files.length) { setDriveStatus('✓ READY','ok'); return }
     driveCurrentId = files[0].id
-    const data = await driveReadFile(driveCurrentId)
+    const data = await cloudReadFile(driveCurrentId)
     if (data?.settings) showRestorePopup(data.settings)
     else setDriveStatus('✓ READY','ok')
   } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
@@ -5051,7 +5522,7 @@ async function driveLoadCurrentSettings() {
 
 // ─── INDIVIDUAL PROMPT FILES ──────────────────────────────────────
 async function driveSavePrompt(fav) {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   // Ensure versions array exists
   if (!fav.versions) fav.versions = [{ text: fav.text, savedAt: fav.createdAt || fav.id, label: 'Original' }]
   setDriveStatus('SAVING…')
@@ -5059,16 +5530,16 @@ async function driveSavePrompt(fav) {
     const fname = PROMPT_FILE_PREFIX + fav.id + '.json'
     const body  = JSON.stringify({ fav, savedAt: new Date().toISOString() })
     if (drivePromptIds[fav.id]) {
-      await drivePatchFile(drivePromptIds[fav.id], body)
+      await cloudPatchFile(drivePromptIds[fav.id], body)
     } else {
-      drivePromptIds[fav.id] = await driveCreateFile(fname, body)
+      drivePromptIds[fav.id] = await cloudCreateFile(fname, body)
     }
     setDriveStatus('✓ SAVED','ok')
   } catch(e) { setDriveStatus('✗ SAVE FAILED','err') }
 }
 
 async function driveDeletePrompt(id) {
-  if (!driveToken || !drivePromptIds[id]) return
+  if (!cloudIsConnected() || !drivePromptIds[id]) return
   try {
     await fetch('https://www.googleapis.com/drive/v3/files/' + drivePromptIds[id], {
       method: 'DELETE',
@@ -5079,13 +5550,13 @@ async function driveDeletePrompt(id) {
 }
 
 async function driveLoadAllPrompts() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
-    const files = await driveListFiles("name contains '" + PROMPT_FILE_PREFIX + "'")
+    const files = await cloudListFiles("name contains '" + PROMPT_FILE_PREFIX + "'")
     const loaded = []
     await Promise.all(files.map(async f => {
       try {
-        const data = await driveReadFile(f.id)
+        const data = await cloudReadFile(f.id)
         if (data?.fav) { drivePromptIds[data.fav.id] = f.id; loaded.push(data.fav) }
       } catch(e) {}
     }))
@@ -5191,7 +5662,13 @@ function toggleLightMode() {
   }
 })()
 
-window.addEventListener('load', () => { setTimeout(initDrive, 800); openLoadPanel() })
+window.addEventListener('load', () => {
+  setTimeout(initDrive, 800)
+  initDropbox()
+  // Restore provider UI to match saved cookie
+  cloudSetProvider(cloudProvider)
+  openLoadPanel()
+})
 
 
 // ═══════════════════════════════════════════════════════════════════
@@ -5218,7 +5695,7 @@ function switchView(view, pushState = true) {
   if (view === 'library') renderLibrary()
   if (view === 'settings') renderSettingsView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
-  if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar() }
+  if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
   else {
     const nav = document.getElementById('pbTypeNav')
     if (nav) nav.classList.remove('visible')
@@ -5245,7 +5722,7 @@ function switchViewFromHash() {
 window.addEventListener('popstate', switchViewFromHash)
 window.addEventListener('hashchange', switchViewFromHash)
 window.addEventListener('resize', () => {
-  if (currentView === 'builder') pbRenderTypeNav()
+  if (currentView === 'builder') { pbRenderTypeNav(); pbInitBottomObserver() }
 })
 
 // ═══════════════════════════════════════════════════════════════════
@@ -5913,26 +6390,26 @@ function libMoveFavToFolder(favId, folderId) {
 
 // Folder Drive sync
 async function libFoldersSync() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ folders: libFolders, savedAt: new Date().toISOString() })
     if (libDriveFoldersId) {
-      await drivePatchFile(libDriveFoldersId, body)
+      await cloudPatchFile(libDriveFoldersId, body)
     } else {
-      const files = await driveListFiles(`name='${FOLDERS_FILE}'`)
-      if (files.length) { libDriveFoldersId = files[0].id; await drivePatchFile(libDriveFoldersId, body) }
-      else { libDriveFoldersId = await driveCreateFile(FOLDERS_FILE, body) }
+      const files = await cloudListFiles(`name='${FOLDERS_FILE}'`)
+      if (files.length) { libDriveFoldersId = files[0].id; await cloudPatchFile(libDriveFoldersId, body) }
+      else { libDriveFoldersId = await cloudCreateFile(FOLDERS_FILE, body) }
     }
   } catch(e) {}
 }
 
 async function libFoldersLoad() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
-    const files = await driveListFiles(`name='${FOLDERS_FILE}'`)
+    const files = await cloudListFiles(`name='${FOLDERS_FILE}'`)
     if (!files.length) return
     libDriveFoldersId = files[0].id
-    const data = await driveReadFile(libDriveFoldersId)
+    const data = await cloudReadFile(libDriveFoldersId)
     if (Array.isArray(data?.folders)) libFolders = data.folders
   } catch(e) {}
 }
@@ -6300,10 +6777,46 @@ function iterSaveVariant(btn, srcFavId) {
 // DRIVE PHOTO PICKER
 // ═══════════════════════════════════════════════════════════════════
 
-let drivePhotoFavId      = null
-let drivePhotoCurFolder  = 'root'
+let drivePhotoFavId       = null
+let drivePhotoCurFolder   = 'root'
 let drivePhotoFolderStack = []
-let driveDefaultFolderId = localStorage.getItem('bm_default_drive_folder') || null
+let driveDefaultFolderId  = localStorage.getItem('bm_default_drive_folder') || null
+let drivePhotoSortField   = 'name'        // 'name' | 'createdTime' | 'modifiedTime'
+let drivePhotoSortAsc     = true
+
+const DRIVE_SORT_OPTIONS = [
+  { key:'name',         label:'NAME' },
+  { key:'createdTime',  label:'CREATED' },
+  { key:'modifiedTime', label:'MODIFIED' },
+]
+
+function driveRenderSortTabs() {
+  const wrap = document.getElementById('driveSortTabs')
+  const dirBtn = document.getElementById('driveSortDir')
+  if (!wrap) return
+  wrap.innerHTML = ''
+  DRIVE_SORT_OPTIONS.forEach(opt => {
+    const btn = document.createElement('button')
+    btn.className = 'drive-sort-tab' + (drivePhotoSortField === opt.key ? ' active' : '')
+    btn.textContent = opt.label
+    btn.onclick = () => {
+      drivePhotoSortField = opt.key
+      driveRenderSortTabs()
+      drivePhotoBrowse(drivePhotoCurFolder)
+    }
+    wrap.appendChild(btn)
+  })
+  if (dirBtn) {
+    dirBtn.textContent = drivePhotoSortAsc ? '↑' : '↓'
+    dirBtn.title = drivePhotoSortAsc ? 'Ascending — click to reverse' : 'Descending — click to reverse'
+  }
+}
+
+function driveToggleSortDir() {
+  drivePhotoSortAsc = !drivePhotoSortAsc
+  driveRenderSortTabs()
+  drivePhotoBrowse(drivePhotoCurFolder)
+}
 
 function openDrivePhoto(favId) {
   if (!driveToken) { alert('Please connect Google Drive first'); return }
@@ -6311,12 +6824,11 @@ function openDrivePhoto(favId) {
   drivePhotoFolderStack = []
   document.getElementById('drivePhotoModal').style.display = 'flex'
   updateDriveDefaultLabel()
+  driveRenderSortTabs()
 
   const grid = document.getElementById('drivePhotoGrid')
   if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:11px;letter-spacing:1px;padding:20px;">Requesting Drive access…</div>'
 
-  // Request the photo token (includes drive.readonly)
-  // If already have a valid photo token, browse immediately
   if (drivePhotoToken) {
     const startFolder = driveDefaultFolderId || localStorage.getItem('bm_last_drive_folder') || 'root'
     drivePhotoBrowse(startFolder)
@@ -6337,12 +6849,13 @@ async function drivePhotoBrowse(folderId) {
   if (grid) grid.innerHTML = '<div style="color:var(--muted);font-size:11px;letter-spacing:1px;padding:20px;">Loading…</div>'
   if (backBtn) backBtn.disabled = drivePhotoFolderStack.length === 0
 
-  const token = drivePhotoToken || driveToken
+  const token   = drivePhotoToken || driveToken
+  const orderBy = `${drivePhotoSortField}${drivePhotoSortAsc ? '' : ' desc'}`
+
   try {
+    const q = `'${folderId}' in parents and trashed=false and (mimeType='application/vnd.google-apps.folder' or mimeType contains 'image/')`
     const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
-        `'${folderId}' in parents and trashed=false and (mimeType='application/vnd.google-apps.folder' or mimeType contains 'image/')`
-      )}&fields=files(id,name,mimeType,thumbnailLink)&pageSize=50&orderBy=name`,
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,thumbnailLink,createdTime,modifiedTime)&pageSize=100&orderBy=${encodeURIComponent(orderBy)}`,
       { headers: { Authorization: 'Bearer ' + token } }
     )
     if (!res.ok) {
@@ -6350,7 +6863,7 @@ async function drivePhotoBrowse(folderId) {
       if (res.status === 403 || res.status === 401) {
         grid.innerHTML = `<div style="color:#ff4444;font-size:11px;padding:20px;line-height:1.6;">
           <strong>Drive permission needed.</strong><br>
-          Click the button below to grant access to your Drive files.
+          Click below to grant access to your Drive files.
           <br><br>
           <button class="btn btn-primary" style="font-size:10px;" onclick="drivePhotoTokenClient.requestAccessToken({prompt:'consent'})">Grant Drive Access</button>
         </div>`
@@ -6370,10 +6883,27 @@ async function drivePhotoBrowse(folderId) {
       return
     }
 
-    files.forEach(file => {
+    // Folders first, then files
+    const folders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder')
+    const images  = files.filter(f => f.mimeType !== 'application/vnd.google-apps.folder')
+
+    // Sort folders by name always; files use selected sort
+    folders.sort((a,b) => a.name.localeCompare(b.name))
+
+    ;[...folders, ...images].forEach(file => {
       const item = document.createElement('div')
       item.className = 'drive-photo-item'
       const isFolder = file.mimeType === 'application/vnd.google-apps.folder'
+
+      // Format date for subtitle
+      let subtitle = ''
+      if (!isFolder && drivePhotoSortField !== 'name') {
+        const dateField = drivePhotoSortField === 'createdTime' ? file.createdTime : file.modifiedTime
+        if (dateField) {
+          subtitle = `<div class="drive-photo-sub">${drivePhotoSortField === 'createdTime' ? 'Created' : 'Modified'}: ${new Date(dateField).toLocaleDateString()}</div>`
+        }
+      }
+
       if (isFolder) {
         item.innerHTML = `<div class="drive-photo-thumb" style="font-size:28px;">📁</div><div class="drive-photo-name">${file.name}</div>`
         item.onclick = () => { drivePhotoFolderStack.push(drivePhotoCurFolder); drivePhotoBrowse(file.id) }
@@ -6382,6 +6912,7 @@ async function drivePhotoBrowse(folderId) {
         item.innerHTML = `
           ${thumb ? `<img class="drive-photo-thumb" src="${thumb}" alt="${file.name}" style="object-fit:cover;">` : `<div class="drive-photo-thumb" style="font-size:24px;">🖼</div>`}
           <div class="drive-photo-name">${file.name}</div>
+          ${subtitle}
         `
         item.onclick = () => drivePhotoSelect(file.id, file.name)
       }
@@ -6559,14 +7090,13 @@ function exportLibraryJSON() {
 // Nav drive dot
 function updateNavDriveDot() {
   const dot = document.getElementById('navDriveStatus')
+  const lbl = document.getElementById('navSyncLabel')
   if (!dot) return
-  if (driveToken) {
-    dot.style.background = '#00cc88'
-    dot.title = 'Drive connected'
-  } else {
-    dot.style.background = 'var(--muted)'
-    dot.title = 'Drive not connected'
-  }
+  const connected = cloudIsConnected()
+  const label = cloudProvider === 'dropbox' ? 'Dropbox' : 'Google Drive'
+  dot.style.background = connected ? '#00cc88' : 'var(--muted)'
+  dot.title = connected ? `${label} connected` : `${label} not connected`
+  if (lbl) lbl.textContent = (label + ' sync').toUpperCase()
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -6574,30 +7104,30 @@ function updateNavDriveDot() {
 // ═══════════════════════════════════════════════════════════════════
 
 async function driveModelsSync() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ models: customModels, savedAt: new Date().toISOString() })
     if (driveModelsId) {
-      await drivePatchFile(driveModelsId, body)
+      await cloudPatchFile(driveModelsId, body)
     } else {
-      const files = await driveListFiles(`name='${MODELS_FILE}'`)
+      const files = await cloudListFiles(`name='${MODELS_FILE}'`)
       if (files.length) {
         driveModelsId = files[0].id
-        await drivePatchFile(driveModelsId, body)
+        await cloudPatchFile(driveModelsId, body)
       } else {
-        driveModelsId = await driveCreateFile(MODELS_FILE, body)
+        driveModelsId = await cloudCreateFile(MODELS_FILE, body)
       }
     }
   } catch(e) {}
 }
 
 async function driveModelsLoad() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
-    const files = await driveListFiles(`name='${MODELS_FILE}'`)
+    const files = await cloudListFiles(`name='${MODELS_FILE}'`)
     if (!files.length) return
     driveModelsId = files[0].id
-    const data = await driveReadFile(driveModelsId)
+    const data = await cloudReadFile(driveModelsId)
     if (Array.isArray(data?.models)) {
       customModels = data.models
       populateModelSelect()
@@ -6866,6 +7396,8 @@ function pbInit() {
   pbInitAddSelects()
   pbRenderOutput()
   pbUpdateBottomBar()
+  // Delay observer init so DOM is fully laid out
+  setTimeout(pbInitBottomObserver, 100)
 }
 
 // ── LEGEND ─────────────────────────────────────────────────────────
@@ -6914,18 +7446,27 @@ function pbRenderLibrary() {
     // Apply mode filter to subject, form, action and technical (which have mode-tagged generator particles)
     const modeFilteredTypes = ['subject','form','action','technical']
     const applyMode = modeFilteredTypes.includes(t.key)
-    const allItems = pbGetParticles().filter(p => {
+    let allItems = pbGetParticles().filter(p => {
       if (p.type !== t.key) return false
       if (applyMode && pbSubjectMode !== 'all' && p.source === 'generator') {
         return p.mode === pbSubjectMode || !p.mode
       }
       return true
     })
+    // In creator mode, apply the creator filter to the full items set
+    if (pbLabMode === 'creator') allItems = pbApplyCreatorFilter(allItems, t.key)
+
     const isSubject = t.key === 'subject'
     const isOpen    = !pbCollapsed[t.key]
     const activeCat = pbActiveCats[t.key] || t.cats[0]
 
     // Skip block only during search when nothing matches
+    // In creator mode: always show all 11 blocks regardless of filter
+    const isCreator         = pbLabMode === 'creator'
+    const isPersonalCreator = isCreator && pbCreatorFilter === 'mine'
+    const isFavsCreator     = isCreator && pbCreatorFavsOn
+    const isBuiltinCreator  = isCreator && pbCreatorFilter === 'builtin'
+    // Only skip during search when nothing matches — always show all 11 blocks otherwise
     if (!allItems.length && query) return
 
     // Filter by search or active category (Favourites uses fav ids lookup)
@@ -6933,6 +7474,9 @@ function pbRenderLibrary() {
     let filtered
     if (query) {
       filtered = allItems.filter(p => p.text.toLowerCase().includes(query) || p.cat.toLowerCase().includes(query))
+    } else if (pbLabMode === 'creator') {
+      // Creator mode — flat list, no category tabs needed
+      filtered = allItems
     } else if (activeCatForFilter === 'Favourites') {
       const favIds = pbFavParticles[t.key] || []
       filtered = pbGetParticles().filter(p => p.type === t.key && favIds.includes(p.id))
@@ -6992,7 +7536,15 @@ function pbRenderLibrary() {
       }
     }
 
-    // Category tabs — Favourites always first, then cats with items, then default cats
+    // Category tabs — hidden in creator mode (filter handled by top buttons)
+    // resolvedCat needed by both tabs (editor) and groupKey (both modes)
+    const catsWithItemsAll = [...new Set(allItems.map(p => p.cat))]
+    if (!['Favourites', ...t.cats, ...catsWithItemsAll].includes(activeCat)) {
+      pbActiveCats[t.key] = catsWithItemsAll[0] || t.cats[0]
+    }
+    const resolvedCat = pbActiveCats[t.key] || t.cats[0]
+
+    if (pbLabMode !== 'creator') {
     const tabs = document.createElement('div')
     tabs.className = 'pb-cat-tabs'
     const catsWithItems = [...new Set(allItems.map(p => p.cat))]
@@ -7002,7 +7554,6 @@ function pbRenderLibrary() {
     if (!allCats.includes(activeCat)) {
       pbActiveCats[t.key] = catsWithItems[0] || t.cats[0]
     }
-    const resolvedCat = pbActiveCats[t.key] || t.cats[0]
 
     allCats.forEach(cat => {
       const isFavCat = cat === 'Favourites'
@@ -7058,6 +7609,7 @@ function pbRenderLibrary() {
       tabs.appendChild(tab)
     })
     body.appendChild(tabs)
+    } // end editor-mode category tabs
 
     // Particles list — sub-grouped if large generator category
     const list = document.createElement('div')
@@ -7065,7 +7617,7 @@ function pbRenderLibrary() {
 
     const GROUP_THRESHOLD = 20
     const hasGeneratorParticles = filtered.some(p => p.source === 'generator')
-    const useGroups = !query && hasGeneratorParticles && filtered.length >= GROUP_THRESHOLD
+    const useGroups = !query && pbLabMode !== 'creator' && hasGeneratorParticles && filtered.length >= GROUP_THRESHOLD
 
     if (useGroups) {
       // Separate user particles from generator particles
@@ -7100,8 +7652,29 @@ function pbRenderLibrary() {
 
       if (!filtered.length) {
         const empty = document.createElement('div')
-        empty.style.cssText = 'color:var(--muted);font-size:10px;letter-spacing:1px;padding:4px 0;'
-        empty.textContent = query ? 'No matches in this type.' : 'No particles in this category yet.'
+        empty.style.cssText = 'padding:10px 4px;'
+        if (isFavsCreator) {
+          empty.innerHTML = `
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.5px;line-height:1.8;">
+              No favourites yet for this type.
+              <br>Star particles using ★ while browsing
+              <button onclick="pbCreatorSetFilter('mine');pbCreatorFavsOn=false;pbCreatorToggleFavs&&null;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">👤 PERSONAL</button>
+              or
+              <button onclick="pbCreatorSetFilter('builtin');pbCreatorFavsOn=false;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">◈ BUILT-IN</button>
+            </div>`
+        } else if (isPersonalCreator) {
+          empty.innerHTML = `
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.5px;line-height:1.8;">
+              No personal particles yet for this type.
+              <br>
+              <button onclick="pbSetLabMode('editor')" style="margin-top:6px;background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">✏ SWITCH TO EDITOR TO CREATE PARTICLES</button>
+            </div>`
+        } else {
+          empty.style.cssText = 'color:var(--muted);font-size:10px;letter-spacing:1px;padding:4px 0;'
+          empty.textContent = query ? 'No matches in this type.'
+            : !pbShowBuiltin ? 'No personal particles yet — built-in particles hidden.'
+            : 'No particles in this category yet.'
+        }
         list.appendChild(empty)
       }
     }
@@ -7130,10 +7703,12 @@ function pbRenderLibrary() {
     addCatBtn.style.color = pbHexAlpha(t.color, 0.6)
     addCatBtn.textContent = '+ CATEGORY'
     addCatBtn.onclick = () => pbAddCategory(t.key)
-    addRow.appendChild(inp)
-    addRow.appendChild(saveBtn)
-    addRow.appendChild(addCatBtn)
-    body.appendChild(addRow)
+    if (pbLabMode !== 'creator') {
+      addRow.appendChild(inp)
+      addRow.appendChild(saveBtn)
+      addRow.appendChild(addCatBtn)
+      body.appendChild(addRow)
+    }
 
     // Colour tuner — only for colour type
     if (t.key === 'colour') {
@@ -7501,13 +8076,45 @@ function pbUpdateBottomBar() {
 }
 
 let pbBottomExpanded = false
+let pbBottomObserver = null
+
 function pbToggleBottomExpand() {
   pbBottomExpanded = !pbBottomExpanded
-  const chips  = document.getElementById('pbBottomChips')
-  const btn    = document.getElementById('pbBottomExpand')
+  const chips = document.getElementById('pbBottomChips')
+  const btn   = document.getElementById('pbBottomExpand')
   if (!chips || !btn) return
   chips.classList.toggle('expanded', pbBottomExpanded)
   btn.textContent = pbBottomExpanded ? '▼ COLLAPSE' : '▲ SHOW ALL'
+}
+
+function pbPeekTap() {
+  // User tapped the peek handle — scroll back to assembled prompt
+  const wrap = document.getElementById('pbAssembledWrap')
+  if (wrap) wrap.scrollIntoView({ behavior:'smooth', block:'start' })
+}
+
+function pbInitBottomObserver() {
+  if (pbBottomObserver) { pbBottomObserver.disconnect(); pbBottomObserver = null }
+  const wrap = document.getElementById('pbAssembledWrap')
+  const bar  = document.getElementById('pbBottomBar')
+  if (!wrap || !bar) return
+  // Only observe on mobile
+  if (window.innerWidth > 900) return
+  pbBottomObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        // Assembled prompt visible — collapse bar to peek
+        bar.classList.add('peek')
+      } else {
+        // Scrolled past — show full bar
+        bar.classList.remove('peek')
+      }
+    })
+  }, {
+    threshold: 0.1,  // fire when >10% of prompt is visible
+    rootMargin: '0px 0px -56px 0px'  // account for bar height so transition is clean
+  })
+  pbBottomObserver.observe(wrap)
 }
 
 function pbRenderFormula() {
@@ -7675,15 +8282,15 @@ function pbSaveParticle() {
 
 // ── DRIVE SYNC ─────────────────────────────────────────────────────
 async function pbParticlesDriveSync() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ libraries: pbLibraries, savedAt: new Date().toISOString() })
     if (pbLibDriveId) {
-      await drivePatchFile(pbLibDriveId, body)
+      await cloudPatchFile(pbLibDriveId, body)
     } else {
-      const files = await driveListFiles(`name='${PB_LIBRARIES_FILE}'`)
-      if (files.length) { pbLibDriveId = files[0].id; await drivePatchFile(pbLibDriveId, body) }
-      else { pbLibDriveId = await driveCreateFile(PB_LIBRARIES_FILE, body) }
+      const files = await cloudListFiles(`name='${PB_LIBRARIES_FILE}'`)
+      if (files.length) { pbLibDriveId = files[0].id; await cloudPatchFile(pbLibDriveId, body) }
+      else { pbLibDriveId = await cloudCreateFile(PB_LIBRARIES_FILE, body) }
     }
   } catch(e) {}
 }
@@ -7712,29 +8319,29 @@ function pbAddFavParticle(typeKey, particleId) {
 }
 
 async function pbFavParticlesSync() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
     // Serialise sets to plain arrays
     const data = {}
     Object.entries(pbFavParticles).forEach(([k,v]) => { data[k] = [...v] })
     const body = JSON.stringify({ favs: data, savedAt: new Date().toISOString() })
     if (pbFavDriveId) {
-      await drivePatchFile(pbFavDriveId, body)
+      await cloudPatchFile(pbFavDriveId, body)
     } else {
-      const files = await driveListFiles(`name='${PB_FAV_PARTICLES_FILE}'`)
-      if (files.length) { pbFavDriveId = files[0].id; await drivePatchFile(pbFavDriveId, body) }
-      else { pbFavDriveId = await driveCreateFile(PB_FAV_PARTICLES_FILE, body) }
+      const files = await cloudListFiles(`name='${PB_FAV_PARTICLES_FILE}'`)
+      if (files.length) { pbFavDriveId = files[0].id; await cloudPatchFile(pbFavDriveId, body) }
+      else { pbFavDriveId = await cloudCreateFile(PB_FAV_PARTICLES_FILE, body) }
     }
   } catch(e) {}
 }
 
 async function pbFavParticlesLoad() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
-    const files = await driveListFiles(`name='${PB_FAV_PARTICLES_FILE}'`)
+    const files = await cloudListFiles(`name='${PB_FAV_PARTICLES_FILE}'`)
     if (!files.length) return
     pbFavDriveId = files[0].id
-    const data = await driveReadFile(pbFavDriveId)
+    const data = await cloudReadFile(pbFavDriveId)
     if (data?.favs && typeof data.favs === 'object') {
       pbFavParticles = data.favs
     }
@@ -7742,14 +8349,14 @@ async function pbFavParticlesLoad() {
 }
 
 async function pbParticlesLoad() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   try {
-    const files = await driveListFiles(`name='${PB_LIBRARIES_FILE}'`)
+    const files = await cloudListFiles(`name='${PB_LIBRARIES_FILE}'`)
     if (!files.length) {
       // Migrate old single-library format if it exists
-      const oldFiles = await driveListFiles(`name='${PB_PARTICLES_FILE}'`)
+      const oldFiles = await cloudListFiles(`name='${PB_PARTICLES_FILE}'`)
       if (oldFiles.length) {
-        const old = await driveReadFile(oldFiles[0].id)
+        const old = await cloudReadFile(oldFiles[0].id)
         if (Array.isArray(old?.particles)) {
           pbLibraries[0].particles = old.particles.filter(p => !p.builtin)
           pbParticlesDriveSync()
@@ -7759,7 +8366,7 @@ async function pbParticlesLoad() {
       return
     }
     pbLibDriveId = files[0].id
-    const data = await driveReadFile(pbLibDriveId)
+    const data = await cloudReadFile(pbLibDriveId)
     if (Array.isArray(data?.libraries) && data.libraries.length) {
       // Merge saved libraries into default structure
       data.libraries.forEach((saved, i) => {
@@ -7841,7 +8448,75 @@ function pbToggleBuiltin() {
 // GENERATOR → PARTICLE BRIDGE
 // ═══════════════════════════════════════════════════════════════════
 
-let pbSubjectMode = 'all'   // 'all' | 'insect' | 'beast'
+let pbLabMode        = 'editor'   // 'editor' | 'creator'
+let pbCreatorFilter  = 'builtin'  // 'mine' | 'builtin'  — base filter
+let pbCreatorFavsOn  = false      // favourites toggle overlay
+let pbSubjectMode    = 'all'      // 'all' | 'insect' | 'beast'
+let pbCreatorSub     = 'all'      // 'all' | 'insect' | 'beast'  (only when builtin)
+
+function pbSetLabMode(mode) {
+  pbLabMode = mode
+  document.getElementById('pbModeEditorBtn').classList.toggle('active', mode === 'editor')
+  document.getElementById('pbModeCreatorBtn').classList.toggle('active', mode === 'creator')
+  document.getElementById('pbEditorControls').style.display  = mode === 'editor'  ? '' : 'none'
+  document.getElementById('pbCreatorControls').style.display = mode === 'creator' ? '' : 'none'
+  document.getElementById('pbAddForm').classList.remove('open')
+  if (mode === 'creator') {
+    // Reset fav toggle, ensure correct sub-filter visibility
+    pbCreatorFavsOn = false
+    document.getElementById('pbCreatorFavBtn')?.classList.remove('active')
+    const sub = document.getElementById('pbCreatorSubfilter')
+    if (sub) sub.style.display = pbCreatorFilter === 'builtin' ? 'flex' : 'none'
+  }
+  pbRenderLibrary()
+}
+
+function pbCreatorSetFilter(filter) {
+  pbCreatorFilter = filter
+  // Update button states
+  document.getElementById('pbCreatorPersonalBtn')?.classList.toggle('active', filter === 'mine')
+  document.getElementById('pbCreatorBuiltinBtn')?.classList.toggle('active', filter === 'builtin')
+  // Sub-filter always visible (built-in always shows it; personal hides it)
+  const sub = document.getElementById('pbCreatorSubfilter')
+  if (sub) sub.style.display = filter === 'builtin' ? 'flex' : 'none'
+  pbRenderLibrary()
+}
+
+function pbCreatorToggleFavs() {
+  pbCreatorFavsOn = !pbCreatorFavsOn
+  const btn = document.getElementById('pbCreatorFavBtn')
+  if (btn) btn.classList.toggle('active', pbCreatorFavsOn)
+  pbRenderLibrary()
+}
+
+function pbCreatorSetSub(sub) {
+  pbCreatorSub = sub
+  ;['all','insect','beast'].forEach(s => {
+    const btn = document.getElementById(`pbCreator${s.charAt(0).toUpperCase()+s.slice(1)}Btn`)
+    if (btn) btn.classList.toggle('active', s === sub)
+  })
+  pbRenderLibrary()
+}
+
+// Apply creator filter to a particles array for a given type key
+function pbApplyCreatorFilter(particles, typeKey) {
+  if (pbLabMode !== 'creator') return particles
+  let pool = particles
+  // Base filter
+  if (pbCreatorFilter === 'mine') {
+    pool = pool.filter(p => !p.builtin && p.source !== 'generator')
+  } else if (pbCreatorFilter === 'builtin') {
+    pool = pool.filter(p => p.builtin || p.source === 'generator')
+    if (pbCreatorSub === 'insect') pool = pool.filter(p => !p.mode || p.mode === 'insect')
+    if (pbCreatorSub === 'beast')  pool = pool.filter(p => p.mode === 'beast')
+  }
+  // Favourites toggle — overlay on top of base filter
+  if (pbCreatorFavsOn) {
+    const favIds = pbFavParticles[typeKey] || []
+    pool = pool.filter(p => favIds.includes(p.id))
+  }
+  return pool
+}
 
 const PB_INSECT_CATS = {"Rhinoceros Beetle":"Beetles", "Hercules Beetle":"Beetles", "Goliath Beetle":"Beetles", "Stag Beetle":"Beetles", "Ironclad Beetle":"Beetles", "Bombardier Beetle":"Beetles", "Trilobite Beetle":"Beetles", "Tiger Beetle":"Beetles", "Diving Beetle":"Beetles", "Longhorn Beetle":"Beetles", "Jewel Beetle":"Beetles", "Whirligig Beetle":"Beetles", "Firefly":"Beetles", "Titan Beetle":"Beetles", "Click Beetle":"Beetles", "Violin Beetle":"Exotic", "Dung Beetle":"Beetles", "Ground Beetle":"Beetles", "Bark Beetle":"Beetles", "Blister Beetle":"Beetles", "Rove Beetle":"Beetles", "Hister Beetle":"Beetles", "Soldier Beetle":"Beetles", "Atlas Beetle":"Beetles", "Elephant Beetle":"Beetles", "Palo Verde Root Borer":"Beetles", "Wallace's Giant Bee":"Beetles", "Dragonfly":"Flies", "Emperor Dragonfly":"Flies", "Glasstail Dragonfly":"Flies", "Damselfly":"Flies", "Stalk-Eyed Fly":"Flies", "Tsetse Fly":"Flies", "Horse Fly":"Flies", "Robber Fly":"Flies", "Hoverfly":"Flies", "Crane Fly":"Flies", "Botfly":"Flies", "Mayfly":"Flies", "Blow Fly":"Flies", "Scorpion Fly":"Flies", "Gnat":"Flies", "Mosquito":"Flies", "Black Fly":"Flies", "Sand Fly":"Flies", "Fungus Gnat":"Flies", "March Fly":"Flies", "Midge":"Flies", "Bumblebee":"Wasps & Bees", "Yellowjacket Wasp":"Wasps & Bees", "Hornet":"Wasps & Bees", "Japanese Giant Hornet":"Wasps & Bees", "Tarantula Hawk":"Wasps & Bees", "Paper Wasp":"Wasps & Bees", "Mud Dauber":"Wasps & Bees", "Cicada Killer":"Wasps & Bees", "Orchid Bee":"Wasps & Bees", "Velvet Ant":"Wasps & Bees", "Cuckoo Wasp":"Wasps & Bees", "Wood Wasp":"Wasps & Bees", "Giant Ichneumon Wasp":"Wasps & Bees", "Warrior Wasp":"Wasps & Bees", "Fire Ant":"Ants", "Bullet Ant":"Ants", "Army Ant":"Ants", "Driver Ant":"Ants", "Carpenter Ant":"Ants", "Leafcutter Ant":"Ants", "Trap-Jaw Ant":"Ants", "Weaver Ant":"Ants", "Praying Mantis":"Mantids", "Orchid Mantis":"Mantids", "Dead Leaf Mantis":"Mantids", "Ghost Mantis":"Mantids", "Spiny Flower Mantis":"Mantids", "Budwing Mantis":"Mantids", "Mantis Fly":"Mantids", "Assassin Bug":"Mantids", "Treehopper":"Mantids", "Cicada":"Mantids", "Leafhopper":"Mantids", "Planthopper":"Mantids", "Water Strider":"Mantids", "Cockroach":"Mantids", "Giant Water Bug":"Mantids", "Backswimmer":"Mantids", "Shield Bug":"Mantids", "Bed Bug":"Mantids", "Aphid":"Mantids", "Water Scorpion":"Mantids", "Peanut Head Bug":"Mantids", "Monarch Butterfly":"Moths & Butterflies", "Blue Morpho Butterfly":"Moths & Butterflies", "Glasswing Butterfly":"Moths & Butterflies", "Swallowtail Butterfly":"Moths & Butterflies", "Queen Alexandra Birdwing":"Moths & Butterflies", "Atlas Moth":"Moths & Butterflies", "Luna Moth":"Moths & Butterflies", "Death's Head Hawk-Moth":"Moths & Butterflies", "Hawk Moth":"Moths & Butterflies", "Hummingbird Hawk-Moth":"Moths & Butterflies", "Peppered Moth":"Moths & Butterflies", "Silkworm Moth":"Moths & Butterflies", "Io Moth":"Moths & Butterflies", "Comet Moth":"Moths & Butterflies", "Hercules Moth":"Moths & Butterflies", "Armyworm Moth":"Moths & Butterflies", "Grasshopper":"Moths & Butterflies", "Cricket":"Moths & Butterflies", "Locust":"Moths & Butterflies", "Katydid":"Moths & Butterflies", "Mole Cricket":"Moths & Butterflies", "Cave Cricket":"Moths & Butterflies", "Weta":"Moths & Butterflies", "Giant Weta":"Moths & Butterflies", "Jerusalem Cricket":"Moths & Butterflies", "Stick Insect":"Stick Insects", "Leaf Insect":"Stick Insects", "Thorny Stick Insect":"Stick Insects", "Chan's Megastick":"Stick Insects", "Peacock Spider":"Arachnids", "Whip Spider":"Arachnids", "Scorpion":"Arachnids", "Emperor Scorpion":"Arachnids", "Deathstalker Scorpion":"Arachnids", "Fat-Tail Scorpion":"Arachnids", "Centipede":"Arachnids", "Giant Desert Centipede":"Arachnids", "Vietnamese Centipede":"Arachnids", "Amazonian Giant Centipede":"Arachnids", "Millipede":"Arachnids", "Giant African Millipede":"Arachnids", "Harvestman":"Arachnids", "Vinegaroon":"Arachnids", "Giant Vinegaroon":"Arachnids", "Sun Spider":"Arachnids", "Camel Spider":"Arachnids", "Pseudoscorpion":"Arachnids", "Tailless Whip Scorpion":"Arachnids", "Goliath Bird-Eater":"Arachnids", "Black Widow Spider":"Arachnids", "Funnel Web Spider":"Arachnids", "Trapdoor Spider":"Arachnids", "Brazilian Wandering Spider":"Arachnids", "Huntsman Spider":"Arachnids", "Tarantula":"Arachnids", "Termite":"Social Insects", "Termite Soldier":"Social Insects", "Earwig":"Primitive", "Silverfish":"Primitive", "Firebrat":"Primitive", "Springtail":"Primitive", "Bristletail":"Primitive", "Flea":"Primitive", "Body Louse":"Primitive", "Webspinner":"Primitive", "Rock Crawler":"Primitive", "Grylloblattid":"Primitive", "Mantophasmatodea":"Primitive", "Lacewing":"Lacewings", "Antlion":"Lacewings", "Owlfly":"Lacewings", "Giant Lacewing":"Lacewings", "Water Boatman":"Water Insects", "Dobsonfly":"Water Insects", "Giant Waterbug":"Water Insects", "Raft Spider":"Water Insects", "Diving Bell Spider":"Water Insects", "Velvet Worm":"Exotic", "Giraffe Weevil":"Exotic", "Twisted-Wing Parasite":"Exotic", "Zorapteran":"Exotic", "Barklouse":"Exotic", "Angel Insect":"Exotic", "Thrips":"Exotic", "Scale Insect":"Exotic", "Mealybug":"Exotic", "Emerald Ash Borer":"Beetles", "Japanese Beetle":"Beetles", "Ladybug":"Beetles", "Weevil":"Beetles", "Cockchafer":"Beetles", "Leafcutter Bee":"Beetles", "Solifuge":"Arachnids", "Whip Scorpion":"Arachnids", "Glowworm":"Flies", "Firefly Larva":"Flies", "Sphinx Moth":"Moths & Butterflies", "Garden Tiger Moth":"Moths & Butterflies", "Cinnabar Moth":"Moths & Butterflies"}
 const PB_BEAST_CATS  = {"Dragon":"Reptilian", "Komodo Dragon":"Reptilian", "Cobra":"Reptilian", "Crocodile":"Reptilian", "Gecko":"Reptilian", "Frog":"Reptilian", "Salamander":"Reptilian", "Wolf":"Predators", "Lion":"Predators", "Tiger":"Predators", "Bear":"Predators", "Gorilla":"Predators", "Panther":"Predators", "Hyena":"Predators", "Rhino":"Predators", "Bull":"Predators", "Falcon":"Avian", "Owl":"Avian", "Raven":"Avian", "Eagle":"Avian", "Vulture":"Avian", "Phoenix":"Avian", "Bat":"Avian", "Shark":"Aquatic", "Octopus":"Aquatic", "Squid":"Aquatic", "Anglerfish":"Aquatic", "Stingray":"Aquatic", "Dolphin":"Aquatic", "Lobster":"Aquatic", "Man O'War":"Aquatic", "Jellyfish":"Aquatic", "Giant Isopod":"Aquatic", "Kraken":"Aquatic", "Leviathan":"Aquatic", "Xenomorph":"Mythic", "Predator (Yautja)":"Mythic", "Kaiju":"Mythic", "Chimera":"Mythic", "Hydra":"Mythic", "Basilisk":"Mythic", "Cerberus":"Mythic", "Manticore":"Mythic", "Behemoth":"Mythic", "Mecha Godzilla":"Mythic", "Godzilla":"Mythic", "King Ghidorah":"Mythic", "Mothra":"Mythic", "Biollante":"Mythic", "Jorōgumo":"Mythic", "Cthulhu":"Mythic", "Griffin":"Mythic", "Minotaur":"Mythic", "Pegasus":"Mythic", "Gargoyle":"Mythic", "Golem":"Mythic", "Oni":"Mythic", "Wendigo":"Mythic", "Werewolf":"Mythic", "Vampire":"Mythic", "Demon":"Mythic", "Reaper":"Mythic", "Pangolin":"Armoured", "Armadillo":"Armoured", "Tortoise":"Armoured", "Horseshoe Crab":"Armoured", "Porcupine":"Armoured", "Hedgehog":"Armoured", "Echidna":"Armoured", "Sea Urchin":"Armoured", "Nautilus":"Armoured", "Boxfish":"Armoured", "Hippopotamus":"Armoured", "Elephant":"Armoured", "Rhinoceros (Beast)":"Armoured", "Gnome":"Other", "Tarantula (Mech)":"Other", "Spider Queen":"Other"}
