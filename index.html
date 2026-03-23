@@ -5499,17 +5499,27 @@ function showDriveSignedIn(name, picture) {
 
 function driveSignOut() {
   if (driveToken) {
-    // Revoke the token so next sign-in is clean
     google.accounts.oauth2.revoke(driveToken, () => {})
   }
   driveToken = null; driveCurrentId = null; drivePromptIds = {}
   localStorage.removeItem('bm_drive_session')
   google.accounts.id.disableAutoSelect()
-  document.getElementById('driveSignedOut').style.display = 'flex'
-  document.getElementById('driveSignedIn').style.display  = 'none'
-  document.getElementById('loadDriveBadge').classList.remove('show')
+  // Update generator panel
+  const so = document.getElementById('driveSignedOut')
+  const si = document.getElementById('driveSignedIn')
+  if (so) so.style.display = 'flex'
+  if (si) si.style.display = 'none'
+  // Update settings panel
+  const sso = document.getElementById('settingsDriveSignedOut')
+  const ssi = document.getElementById('settingsDriveSignedIn')
+  if (sso) sso.style.display = 'block'
+  if (ssi) ssi.style.display = 'none'
+  const loadBadge = document.getElementById('loadDriveBadge')
+  if (loadBadge) loadBadge.classList.remove('show')
   openLoadPanel()
   setDriveStatus('—')
+  updateNavDriveDot()
+  updateLocalWarning()
 }
 
 function setDriveStatus(msg, type='') {
@@ -7194,12 +7204,6 @@ async function driveModelsLoad() {
 // ═══════════════════════════════════════════════════════════════════
 
 // Update nav drive dot on sign out
-const _origDriveSignOut = driveSignOut
-function driveSignOut() {
-  _origDriveSignOut()
-  updateNavDriveDot()
-}
-
 // Patch window load
 window.addEventListener('load', () => {
   setTimeout(initDrive, 800)
@@ -10954,18 +10958,28 @@ function pbSaveTagged() {
       <!-- Google Drive -->
       <button class="sync-gate-btn" onclick="syncGateChooseGdrive()" id="syncGateGdriveBtn">
         <span class="sync-gate-icon" style="background:color-mix(in srgb,#4285F4 20%,transparent);color:#4285F4;">▲</span>
-        <div>
+        <div style="flex:1;">
           <div style="font-weight:700;letter-spacing:.5px;">Google Drive</div>
           <div style="font-size:10px;opacity:.6;margin-top:2px;">Sign in with your Google account</div>
         </div>
+        <a href="https://accounts.google.com/signup" target="_blank" rel="noopener"
+           onclick="event.stopPropagation()"
+           style="font-size:9px;letter-spacing:1px;color:var(--muted);text-decoration:underline;white-space:nowrap;padding:2px 4px;">
+          CREATE ACCOUNT
+        </a>
       </button>
       <!-- Dropbox -->
       <button class="sync-gate-btn" onclick="syncGateChooseDropbox()">
         <span class="sync-gate-icon" style="background:color-mix(in srgb,#0061FF 20%,transparent);color:#0061FF;">⬡</span>
-        <div>
+        <div style="flex:1;">
           <div style="font-weight:700;letter-spacing:.5px;">Dropbox</div>
           <div style="font-size:10px;opacity:.6;margin-top:2px;">Connect your Dropbox account</div>
         </div>
+        <a href="https://www.dropbox.com/register" target="_blank" rel="noopener"
+           onclick="event.stopPropagation()"
+           style="font-size:9px;letter-spacing:1px;color:var(--muted);text-decoration:underline;white-space:nowrap;padding:2px 4px;">
+          CREATE ACCOUNT
+        </a>
       </button>
       <!-- Divider -->
       <div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
