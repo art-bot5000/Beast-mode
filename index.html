@@ -2672,6 +2672,13 @@ body.light .colourTuner { background:var(--surface2); }
       </div>
     </header>
 
+    <!-- Edit mode banner — shown when editing an existing library prompt -->
+    <div id="pbEditBanner" style="display:none;background:color-mix(in srgb,#38b6ff 12%,transparent);border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:5px;padding:8px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;letter-spacing:1px;color:#38b6ff;font-weight:700;">✎ EDITING:</span>
+      <span id="pbEditBannerTitle" style="font-size:12px;color:var(--text);flex:1;"></span>
+      <button onclick="pbCancelEdit()" style="background:none;border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:#38b6ff;">✕ CANCEL EDIT</button>
+    </div>
+
     <!-- // PARTICLE LIBRARY label + library tabs -->
     <div class="pb-section-label" style="margin-bottom:8px;">// PARTICLE LIBRARY</div>
     <div class="pb-lib-bar" style="margin-bottom:16px;">
@@ -2688,7 +2695,7 @@ body.light .colourTuner { background:var(--surface2); }
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbCopyOutput()">⎘ COPY</button>
-        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="pbSaveToLibrary()">♥ SAVE</button>
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" id="pbSaveBtn" onclick="pbSaveToLibrary()">♥ SAVE</button>
       </div>
     </div>
 
@@ -6215,8 +6222,9 @@ function buildLibCard(f) {
   const actionDefs = [
     { label:'⬆ RESTORE',  cls:'', fn: () => { restoreFav(f.id); switchView('generator') } },
     { label:'⎘ COPY',     cls:'', fn: () => copyFav(f.id) },
+    { label:'✎ EDIT IN LAB', cls:'', fn: () => editInPromptLab(f), title:'Open and edit in Prompt Lab' },
     { label:'⟳ ITERATE',  cls:'', fn: () => openIterate(f.id), title:'Generate variants by swapping a particle' },
-    { label:'⊛ PARTICLES',cls:'', fn: () => sendToParticleLab(f), title:'Open in Prompt Lab' },
+    { label:'⊛ PARTICLES',cls:'', fn: () => sendToParticleLab(f), title:'Import into Prompt Lab as particles' },
     { label:'🕒',          cls:'', fn: () => openVersionHistory(f.id), title:'Version history' },
     { label:'🖼',          cls:'', fn: () => openImageModal(f.id), title:'Upload image' },
     { label:'☁',          cls:'', fn: () => openDrivePhoto(f.id), title:'Pick image from Google Drive' },
@@ -6397,14 +6405,28 @@ function openVersionHistory(favId) {
     row.className = 'version-item'
     const promptOnly = v.text?.includes('---SETTINGS---')
       ? v.text.slice(0, v.text.indexOf('---SETTINGS---')).trim() : (v.text || '')
+    // Particle chip preview for this version
+    let chipHtml = ''
+    if (v.particles && v.particles.length) {
+      chipHtml = '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">' +
+        v.particles.map(p => {
+          const t = PB_TYPES.find(x => x.key === p.type)
+          const tc = t ? t.color : 'var(--accent)'
+          return `<span style="font-size:10px;padding:1px 5px;border-radius:2px;background:color-mix(in srgb,${tc} 12%,transparent);color:${tc};border:1px solid color-mix(in srgb,${tc} 25%,transparent);font-weight:700;">${p.text}</span>`
+        }).join('<span style="color:var(--muted);font-size:10px;padding:0 1px;">—</span>') +
+        '</div>'
+    }
     row.innerHTML = `
       <div class="version-meta">
         <div class="version-label">${v.label || 'Version ' + (versions.length - idx)}</div>
         <div class="version-date">${formatDate(v.savedAt)}</div>
         ${isLatest ? '<div style="font-size:11px;color:var(--accent);margin-top:3px;letter-spacing:1px;">CURRENT</div>' : ''}
       </div>
-      <div class="version-text">${promptOnly.slice(0, 200)}${promptOnly.length > 200 ? '…' : ''}</div>
-      ${!isLatest ? `<button class="btn btn-ghost version-restore" onclick="restoreVersion(${favId},${idx})">⬆ RESTORE</button>` : ''}
+      <div class="version-text">${chipHtml || (promptOnly.slice(0, 200) + (promptOnly.length > 200 ? '…' : ''))}</div>
+      ${!isLatest ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+        <button class="btn btn-ghost version-restore" onclick="restoreVersion(${favId},${idx})">⬆ RESTORE</button>
+        ${v.particles ? `<button class="btn btn-ghost version-restore" onclick="editVersionInLab(${favId},${idx})" style="font-size:11px;">✎ EDIT IN LAB</button>` : ''}
+      </div>` : ''}
     `
     body.appendChild(row)
   })
@@ -6432,9 +6454,9 @@ function restoreVersion(favId, reversedIdx) {
   renderLibrary()
 }
 
-function pbAddVersion(fav, text, label) {
+function pbAddVersion(fav, text, label, particles) {
   if (!fav.versions) fav.versions = []
-  fav.versions.push({ text, savedAt: Date.now(), label: label || 'Edit' })
+  fav.versions.push({ text, savedAt: Date.now(), label: label || 'Edit', particles: particles || null })
   // Keep max 20 versions
   if (fav.versions.length > 20) fav.versions = fav.versions.slice(-20)
 }
@@ -10936,6 +10958,88 @@ function pbClearTags() {
   pbRenderTaggedList()
 }
 
+// ── EDIT IN PROMPT LAB ────────────────────────────────────────────
+// Tracks which library prompt is being edited
+window._pbEditingFavId = null
+
+function editInPromptLab(f) {
+  window._pbEditingFavId = f.id
+  switchView('builder')
+  const init = () => {
+    // Clear current formula
+    pbFormula = []
+
+    if (f.particles && f.particles.length) {
+      // Prompt has particle structure — load directly into formula
+      f.particles.forEach(p => {
+        // Try to find the particle in the current library
+        let existing = pbGetParticles().find(x => x.id === p.id)
+        if (!existing) {
+          // Particle not in current library — create a temporary one in active library
+          const temp = { id: p.id, type: p.type, cat: p.cat, text: p.text }
+          pbLibraries[pbActiveLib].particles.push(temp)
+          existing = temp
+        }
+        pbFormula.push({ uid: pbNextUid++, particleId: existing.id })
+      })
+      pbRenderLibrary()
+      pbRenderFormula()
+      pbRenderOutput()
+      pbUpdateBottomBar()
+    } else {
+      // No particles — open the import modal pre-populated with the text
+      const text = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
+      pbOpenImport()
+      setTimeout(() => {
+        const ta = document.getElementById('pbImportTextarea')
+        if (ta) { ta.value = text; ta.dispatchEvent(new Event('input')) }
+      }, 100)
+    }
+
+    // Show edit banner
+    const banner = document.getElementById('pbEditBanner')
+    const titleEl = document.getElementById('pbEditBannerTitle')
+    const saveBtn = document.getElementById('pbSaveBtn')
+    if (banner) banner.style.display = 'flex'
+    if (titleEl) titleEl.textContent = f.title || f.promptOnly?.slice(0, 60) || 'Untitled prompt'
+    if (saveBtn) saveBtn.textContent = '♥ SAVE EDIT'
+  }
+
+  if (pbInitDone) init()
+  else setTimeout(init, 400)
+}
+
+function editVersionInLab(favId, reversedIdx) {
+  const f = favourites.find(x => x.id === favId)
+  if (!f) return
+  const versions = [...(f.versions || [])].reverse()
+  const v = versions[reversedIdx]
+  if (!v) return
+  closeVersionHistory()
+  // Build a temporary fav-like object from this version for editInPromptLab
+  const vFav = {
+    id: f.id,  // still linked to the same original
+    title: f.title,
+    promptOnly: v.text?.includes('---SETTINGS---') ? v.text.slice(0, v.text.indexOf('---SETTINGS---')).trim() : (v.text || ''),
+    text: v.text || '',
+    particles: v.particles || f.particles || null,
+  }
+  editInPromptLab(vFav)
+}
+
+function pbCancelEdit() {
+  window._pbEditingFavId = null
+  pbFormula = []
+  pbRenderFormula()
+  pbRenderOutput()
+  pbUpdateBottomBar()
+  const banner = document.getElementById('pbEditBanner')
+  if (banner) banner.style.display = 'none'
+  const saveBtn = document.getElementById('pbSaveBtn')
+  if (saveBtn) saveBtn.textContent = '♥ SAVE'
+  switchView('library')
+}
+
 function sendToParticleLab(f) {
   const text = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
   if (!text) return
@@ -10963,6 +11067,36 @@ function pbSaveToLibrary() {
     .map(e => pbGetParticles().find(x => x.id === e.particleId))
     .filter(Boolean)
     .map(p => ({ id: p.id, type: p.type, cat: p.cat, text: p.text }))
+
+  if (window._pbEditingFavId) {
+    // EDIT MODE — append a new version to the original prompt
+    const orig = favourites.find(x => x.id === window._pbEditingFavId)
+    if (orig) {
+      const label = `Edited in Prompt Lab`
+      if (!orig.versions?.length) pbAddVersion(orig, orig.text, 'Original', orig.particles)
+      orig.text = text
+      orig.promptOnly = text
+      orig.particles  = particles.length ? particles : orig.particles
+      orig.updatedAt  = Date.now()
+      pbAddVersion(orig, text, label, particles.length ? particles : null)
+      lsSave(LS.FAVS, favourites)
+      driveSavePrompt(orig)
+    }
+    // Clear edit state
+    window._pbEditingFavId = null
+    pbFormula = []
+    const banner = document.getElementById('pbEditBanner')
+    if (banner) banner.style.display = 'none'
+    const saveBtn = document.getElementById('pbSaveBtn')
+    if (saveBtn) saveBtn.textContent = '♥ SAVE'
+    pbRenderFormula()
+    pbRenderOutput()
+    pbUpdateBottomBar()
+    switchView('library')
+    return
+  }
+
+  // Normal save — open image/metadata modal
   window._pendingOutput = { visible: text, full: text, particles }
   openImageModal(null)
 }
