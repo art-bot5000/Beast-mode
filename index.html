@@ -5582,9 +5582,10 @@ async function driveLoadCurrentSettings() {
 
 // ─── INDIVIDUAL PROMPT FILES ──────────────────────────────────────
 async function driveSavePrompt(fav) {
-  if (!cloudIsConnected()) return
-  // Ensure versions array exists
+  // Always save to localStorage regardless of cloud state
   if (!fav.versions) fav.versions = [{ text: fav.text, savedAt: fav.createdAt || fav.id, label: 'Original' }]
+  lsSave(LS.FAVS, favourites)
+  if (!cloudIsConnected()) return
   setDriveStatus('SAVING…')
   try {
     const fname = PROMPT_FILE_PREFIX + fav.id + '.json'
@@ -7206,14 +7207,24 @@ async function driveModelsLoad() {
 // Update nav drive dot on sign out
 // Patch window load
 window.addEventListener('load', () => {
+  // 1. Restore from localStorage immediately — data visible before cloud connects
+  lsRestoreAll()
+  updateLibBadge()
+  renderFavs()
+  renderLibrary()
+  renderFolderSidebar()
+  if (typeof pbRenderLibBar === 'function') pbRenderLibBar()
+
+  // 2. Init cloud — will background-sync and merge after connect
   setTimeout(initDrive, 800)
   initDropbox()
   cloudSetProvider(cloudProvider)
+
   openLoadPanel()
-  updateLibBadge()
   renderLibFilters()
   if (location.hash) switchViewFromHash()
-  // Show sync gate after a brief delay so Drive init can restore session first
+
+  // 3. Show sync gate if no cloud and no local data
   setTimeout(syncGateCheck, 1200)
 })
 
@@ -7222,9 +7233,15 @@ window.addEventListener('load', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 function syncGateCheck() {
-  // If already connected to either provider, or user previously dismissed, skip
-  if (cloudIsConnected()) return
+  // Skip if already connected to cloud
+  if (cloudIsConnected()) { updateLocalWarning(); return }
+  // Skip if user previously dismissed
   if (getCookie('bm_sync_dismissed')) { updateLocalWarning(); return }
+  // Skip if local data exists (they have data, just no cloud yet)
+  const hasLocalData = lsLoad(LS.FAVS)?.length > 0 ||
+    lsLoad(LS.PB_LIBS)?.[0]?.particles?.length > 0
+  if (hasLocalData) { updateLocalWarning(); return }
+  // No cloud, no data — show gate
   document.getElementById('syncGateModal').style.display = 'flex'
 }
 
@@ -7268,10 +7285,138 @@ function updateLocalWarning() {
 
 // Also hide warning when cloud connects
 const _origDriveOnSignedIn = driveOnSignedIn
+// ═══════════════════════════════════════════════════════════════════
+// LOCAL PERSISTENCE — localStorage as working copy
+// ═══════════════════════════════════════════════════════════════════
+
+const LS = {
+  FAVS:      'bm_state_favourites',
+  PRESETS:   'bm_state_presets',
+  MODELS:    'bm_state_models',
+  FOLDERS:   'bm_state_folders',
+  PB_LIBS:   'bm_state_pb_libraries',
+  PB_FAVS:   'bm_state_pb_favs',
+  SETTINGS:  'bm_state_settings',
+}
+
+function lsSave(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch(e) {}
+}
+function lsLoad(key, fallback = null) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback }
+  catch(e) { return fallback }
+}
+
+// Save entire app state to localStorage
+function lsSaveAll() {
+  lsSave(LS.FAVS,    favourites)
+  lsSave(LS.PRESETS, customPresets)
+  lsSave(LS.MODELS,  customModels)
+  lsSave(LS.FOLDERS, libFolders)
+  lsSave(LS.PB_LIBS, pbLibraries)
+  lsSave(LS.PB_FAVS, pbFavParticles)
+}
+
+// Restore entire app state from localStorage
+function lsRestoreAll() {
+  const savedFavs = lsLoad(LS.FAVS)
+  if (Array.isArray(savedFavs) && savedFavs.length) favourites = savedFavs
+
+  const savedPresets = lsLoad(LS.PRESETS)
+  if (Array.isArray(savedPresets)) customPresets = savedPresets
+
+  const savedModels = lsLoad(LS.MODELS)
+  if (Array.isArray(savedModels)) customModels = savedModels
+
+  const savedFolders = lsLoad(LS.FOLDERS)
+  if (Array.isArray(savedFolders)) libFolders = savedFolders
+
+  const savedLibs = lsLoad(LS.PB_LIBS)
+  if (Array.isArray(savedLibs)) {
+    savedLibs.forEach((saved, i) => {
+      if (i < pbLibraries.length) {
+        pbLibraries[i].name = saved.name || pbLibraries[i].name
+        pbLibraries[i].particles = Array.isArray(saved.particles)
+          ? saved.particles.filter(p => !p.builtin) : []
+      }
+    })
+  }
+
+  const savedPbFavs = lsLoad(LS.PB_FAVS)
+  if (savedPbFavs && typeof savedPbFavs === 'object') pbFavParticles = savedPbFavs
+
+  const savedSettings = lsLoad(LS.SETTINGS)
+  if (savedSettings) {
+    try { applySettings(savedSettings) } catch(e) {}
+  }
+}
+
+// Patch all mutation points to auto-save to localStorage ──────────
+
+// Favourites mutations
+const _lsOrigDoSaveFav = doSaveFav
+function doSaveFav(imageData, model, title, rating) {
+  _lsOrigDoSaveFav(imageData, model, title, rating)
+  lsSave(LS.FAVS, favourites)
+}
+
+const _lsOrigDeleteFav = deleteFav
+function deleteFav(id) {
+  _lsOrigDeleteFav(id)
+  lsSave(LS.FAVS, favourites)
+}
+
+// Particle library sync — patch to also save locally
+const _lsOrigPbSync = pbParticlesDriveSync
+async function pbParticlesDriveSync() {
+  lsSave(LS.PB_LIBS, pbLibraries)
+  return _lsOrigPbSync()
+}
+
+// Fav particles sync
+const _lsOrigFavSync = pbFavParticlesSync
+async function pbFavParticlesSync() {
+  lsSave(LS.PB_FAVS, pbFavParticles)
+  return _lsOrigFavSync()
+}
+
+// Folders sync
+const _lsOrigFolderSync = libFoldersSync
+async function libFoldersSync() {
+  lsSave(LS.FOLDERS, libFolders)
+  return _lsOrigFolderSync()
+}
+
+// Models sync
+const _lsOrigModelsSync = driveModelsSync
+async function driveModelsSync() {
+  lsSave(LS.MODELS, customModels)
+  return _lsOrigModelsSync()
+}
+
+// Settings — save on every debounced write
+const _lsOrigSaveSettings = driveSaveCurrentSettings
+async function driveSaveCurrentSettings() {
+  lsSave(LS.SETTINGS, captureSettings())
+  return _lsOrigSaveSettings()
+}
+
+// Custom presets
+const _lsOrigPresetsSync = driveCustomPresetsSync
+async function driveCustomPresetsSync() {
+  lsSave(LS.PRESETS, customPresets)
+  return _lsOrigPresetsSync()
+}
+
+// driveOnSignedIn override — after cloud loads, merge with localStorage,
+// then save merged result back to localStorage
 async function driveOnSignedIn() {
   await _origDriveOnSignedIn()
+  // Cloud data is now loaded — save merged result to localStorage
+  lsSaveAll()
   closeSyncGate()
   updateLocalWarning()
+  setDriveStatus('✓ SYNCED', 'ok')
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -7413,6 +7558,8 @@ async function handleZipFile(file) {
     const msg = `✓ Imported: ${imported.prompts} prompts${imported.settings ? ', settings' : ''}${imported.particles ? ', particles' : ''}${imported.presets ? ', presets' : ''}`
     status.textContent = msg
     status.style.color = 'var(--accent)'
+    // Save everything to localStorage so it persists on refresh
+    lsSaveAll()
     setTimeout(() => closeZipImport(), 3000)
 
   } catch(e) {
