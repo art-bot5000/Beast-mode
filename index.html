@@ -5057,9 +5057,22 @@ function cloudIsConnected() {
 }
 
 // ── Abstract cloud ops — route to active provider ─────────────────
-async function cloudListFiles(nameOrPrefix) {
-  if (cloudProvider === 'gdrive') return driveListFiles(`name='${nameOrPrefix}'`)
-  return dbxListFiles(nameOrPrefix)
+async function cloudListFiles(nameOrQuery) {
+  // Strip Drive-style query wrapper to get plain filename/prefix
+  const plainName = nameOrQuery
+    .replace(/^name\s*contains\s*'([^']+)'$/i, '$1')
+    .replace(/^name\s*=\s*'([^']+)'$/i, '$1')
+    .replace(/^name\s*contains\s*"([^"]+)"$/i, '$1')
+    .replace(/^name\s*=\s*"([^"]+)"$/i, '$1')
+    .trim()
+
+  if (cloudProvider === 'gdrive') {
+    // Use contains for prefix searches (prompt files), exact match for named config files
+    const isPrefix = !plainName.endsWith('.json')
+    const q = isPrefix ? `name contains '${plainName}'` : `name='${plainName}'`
+    return driveListFiles(q)
+  }
+  return dbxListFiles(plainName)
 }
 async function cloudReadFile(id) {
   if (cloudProvider === 'gdrive') return driveReadFile(id)
@@ -5503,7 +5516,7 @@ async function driveSaveCurrentSettings() {
 }
 
 function driveSaveCurrentDebounced() {
-  if (!driveToken) return
+  if (!cloudIsConnected()) return
   clearTimeout(driveCurrentTimer)
   driveCurrentTimer = setTimeout(driveSaveCurrentSettings, 3000)
 }
@@ -5541,10 +5554,14 @@ async function driveSavePrompt(fav) {
 async function driveDeletePrompt(id) {
   if (!cloudIsConnected() || !drivePromptIds[id]) return
   try {
-    await fetch('https://www.googleapis.com/drive/v3/files/' + drivePromptIds[id], {
-      method: 'DELETE',
-      headers: { Authorization: 'Bearer ' + driveToken }
-    })
+    if (cloudProvider === 'dropbox') {
+      await dbxDeleteFile(drivePromptIds[id])
+    } else {
+      await fetch('https://www.googleapis.com/drive/v3/files/' + drivePromptIds[id], {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + driveToken }
+      })
+    }
     delete drivePromptIds[id]
   } catch(e) {}
 }
