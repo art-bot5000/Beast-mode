@@ -1267,6 +1267,24 @@ body.light .colourTuner { background:var(--surface2); }
   }
   .pb-bottom-bar-expand:hover { border-color:var(--accent);color:var(--accent); }
   .pb-bottom-bar-btns { display:flex;gap:6px;flex-shrink:0; }
+  /* Editable formula in expanded bottom bar */
+  .pb-bottom-formula {
+    width:100%;min-height:56px;max-height:38vh;overflow-y:auto;
+    background:#000;border:1px solid #38b6ff;border-radius:5px;
+    padding:10px 12px;box-sizing:border-box;
+    font-family:'Rajdhani',sans-serif;font-size:15px;line-height:1.9;
+    color:var(--text);outline:none;word-break:break-word;white-space:pre-wrap;
+    cursor:text;
+  }
+  .pb-bottom-formula:empty::before {
+    content:attr(data-ph);color:var(--muted);font-style:italic;pointer-events:none;
+  }
+  /* Expanded state — taller bar */
+  .pb-bottom-bar.bb-expanded {
+    max-height:60vh;
+  }
+  .pb-bottom-bar.bb-expanded .pb-bottom-bar-chips { display:none; }
+  .pb-bottom-bar.bb-expanded .pb-bottom-peek-handle { display:none; }
   .pb-bottom-bar-btn {
     height:32px;padding:0 12px;border-radius:4px;border:1px solid var(--border);
     background:var(--surface2);color:var(--muted);cursor:pointer;
@@ -2781,11 +2799,15 @@ body.light .colourTuner { background:var(--surface2); }
     </div>
 
     <!-- EDITOR MODE controls -->
-    <div id="pbEditorControls" class="pb-library-header" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
-      <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbSearchDebounced()">
-      <button class="btn btn-outline" style="font-size:12px;padding:6px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
-      <button class="btn btn-primary" style="font-size:12px;padding:6px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
-      <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
+    <div id="pbEditorControls" style="margin-bottom:12px;">
+      <!-- Row 1: full-width search -->
+      <input class="pb-search" id="pbSearch" placeholder="Search particles…" oninput="pbSearchDebounced()" style="width:100%;box-sizing:border-box;margin-bottom:8px;">
+      <!-- Row 2: actions right-aligned -->
+      <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-outline" style="font-size:12px;padding:5px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
+        <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
+      </div>
     </div>
 
     <!-- CREATOR MODE controls -->
@@ -2848,12 +2870,22 @@ body.light .colourTuner { background:var(--surface2); }
 <!-- Mobile bottom prompt bar -->
 <div id="pbBottomBar" class="pb-bottom-bar" style="display:none;">
   <div class="pb-bottom-bar-inner">
-    <div class="pb-bottom-peek-handle" onclick="pbPeekTap()">▲ PROMPT</div>
+    <!-- Peek handle — visible when scrolled past formula -->
+    <div class="pb-bottom-peek-handle" onclick="pbBottomExpand()">▲ PROMPT</div>
+
+    <!-- Collapsed: compact chip summary -->
     <div class="pb-bottom-bar-chips" id="pbBottomChips">
       <span class="pb-bottom-bar-ph">Build your prompt below…</span>
     </div>
+
+    <!-- Expanded: full editable formula -->
+    <div id="pbBottomFormula" class="pb-bottom-formula" style="display:none;"
+      contenteditable="true" spellcheck="false"
+      data-ph="Type or tap particles to build your prompt…">
+    </div>
+
     <div class="pb-bottom-bar-actions">
-      <button class="pb-bottom-bar-expand" id="pbBottomExpand" onclick="pbToggleBottomExpand()">▲ SHOW ALL</button>
+      <button class="pb-bottom-bar-expand" id="pbBottomExpand" onclick="pbToggleBottomExpand()">▲ EDIT PROMPT</button>
       <div class="pb-bottom-bar-btns">
         <button class="pb-bottom-bar-btn" onclick="pbCopyOutput()" title="Copy prompt">⎘ COPY</button>
         <button class="pb-bottom-bar-btn pb-bottom-bar-save" onclick="pbSaveToLibrary()" title="Save prompt">♥ SAVE</button>
@@ -9377,28 +9409,31 @@ let pbSavedRange  = null   // saved selection range for insertion
 
 function pbAddToFormula(particle) {
   if (pbReplaceMode) {
-    // Replace the chip being swapped
     pbDoReplace(particle)
     return
   }
+  // Determine active editing surface — main formula or bottom bar formula
+  const bf = document.getElementById('pbBottomFormula')
+  const bbActive = bf && bf.style.display !== 'none' && pbBottomExpanded
+  const activeFormula = (bbActive && (document.activeElement === bf || pbSavedRange?.startContainer.getRootNode?.()?.contains?.(bf)))
+    ? bf
+    : (El.pbFormula || document.getElementById('pbFormula'))
+
   if (pbInsertMode && pbSavedRange) {
-    // Insert at saved cursor position inside the formula
     pbInsertParticleAtRange(particle, pbSavedRange)
     pbSavedRange = null
     pbInsertMode = false
-    pbSyncFormulaFromDOM()
+    if (bbActive) pbSyncFormulaFromBottomBar()
+    else pbSyncFormulaFromDOM()
     pbUpdateBottomBar()
     return
   }
-  // Default: append to end
-  const bar = El.pbFormula || document.getElementById('pbFormula')
-  if (!bar) return
-  // Remove placeholder
-  bar.querySelector('.pb-formula-ph')?.remove()
-  // Insert chip then sync
+  // Default: append to end of active surface
+  activeFormula.querySelector('.pb-formula-ph,.pb-bottom-bar-ph')?.remove()
   const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: particle.id }, particle)
-  bar.appendChild(chip)
-  pbSyncFormulaFromDOM()
+  activeFormula.appendChild(chip)
+  if (bbActive) pbSyncFormulaFromBottomBar()
+  else pbSyncFormulaFromDOM()
   pbUpdateBottomBar()
 }
 
@@ -9548,13 +9583,19 @@ function pbEndReplace() {
 function pbDoReplace(particle) {
   const { uid } = pbReplaceMode
   pbEndReplace()
-  const bar = El.pbFormula || document.getElementById('pbFormula')
-  const oldChip = bar?.querySelector(`[data-uid="${uid}"]`)
+  // Find chip in either formula surface
+  const bf = document.getElementById('pbBottomFormula')
+  const mainBar = El.pbFormula || document.getElementById('pbFormula')
+  const oldChip = mainBar?.querySelector(`[data-uid="${uid}"]`)
+    || bf?.querySelector(`[data-uid="${uid}"]`)
   if (!oldChip) return
+  const parent = oldChip.parentNode
   const newEntry = { uid: parseInt(oldChip.dataset.uid), particleId: particle.id }
   const newChip = pbMakeChipEl(newEntry, particle)
   oldChip.replaceWith(newChip)
-  pbSyncFormulaFromDOM()
+  // Sync whichever surface was modified
+  if (parent === bf) pbSyncFormulaFromBottomBar()
+  else pbSyncFormulaFromDOM()
   pbUpdateBottomBar()
 }
 
@@ -9623,6 +9664,8 @@ function pbUpdateBottomBar() {
   const bar    = El.pbBottomChips  || document.getElementById('pbBottomChips')
   const expand = El.pbBottomExpand || document.getElementById('pbBottomExpand')
   if (!bar) return
+
+  // Update the peek chip summary
   bar.innerHTML = ''
   if (!pbFormula.length) {
     const ph = document.createElement('span')
@@ -9630,44 +9673,140 @@ function pbUpdateBottomBar() {
     ph.textContent = 'Build your prompt below…'
     bar.appendChild(ph)
     if (expand) expand.style.display = 'none'
-    return
+  } else {
+    if (expand) expand.style.display = ''
+    pbFormula.forEach((entry, idx) => {
+      if (entry.isText) {
+        if (entry.text.trim()) {
+          const s = document.createElement('span')
+          s.style.cssText = 'color:var(--muted);font-size:13px;align-self:center;'
+          s.textContent = entry.text.trim().slice(0, 20) + (entry.text.trim().length > 20 ? '…' : '')
+          bar.appendChild(s)
+        }
+        return
+      }
+      const p = pbGetParticles().find(x => x.id === entry.particleId)
+      const t = p ? PB_TYPES.find(x => x.key === p.type) : null
+      if (!p || !t) return
+      if (idx > 0 && bar.lastChild?.tagName !== 'SPAN') {
+        const sep = document.createElement('span')
+        sep.style.cssText = 'color:var(--muted);font-size:13px;padding:0 1px;align-self:center;'
+        sep.textContent = '—'
+        bar.appendChild(sep)
+      }
+      const chip = document.createElement('span')
+      chip.className = 'pb-bottom-chip'
+      chip.style.setProperty('--tc', t.color)
+      chip.textContent = p.text
+      chip.title = 'Tap to edit prompt'
+      chip.onclick = () => {
+        // Tapping a peek chip opens expanded edit mode and enters replace for that chip
+        pbBottomExpand()
+        setTimeout(() => pbStartReplace(entry.uid, p.type), 100)
+      }
+      bar.appendChild(chip)
+    })
   }
-  if (expand) expand.style.display = ''
-  pbFormula.forEach((entry, idx) => {
-    const p = pbGetParticles().find(x => x.id === entry.particleId)
-    const t = p ? PB_TYPES.find(x => x.key === p.type) : null
-    if (!p || !t) return
-    if (idx > 0) {
-      const sep = document.createElement('span')
-      sep.style.cssText = 'color:var(--muted);font-size:13px;padding:0 1px;align-self:center;'
-      sep.textContent = '—'
-      bar.appendChild(sep)
+
+  // If expanded bottom bar is visible, keep its formula in sync too
+  pbSyncBottomFormula()
+}
+
+function pbSyncBottomFormula() {
+  const bf = document.getElementById('pbBottomFormula')
+  if (!bf || bf.style.display === 'none') return
+
+  // Only re-render if formula actually changed (avoid disrupting active cursor)
+  if (document.activeElement === bf) return
+
+  bf.innerHTML = ''
+  if (!pbFormula.length) return
+
+  pbFormula.forEach(entry => {
+    if (entry.isText) {
+      bf.appendChild(document.createTextNode(entry.text))
+    } else {
+      const p = pbGetParticles().find(x => x.id === entry.particleId)
+      if (p) {
+        const chip = pbMakeChipEl(entry, p)
+        bf.appendChild(chip)
+      }
     }
-    const chip = document.createElement('span')
-    chip.className = 'pb-bottom-chip'
-    chip.style.setProperty('--tc', t.color)
-    chip.textContent = p.text
-    chip.title = 'Tap to remove'
-    chip.onclick = () => pbRemoveFromFormula(entry.uid)
-    bar.appendChild(chip)
   })
 }
 
 let pbBottomExpanded = false
 let pbBottomObserver = null
 
-function pbToggleBottomExpand() {
-  pbBottomExpanded = !pbBottomExpanded
-  const chips = El.pbBottomChips  || document.getElementById('pbBottomChips')
-  const btn   = El.pbBottomExpand || document.getElementById('pbBottomExpand')
-  if (!chips || !btn) return
-  chips.classList.toggle('expanded', pbBottomExpanded)
-  btn.textContent = pbBottomExpanded ? '▼ COLLAPSE' : '▲ SHOW ALL'
+function pbBottomExpand() {
+  if (pbBottomExpanded) return
+  pbToggleBottomExpand()
 }
 
-function pbPeekTap() {
-  const wrap = El.pbAssembledWrap || document.getElementById('pbAssembledWrap')
-  if (wrap) wrap.scrollIntoView({ behavior:'smooth', block:'start' })
+function pbToggleBottomExpand() {
+  pbBottomExpanded = !pbBottomExpanded
+  const bbBar  = El.pbBottomBar    || document.getElementById('pbBottomBar')
+  const chips  = El.pbBottomChips  || document.getElementById('pbBottomChips')
+  const bf     = document.getElementById('pbBottomFormula')
+  const btn    = El.pbBottomExpand || document.getElementById('pbBottomExpand')
+
+  if (pbBottomExpanded) {
+    // Show editable formula, hide chip summary
+    if (chips) chips.style.display = 'none'
+    if (bf) {
+      bf.style.display = 'block'
+      pbSyncBottomFormula()
+      // Wire events if not already wired
+      if (!bf.dataset.wired) {
+        bf.dataset.wired = '1'
+        bf.addEventListener('focus', pbFormulaFocus)
+        bf.addEventListener('blur',  () => {
+          pbSyncFormulaFromBottomBar()
+          pbFormulaBlur()
+        })
+        bf.addEventListener('mouseup',  pbFormulaSaveRange)
+        bf.addEventListener('keyup',    pbFormulaSaveRange)
+        bf.addEventListener('touchend', pbFormulaSaveRange)
+        bf.addEventListener('input', () => {
+          pbSyncFormulaFromBottomBar()
+          pbUpdateBottomBar()
+        })
+      }
+      setTimeout(() => bf.focus(), 50)
+    }
+    if (bbBar) bbBar.classList.add('bb-expanded')
+    if (btn) btn.textContent = '▼ COLLAPSE'
+  } else {
+    // Collapse — sync then show chip summary
+    pbSyncFormulaFromBottomBar()
+    if (bf) bf.style.display = 'none'
+    if (chips) chips.style.display = ''
+    if (bbBar) bbBar.classList.remove('bb-expanded')
+    if (btn) btn.textContent = '▲ EDIT PROMPT'
+    pbUpdateBottomBar()
+    pbEndReplace()
+  }
+}
+
+// Sync the bottom bar formula div → pbFormula array
+function pbSyncFormulaFromBottomBar() {
+  const bf = document.getElementById('pbBottomFormula')
+  if (!bf || bf.style.display === 'none') return
+  // Reuse same DOM-sync logic as main formula
+  const newFormula = []
+  bf.childNodes.forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.textContent
+      if (t) newFormula.push({ uid: pbNextUid++, isText: true, text: t })
+    } else if (node.nodeType === Node.ELEMENT_NODE && node.dataset.uid) {
+      const uid = parseInt(node.dataset.uid)
+      const pid = parseInt(node.dataset.particleId)
+      if (!isNaN(pid)) newFormula.push({ uid, particleId: pid })
+    }
+  })
+  pbFormula = newFormula
+  // Also update main formula display
+  pbRenderFormula()
 }
 
 function pbInitBottomObserver() {
