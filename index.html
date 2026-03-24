@@ -8323,11 +8323,29 @@ function renderSettingsView() {
   } else {
     // Re-render the Google sign-in button each time so it always appears
     const container = document.getElementById('settingsSignInBtn')
-    if (container && typeof google !== 'undefined') {
+    if (container) {
       container.innerHTML = ''
-      google.accounts.id.renderButton(container, {
-        theme: 'outline', size: 'medium', text: 'signin_with', shape: 'rectangular'
-      })
+      if (typeof google !== 'undefined') {
+        google.accounts.id.renderButton(container, {
+          theme: 'outline', size: 'medium', text: 'signin_with', shape: 'rectangular'
+        })
+      } else {
+        // SDK not yet loaded — show a plain button that triggers the auth flow
+        const btn = document.createElement('button')
+        btn.className = 'btn btn-primary'
+        btn.style.fontSize = '12px'
+        btn.textContent = '▲ CONNECT GOOGLE DRIVE'
+        btn.onclick = () => {
+          if (typeof google !== 'undefined') {
+            driveTokenClient?.requestAccessToken({ prompt: 'select_account' })
+          } else {
+            // Re-init Drive which will load the SDK and prompt sign-in
+            initDrive()
+            setTimeout(() => renderSettingsView(), 1500)
+          }
+        }
+        container.appendChild(btn)
+      }
     }
   }
 
