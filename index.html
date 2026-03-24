@@ -12950,31 +12950,55 @@ function pbSaveTagged() {
 const TOUR_STEPS = [
   {
     title: 'ASSEMBLED PROMPT',
-    body: 'This is your prompt canvas. Type freely or click particles below to build it. Particle chips appear inline — tap a chip to replace it.',
+    body: 'Your prompt canvas. Type freely anywhere in the box — plain text and particle chips live side by side. Click any particle in the library below to add it at your cursor.',
     target: 'pbAssembledWrap',
     pos: 'below',
   },
   {
-    title: 'PARTICLE LIBRARY',
-    body: 'Each of the 11 coloured blocks is a particle type — Subject, Form, Action and so on. Click any chip to add it to your prompt instantly.',
-    target: 'pbGrid',
-    pos: 'above',
-  },
-  {
-    title: 'REPLACE A PARTICLE',
-    body: 'Tap any coloured chip in your prompt to enter replace mode. That particle\'s category lights up below — pick a replacement or press ✕ to cancel.',
+    title: 'AUTOCOMPLETE',
+    body: 'Type 3 or more letters and a dropdown appears showing every particle that contains those letters — from built-in and your own. Pick one to replace the typed word with a coloured chip.',
     target: 'pbFormula',
     pos: 'below',
   },
   {
+    title: 'PASTE A PROMPT',
+    body: 'Paste any existing prompt directly into the box. Multi-word pastes are scanned automatically — any text matching a known particle converts to a chip instantly. A toast tells you how many were found.',
+    target: 'pbFormula',
+    pos: 'below',
+  },
+  {
+    title: 'REPLACE A PARTICLE',
+    body: 'Tap any coloured chip in your prompt to enter replace mode. That particle\'s type block lights up in the library below — pick a replacement, or press ✕ to cancel.',
+    target: 'pbFormula',
+    pos: 'below',
+  },
+  {
+    title: 'SELECT TEXT → REPLACE',
+    body: 'Select any text in the prompt box, then click a particle chip in the library — the selected text is deleted and the particle takes its place.',
+    target: 'pbFormula',
+    pos: 'below',
+  },
+  {
+    title: 'PARTICLE LIBRARY',
+    body: 'Eleven coloured type blocks — Subject, Material, Colour, Reference and more. Each groups particles by category. Large types like Subject and Colour use compact grid layouts for fast browsing.',
+    target: 'pbGrid',
+    pos: 'above',
+  },
+  {
+    title: 'CREATE A PARTICLE',
+    body: 'In Editor mode, hit + ADD PARTICLE. Type or paste text — or select text in the prompt box first and it pre-fills automatically. The Type and Category dropdowns are auto-suggested based on your text. Edit them freely before saving.',
+    target: 'pbEditorControls',
+    pos: 'below',
+  },
+  {
     title: 'CREATOR MODE',
-    body: 'Switch to ⚡ CREATOR for a cleaner view — no add/edit controls, just particles ready to use. Great for building prompts quickly.',
+    body: 'Switch to ⚡ CREATOR for a focused browsing view — no editing controls, just particles ready to add. Filter by Built-in, Personal, or Favourites.',
     target: 'pbModeToggle',
     pos: 'below',
   },
   {
     title: 'SAVE YOUR WORK',
-    body: 'When your prompt looks good, hit ♥ SAVE EDIT to save it to the Library — or save as a new prompt. Your particle structure is preserved for easy editing later.',
+    body: 'Hit ♥ SAVE to add to the Library as a new prompt, or ♥ SAVE EDIT to update an existing one. Particle structure is preserved so you can come back and edit chips later.',
     target: 'pbSaveBtn',
     pos: 'above',
   },
@@ -12984,8 +13008,10 @@ let tourStep = 0
 let tourActive = false
 let tourHighlighted = null
 
+const TOUR_VERSION = 2  // bump to re-show tour for existing users
+
 function tourStart() {
-  if (lsLoad('bm_tour_done')) return
+  if (lsLoad('bm_tour_done') === TOUR_VERSION) return
   tourStep = 0
   tourActive = true
   document.getElementById('tourOverlay').style.display = 'block'
@@ -13047,13 +13073,13 @@ function tourEnd() {
   tourActive = false
   if (tourHighlighted) { tourHighlighted.classList.remove('tour-highlight'); tourHighlighted = null }
   document.getElementById('tourOverlay').style.display = 'none'
-  lsSave('bm_tour_done', true)
+  lsSave('bm_tour_done', TOUR_VERSION)
 }
 
 // Trigger tour when Prompt Lab is opened for the first time
 // Inline into switchView by patching the existing function's body via a post-switch hook
 document.addEventListener('viewSwitched', e => {
-  if (e.detail === 'builder' && !lsLoad('bm_tour_done') && !tourActive) {
+  if (e.detail === 'builder' && lsLoad('bm_tour_done') !== TOUR_VERSION && !tourActive) {
     setTimeout(tourStart, 600)
   }
 })
