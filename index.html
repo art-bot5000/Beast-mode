@@ -2586,7 +2586,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 <!-- ACTIONS -->
 <div class="panel" style="padding:16px 20px;">
   <div class="btn-row">
-    <button class="btn btn-primary" onclick="generateSingle()">▶ GENERATE MECH</button>
+    <button class="btn btn-primary" onclick="generateSingle()">▶ GENERATE PROMPT</button>
     <button class="btn btn-outline" onclick="generateBatch()">⊞ BATCH × 10</button>
     <button class="btn btn-outline" onclick="randomiseAll()">⚄ RANDOMISE ALL</button>
     <button class="btn btn-ghost" onclick="saveFav()">♥ SAVE PROMPT</button>
@@ -5409,6 +5409,27 @@ function applySettings(s) {
   updateTunerSummary()
 }
 
+function captureSettings() {
+  return {
+    mode:       currentMode,
+    preset:     currentPreset,
+    creatureA:  document.getElementById('creatureA')?.value  || '',
+    creatureB:  document.getElementById('creatureB')?.value  || '',
+    colour:     document.getElementById('colourSel')?.value  || '',
+    colAHex:    document.getElementById('colAHex')?.textContent || '',
+    colBHex:    document.getElementById('colBHex')?.textContent || '',
+    modA:       document.getElementById('modA')?.value       || '',
+    modB:       document.getElementById('modB')?.value       || '',
+    material:   document.getElementById('materialSel')?.value || '',
+    env:        document.getElementById('envSel')?.value      || '',
+    lighting:   document.getElementById('lightSel')?.value    || '',
+    insp1:      document.getElementById('insp1Sel')?.value    || '',
+    insp2:      document.getElementById('insp2Sel')?.value    || '',
+    fieldStateA: { ...fieldState.A },
+    fieldStateB: { ...fieldState.B },
+  }
+}
+
 function generateSingle(){
   const aName = document.getElementById('creatureA').value
   const bName = document.getElementById('creatureB').value
@@ -5500,6 +5521,12 @@ function clearLoadPanel() {
   document.getElementById('loadBtn').disabled = true
   document.getElementById('loadBtn').style.opacity = '.4'
   document.getElementById('loadStatus').textContent = ''
+}
+
+function getRandName(slot) {
+  const list = getList(slot)
+  const names = Object.keys(list)
+  return names[Math.floor(Math.random() * names.length)]
 }
 
 function generateBatch(){
@@ -6010,6 +6037,7 @@ const DRIVE_SCOPES          = 'https://www.googleapis.com/auth/drive.appdata'
 const DRIVE_PHOTO_SCOPES    = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.readonly'
 const CURRENT_SETTINGS_FILE = 'beast-mode-current-settings.json'
 const PROMPT_FILE_PREFIX    = 'beast-mode-prompt-'
+const SETTINGS_DELIMITER    = '\n\n---SETTINGS---\n'
 
 let driveToken       = null
 let drivePhotoToken  = null   // separate token with drive.readonly for photo browsing
@@ -6574,6 +6602,19 @@ let pendingImageModalFavId = null  // fav id being edited, or null for new save
 let pendingRating = 0
 const MODELS_FILE = 'beast-mode-models.json'
 let driveModelsId = null
+
+function openImageModal(favId) {
+  pendingImageModalFavId = favId
+  pendingImageData = null
+  pendingRating = favId ? (favourites.find(f => f.id === favId)?.rating || 0) : 0
+  document.getElementById('imgTitleInput').value = favId
+    ? (favourites.find(f => f.id === favId)?.title || '') : ''
+  document.getElementById('imgPreviewWrap').style.display = 'none'
+  document.getElementById('imgDropZone').style.display = 'flex'
+  document.getElementById('imgFileInput').value = ''
+  populateModelSelect()
+  document.getElementById('imageUploadModal').classList.add('open')
+}
 
 function closeImageModal() {
   document.getElementById('imageUploadModal').classList.remove('open')
