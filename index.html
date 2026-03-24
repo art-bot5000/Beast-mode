@@ -929,7 +929,11 @@ body.light .colourTuner { background:var(--surface2); }
   cursor:text;
 }
 .pb-formula-output:focus { border-color:#38b6ff; }
-.pb-formula-ph { color:var(--muted);font-size:15px;letter-spacing:1px;font-style:italic; }
+.pb-formula-output:empty::before {
+  content:'Click particles below or type to build your prompt…';
+  color:var(--muted);font-style:italic;pointer-events:none;
+}
+.pb-formula-ph { display:none; }
 .pb-formula-chip {
   display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;
   font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;letter-spacing:.3px;
@@ -1750,7 +1754,35 @@ body.light .colourTuner { background:var(--surface2); }
 }
 
 
-/* ── SUBJECT: compact name-chip grid ───────────────────────────── */
+/* ── FORMULA AUTOCOMPLETE ─────────────────────────────────────── */
+.pb-ac-dropdown {
+  position:absolute;z-index:99999;
+  background:var(--surface);border:1px solid var(--accent);border-radius:6px;
+  min-width:240px;max-width:360px;max-height:300px;overflow-y:auto;
+  box-shadow:0 8px 24px rgba(0,0,0,.7);
+  display:none;
+}
+.pb-ac-item {
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;cursor:pointer;
+  border-bottom:1px solid var(--border);transition:background .1s;
+}
+.pb-ac-item:last-child { border-bottom:none; }
+.pb-ac-item:hover, .pb-ac-item.active {
+  background:color-mix(in srgb,var(--accent) 10%,transparent);
+}
+.pb-ac-dot {
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;
+}
+.pb-ac-label {
+  flex:1;font-size:13px;font-weight:600;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.pb-ac-type {
+  font-size:10px;font-weight:700;letter-spacing:1px;flex-shrink:0;opacity:.8;
+}
+
+
 .pb-name-chip-grid {
   display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;
 }
@@ -2787,9 +2819,7 @@ body.light .colourTuner { background:var(--surface2); }
     <!-- // ASSEMBLED PROMPT — formula box, buttons below -->
     <div class="pb-assembled-wrap" id="pbAssembledWrap" style="margin-bottom:20px;">
       <div class="pb-section-label" style="margin-bottom:8px;">// ASSEMBLED PROMPT</div>
-      <div class="pb-formula pb-formula-output" id="pbFormula" contenteditable="true" spellcheck="false">
-        <span class="pb-formula-ph" contenteditable="false">Click particles below to build your prompt…</span>
-      </div>
+      <div class="pb-formula pb-formula-output" id="pbFormula" contenteditable="true" spellcheck="false"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
@@ -8544,10 +8574,12 @@ function pbInit() {
     bar.addEventListener('touchend',  pbFormulaSaveRange)
     bar.addEventListener('input', () => {
       pbSyncFormulaFromDOM()
-      pbUpdateBottomBar()
+      pbFormulaAutocomplete(bar)
       pbShowPlaceholderIfEmpty(bar)
     })
   }
+  // selectionchange fires even after focus moves away — captures text selections
+  document.addEventListener('selectionchange', pbFormulaSaveRange)
 }
 
 // ── LEGEND ─────────────────────────────────────────────────────────
@@ -9431,20 +9463,42 @@ function pbAddToFormula(particle) {
   // Default: append to end of active surface
   activeFormula.querySelector('.pb-formula-ph,.pb-bottom-bar-ph')?.remove()
   const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: particle.id }, particle)
-  activeFormula.appendChild(chip)
+
+  // If cursor is saved inside the active formula, insert there; else append
+  if (pbSavedRange && activeFormula.contains(pbSavedRange.startContainer)) {
+    pbInsertParticleAtRange(particle, pbSavedRange)
+    pbSavedRange = null
+  } else {
+    activeFormula.appendChild(chip)
+  }
+
   if (bbActive) pbSyncFormulaFromBottomBar()
   else pbSyncFormulaFromDOM()
   pbUpdateBottomBar()
 }
 
 function pbRemoveFromFormula(uid) {
-  const bar = El.pbFormula || document.getElementById('pbFormula')
-  if (!bar) return
-  const chip = bar.querySelector(`[data-uid="${uid}"]`)
+  const mainBar = El.pbFormula || document.getElementById('pbFormula')
+  const bf      = document.getElementById('pbBottomFormula')
+
+  // Find chip in whichever surface contains it
+  let chip = mainBar?.querySelector(`[data-uid="${uid}"]`)
+  let inBottomBar = false
+  if (!chip && bf) {
+    chip = bf.querySelector(`[data-uid="${uid}"]`)
+    inBottomBar = !!chip
+  }
+
   if (chip) chip.remove()
-  pbSyncFormulaFromDOM()
+
+  if (inBottomBar) {
+    pbSyncFormulaFromBottomBar()
+    pbSyncBottomFormula()
+  } else {
+    pbSyncFormulaFromDOM()
+  }
   pbUpdateBottomBar()
-  pbShowPlaceholderIfEmpty(bar)
+  pbShowPlaceholderIfEmpty(mainBar)
 }
 
 // Sync DOM → pbFormula array (called after any DOM mutation)
@@ -9466,14 +9520,7 @@ function pbSyncFormulaFromDOM() {
 }
 
 function pbShowPlaceholderIfEmpty(bar) {
-  if (!bar) return
-  const hasContent = [...bar.childNodes].some(n =>
-    (n.nodeType === Node.TEXT_NODE && n.textContent.trim()) ||
-    (n.nodeType === Node.ELEMENT_NODE && n.dataset.uid)
-  )
-  if (!hasContent) {
-    bar.innerHTML = '<span class="pb-formula-ph" contenteditable="false">Click particles below to build your prompt…</span>'
-  }
+  // Placeholder handled via CSS :empty::before — no DOM injection needed
 }
 
 // Build a chip DOM element from a formula entry + particle
@@ -9600,24 +9647,188 @@ function pbDoReplace(particle) {
 }
 
 // ── INSERT MODE (cursor in formula) ───────────────────────────────
+// ── FORMULA AUTOCOMPLETE ──────────────────────────────────────────
+let pbAcDropdown = null
+let pbAcWordRange = null  // range covering the word being typed
+
+function pbFormulaAutocomplete(bar) {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) { pbAcHide(); return }
+  const range = sel.getRangeAt(0)
+  if (!bar.contains(range.commonAncestorContainer)) { pbAcHide(); return }
+
+  // Get text from start of current text node up to cursor
+  const node = range.startContainer
+  if (node.nodeType !== Node.TEXT_NODE) { pbAcHide(); return }
+  const textBefore = node.textContent.slice(0, range.startOffset)
+  // Extract the current word (letters, digits, spaces allowed — stop at punctuation)
+  const wordMatch = textBefore.match(/(\S+)$/)
+  const word = wordMatch ? wordMatch[1] : ''
+
+  if (word.length < 3) { pbAcHide(); return }
+
+  // Search all particles
+  const q = word.toLowerCase()
+  const all = pbGetParticles()
+  const hits = all.filter(p => p.text.toLowerCase().includes(q)).slice(0, 12)
+  if (!hits.length) { pbAcHide(); return }
+
+  // Build range for the current word (to replace on selection)
+  const wordStart = range.startOffset - word.length
+  pbAcWordRange = document.createRange()
+  pbAcWordRange.setStart(node, wordStart)
+  pbAcWordRange.setEnd(node, range.startOffset)
+
+  pbAcShow(hits, range)
+}
+
+function pbAcShow(particles, caretRange) {
+  // Position dropdown below caret
+  const rect = caretRange.getBoundingClientRect()
+
+  if (!pbAcDropdown) {
+    pbAcDropdown = document.createElement('div')
+    pbAcDropdown.id = 'pbAcDropdown'
+    pbAcDropdown.className = 'pb-ac-dropdown'
+    document.body.appendChild(pbAcDropdown)
+  }
+
+  pbAcDropdown.innerHTML = ''
+  particles.forEach(p => {
+    const t = PB_TYPES.find(x => x.key === p.type)
+    const item = document.createElement('div')
+    item.className = 'pb-ac-item'
+    item.dataset.particleId = p.id
+
+    const dot = document.createElement('span')
+    dot.className = 'pb-ac-dot'
+    if (t) dot.style.background = t.color
+
+    const label = document.createElement('span')
+    label.className = 'pb-ac-label'
+    label.textContent = p.text
+
+    const typeTag = document.createElement('span')
+    typeTag.className = 'pb-ac-type'
+    if (t) { typeTag.textContent = t.label; typeTag.style.color = t.color }
+
+    item.appendChild(dot)
+    item.appendChild(label)
+    item.appendChild(typeTag)
+
+    // mousedown not click — fires before blur so pbAcWordRange is still valid
+    item.addEventListener('mousedown', e => {
+      e.preventDefault()
+      pbAcCommit(p)
+    })
+    item.addEventListener('touchend', e => {
+      e.preventDefault()
+      pbAcCommit(p)
+    })
+    pbAcDropdown.appendChild(item)
+  })
+
+  // Position
+  const scrollY = window.scrollY || document.documentElement.scrollTop
+  const dropH = Math.min(particles.length * 38, 300)
+  const spaceBelow = window.innerHeight - rect.bottom
+  const top = spaceBelow > dropH + 8
+    ? rect.bottom + scrollY + 4
+    : rect.top + scrollY - dropH - 4
+
+  pbAcDropdown.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 260)) + 'px'
+  pbAcDropdown.style.top  = top + 'px'
+  pbAcDropdown.style.display = 'block'
+}
+
+function pbAcCommit(particle) {
+  if (!pbAcWordRange) { pbAcHide(); return }
+  // Delete the typed word and insert the chip
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  pbAcWordRange.deleteContents()
+  const uid  = pbNextUid++
+  const chip = pbMakeChipEl({ uid, particleId: particle.id }, particle)
+  pbAcWordRange.insertNode(chip)
+  // Place cursor after chip
+  const newRange = document.createRange()
+  newRange.setStartAfter(chip)
+  newRange.collapse(true)
+  const sel = window.getSelection()
+  sel.removeAllRanges()
+  sel.addRange(newRange)
+  // Add a space after for flow
+  const space = document.createTextNode(' ')
+  chip.after(space)
+  newRange.setStart(space, 1)
+  newRange.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(newRange)
+
+  pbAcHide()
+  pbSyncFormulaFromDOM()
+  pbUpdateBottomBar()
+  if (bar) bar.focus()
+}
+
+function pbAcHide() {
+  if (pbAcDropdown) pbAcDropdown.style.display = 'none'
+  pbAcWordRange = null
+}
+
+// Hide dropdown on click outside
+document.addEventListener('mousedown', e => {
+  if (pbAcDropdown && !pbAcDropdown.contains(e.target)) pbAcHide()
+})
+document.addEventListener('keydown', e => {
+  if (pbAcDropdown && pbAcDropdown.style.display !== 'none') {
+    if (e.key === 'Escape') pbAcHide()
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      const items = pbAcDropdown.querySelectorAll('.pb-ac-item')
+      const cur = pbAcDropdown.querySelector('.pb-ac-item.active')
+      const next = cur ? (cur.nextElementSibling || items[0]) : items[0]
+      cur?.classList.remove('active')
+      next?.classList.add('active')
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      const items = pbAcDropdown.querySelectorAll('.pb-ac-item')
+      const cur = pbAcDropdown.querySelector('.pb-ac-item.active')
+      const prev = cur ? (cur.previousElementSibling || items[items.length-1]) : items[items.length-1]
+      cur?.classList.remove('active')
+      prev?.classList.add('active')
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const active = pbAcDropdown.querySelector('.pb-ac-item.active')
+      if (active) {
+        e.preventDefault()
+        const p = pbGetParticles().find(x => x.id === parseInt(active.dataset.particleId))
+        if (p) pbAcCommit(p)
+      }
+    }
+  }
+})
+
 function pbFormulaFocus() {
   pbInsertMode = true
 }
 function pbFormulaBlur() {
-  // Small delay so a particle click can read pbSavedRange before insert mode clears
+  // On blur, sync DOM → formula array and update bottom bar summary
   setTimeout(() => {
+    pbSyncFormulaFromDOM()
+    pbUpdateBottomBar()
     if (!pbReplaceMode) pbInsertMode = false
   }, 300)
 }
 function pbFormulaSaveRange() {
   const sel = window.getSelection()
-  if (sel && sel.rangeCount > 0) {
-    const range = sel.getRangeAt(0)
-    // Only save if range is inside the formula div
-    const bar = El.pbFormula || document.getElementById('pbFormula')
-    if (bar && bar.contains(range.commonAncestorContainer)) {
-      pbSavedRange = range.cloneRange()
-    }
+  if (!sel || sel.rangeCount === 0) return
+  const range = sel.getRangeAt(0)
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  const bf  = document.getElementById('pbBottomFormula')
+  if ((bar && bar.contains(range.commonAncestorContainer)) ||
+      (bf  && bf.contains(range.commonAncestorContainer))) {
+    pbSavedRange = range.cloneRange()
   }
 }
 
@@ -9625,13 +9836,16 @@ function pbRenderFormula() {
   const bar = El.pbFormula || document.getElementById('pbFormula')
   if (!bar) return
 
+  // Never re-render while the user is actively editing — it destroys cursor position
+  if (document.activeElement === bar) return
+
   // Preserve any ongoing replace mode state
   const wasReplacing = pbReplaceMode
 
   bar.innerHTML = ''
 
   if (!pbFormula.length) {
-    bar.innerHTML = '<span class="pb-formula-ph" contenteditable="false">Click particles below or type to build your prompt…</span>'
+    bar.innerHTML = ''
     return
   }
 
@@ -9715,8 +9929,7 @@ function pbUpdateBottomBar() {
 function pbSyncBottomFormula() {
   const bf = document.getElementById('pbBottomFormula')
   if (!bf || bf.style.display === 'none') return
-
-  // Only re-render if formula actually changed (avoid disrupting active cursor)
+  // Never re-render while user is actively typing in the bottom bar formula
   if (document.activeElement === bf) return
 
   bf.innerHTML = ''
