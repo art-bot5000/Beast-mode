@@ -2767,7 +2767,6 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
         <!-- Google Drive auth panel -->
         <div id="cloudPanelGdrive">
-          <div id="settingsDriveStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
           <div id="settingsDriveSignedIn" style="display:none;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
               <img class="drive-avatar" id="settingsAvatar" src="" alt="">
@@ -2780,13 +2779,13 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
             <button class="btn btn-ghost" onclick="driveSignOut()" style="font-size:12px;">SIGN OUT</button>
           </div>
           <div id="settingsDriveSignedOut" style="display:block;">
+            <div id="settingsDriveStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
             <div id="settingsSignInBtn" style="margin-top:8px;"></div>
           </div>
         </div>
 
         <!-- Dropbox auth panel -->
         <div id="cloudPanelDropbox" style="display:none;">
-          <div id="dbxStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
           <div id="dbxSignedIn" style="display:none;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
               <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;">⬡</div>
@@ -2799,6 +2798,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
             <button class="btn btn-ghost" onclick="dbxSignOut()" style="font-size:12px;">SIGN OUT</button>
           </div>
           <div id="dbxSignedOut" style="display:block;">
+            <div id="dbxStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
             <button class="btn btn-primary" onclick="dbxSignIn()" style="font-size:12px;margin-top:8px;">CONNECT DROPBOX</button>
           </div>
         </div>
