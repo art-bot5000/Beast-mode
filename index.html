@@ -566,10 +566,18 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 .preset-cat-select:hover { border-color:var(--accent);color:var(--accent); }
 .preset-cat-select.has-active {
   border-color:var(--accent);color:var(--accent);
-  background-color:color-mix(in srgb,var(--accent) 10%,transparent);
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23e8ff00'/%3E%3C/svg%3E");
+  background-color:var(--surface);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
 }
 .preset-cat-select:focus { outline:none;border-color:var(--accent); }
+body.light .preset-cat-select {
+  background-color:#ffffff;
+}
+body.light .preset-cat-select.has-active {
+  background-color:#ffffff;
+  border-color:var(--accent);
+  color:var(--accent);
+}
 
 
 /* STYLE EDITOR */
@@ -2320,7 +2328,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   <div class="nav-actions">
     <button id="lightToggle" onclick="toggleLightMode()" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:var(--muted);transition:all .2s;">☀</button>
     <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
-    <a href="https://buymeacoffee.com/artbot5000" target="_blank" rel="noopener" title="Buy me a coffee ☕" style="color:var(--muted);font-size:16px;line-height:1;text-decoration:none;padding:2px 4px;transition:color .15s;" onmouseover="this.style.color='#FFDD00'" onmouseout="this.style.color='var(--muted)'">☕</a>
+    <a href="https://buymeacoffee.com/artbot5000" target="_blank" rel="noopener" title="Buy me a coffee" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);line-height:1;text-decoration:none;transition:color .15s;display:flex;align-items:center;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;"><path d="M2 4h9v5.5A3.5 3.5 0 017.5 13h-2A3.5 3.5 0 012 9.5V4z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M11 5.5h1.5a1.5 1.5 0 010 3H11" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M4 13.5h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 2.5c0-.5.8-1 .8-1.5M7.5 2.5c0-.5.8-1 .8-1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></a>
     <button onclick="sendFeedback()" title="Send feedback" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);font-size:16px;line-height:1;transition:color .15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">✉</button>
   </div>
 </nav>
@@ -6480,10 +6488,10 @@ const THEME_COLOURS = [
 ]
 
 function applyThemeColour(key) {
-  // Remove all existing theme classes
   document.body.classList.forEach(c => { if (c.startsWith('theme-')) document.body.classList.remove(c) })
   if (key && key !== 'yellow') document.body.classList.add('theme-' + key)
   lsSave('bm_theme_colour', key || 'yellow')
+  lsSave('bm_theme_user_set', true)
   renderThemePicker()
 }
 
@@ -6526,14 +6534,26 @@ function renderThemePicker() {
 
 function initThemeColour() {
   const saved = lsLoad('bm_theme_colour')
-  if (saved && saved !== 'yellow') document.body.classList.add('theme-' + saved)
+  const isLight = document.body.classList.contains('light')
+  // Default to cyan in light mode if user hasn't explicitly picked a theme
+  const effective = (!saved || saved === 'yellow') && isLight ? 'cyan' : saved
+  if (effective && effective !== 'yellow') document.body.classList.add('theme-' + effective)
 }
 
 function toggleLightMode() {
   const isLight = document.body.classList.toggle('light')
   const btn = document.getElementById('lightToggle')
-  btn.textContent = isLight ? '🌙 DARK' : '☀ LIGHT'
+  if (btn) btn.textContent = isLight ? '🌙 DARK' : '☀ LIGHT'
   localStorage.setItem('bm_light', isLight ? '1' : '')
+
+  // Apply cyan as the default theme for light mode if the user hasn't picked one yet
+  const savedTheme = lsLoad('bm_theme_colour')
+  if (isLight && (!savedTheme || savedTheme === 'yellow')) {
+    applyThemeColour('cyan')
+  } else if (!isLight && savedTheme === 'cyan' && !lsLoad('bm_theme_user_set')) {
+    // Switching back to dark with auto-cyan — restore yellow default
+    applyThemeColour('yellow')
+  }
 }
 
 // Restore light mode preference
