@@ -8577,6 +8577,12 @@ function pbInit() {
       pbFormulaAutocomplete(bar)
       pbShowPlaceholderIfEmpty(bar)
     })
+    bar.addEventListener('paste', e => {
+      e.preventDefault()
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain').trim()
+      if (!text) return
+      pbHandleFormulaPaste(text, bar)
+    })
   }
   // selectionchange fires even after focus moves away — captures text selections
   document.addEventListener('selectionchange', pbFormulaSaveRange)
@@ -9779,6 +9785,136 @@ function pbAcHide() {
 document.addEventListener('mousedown', e => {
   if (pbAcDropdown && !pbAcDropdown.contains(e.target)) pbAcHide()
 })
+
+// ── PASTE-TO-PARTICLES ────────────────────────────────────────────
+
+function pbHandleFormulaPaste(text, bar) {
+  const words = text.trim().split(/\s+/)
+  const isSingleWord = words.length === 1
+
+  // Insert at cursor if we have a saved range, else append
+  const insertAt = pbSavedRange && bar.contains(pbSavedRange.startContainer)
+    ? pbSavedRange : null
+
+  if (isSingleWord) {
+    // Single word: insert as plain text first, then show autocomplete
+    const textNode = document.createTextNode(text)
+    if (insertAt) {
+      insertAt.deleteContents()
+      insertAt.insertNode(textNode)
+      const r = document.createRange()
+      r.setStartAfter(textNode); r.collapse(true)
+      window.getSelection().removeAllRanges()
+      window.getSelection().addRange(r)
+    } else {
+      bar.appendChild(textNode)
+    }
+    pbSyncFormulaFromDOM()
+    // Position cursor and trigger autocomplete
+    const sel = window.getSelection()
+    if (sel.rangeCount) {
+      pbAcWordRange = document.createRange()
+      pbAcWordRange.selectNode(textNode)
+      // Search for matches
+      const q = text.toLowerCase()
+      const hits = pbGetParticles().filter(p => p.text.toLowerCase().includes(q)).slice(0, 12)
+      if (hits.length) pbAcShow(hits, sel.getRangeAt(0))
+    }
+    return
+  }
+
+  // Multi-word: auto-convert known particles, leave rest as text
+  const nodes = pbBuildMixedNodes(text)
+
+  if (insertAt) {
+    insertAt.deleteContents()
+    // Insert all nodes at cursor in reverse order (insertNode inserts before)
+    const frag = document.createDocumentFragment()
+    nodes.forEach(n => frag.appendChild(n))
+    insertAt.insertNode(frag)
+  } else {
+    nodes.forEach(n => bar.appendChild(n))
+  }
+
+  // Move cursor to end of pasted content
+  const lastNode = bar.lastChild
+  if (lastNode) {
+    const r = document.createRange()
+    r.setStartAfter(lastNode); r.collapse(true)
+    window.getSelection().removeAllRanges()
+    window.getSelection().addRange(r)
+  }
+
+  pbSyncFormulaFromDOM()
+  pbUpdateBottomBar()
+
+  // Show a brief toast indicating how many particles were found
+  const chipCount = nodes.filter(n => n.classList?.contains('pb-formula-chip')).length
+  if (chipCount > 0) pbPasteToast(`${chipCount} particle${chipCount > 1 ? 's' : ''} matched`)
+}
+
+// Scan text for particle matches, return array of DOM nodes (chips + text nodes)
+function pbBuildMixedNodes(text) {
+  const all = pbGetParticles()
+  // Sort longest-first so "giant biomechanical hybrid mech" beats "mech"
+  const sorted = [...all].sort((a, b) => b.text.length - a.text.length)
+
+  const nodes = []
+  let remaining = text
+
+  while (remaining.length > 0) {
+    // Try to match any particle at start of remaining (with optional leading whitespace)
+    const leadingSpace = remaining.match(/^(\s+)/)?.[1] || ''
+    const toSearch = remaining.slice(leadingSpace.length)
+
+    let matched = false
+    for (const p of sorted) {
+      if (p.text.length < 3) continue  // skip very short particles to avoid false matches
+      if (toSearch.toLowerCase().startsWith(p.text.toLowerCase())) {
+        // Emit leading space as text
+        if (leadingSpace) nodes.push(document.createTextNode(leadingSpace))
+        // Emit chip
+        const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
+        nodes.push(chip)
+        remaining = remaining.slice(leadingSpace.length + p.text.length)
+        matched = true
+        break
+      }
+    }
+
+    if (!matched) {
+      // Consume one character as plain text, accumulate into a text node
+      const char = remaining[0]
+      // Extend previous text node if there is one
+      const last = nodes[nodes.length - 1]
+      if (last && last.nodeType === Node.TEXT_NODE) {
+        last.textContent += char
+      } else {
+        nodes.push(document.createTextNode(char))
+      }
+      remaining = remaining.slice(1)
+    }
+  }
+
+  return nodes
+}
+
+function pbPasteToast(msg) {
+  let toast = document.getElementById('pbPasteToast')
+  if (!toast) {
+    toast = document.createElement('div')
+    toast.id = 'pbPasteToast'
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);' +
+      'background:var(--surface);border:1px solid var(--accent);border-radius:5px;' +
+      'padding:8px 18px;font-size:12px;font-weight:700;letter-spacing:1.5px;' +
+      'color:var(--accent);z-index:99998;pointer-events:none;transition:opacity .3s;'
+    document.body.appendChild(toast)
+  }
+  toast.textContent = '⊛ ' + msg.toUpperCase()
+  toast.style.opacity = '1'
+  clearTimeout(toast._t)
+  toast._t = setTimeout(() => { toast.style.opacity = '0' }, 2000)
+}
 document.addEventListener('keydown', e => {
   if (pbAcDropdown && pbAcDropdown.style.display !== 'none') {
     if (e.key === 'Escape') pbAcHide()
