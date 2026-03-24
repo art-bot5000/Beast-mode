@@ -2320,8 +2320,17 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   <div class="nav-actions">
     <button id="lightToggle" onclick="toggleLightMode()" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:var(--muted);transition:all .2s;">☀</button>
     <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
+    <a href="https://buymeacoffee.com/artbot5000" target="_blank" rel="noopener" title="Buy me a coffee ☕" style="color:var(--muted);font-size:16px;line-height:1;text-decoration:none;padding:2px 4px;transition:color .15s;" onmouseover="this.style.color='#FFDD00'" onmouseout="this.style.color='var(--muted)'">☕</a>
+    <button onclick="sendFeedback()" title="Send feedback" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);font-size:16px;line-height:1;transition:color .15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">✉</button>
   </div>
 </nav>
+
+<!-- Generate-only mode upgrade banner -->
+<div id="generateOnlyBanner" style="display:none;background:color-mix(in srgb,var(--accent) 8%,transparent);border-bottom:1px solid color-mix(in srgb,var(--accent) 25%,transparent);padding:8px 16px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
+  <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;">▶ GENERATE MODE</span>
+  <span style="font-size:11px;color:var(--muted);flex:1;">Saving disabled — connect cloud to unlock full mode</span>
+  <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK FULL MODE</button>
+</div>
 
 <!-- ═══════════════════════ LIBRARY VIEW ═══════════════════════ -->
 <div class="view" id="viewLibrary">
@@ -2626,6 +2635,17 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   </div>
 </div>
 
+<!-- GENERATE ONLY — recent prompts (last 10, no cloud) -->
+<div class="panel" id="genOnlyRecentPanel" style="display:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="panel-title" style="margin-bottom:0;">// RECENT PROMPTS <span style="font-size:10px;color:var(--muted);font-weight:400;letter-spacing:1px;">(last 10)</span></div>
+    <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK SAVING</button>
+  </div>
+  <div id="genOnlyRecentList" style="display:flex;flex-direction:column;gap:8px;">
+    <div style="color:var(--muted);font-size:12px;letter-spacing:.5px;">Generate a prompt to see it here.</div>
+  </div>
+</div>
+
 <!-- LOAD SETTINGS -->
 <div class="panel" id="loadPanel">
   <div class="accordion-header" onclick="toggleLoadPanel()">
@@ -2715,7 +2735,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
     <div class="settings-grid">
 
       <!-- Cloud Sync -->
-      <div class="settings-section" style="grid-column:1/-1;">
+      <div class="settings-section" style="grid-column:1/-1;" id="settingsSyncSection">
         <div class="settings-section-title">Cloud Sync</div>
 
         <!-- Provider selector -->
@@ -2790,7 +2810,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
       </div>
 
       <!-- Custom Models -->
-      <div class="settings-section">
+      <div class="settings-section" id="settingsModelsSection">
         <div class="settings-section-title">My AI Models</div>
         <div style="font-size:12px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;line-height:1.6;">Custom models saved for reuse when tagging prompts.</div>
         <div class="models-list" id="settingsModelsList"></div>
@@ -2808,7 +2828,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
       </div>
 
       <!-- Export -->
-      <div class="settings-section" style="grid-column:1/-1;">
+      <div class="settings-section" style="grid-column:1/-1;" id="settingsDataSection">
         <div class="settings-section-title">Data &amp; Export</div>
         <!-- Local storage warning when not synced -->
         <div id="localStorageWarning" style="display:none;background:color-mix(in srgb,#ff9900 12%,transparent);border:1px solid #ff9900;border-radius:4px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#ff9900;letter-spacing:.5px;line-height:1.7;">
@@ -2822,6 +2842,18 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-ghost" onclick="exportAll()" style="font-size:12px;">⬇ EXPORT PROMPTS .TXT</button>
           <button class="btn btn-ghost" onclick="exportLibraryJSON()" style="font-size:12px;">⬇ EXPORT LIBRARY .JSON</button>
+        </div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="settings-section" style="grid-column:1/-1;">
+        <div class="settings-section-title">Send Feedback</div>
+        <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;line-height:1.7;margin-bottom:14px;">Found a bug? Have a suggestion? We'd love to hear from you.</div>
+        <a id="feedbackBtn" href="#" onclick="sendFeedback(event)" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;">
+          <button class="btn btn-outline" style="font-size:12px;pointer-events:none;">✉ SEND FEEDBACK</button>
+        </a>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:.5px;margin-top:10px;line-height:1.6;">
+          Opens your email app pre-filled with app details.<br>Sends to <span style="color:var(--accent);">promptlab@artbot5000.com</span>
         </div>
       </div>
 
@@ -3092,7 +3124,11 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   <div class="modal-card" style="max-width:700px;width:100%;">
     <div class="modal-header">
       <div class="modal-title">// VARIANTS</div>
-      <button class="modal-close" onclick="document.getElementById('iterResultsModal').style.display='none'">✕</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="iterCopyAll()">⎘ COPY ALL</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="iterExportTxt()">⬇ EXPORT .TXT</button>
+        <button class="modal-close" onclick="document.getElementById('iterResultsModal').style.display='none'">✕</button>
+      </div>
     </div>
     <div class="modal-body" id="iterResultsBody"></div>
   </div>
@@ -5452,6 +5488,8 @@ function generateSingle(){
     out.textContent = `${header}\n\n${prompt}`
     out.dataset.full = full
     driveSaveCurrentDebounced()
+    // Track in generate-only recent list if in that mode
+    genOnlyAddRecent(prompt)
   }, 200)
 }
 
@@ -7884,6 +7922,42 @@ function iterSaveVariant(btn, srcFavId) {
   btn.textContent = '✓ SAVED'; btn.disabled = true
 }
 
+function iterCopyAll() {
+  const items = document.querySelectorAll('#iterResultsBody .iter-result-item')
+  if (!items.length) return
+  const text = [...items].map((item, i) => {
+    const label = item.querySelector('.iter-result-label')?.textContent || `VARIANT ${i+1}`
+    const prompt = item.dataset.variantText || ''
+    return `${label}\n${prompt}`
+  }).join('\n\n---\n\n')
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'
+    document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); document.body.removeChild(ta)
+    const btn = document.querySelector('#iterResultsModal .btn-ghost')
+    const orig = btn.textContent; btn.textContent = '✓ COPIED'
+    setTimeout(() => btn.textContent = orig, 1500)
+  } catch(e) {}
+}
+
+function iterExportTxt() {
+  const items = document.querySelectorAll('#iterResultsBody .iter-result-item')
+  if (!items.length) return
+  const srcFav = favourites.find(x => x.id === iterFavId)
+  const header = `BEAST MODE — ITERATE VARIANTS\n${'='.repeat(40)}\nSource: ${srcFav?.title || 'Prompt'}\nGenerated: ${new Date().toLocaleString()}\n${'='.repeat(40)}\n\n`
+  const body = [...items].map((item, i) => {
+    const label = item.querySelector('.iter-result-label')?.textContent || `VARIANT ${i+1}`
+    const prompt = item.dataset.variantText || ''
+    return `${label}\n${'-'.repeat(40)}\n${prompt}`
+  }).join('\n\n')
+  const text = header + body
+  const a = document.createElement('a')
+  a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text)
+  a.download = `variants-${Date.now()}.txt`
+  a.click()
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // DRIVE PHOTO PICKER
 // ═══════════════════════════════════════════════════════════════════
@@ -8127,8 +8201,38 @@ document.addEventListener('keydown', e => {
 // SETTINGS VIEW
 // ═══════════════════════════════════════════════════════════════════
 
+function sendFeedback(e) {
+  if (e) e.preventDefault()
+  const version   = 'v4'
+  const mode      = typeof currentMode !== 'undefined' ? currentMode : 'unknown'
+  const preset    = typeof currentPreset !== 'undefined' ? currentPreset : 'unknown'
+  const prompts   = typeof favourites !== 'undefined' ? favourites.length : 0
+  const cloud     = typeof cloudProvider !== 'undefined' && cloudProvider ? cloudProvider : 'none'
+  const genOnly   = typeof genOnlyMode !== 'undefined' && genOnlyMode ? 'yes' : 'no'
+
+  const subject = encodeURIComponent('Beast Mode Feedback')
+  const body = encodeURIComponent(
+`Hi,
+
+[Please describe your feedback, bug, or suggestion here]
+
+
+--- App Info (please leave this in) ---
+Version: Beast Mode ${version}
+Mode: ${mode}
+Preset: ${preset}
+Saved prompts: ${prompts}
+Cloud sync: ${cloud}
+Generate-only mode: ${genOnly}
+Browser: ${navigator.userAgent}
+`
+  )
+  window.location.href = `mailto:promptlab@artbot5000.com?subject=${subject}&body=${body}`
+}
+
 function renderSettingsView() {
   renderThemePicker()
+  renderSettingsViewGenOnly()
   // Sync the provider selector buttons
   document.getElementById('providerBtnGdrive')?.classList.toggle('active', cloudProvider === 'gdrive')
   document.getElementById('providerBtnDropbox')?.classList.toggle('active', cloudProvider === 'dropbox')
@@ -8337,6 +8441,7 @@ function initElCache() {
 window.addEventListener('load', () => {
   initElCache()
   initThemeColour()
+  initGenerateOnlyMode()
   // 1. Restore from localStorage immediately — data visible before cloud connects
   lsRestoreAll()
   updateLibBadge()
@@ -8373,6 +8478,149 @@ function syncGateCheck() {
   if (hasLocalData) { updateLocalWarning(); return }
   // No cloud, no data — show gate
   document.getElementById('syncGateModal').style.display = 'flex'
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GENERATE ONLY MODE
+// ═══════════════════════════════════════════════════════════════════
+
+const GENERATE_ONLY_KEY = 'bm_generate_only'
+const GENERATE_ONLY_RECENT_KEY = 'bm_gen_only_recent'
+let genOnlyMode = false
+
+function syncGateGenerateOnly() {
+  lsSave(GENERATE_ONLY_KEY, true)
+  closeSyncGate()
+  applyGenerateOnlyMode()
+}
+
+function applyGenerateOnlyMode() {
+  genOnlyMode = true
+
+  // Hide non-generator nav tabs
+  ;['navBuilder', 'navLibrary'].forEach(id => {
+    const el = document.getElementById(id)
+    if (el) el.style.display = 'none'
+  })
+
+  // Show upgrade banner
+  const banner = document.getElementById('generateOnlyBanner')
+  if (banner) banner.style.display = 'flex'
+
+  // Show generate-only recent panel, hide full saved prompts panel
+  const favsPanel = document.getElementById('favsPanel')
+  const recentPanel = document.getElementById('genOnlyRecentPanel')
+  if (favsPanel) favsPanel.style.display = 'none'
+  if (recentPanel) recentPanel.style.display = 'block'
+
+  // Grey out save button in generator
+  const saveBtn = document.querySelector('.panel button[onclick="saveFav()"]')
+  if (saveBtn) {
+    saveBtn.disabled = true
+    saveBtn.style.opacity = '.35'
+    saveBtn.title = 'Connect cloud storage to save prompts'
+    saveBtn.textContent = '♥ SAVE PROMPT'
+  }
+
+  // Switch to generator view
+  switchView('generator')
+
+  // Render recent prompts
+  genOnlyRenderRecent()
+}
+
+function exitGenerateOnlyMode() {
+  // Clear flag and re-show sync gate for full mode
+  lsSave(GENERATE_ONLY_KEY, false)
+  genOnlyMode = false
+  // Restore nav
+  ;['navBuilder', 'navLibrary'].forEach(id => {
+    const el = document.getElementById(id)
+    if (el) el.style.display = ''
+  })
+  // Hide banner
+  const banner = document.getElementById('generateOnlyBanner')
+  if (banner) banner.style.display = 'none'
+  // Restore panels
+  const favsPanel = document.getElementById('favsPanel')
+  const recentPanel = document.getElementById('genOnlyRecentPanel')
+  if (favsPanel) favsPanel.style.display = ''
+  if (recentPanel) recentPanel.style.display = 'none'
+  // Re-enable save button
+  const saveBtn = document.querySelector('.panel button[onclick="saveFav()"]')
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = ''; saveBtn.title = '' }
+  // Show sync gate
+  syncGateCheck()
+}
+
+function genOnlyAddRecent(promptText) {
+  if (!genOnlyMode) return
+  let recents = []
+  try { recents = JSON.parse(localStorage.getItem(GENERATE_ONLY_RECENT_KEY) || '[]') } catch(e) {}
+  recents.unshift({ text: promptText, savedAt: Date.now() })
+  if (recents.length > 10) recents = recents.slice(0, 10)
+  localStorage.setItem(GENERATE_ONLY_RECENT_KEY, JSON.stringify(recents))
+  genOnlyRenderRecent()
+}
+
+function genOnlyRenderRecent() {
+  const list = document.getElementById('genOnlyRecentList')
+  if (!list) return
+  let recents = []
+  try { recents = JSON.parse(localStorage.getItem(GENERATE_ONLY_RECENT_KEY) || '[]') } catch(e) {}
+  list.innerHTML = ''
+  if (!recents.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;letter-spacing:.5px;">Generate a prompt to see it here.</div>'
+    return
+  }
+  recents.forEach((r, i) => {
+    const item = document.createElement('div')
+    item.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 12px;'
+    const preview = r.text.slice(0, 120) + (r.text.length > 120 ? '…' : '')
+    const timeStr = new Date(r.savedAt).toLocaleTimeString()
+
+    const label = document.createElement('div')
+    label.style.cssText = 'font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:5px;'
+    label.textContent = `RECENT ${i+1} — ${timeStr}`
+
+    const text = document.createElement('div')
+    text.style.cssText = 'font-size:12px;color:var(--text);line-height:1.5;margin-bottom:8px;'
+    text.textContent = preview
+
+    const copyBtn = document.createElement('button')
+    copyBtn.style.cssText = 'background:none;border:1px solid var(--border);border-radius:3px;padding:3px 9px;font-family:\'Rajdhani\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);'
+    copyBtn.textContent = '⎘ COPY'
+    copyBtn.addEventListener('click', () => genOnlyCopy(copyBtn, r.text))
+
+    item.appendChild(label)
+    item.appendChild(text)
+    item.appendChild(copyBtn)
+    list.appendChild(item)
+  })
+}
+
+function genOnlyCopy(btn, text) {
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'
+    document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); document.body.removeChild(ta)
+    const orig = btn.textContent; btn.textContent = '✓ COPIED'
+    setTimeout(() => btn.textContent = orig, 1500)
+  } catch(e) {}
+}
+
+function initGenerateOnlyMode() {
+  if (lsLoad(GENERATE_ONLY_KEY)) applyGenerateOnlyMode()
+}
+
+function renderSettingsViewGenOnly() {
+  // In generate-only mode, hide cloud sync and data export sections in settings
+  if (!genOnlyMode) return
+  ;['settingsSyncSection','settingsDataSection','settingsModelsSection'].forEach(id => {
+    const el = document.getElementById(id)
+    if (el) el.style.display = 'none'
+  })
 }
 
 function syncGateChooseGdrive() {
@@ -12888,6 +13136,61 @@ function pbRemoveTagFromToken(uid) {
   pbUpdateSelStatus('Tag removed')
 }
 
+function pbRenderTaggedList() {
+  const section = document.getElementById('pbTaggedSection')
+  const list    = document.getElementById('pbTaggedList')
+  const count   = document.getElementById('pbTaggedCount')
+  const saveBtn = document.getElementById('pbSaveTaggedBtn')
+  if (!list) return
+
+  if (!pbTagged.length) {
+    if (section) section.style.display = 'none'
+    if (saveBtn) saveBtn.disabled = true
+    return
+  }
+
+  if (section) section.style.display = 'block'
+  if (count) count.textContent = `(${pbTagged.length})`
+  if (saveBtn) saveBtn.disabled = false
+
+  list.innerHTML = ''
+  pbTagged.forEach(item => {
+    const t = PB_TYPES.find(x => x.key === item.type)
+    const row = document.createElement('div')
+    row.className = 'pb-tagged-item'
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);'
+
+    const chip = document.createElement('span')
+    chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:700;
+      background:color-mix(in srgb,${t?.color || 'var(--accent)'} 15%,transparent);
+      color:${t?.color || 'var(--accent)'};flex-shrink:0;`
+    chip.textContent = t?.label || item.type
+
+    const txt = document.createElement('span')
+    txt.style.cssText = 'flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+    txt.textContent = item.text
+
+    const rm = document.createElement('button')
+    rm.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 4px;flex-shrink:0;'
+    rm.textContent = '×'
+    rm.title = 'Remove tag'
+    rm.onclick = () => {
+      // Untag the token(s) with this uid
+      if (typeof pbTokens !== 'undefined') {
+        pbTokens.forEach(tok => { if (tok.tagUid === item.uid) tok.tagUid = null })
+      }
+      pbTagged = pbTagged.filter(t => t.uid !== item.uid)
+      pbRenderAnnotated()
+      pbRenderTaggedList()
+    }
+
+    row.appendChild(chip)
+    row.appendChild(txt)
+    row.appendChild(rm)
+    list.appendChild(row)
+  })
+}
+
 function pbUpdateSelStatus(msg, isActive) {
   const el = document.getElementById('pbSelStatus')
   if (!el) return
@@ -13244,6 +13547,13 @@ document.addEventListener('viewSwitched', e => {
       </div>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+      <!-- Recommendation notice -->
+      <div style="background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:5px;padding:10px 14px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:5px;">⊛ RECOMMENDED FOR FULL ACCESS</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.7;letter-spacing:.3px;">
+          Connecting a cloud service unlocks the full app — <strong style="color:var(--text);">Generator</strong>, <strong style="color:var(--text);">Prompt Lab</strong> and <strong style="color:var(--text);">Prompt Library</strong> — with all your prompts, particles and settings saved and synced across devices. Without it, data is stored in your browser only and can be lost if storage is cleared.
+        </div>
+      </div>
       <!-- Google Drive -->
       <button class="sync-gate-btn" onclick="syncGateChooseGdrive()" id="syncGateGdriveBtn">
         <span class="sync-gate-icon" style="background:color-mix(in srgb,#4285F4 20%,transparent);color:#4285F4;">▲</span>
@@ -13282,6 +13592,14 @@ document.addEventListener('viewSwitched', e => {
         <div>
           <div style="font-weight:700;letter-spacing:.5px;">Import from ZIP backup</div>
           <div style="font-size:10px;opacity:.6;margin-top:2px;">Restore a previously exported backup</div>
+        </div>
+      </button>
+      <!-- Generate Only -->
+      <button class="sync-gate-btn sync-gate-btn-secondary" onclick="syncGateGenerateOnly()" style="border-color:color-mix(in srgb,var(--accent) 25%,transparent);">
+        <span class="sync-gate-icon" style="background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-size:20px;">▶</span>
+        <div>
+          <div style="font-weight:700;letter-spacing:.5px;color:var(--accent);">Generate Mode Only</div>
+          <div style="font-size:10px;opacity:.7;margin-top:2px;line-height:1.5;">No account needed. Generate prompts instantly.<br>Last 10 shown — save to cloud anytime.</div>
         </div>
       </button>
       <!-- Skip -->
