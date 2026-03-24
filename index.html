@@ -24,9 +24,6 @@
   --muted: #4a5a68;
   --radius: 3px;
 }
-.mode-insect { --accent: #00ffb0; --accent2: #00cc88; }
-.mode-beast  { --accent: #ff6a00; --accent2: #ff0040; }
-.mode-fusion { --accent: #c800ff; --accent2: #ff0080; }
 .preset-horror  { --accent: #cc0033; --accent2: #660022; }
 .preset-scifi   { --accent: #00d4ff; --accent2: #0066ff; }
 .preset-fantasy { --accent: #c77dff; --accent2: #7b2fff; }
@@ -77,14 +74,6 @@ h1 {
 .mode-btn.active { background:var(--accent);color:#000; }
 
 /* STYLE PRESETS */
-.preset-row { display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap; }
-.preset-btn {
-  padding:6px 14px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;
-  letter-spacing:2px;cursor:pointer;border:1px solid var(--border);background:transparent;
-  color:var(--muted);border-radius:var(--radius);transition:all .2s;text-transform:uppercase;
-}
-.preset-btn:hover { border-color:var(--accent);color:var(--accent); }
-.preset-btn.active { background:var(--accent);color:#000;border-color:var(--accent); }
 
 /* PANEL */
 .panel {
@@ -463,7 +452,6 @@ body.light .colourTuner { background:var(--surface2); }
 .hsl-row { display:flex;align-items:center;gap:8px;margin-bottom:5px; }
 .hsl-lbl { font-size:13px;letter-spacing:2px;color:var(--muted);font-weight:700;width:12px;flex-shrink:0; }
 .hsl-slider { flex:1;height:4px;border-radius:2px;outline:none;border:none;cursor:pointer;accent-color:var(--accent); }
-.hsl-val { font-size:14px;color:var(--text);width:32px;text-align:right;flex-shrink:0;font-family:'Rajdhani',sans-serif; }
 .hsl-input {
   width:36px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);
   border-radius:2px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:16px;
@@ -564,9 +552,6 @@ body.light .colourTuner { background:var(--surface2); }
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23e8ff00'/%3E%3C/svg%3E");
 }
 .preset-cat-select:focus { outline:none;border-color:var(--accent); }
-.mode-insect .preset-cat-select.has-active { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2300ffb0'/%3E%3C/svg%3E"); }
-.mode-beast  .preset-cat-select.has-active { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23ff6a00'/%3E%3C/svg%3E"); }
-.mode-fusion .preset-cat-select.has-active { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c800ff'/%3E%3C/svg%3E"); }
 
 
 /* STYLE EDITOR */
@@ -674,7 +659,6 @@ body.light .colourTuner { background:var(--surface2); }
 .lib-filter-row {
   display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px;align-items:center;
 }
-.lib-filter-label { font-size:13px;letter-spacing:2px;color:var(--muted);margin-right:2px; }
 .lib-filter-chip {
   padding:4px 10px;border-radius:12px;font-size:14px;letter-spacing:1px;font-weight:700;
   cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);
@@ -934,64 +918,65 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-assembled-wrap { margin-bottom:20px; }
 
 .pb-formula {
-  display:flex;flex-wrap:wrap;gap:6px;padding:14px;
+  display:block;padding:14px;
   background:var(--surface);border:1px solid var(--border);border-radius:6px;
-  min-height:52px;align-items:flex-start;
+  min-height:52px;
 }
 .pb-formula-output {
   background:#000;border-left:2px solid #38b6ff;
-  font-family:'Rajdhani',sans-serif;line-height:2;
+  font-family:'Rajdhani',sans-serif;font-size:15px;line-height:1.9;
+  outline:none;word-break:break-word;white-space:pre-wrap;
+  cursor:text;
 }
-.pb-formula-ph { color:var(--muted);font-size:15px;letter-spacing:1px;align-self:center;font-style:italic; }
+.pb-formula-output:focus { border-color:#38b6ff; }
+.pb-formula-ph { color:var(--muted);font-size:15px;letter-spacing:1px;font-style:italic; }
 .pb-formula-chip {
   display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;
   font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;letter-spacing:.3px;
-  border:1px solid transparent;user-select:none;cursor:grab;max-width:280px;
-  transition:transform .1s;
+  border:1px solid transparent;user-select:none;cursor:pointer;
+  vertical-align:middle;margin:0 2px;
+  transition:transform .1s, box-shadow .15s;
   background: color-mix(in srgb, var(--tc, var(--accent)) 18%, transparent);
   color: var(--tc, var(--accent));
   border-color: color-mix(in srgb, var(--tc, var(--accent)) 30%, transparent);
 }
-.pb-formula-chip:active { cursor:grabbing;transform:scale(.95); }
+.pb-formula-chip:hover { transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.3); }
+.pb-formula-chip.pfc-replacing {
+  outline:2px solid var(--tc, var(--accent));
+  outline-offset:2px;
+  box-shadow:0 0 10px color-mix(in srgb, var(--tc, var(--accent)) 40%, transparent);
+  animation:pfc-pulse .8s ease-in-out infinite alternate;
+}
+@keyframes pfc-pulse {
+  from { box-shadow:0 0 6px color-mix(in srgb, var(--tc, var(--accent)) 30%, transparent); }
+  to   { box-shadow:0 0 14px color-mix(in srgb, var(--tc, var(--accent)) 60%, transparent); }
+}
 .pb-formula-chip .pfc-text {
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
 }
 .pb-formula-chip .pfc-rm {
   flex-shrink:0;font-size:17px;line-height:1;
-  opacity:.5;cursor:pointer;transition:opacity .1s;
+  opacity:.4;cursor:pointer;transition:opacity .1s;
   padding:0 2px;touch-action:manipulation;
   -webkit-user-select:none;user-select:none;
 }
 .pb-formula-chip .pfc-rm:hover { opacity:1; }
-.pb-formula-sep {
-  color:var(--muted);align-self:center;font-size:17px;opacity:.4;flex-shrink:0;
+/* Replace / dim mode on particle grid */
+.pb-type-block.pb-replace-active { outline:2px solid var(--tc, var(--accent));outline-offset:2px; }
+.pb-type-block.pb-replace-dimmed { opacity:.18;pointer-events:none; }
+.pb-replace-cancel {
+  margin-left:auto;padding:2px 8px;border-radius:3px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-family:'Rajdhani',sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;
 }
-.pb-formula-chip.drag-over { outline:2px dashed rgba(255,255,255,.4);outline-offset:2px; }
+.pb-replace-cancel:hover { color:var(--text);border-color:var(--text); }
+/* Insert mode hint */
+@keyframes blink { 50% { opacity:0 } }
+
 
 /* ── PROMPT LAB COLOUR PICKER ────────────────────────────────────── */
-.pb-colour-picker {
-  padding:12px 14px;border-top:1px solid var(--border);
-  background:var(--surface2);display:none;
-}
-.pb-colour-picker.open { display:block; }
-.pb-colour-picker-grid {
-  display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;
-}
-.pb-colour-swatch-row {
-  display:flex;align-items:center;gap:8px;margin-bottom:6px;
-}
-.pb-colour-swatch {
-  width:20px;height:20px;border-radius:3px;border:1px solid var(--border);flex-shrink:0;
-}
-.pb-colour-lbl { font-size:13px;letter-spacing:2px;color:var(--accent);font-weight:700; }
-.pb-colour-hex { font-size:14px;color:var(--text);margin-left:auto;font-family:'Rajdhani',sans-serif; }
-.pb-hsl-row { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
-.pb-hsl-lbl { font-size:13px;color:var(--muted);width:10px;flex-shrink:0; }
-.pb-hsl-slider { flex:1;accent-color:var(--accent);cursor:pointer; }
-.pb-hsl-num { width:40px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;padding:2px 4px;text-align:right; }
 .pb-colour-preview { display:flex;height:18px;border-radius:3px;overflow:hidden;border:1px solid var(--border);margin-bottom:8px; }
 .pb-colour-preview div { flex:1; }
-.pb-colour-result { font-size:14px;color:var(--muted);letter-spacing:1px;margin-bottom:8px; }
 
 
 /* Legend */
@@ -1224,43 +1209,6 @@ body.light .colourTuner { background:var(--surface2); }
 #viewBuilder .view-inner { padding-right:40px; padding-bottom:160px; }
 
 /* Embedded type nav */
-.pb-type-nav-embedded {
-  display:flex;
-  flex-direction:column;
-  gap:3px;
-}
-.pb-type-nav-embedded .pb-type-nav-btn {
-  width:100%;
-  padding:7px 10px;
-  border-radius:4px;
-  font-size:15px;
-  font-weight:700;
-  letter-spacing:.5px;
-  display:flex;
-  align-items:center;
-  gap:8px;
-  background:transparent;
-  border:1px solid transparent;
-  color:var(--muted);
-  cursor:pointer;
-  transition:all .12s;
-  text-align:left;
-}
-.pb-type-nav-embedded .pb-type-nav-btn:hover {
-  background:var(--surface2);
-  border-color:var(--border);
-  color:var(--text);
-}
-.pb-type-nav-embedded .pb-type-nav-btn.hidden-type {
-  opacity:.25;
-  pointer-events:none;
-}
-.pb-type-nav-embedded .pb-type-nav-dot {
-  width:9px;height:9px;border-radius:50%;flex-shrink:0;
-}
-.pb-type-nav-embedded .pb-type-nav-sep {
-  height:1px;background:var(--border);margin:4px 0;
-}
 
 /* Hide floating nav on desktop — it's always shown, remove the hide rule */
 @media(min-width:901px){
@@ -1533,22 +1481,6 @@ body.light .colourTuner { background:var(--surface2); }
 
 
 /* Unified prompt section */
-.pb-prompt-section {
-  margin-top:24px;
-  background:var(--surface);border:1px solid var(--border);border-radius:6px;
-  padding:14px;
-}
-.pb-prompt-section .pb-formula {
-  background:var(--surface2);border:1px solid var(--border);
-  border-radius:var(--radius);padding:10px;min-height:44px;
-}
-.pb-prompt-section .pb-output {
-  border-top:none;border-radius:0 0 var(--radius) var(--radius);
-  border-left:2px solid #38b6ff;border-right:1px solid var(--border);
-  border-bottom:1px solid var(--border);
-  padding:10px 44px 10px 10px;font-size:16px;
-  background:rgba(0,0,0,.3);
-}
 
 /* Prompt Lab colour tuner */
 .pb-colour-tuner {
@@ -1585,7 +1517,6 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-colour-add-btn:hover { background:#38b6ff;color:#000; }
 /* Mobile */
 @media(max-width:640px){
-  .pb-output { font-size:15px;padding:12px 44px 12px 12px; }
   .pb-particle { font-size:14px;padding:4px 8px; }
   .pb-formula-chip { font-size:14px;max-width:180px; }
 }
@@ -1695,6 +1626,84 @@ body.light .colourTuner { background:var(--surface2); }
 .pb-tagged-item-del { cursor:pointer;opacity:.5;flex-shrink:0;font-size:18px;transition:opacity .1s; }
 .pb-tagged-item-del:hover { opacity:1; }
 
+/* ══ BULK SELECT ══════════════════════════════════════════════════ */
+.lib-bulk-bar {
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding:8px 12px;margin-bottom:10px;
+  background:color-mix(in srgb,var(--accent) 8%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
+  border-radius:5px;animation:slideDown .2s ease;
+}
+@keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+.lib-select-toggle.active { background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent); }
+.lib-card.selected {
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+  background:color-mix(in srgb,var(--accent) 5%,var(--surface));
+}
+.lib-card-checkbox {
+  position:absolute;top:10px;left:10px;z-index:5;
+  width:22px;height:22px;border-radius:4px;
+  border:2px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .12s;font-size:14px;font-weight:700;
+}
+.lib-card.selected .lib-card-checkbox {
+  background:var(--accent);border-color:var(--accent);color:#000;
+}
+.lib-card { position:relative; }
+
+/* ══ SWIPE TO REVEAL ══════════════════════════════════════════════ */
+.lib-card-swipe-wrap {
+  position:relative;overflow:hidden;border-radius:6px;
+  touch-action:pan-y;
+}
+.lib-card-swipe-actions {
+  position:absolute;right:0;top:0;bottom:0;
+  display:flex;align-items:stretch;
+  transform:translateX(100%);transition:transform .2s ease;
+}
+.lib-card-swipe-wrap.swiped .lib-card-swipe-actions { transform:translateX(0); }
+.lib-card-swipe-wrap.swiped .lib-card { transform:translateX(-140px); }
+.lib-card { transition:transform .2s ease; }
+.swipe-action-btn {
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:70px;padding:8px 4px;gap:4px;cursor:pointer;border:none;
+  font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;
+  color:#fff;
+}
+.swipe-action-btn span { font-size:18px; }
+.swipe-btn-move   { background:#4a90d9; }
+.swipe-btn-delete { background:#e05; }
+
+/* ══ PROMPT LAB TOUR ══════════════════════════════════════════════ */
+.tour-card {
+  background:var(--surface);border:1px solid var(--accent);border-radius:8px;
+  padding:18px 20px;max-width:300px;width:90%;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+  animation:tourPop .25s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes tourPop { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
+.tour-step-badge {
+  font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700;
+  margin-bottom:8px;font-family:'Rajdhani',sans-serif;
+}
+.tour-title {
+  font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;
+  color:var(--accent);margin-bottom:8px;
+}
+.tour-body {
+  font-size:13px;color:var(--text);line-height:1.6;letter-spacing:.3px;
+  margin-bottom:16px;
+}
+.tour-actions { display:flex;justify-content:flex-end;gap:8px; }
+.tour-highlight {
+  outline:3px solid var(--accent) !important;
+  outline-offset:4px !important;
+  position:relative;z-index:29999 !important;
+  border-radius:6px;
+}
+
 .lib-card-particles {
   display:flex;flex-wrap:wrap;gap:3px;align-items:center;
 }
@@ -1723,7 +1732,68 @@ body.light .colourTuner { background:var(--surface2); }
 }
 
 
-.sync-gate-btn {
+/* ── SUBJECT: compact name-chip grid ───────────────────────────── */
+.pb-name-chip-grid {
+  display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;
+}
+.pb-name-chip {
+  display:inline-block;padding:3px 9px;border-radius:12px;
+  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:.3px;
+  cursor:pointer;user-select:none;
+  background:color-mix(in srgb,var(--tc,var(--accent)) 10%,transparent);
+  color:var(--tc,var(--accent));
+  border:1px solid color-mix(in srgb,var(--tc,var(--accent)) 22%,transparent);
+  transition:all .1s;
+}
+.pb-name-chip:hover {
+  background:color-mix(in srgb,var(--tc,var(--accent)) 22%,transparent);
+  transform:translateY(-1px);
+}
+.pb-name-chip.pb-name-chip-fav {
+  border-style:dashed;
+}
+/* ── COLOUR: swatch grid ─────────────────────────────────────────── */
+.pb-swatch-grid {
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+  gap:5px;padding:8px 10px;
+}
+.pb-swatch-item {
+  display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--border);background:var(--surface2);
+  transition:all .12s;
+}
+.pb-swatch-item:hover {
+  border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 6%,transparent);
+}
+.pb-swatch-preview {
+  width:26px;height:26px;border-radius:3px;flex-shrink:0;
+  border:1px solid rgba(255,255,255,.12);
+}
+.pb-swatch-label {
+  font-size:11px;font-weight:700;letter-spacing:.2px;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
+  font-family:'Rajdhani',sans-serif;
+}
+/* ── REFERENCE: compact alpha grid ──────────────────────────────── */
+.pb-ref-grid {
+  display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;
+}
+.pb-ref-chip {
+  display:inline-block;padding:3px 10px;border-radius:3px;
+  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:.2px;
+  cursor:pointer;user-select:none;
+  background:color-mix(in srgb,var(--tc,var(--accent)) 10%,transparent);
+  color:var(--tc,var(--accent));
+  border:1px solid color-mix(in srgb,var(--tc,var(--accent)) 22%,transparent);
+  transition:all .1s;
+}
+.pb-ref-chip:hover {
+  background:color-mix(in srgb,var(--tc,var(--accent)) 22%,transparent);
+  transform:translateY(-1px);
+}
+
+/* ── SYNC GATE ───────────────────────────────────────────────────── */
   display:flex;align-items:center;gap:14px;width:100%;
   padding:14px 16px;border-radius:6px;border:1px solid var(--border);
   background:var(--surface2);cursor:pointer;text-align:left;
@@ -2198,6 +2268,16 @@ body.light .colourTuner { background:var(--surface2); }
             <option value="rating">TOP RATED</option>
             <option value="name">A–Z</option>
           </select>
+          <button class="btn btn-ghost lib-select-toggle" id="libSelectToggle" onclick="libToggleSelectMode()" style="font-size:11px;padding:5px 12px;white-space:nowrap;">☐ SELECT</button>
+        </div>
+        <!-- Bulk action bar — slides up when items selected -->
+        <div id="libBulkBar" style="display:none;" class="lib-bulk-bar">
+          <span id="libBulkCount" style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:1px;flex:1;"></span>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkStar()">★ STAR ALL</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkMove()">📁 MOVE</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkExport()">⬇ EXPORT</button>
+          <button class="btn btn-ghost danger" style="font-size:11px;" onclick="libBulkDelete()">✕ DELETE</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libToggleSelectMode()">CANCEL</button>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
           <div class="lib-filter-row" id="libFilters" style="margin-bottom:0;"></div>
@@ -2688,8 +2768,8 @@ body.light .colourTuner { background:var(--surface2); }
     <!-- // ASSEMBLED PROMPT — formula box, buttons below -->
     <div class="pb-assembled-wrap" id="pbAssembledWrap" style="margin-bottom:20px;">
       <div class="pb-section-label" style="margin-bottom:8px;">// ASSEMBLED PROMPT</div>
-      <div class="pb-formula pb-formula-output" id="pbFormula">
-        <span class="pb-formula-ph">Click particles below to build your prompt…</span>
+      <div class="pb-formula pb-formula-output" id="pbFormula" contenteditable="true" spellcheck="false">
+        <span class="pb-formula-ph" contenteditable="false">Click particles below to build your prompt…</span>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
@@ -2941,6 +3021,738 @@ body.light .colourTuner { background:var(--surface2); }
 {"INSECTS":{"Rhinoceros Beetle":{"body":"armored beetle chassis","armor":"reinforced horn-plated shell","legs":"powerful crushing legs","weapon":"ram horns","texture":"glossy ribbed carapace with deep grooves","movement":"slow deliberate stomping charge","scale":"car-sized"},"Hercules Beetle":{"body":"long twin-horned frame","armor":"reinforced carapace with dorsal horn","legs":"tank-grip legs","weapon":"horn ram and pincer","texture":"matte black and olive-green banded shell","movement":"low rumbling bulldozer charge","scale":"van-sized"},"Goliath Beetle":{"body":"massive block-like chassis","armor":"dense mosaic plates","legs":"strong grip limbs","weapon":"crushing pincer jaws","texture":"bold black-and-white geometric patterned shell","movement":"heavy plodding gait with sudden lunges","scale":"car-sized"},"Stag Beetle":{"body":"armored antlered frame","armor":"horned iridescent shell","legs":"grip crawler legs","weapon":"massive antler-horn attack","texture":"deep mahogany lacquered shell","movement":"aggressive sideways wrestling stance","scale":"motorbike-sized"},"Ironclad Beetle":{"body":"heavily compressed armored frame","armor":"ultra-dense iron-like shell","legs":"squat stubby legs","weapon":"crushing mandible jaws","texture":"rough stone-like ridged exoskeleton","movement":"immovable defensive crouch with short bursts","scale":"fist-sized"},"Bombardier Beetle":{"body":"blast-chassis with rear cannon","armor":"heat-resistant segmented plates","legs":"multi-jointed rapid legs","weapon":"boiling chemical steam cannon","texture":"metallic blue-black shell with orange head","movement":"fast retreating sprint with directional blast","scale":"boot-sized"},"Trilobite Beetle":{"body":"ancient trilobite-shell frame","armor":"overlapping articulated plates","legs":"many segmented multi-jointed legs","weapon":"crushing mandibles","texture":"rippled fossil-pattern segmented shell","movement":"flat ground-hugging scuttle","scale":"shoebox-sized"},"Tiger Beetle":{"body":"streamlined fast-predator frame","armor":"iridescent metallic plates","legs":"long sprint legs","weapon":"scissor snap jaws","texture":"vivid iridescent green-gold shell","movement":"explosive sprint and stop hunting pattern","scale":"hand-sized"},"Diving Beetle":{"body":"streamlined aquatic tear-drop frame","armor":"waterproof sealed shell","legs":"oar paddle limbs","weapon":"rending mandible bite","texture":"smooth olive-brown hydrodynamic shell","movement":"powerful underwater corkscrewing dive","scale":"palm-sized"},"Longhorn Beetle":{"body":"elongated antenna-crowned frame","armor":"banded black-and-white plates","legs":"clinging bark-grip limbs","weapon":"antenna whip strike","texture":"boldly banded monochrome shell","movement":"slow methodical climbing and boring","scale":"forearm-length"},"Jewel Beetle":{"body":"iridescent gem-like chassis","armor":"faceted metallic gem plates","legs":"agile precision legs","weapon":"focused heat beam","texture":"brilliant metallic green-gold-copper iridescence","movement":"glinting darting aerial hover","scale":"hand-sized"},"Whirligig Beetle":{"body":"disc-shaped gyroscope frame","armor":"split-lens sensor dome","legs":"rowing sculling limbs","weapon":"surface vortex spin","texture":"polished jet-black convex shell","movement":"rapid circular surface spinning","scale":"coin-sized"},"Firefly":{"body":"soft-bodied luminescent frame","armor":"bioluminescent soft plates","legs":"landing clasper limbs","weapon":"blinding light pulse","texture":"soft brown shell with glowing yellow abdomen panels","movement":"slow drifting pulse-flash flight","scale":"finger-length"},"Titan Beetle":{"body":"enormous bark-crushing chassis","armor":"ultra-thick ribbed plates","legs":"powerful grip legs","weapon":"mandible shear capable of snapping pencils","texture":"matte brown rough-ridged bark-like shell","movement":"slow lumbering unstoppable advance","scale":"forearm-length"},"Click Beetle":{"body":"spring-loaded launch chassis","armor":"ridged hard wing cases","legs":"snap-launch legs","weapon":"kinetic body-launch strike","texture":"brown striped ridged shell","movement":"sudden violent body-snap launch","scale":"thumb-sized"},"Violin Beetle":{"body":"flat violin-body silhouette frame","armor":"transparent wing edge extensions","legs":"wide-gait splayed legs","weapon":"acid defensive ooze","texture":"translucent amber flat violin shape","movement":"flat bark-panel crawl","scale":"palm-sized"},"Dung Beetle":{"body":"rounded compact hauler frame","armor":"rugged matte shell","legs":"grip and roll legs","weapon":"rolling ram","texture":"matte black rough shell","movement":"precise rolling backward navigation","scale":"walnut-sized"},"Ground Beetle":{"body":"low-slung patrol frame","armor":"polished dark plates","legs":"fast patrol legs","weapon":"acid mandible spray","texture":"polished jet-black shell","movement":"rapid low-to-ground sprint","scale":"thumb-sized"},"Bark Beetle":{"body":"compact cylindrical borer frame","armor":"wood-pattern cryptic plates","legs":"grip claw limbs","weapon":"bore drill mandibles","texture":"brown wood-grain patterned shell","movement":"slow rotating boring drill advance","scale":"rice-grain-sized"},"Blister Beetle":{"body":"slender soft-bodied frame","armor":"warning-coloured soft plates","legs":"walking limbs","weapon":"cantharidin chemical sprayer","texture":"bright warning-red or metallic blue soft shell","movement":"slow deliberate warning walk","scale":"thumb-sized"},"Rove Beetle":{"body":"flexible abbreviated-wing frame","armor":"shortened elytra","legs":"swift running legs","weapon":"abdominal gland spray","texture":"shiny black flexible body","movement":"fast running with raised abdomen","scale":"thumb-sized"},"Hister Beetle":{"body":"compact box-like frame","armor":"polished jet-black shell","legs":"burrowing limbs","weapon":"clamping mandible jaws","texture":"mirror-polished hard black carapace","movement":"playing dead then explosive escape","scale":"pea-sized"},"Soldier Beetle":{"body":"narrow soft-shelled frame","armor":"leathery soft plates","legs":"patrol limbs","weapon":"pheromone chemical gun","texture":"orange and black leathery soft shell","movement":"steady patrol flight and crawl","scale":"thumbnail-sized"},"Atlas Beetle":{"body":"triple-horned Y-shaped chassis","armor":"thick dark plates","legs":"grip tank legs","weapon":"triple horn wrestling ram","texture":"dark brown rough matte shell","movement":"powerful slow wrestling advance","scale":"fist-sized"},"Elephant Beetle":{"body":"humped horn-crowned chassis","armor":"spotted thick plates","legs":"strong clinging legs","weapon":"trunk horn ram","texture":"black shell with olive-yellow hair patches","movement":"slow deliberate strength-display advance","scale":"fist-sized"},"Palo Verde Root Borer":{"body":"long-horned aerial frame","armor":"mottled bark-pattern plates","legs":"clinging burrowing legs","weapon":"antenna whip","texture":"mottled grey-brown bark-pattern shell","movement":"clumsy heavy night flight","scale":"forearm-length"},"Wallace's Giant Bee":{"body":"massive barrel-bodied bee frame","armor":"dense fur-plate armor","legs":"pollen basket legs","weapon":"massive sting lance","texture":"dense black fur with pale fur bands","movement":"loud heavy deliberate flight","scale":"thumb-length"},"Dragonfly":{"body":"aerodynamic twin-wing fuselage","armor":"lightweight lattice plating","legs":"basket-trap landing limbs","weapon":"precision targeting system","texture":"transparent net-veined wing panels, metallic thorax","movement":"helicopter hover and lightning-fast directional strike","scale":"forearm-length"},"Emperor Dragonfly":{"body":"large aerial interceptor frame","armor":"banded thorax plates","legs":"prey-basket limbs","weapon":"aerial snatch claws","texture":"electric blue and black banded body","movement":"territorial patrol with explosive acceleration","scale":"forearm-length"},"Glasstail Dragonfly":{"body":"transparent-tailed aerial frame","armor":"clear wing panels","legs":"perch grip limbs","weapon":"aerial ambush dive","texture":"transparent abdomen with metallic thorax","movement":"ghost-silent hover and vanish","scale":"hand-length"},"Damselfly":{"body":"slender needle-like hovering frame","armor":"delicate wing panels","legs":"perch clasper limbs","weapon":"precision prey grab","texture":"vivid blue or red iridescent slender body","movement":"weak fluttering hover near water surface","scale":"finger-length"},"Stalk-Eyed Fly":{"body":"compact scout body with extended eye stalks","armor":"sensor dome head","legs":"agile positioning legs","weapon":"wide-angle optic array","texture":"brown striped body with absurd eye stalks","movement":"sideways eye-display posturing","scale":"thumbnail-sized"},"Tsetse Fly":{"body":"compact flying injector body","armor":"chitin plates","legs":"quick landing legs","weapon":"scissor-blade proboscis injector","texture":"dull brown bristled shell","movement":"silent landing and rapid feed","scale":"thumbnail-sized"},"Horse Fly":{"body":"robust heavy-bodied flying frame","armor":"hard wing plates","legs":"landing grip legs","weapon":"blade-slice biting mouth","texture":"brown striped with vivid iridescent compound eyes","movement":"silent fast approach then painful bite","scale":"thumbnail-sized"},"Robber Fly":{"body":"fast predatory bearded frame","armor":"bristle-plate armor","legs":"raptorial grip limbs","weapon":"stabbing hypopharynx beak","texture":"grey bristled hairy body","movement":"ambush perch then supersonic interception","scale":"thumb-sized"},"Hoverfly":{"body":"hovering bee-mimic chassis","armor":"warning-pattern mimic plates","legs":"delicate hovering limbs","weapon":"pollen delivery cannon","texture":"bold yellow-black bee-mimic banding","movement":"precision stationary hover","scale":"thumbnail-sized"},"Crane Fly":{"body":"long-limbed fragile frame","armor":"thin papery shell","legs":"long dangling fragile limbs","weapon":"decoy distraction emitter","texture":"pale grey papery soft body","movement":"bumbling erratic weak flight","scale":"palm-sized"},"Botfly":{"body":"parasitic host-seeker frame","armor":"thick hairy hide","legs":"grip host-clinging limbs","weapon":"larval injection system","texture":"bumblebee-mimicking hairy body","movement":"brief targeted landing then vanish","scale":"thumbnail-sized"},"Mayfly":{"body":"ephemeral long-tailed frame","armor":"transparent wing panels","legs":"brief-contact legs","weapon":"swarm emergence burst","texture":"pale translucent wings and pale body","movement":"weak upward drifting dance flight","scale":"finger-length"},"Blow Fly":{"body":"metallic compact flying frame","armor":"shiny iridescent plates","legs":"sticky landing legs","weapon":"chemical detection sniffer","texture":"brilliant metallic blue-green iridescent shell","movement":"erratic buzzing landing search","scale":"thumbnail-sized"},"Scorpion Fly":{"body":"predatory scorpion-tail flying frame","armor":"yellow-black banded plates","legs":"scavenging limbs","weapon":"scorpion-curl tail sting","texture":"yellow and black banded body with raised tail","movement":"slow deliberate scavenging walk","scale":"thumb-sized"},"Gnat":{"body":"tiny slender flying frame","armor":"minimal transparent plates","legs":"hovering hair-like limbs","weapon":"swarm cloud burst","texture":"near-invisible transparent body","movement":"dancing swarm column","scale":"pin-head-sized"},"Mosquito":{"body":"slender needle-nosed flying frame","armor":"scaled delicate wings","legs":"precision landing legs","weapon":"hypodermic blood-lance proboscis","texture":"dark speckled slender body with banded legs","movement":"silent drift landing","scale":"pin-length"},"Black Fly":{"body":"humpbacked compact biting frame","armor":"dense black plates","legs":"gripping hook legs","weapon":"bladed mandible blood-slice","texture":"glossy black humpbacked body","movement":"fast low swarming attack","scale":"pinhead-sized"},"Sand Fly":{"body":"tiny hairy flying frame","armor":"held-wing hairy plates","legs":"quick escape legs","weapon":"disease vector bite","texture":"pale hairy minute body","movement":"short hopping low flight","scale":"pinhead-sized"},"Fungus Gnat":{"body":"slender delicate-wing frame","armor":"delicate transparent wings","legs":"walking legs","weapon":"spore cloud release","texture":"dark slender body with clear wings","movement":"weak erratic indoor drift","scale":"pinhead-sized"},"March Fly":{"body":"stocky bristled frame","armor":"hairy plate armor","legs":"slow walking legs","weapon":"blood-lance mouthparts","texture":"black hairy soft body","movement":"slow buzzing low flight","scale":"thumbnail-sized"},"Midge":{"body":"tiny soft slender frame","armor":"delicate wing panels","legs":"hovering drift limbs","weapon":"swarm cloud","texture":"near-transparent tiny body","movement":"tight swarm ball dance","scale":"pinhead-sized"},"Bumblebee":{"body":"round fuzzy flying chassis","armor":"dense fur honeycomb plating","legs":"pollen basket hovering limbs","weapon":"venomous barbed stinger","texture":"dense black and yellow fur","movement":"low loud deliberate hovering flight","scale":"thumb-sized"},"Yellowjacket Wasp":{"body":"slender aggressive wasp body","armor":"hard smooth exoskeleton","legs":"quick aggressive legs","weapon":"smooth reusable venom stinger","texture":"bright yellow-black glossy smooth bands","movement":"rapid aggressive darting flight","scale":"thumbnail-sized"},"Hornet":{"body":"large aggressive wasp frame","armor":"hard banded plates","legs":"swift powerful legs","weapon":"large venom stinger","texture":"brown orange-yellow banded smooth shell","movement":"loud fast aggressive patrol","scale":"thumb-sized"},"Japanese Giant Hornet":{"body":"massive predator wasp frame","armor":"orange-yellow banded plates","legs":"swift powerful legs","weapon":"large mandible saw and sting","texture":"vivid orange head with brown-banded body","movement":"loud fast terrifying patrol flight","scale":"finger-length"},"Tarantula Hawk":{"body":"large metallic flying predator","armor":"iridescent blue-black wing casing","legs":"grappling hook limbs","weapon":"paralyzing sting lance","texture":"vivid blue-black metallic body with orange wings","movement":"low deliberate hunting ground patrol","scale":"thumb-length"},"Paper Wasp":{"body":"slender hanging-leg wasp frame","armor":"segmented paper-thin waist","legs":"dangling leg limbs","weapon":"venom lance sting","texture":"brown and yellow banded paper-thin body","movement":"slow hovering nest patrol","scale":"thumbnail-sized"},"Mud Dauber":{"body":"needle-thin tube-wasp frame","armor":"clay-daubed cylinder plates","legs":"construction grip limbs","weapon":"paralysis sting lance","texture":"black shiny narrow metallic body","movement":"precise hovering mud-carry flight","scale":"finger-length"},"Cicada Killer":{"body":"massive hunting wasp frame","armor":"banded yellow-black plates","legs":"carry-clamp limbs","weapon":"paralysis sting","texture":"black with yellow bands, rust-red wings","movement":"dramatic low hunting patrol","scale":"finger-length"},"Orchid Bee":{"body":"compact iridescent bee frame","armor":"metallic jewel plates","legs":"specialized scent-collecting legs","weapon":"mandible snip","texture":"brilliant metallic green gold iridescence","movement":"fast darting precision hover","scale":"thumbnail-sized"},"Velvet Ant":{"body":"fuzzy warning-colored ant-wasp","armor":"dense fur warning plates","legs":"fast running limbs","weapon":"extremely painful sting","texture":"vivid orange-red dense fur on black body","movement":"fast ground running","scale":"thumb-sized"},"Cuckoo Wasp":{"body":"gem-like compact wasp frame","armor":"deep-pitted metallic shell","legs":"agile curl-up limbs","weapon":"ovipositor dart","texture":"brilliant metallic blue-green deeply pitted shell","movement":"darting nervous hover","scale":"thumbnail-sized"},"Wood Wasp":{"body":"robust cylindrical wasp frame","armor":"banded plates","legs":"wood-grip limbs","weapon":"wood-drilling ovipositor","texture":"black yellow-banded cylindrical body","movement":"slow deliberate drilling bore","scale":"finger-length"},"Giant Ichneumon Wasp":{"body":"long-ovipositor hunting frame","armor":"orange-banded plates","legs":"bark-grip limbs","weapon":"metre-long drill ovipositor","texture":"orange and black with absurdly long tail","movement":"slow methodical bark-drilling","scale":"hand-length including ovipositor"},"Warrior Wasp":{"body":"colonial ranked soldier frame","armor":"hard striped plates","legs":"marching combat limbs","weapon":"repeated intense stings","texture":"dark brown uniform banding","movement":"synchronized marching swarm","scale":"thumbnail-sized"},"Fire Ant":{"body":"aggressive compact ant frame","armor":"hard chitin exoskeleton","legs":"rapid six-leg sprint","weapon":"mandible bite and acid sting","texture":"reddish-brown smooth chitin","movement":"frantic coordinated swarm attack","scale":"grain-of-rice-sized"},"Bullet Ant":{"body":"large powerful ant frame","armor":"tough pitted chitin","legs":"powerful grip legs","weapon":"most painful sting known","texture":"dark brown matte rough chitin","movement":"deliberate slow warning patrol","scale":"thumbnail-sized"},"Army Ant":{"body":"swarm colonial raider frame","armor":"massed soldier plates","legs":"marching coordinated limbs","weapon":"mandible shear in masses","texture":"dark brown matte chitin","movement":"unstoppable river-like swarm flood","scale":"grain-sized individually, bus-sized as swarm"},"Driver Ant":{"body":"colonial mass-raider frame","armor":"massed layered armor","legs":"coordinated racing limbs","weapon":"mandible blade in thousands","texture":"dark reddish-brown matte chitin","movement":"unstoppable flooding column","scale":"grain-sized individually"},"Carpenter Ant":{"body":"large wood-boring ant frame","armor":"segmented black shell","legs":"strong grip legs","weapon":"formic acid spray","texture":"shiny black segmented chitin","movement":"methodical precise wood-boring advance","scale":"thumbnail-sized"},"Leafcutter Ant":{"body":"carrying-frame ant","armor":"ridged plate armor","legs":"worker carrying limbs","weapon":"mandible scissor saw","texture":"rust-brown rough chitin","movement":"steady leaf-fragment carrying column","scale":"grain-sized"},"Trap-Jaw Ant":{"body":"spring-loaded jaw-dominant frame","armor":"hard chitin","legs":"escape-launch sprint legs","weapon":"fastest closing snap jaws","texture":"dark brown with oversized mandibles","movement":"explosive mandible snap escape launch","scale":"thumbnail-sized"},"Weaver Ant":{"body":"arboreal silk-builder frame","armor":"vivid green chitin","legs":"silk-pull limbs","weapon":"acid silk binder","texture":"lime-green translucent chitin","movement":"coordinated bridge-chain formation","scale":"thumbnail-sized"},"Praying Mantis":{"body":"slender raptorial predator frame","armor":"segmented leaf-green armor","legs":"raptorial strike limbs","weapon":"serrated scythe arms","texture":"rough leaf-textured green exoskeleton","movement":"slow sway then sub-millisecond strike","scale":"palm-length"},"Orchid Mantis":{"body":"floral petal-torso frame","armor":"pink-white petal plating","legs":"petal-lobe bladed limbs","weapon":"raptorial ambush scythe","texture":"translucent pink-white petal-like surfaces","movement":"gentle flower-sway ambush","scale":"palm-length"},"Dead Leaf Mantis":{"body":"flat crinkled leaf-shaped frame","armor":"brown crinkled camouflage plates","legs":"dry twig limbs","weapon":"ambush raptorial claws","texture":"perfect dead-leaf brown crinkle texture","movement":"dead-leaf tremble in false wind","scale":"palm-length"},"Ghost Mantis":{"body":"wispy bark-fragment frame","armor":"bark-pattern ragged plates","legs":"swaying dead-twig limbs","weapon":"raptorial strike","texture":"mottled brown-grey bark pattern","movement":"swaying ghost-like stillness","scale":"thumb-length"},"Spiny Flower Mantis":{"body":"spiral eye-spot patterned frame","armor":"false-eye deterrent plates","legs":"grasping display limbs","weapon":"spine lance","texture":"white with vivid spiral eye patterns on wings","movement":"warning display then sudden strike","scale":"thumb-length"},"Budwing Mantis":{"body":"compact brown camo frame","armor":"camo wing plates","legs":"grip ambush limbs","weapon":"raptorial claws","texture":"brown wood-grain patterned body","movement":"still ground ambush","scale":"thumb-length"},"Mantis Fly":{"body":"raptorial-armed flying frame","armor":"wasp-mimic warning plates","legs":"mantis-strike raptorial limbs","weapon":"raptorial ambush claws","texture":"wasp yellow-black mimic pattern","movement":"hover then raptorial snatch","scale":"thumbnail-sized"},"Assassin Bug":{"body":"predatory narrow-waisted frame","armor":"armored exoskeleton","legs":"grasping raptorial legs","weapon":"curved piercing proboscis","texture":"dark brown or red rough exoskeleton","movement":"slow stalk then explosive stab","scale":"thumbnail-sized"},"Treehopper":{"body":"angular horn-crested chassis","armor":"elaborate horn plating","legs":"jumping articulated legs","weapon":"spike horn emitter","texture":"vivid green with bizarre horn shapes","movement":"jump to new stem and freeze","scale":"pea-sized"},"Cicada":{"body":"resonant drum-thorax frame","armor":"sound-panel plates","legs":"gripping bark limbs","weapon":"170dB sonic vibration cannon","texture":"dark body with translucent veined wings","movement":"17-year dormancy then explosive emergence","scale":"thumb-sized"},"Leafhopper":{"body":"slender wedge-shaped jumping body","armor":"leaf-pattern plates","legs":"powerful catapult legs","weapon":"piercing spear stylets","texture":"vivid green or multicolour leaf mimic","movement":"sideways crab-shuffle then sudden leap","scale":"thumbnail-sized"},"Planthopper":{"body":"slender camouflage wedge frame","armor":"cryptic pattern plates","legs":"jump launch legs","weapon":"piercing plant-tap appendages","texture":"bark or lichen camouflage pattern","movement":"angled cryptic posture then escape jump","scale":"thumbnail-sized"},"Water Strider":{"body":"long-legged floating chassis","armor":"hydrophobic wax plates","legs":"surface-tension skimming limbs","weapon":"piercing predator claws","texture":"dark slender body on spread hairy feet","movement":"skating glide on water surface","scale":"hand-sized"},"Cockroach":{"body":"flat oval armored frame","armor":"flexible armor plates","legs":"six rapid escape limbs","weapon":"spiked mandibles","texture":"glossy brown oval chitinous shell","movement":"lightning-fast omnidirectional escape sprint","scale":"palm-sized"},"Giant Water Bug":{"body":"powerful flat aquatic predator","armor":"flat streamlined shell","legs":"rowing capture limbs","weapon":"dissolving enzyme beak","texture":"flat mottled brown hydrodynamic body","movement":"ambush from underwater vegetation","scale":"forearm-length"},"Backswimmer":{"body":"keel-hulled inverted swimmer","armor":"boat-keel plates","legs":"oar rowing limbs","weapon":"piercing ventral beak","texture":"pale underside with dark back, upside-down swimmer","movement":"upside-down rapid rowing","scale":"thumbnail-sized"},"Shield Bug":{"body":"shield-pentagonal chassis","armor":"heraldic shield plates","legs":"gripping plant limbs","weapon":"chemical spray","texture":"vivid green or brown shield-shaped body","movement":"slow deliberate plant patrol","scale":"thumbnail-sized"},"Bed Bug":{"body":"flat oval parasitic frame","armor":"reddish leathery plates","legs":"crawling host-seeking limbs","weapon":"blood-sucking lance","texture":"flat reddish-brown leathery oval","movement":"flat gap-squeezing night crawl","scale":"apple-seed-sized"},"Aphid":{"body":"soft pear-shaped swarm body","armor":"waxy soft coat","legs":"clinging tube-feet","weapon":"phloem tap stylets","texture":"green, black or pink soft waxy body","movement":"stationary cluster feeding","scale":"pinhead-sized"},"Water Scorpion":{"body":"flat twig-like aquatic frame","armor":"leaf-pattern plates","legs":"predatory raptorial limbs","weapon":"breathing siphon sting","texture":"flat brown twig-like body","movement":"motionless ambush","scale":"finger-length"},"Peanut Head Bug":{"body":"peanut-head hollow-dome frame","armor":"peanut-shaped false-head dome","legs":"stout plant limbs","weapon":"false eye bluff display","texture":"brown mottled body with huge false head","movement":"slow plant crawl then startle display","scale":"thumb-length"},"Monarch Butterfly":{"body":"winged migratory chassis","armor":"warning orange scale plates","legs":"landing clasper limbs","weapon":"chemical deterrent gust","texture":"vivid orange-black-white scale pattern","movement":"leisurely gliding migration flight","scale":"hand-wingspan"},"Blue Morpho Butterfly":{"body":"iridescent wing-flash chassis","armor":"structural-colour scale plates","legs":"landing clasper limbs","weapon":"blinding light refractor","texture":"brilliant structural-blue iridescent wings","movement":"slow alternating flap and glide","scale":"hand-wingspan"},"Glasswing Butterfly":{"body":"transparent ghost-wing frame","armor":"clear glass-panel wings","legs":"delicate landing limbs","weapon":"stealth invisible glide","texture":"transparent wings with thin opaque borders","movement":"slow invisible ghost glide","scale":"hand-wingspan"},"Swallowtail Butterfly":{"body":"tailed wing frame","armor":"vivid patterned scale plates","legs":"landing clasper limbs","weapon":"wing-gust defense","texture":"yellow black-striped or vivid patterned wings","movement":"graceful soaring glide","scale":"hand-wingspan"},"Queen Alexandra Birdwing":{"body":"largest butterfly wing frame","armor":"teal-black scaled wings","legs":"landing clasper limbs","weapon":"wing-size intimidation gust","texture":"vivid teal-green and black scaled wings","movement":"slow majestic gliding flight","scale":"dinner-plate wingspan"},"Atlas Moth":{"body":"massive wing-snake-head frame","armor":"thick brown-scale wing plates","legs":"landing limbs","weapon":"wing-tip snake-head bluff","texture":"rich brown with transparent window patches","movement":"slow heavy night flight","scale":"dinner-plate wingspan"},"Luna Moth":{"body":"pale green tailed-wing frame","armor":"soft lime-green scale plates","legs":"landing limbs","weapon":"tail decoy and wind slash","texture":"pale lime-green with long tail streamers","movement":"gentle slow night drift","scale":"hand-wingspan"},"Death's Head Hawk-Moth":{"body":"robust skull-marked frame","armor":"skull-pattern thorax","legs":"hovering limbs","weapon":"skull-squeak emitter","texture":"dark brown with vivid skull face on thorax","movement":"fast hovering flower feed","scale":"hand-wingspan"},"Hawk Moth":{"body":"streamlined rocket-body hover frame","armor":"camouflage cryptic wings","legs":"hovering limbs","weapon":"long proboscis lance","texture":"grey-brown streaked cryptic wings","movement":"hummingbird hovering","scale":"hand-wingspan"},"Hummingbird Hawk-Moth":{"body":"hovering day-flying compact frame","armor":"olive-green scaled plates","legs":"hovering limbs","weapon":"long proboscis lance","texture":"olive-green and orange abdomen","movement":"rapid hummingbird hovering","scale":"thumb-length"},"Peppered Moth":{"body":"bark-cryptic resting frame","armor":"speckled bark-pattern wings","legs":"resting flat limbs","weapon":"dust-scatter escape","texture":"white with black pepper speckle pattern","movement":"cryptic flat bark rest then burst flight","scale":"hand-wingspan"},"Silkworm Moth":{"body":"silk-wrapped flightless frame","armor":"white fiber plates","legs":"clinging limbs","weapon":"silk cocoon binder","texture":"white fuzzy wing and body","movement":"slow flightless walk","scale":"thumb-length"},"Io Moth":{"body":"eyespot-wing display frame","armor":"eyespot deterrent plates","legs":"landing limbs","weapon":"false-eye startle bluff","texture":"yellow wings with vivid bull's-eye eyespots","movement":"sudden wing-flash startle display","scale":"hand-wingspan"},"Comet Moth":{"body":"long-tailed streamer wing frame","armor":"gold-dusted scale plates","legs":"landing limbs","weapon":"tail-streamer distraction slash","texture":"vivid yellow with red borders and long tail","movement":"slow drifting night hover","scale":"dinner-plate including tails"},"Hercules Moth":{"body":"world's largest wing-area frame","armor":"pale brown scale wing plates","legs":"landing limbs","weapon":"sheer wing-size gale","texture":"pale brown large wing patches","movement":"slow massive night glide","scale":"dinner-plate wingspan"},"Armyworm Moth":{"body":"larval-phase soft body","armor":"protective soft shell","legs":"crawling prolegs","weapon":"acid spray","texture":"striped green or brown soft larva body","movement":"steady marching crawl","scale":"finger-length"},"Grasshopper":{"body":"spring-loaded jumping frame","armor":"strong ridged exoskeleton","legs":"long catapult legs","weapon":"powerful kick limbs","texture":"green or brown cryptic rough exoskeleton","movement":"still camouflage then explosive leap","scale":"thumb-length"},"Cricket":{"body":"stridulating chirp-body frame","armor":"smooth brown thin plates","legs":"jump escape legs","weapon":"sonic chirp strike","texture":"dark brown smooth glossy shell","movement":"rapid escape bursts with chirp warning","scale":"thumb-length"},"Locust":{"body":"swarming plague chassis","armor":"hard brown or yellow plates","legs":"launch legs","weapon":"coordinated mandible shear","texture":"brown or yellow cryptic exoskeleton","movement":"billion-strong unstoppable swarm migration","scale":"thumb-length individually, city-covering swarm"},"Katydid":{"body":"leaf-shaped stridulating frame","armor":"leaf vein-patterned plates","legs":"long sensory legs","weapon":"stridulation sonic pulse","texture":"perfect green leaf vein pattern","movement":"slow leaf-sway camouflage","scale":"palm-length"},"Mole Cricket":{"body":"subterranean burrowing frame","armor":"velvety soil-proof plates","legs":"shovel digging forelimbs","weapon":"underground tunnel strike","texture":"dense velvety brown soil-repelling coat","movement":"rapid underground tunneling","scale":"thumb-length"},"Cave Cricket":{"body":"humpbacked sensory cave frame","armor":"pale reduced plates","legs":"long sensory walking legs","weapon":"kick blast","texture":"pale tan smooth humpbacked body","movement":"erratic sensory-search walk in dark","scale":"palm-length"},"Weta":{"body":"heavy armored cricket frame","armor":"ridge-spiked thick plates","legs":"powerful spine-covered legs","weapon":"rear spine defense","texture":"dark brown rough spiked exoskeleton","movement":"slow defensive threat display","scale":"palm-length"},"Giant Weta":{"body":"massive armored cricket frame","armor":"ridge-spiked heavy plates","legs":"powerful legs","weapon":"spine defense","texture":"dark brown heavy ridged exoskeleton","movement":"slow ground patrol","scale":"forearm-length"},"Jerusalem Cricket":{"body":"large bald-headed burrowing frame","armor":"banded smooth plates","legs":"digging legs","weapon":"powerful bite","texture":"banded orange-black smooth shiny body","movement":"slow deliberate underground burrowing","scale":"thumb-length"},"Stick Insect":{"body":"elongated twig-body frame","armor":"branch-texture bark armor","legs":"flexible clinging twig limbs","weapon":"defensive sway and grapple","texture":"perfect twig or bark surface texture","movement":"slow swaying twig mimicry","scale":"forearm-length"},"Leaf Insect":{"body":"flat leaf-body frame","armor":"vein-etched leaf plates","legs":"swaying leaf limbs","weapon":"camouflage burst and startle","texture":"perfect green leaf with vein detail and bite marks","movement":"leaf-trembling wind sway","scale":"palm-sized"},"Thorny Stick Insect":{"body":"thorn-studded spine-body frame","armor":"spiked bark plates","legs":"gripping thorn limbs","weapon":"spine rake defense","texture":"brown spiked thorny twig texture","movement":"slow sway with spine presentation","scale":"forearm-length"},"Chan's Megastick":{"body":"world's longest stick frame","armor":"green branch-like plates","legs":"grip camouflage legs","weapon":"absolute camouflage lock","texture":"perfect green-brown stick texture","movement":"absolute stillness","scale":"arm-length"},"Peacock Spider":{"body":"ornate display-abdomen frame","armor":"iridescent fan-pattern plates","legs":"agile dance limbs","weapon":"raptorial strike claws","texture":"vivid iridescent mosaic pattern on abdomen fan","movement":"vibrating semaphore courtship dance","scale":"thumbnail-sized"},"Whip Spider":{"body":"flat stealth wide-body frame","armor":"stealth dark plates","legs":"long sensory whip limbs","weapon":"pedipalp grasp and crush","texture":"flat dark brown cryptic body","movement":"sideways crab walk with whip-sensing","scale":"hand-sized including legs"},"Scorpion":{"body":"armored segmented tail-weapon frame","armor":"hard carapace plates","legs":"crawler legs","weapon":"barb tail venom sting","texture":"smooth dark chitinous plates","movement":"slow stalking sideways advance","scale":"hand-length"},"Emperor Scorpion":{"body":"large glossy black imperial frame","armor":"polished black carapace plates","legs":"crusher legs","weapon":"claw-and-sting combo","texture":"glossy jet-black smooth carapace","movement":"slow deliberate imperial advance","scale":"forearm-length"},"Deathstalker Scorpion":{"body":"slender pale lethal frame","armor":"yellow translucent plates","legs":"fast escape legs","weapon":"potent neurotoxin sting","texture":"pale yellow translucent smooth shell","movement":"fast darting nervous advance","scale":"hand-length"},"Fat-Tail Scorpion":{"body":"robust thick-tailed frame","armor":"thick dark plates","legs":"sturdy legs","weapon":"fat-tail powerful sting","texture":"dark brown rough thick carapace","movement":"slow aggressive advance","scale":"hand-length"},"Centipede":{"body":"elongated venomous segmented body","armor":"flexible armored segments","legs":"many fast coordinated limbs","weapon":"forcipule venom fang strike","texture":"reddish-brown smooth-jointed segments","movement":"fast undulating wave-motion sprint","scale":"arm-length"},"Giant Desert Centipede":{"body":"large venomous desert runner","armor":"orange-red plate rings","legs":"many sprint limbs","weapon":"powerful venom claws","texture":"vivid red-orange segmented body","movement":"rapid aggressive undulating charge","scale":"forearm-length"},"Vietnamese Centipede":{"body":"large armored giant centipede","armor":"hard teal-brown plates","legs":"many power limbs","weapon":"venom fangs","texture":"teal-blue and brown banded segments","movement":"rapid aggressive sprint","scale":"forearm-length"},"Amazonian Giant Centipede":{"body":"longest centipede body frame","armor":"thick yellow-brown segments","legs":"many grip limbs","weapon":"bat-hunting venom fangs","texture":"yellow-brown banded robust segments","movement":"powerful ceiling-hang ambush drop","scale":"arm-length"},"Millipede":{"body":"long cylinder multi-segment frame","armor":"overlapping ring plates","legs":"crawler wave limbs","weapon":"defensive cyanide spray","texture":"smooth brown or black polished cylinder segments","movement":"slow flowing cylindrical wave crawl","scale":"arm-length"},"Giant African Millipede":{"body":"massive cylinder many-segment frame","armor":"stacked ring armor","legs":"hundred wave limbs","weapon":"defensive cyanide gland spray","texture":"shiny dark brown cylinder body","movement":"slow majestic rolling wave","scale":"arm-length"},"Harvestman":{"body":"oval body on spider-stilts frame","armor":"minimal soft plates","legs":"extreme stilted sensory limbs","weapon":"chemical gland stink defense","texture":"small brown oval body on impossibly long legs","movement":"stilt-walking stumble patrol","scale":"coin-body, hand-span legs"},"Vinegaroon":{"body":"armored whip-tail arachnid frame","armor":"dark hard plates","legs":"sensory whip-limbs","weapon":"acid vinegar spray","texture":"dark brown shiny heavy body","movement":"slow deliberate whip-sensing advance","scale":"hand-length"},"Giant Vinegaroon":{"body":"large armored whip arachnid","armor":"dark heavy plates","legs":"sensory limbs","weapon":"directed acid whip spray","texture":"dark brown massive body","movement":"slow deliberate territorial advance","scale":"forearm-length"},"Sun Spider":{"body":"fast giant-jaw hairy frame","armor":"flexible hairy plates","legs":"ten racing limbs","weapon":"enormous chelicera crushing jaws","texture":"sandy yellow hairy body","movement":"explosive sprint then pause","scale":"palm-sized"},"Camel Spider":{"body":"large jaw-dominant hairy frame","armor":"hairy camouflage plates","legs":"fast ten-limb sprint","weapon":"massive serrated chelicerae","texture":"sandy brown hairy body","movement":"fast aggressive sprint toward shade","scale":"palm-sized"},"Pseudoscorpion":{"body":"tiny pincered arachnid frame","armor":"hard plates","legs":"eight limbs","weapon":"venom pedipalp claws","texture":"reddish-brown smooth tiny body","movement":"backward walking grip","scale":"pinhead-sized"},"Tailless Whip Scorpion":{"body":"flat wide terror frame","armor":"wide body plates","legs":"long sensory whip-limbs","weapon":"raptorial pedipalp crush","texture":"flat brown wide body","movement":"ultra-fast sideways dash","scale":"hand-sized including legs"},"Goliath Bird-Eater":{"body":"massive hairy arachnid frame","armor":"dense urticating hair-plates","legs":"eight crushing legs","weapon":"urticating hair barrage and fang","texture":"dense dark brown hair coat","movement":"slow deliberate advance then explosive charge","scale":"dinner-plate-sized"},"Black Widow Spider":{"body":"round red-hourglass abdomen frame","armor":"glossy black hourglass plates","legs":"web-anchor legs","weapon":"neurotoxin fangs","texture":"glossy jet-black with vivid red hourglass","movement":"slow deliberate web patrol","scale":"thumb-sized"},"Funnel Web Spider":{"body":"robust aggressive burrow frame","armor":"glossy dark plates","legs":"high-speed attack legs","weapon":"powerful neurotoxin fangs","texture":"glossy black smooth carapace","movement":"explosive lunge from tunnel mouth","scale":"palm-sized"},"Trapdoor Spider":{"body":"squat burrow-lid frame","armor":"smooth lid-door plates","legs":"ambush launch limbs","weapon":"spring-trap ambush attack","texture":"smooth brown silk-lined body","movement":"motionless wait then explosive spring","scale":"thumb-sized"},"Brazilian Wandering Spider":{"body":"aggressive patrol frame","armor":"brown banded plates","legs":"fast patrol legs","weapon":"potent neurotoxin fangs","texture":"brown hairy banded body","movement":"fast erratic threatening posture advance","scale":"palm-sized"},"Huntsman Spider":{"body":"flat lateral-leg spread frame","armor":"cryptic bark plates","legs":"lateral-spread crab legs","weapon":"rapid crushing fangs","texture":"flat grey-brown bark-cryptic body","movement":"lightning sideways sprint","scale":"dinner-plate-sized including legs"},"Tarantula":{"body":"hairy heavy-bodied arachnid frame","armor":"urticating hair coat","legs":"eight powerful legs","weapon":"urticating hair barrage and fang venom","texture":"dense brown or black hair coat","movement":"slow deliberate heavy advance","scale":"hand-sized"},"Termite":{"body":"swarm soft-body chassis","armor":"pale soft armor","legs":"crawler limbs","weapon":"mandible bite and acid spray","texture":"pale white soft body","movement":"blind chemical-trail swarm","scale":"grain-sized"},"Termite Soldier":{"body":"large-headed defender frame","armor":"hardened head capsule","legs":"patrol limbs","weapon":"mandible crusher and chemical spray","texture":"large dark-brown head with pale body","movement":"defensive frontline stance","scale":"thumbnail-sized"},"Earwig":{"body":"slender forcep-tail chassis","armor":"leathery wing plates","legs":"scuttling limbs","weapon":"rearward forcep claws","texture":"dark brown shiny leathery body","movement":"rapid scuttling run with raised forceps","scale":"thumbnail-sized"},"Silverfish":{"body":"slender scale-covered ancient frame","armor":"iridescent silver scales","legs":"fast crawler legs","weapon":"spike tail escape","texture":"silvery metallic scales over slender body","movement":"fast sinuous paper-flat sprint","scale":"finger-length"},"Firebrat":{"body":"heat-resistant bristle-scale frame","armor":"grey bristled scales","legs":"fast runner legs","weapon":"vanishing escape dash","texture":"grey mottled bristled scales","movement":"extremely fast erratic sprint near heat","scale":"finger-length"},"Springtail":{"body":"tiny springboard chassis","armor":"waxy smooth coat","legs":"furcula launch legs","weapon":"spring-launch escape","texture":"pale smooth tiny body","movement":"explosive spring-launch somersault escape","scale":"pinhead-sized"},"Bristletail":{"body":"archaic scale-covered frame","armor":"scaly metallic plates","legs":"agile running legs","weapon":"tail-filament whip","texture":"metallic grey-brown scale pattern","movement":"fast rock-surface sprint","scale":"thumbnail-sized"},"Flea":{"body":"laterally compressed jumping frame","armor":"hard smooth chitin plates","legs":"spring catapult legs","weapon":"piercing bite","texture":"shiny brown compressed smooth chitin","movement":"explosive 100x body-length leap","scale":"pinhead-sized"},"Body Louse":{"body":"flat gripping parasite frame","armor":"transparent grip plates","legs":"clamp claw limbs","weapon":"blood lance","texture":"transparent pale gripping body","movement":"grip and feed stillness","scale":"sesame-seed-sized"},"Webspinner":{"body":"slender silk-tunnel builder frame","armor":"silk-walled plates","legs":"fast running limbs","weapon":"silk cocoon trap","texture":"pale silk-lined slender body","movement":"fast backward running in silk tunnel","scale":"thumbnail-sized"},"Rock Crawler":{"body":"cold-adapted mountain frame","armor":"thin flexible plates","legs":"ice-grip climbing limbs","weapon":"mandible grip","texture":"pale yellowish soft thin body","movement":"slow cold-adapted high-altitude patrol","scale":"thumbnail-sized"},"Grylloblattid":{"body":"wingless ice-crawler frame","armor":"soft reduced plates","legs":"slow cold-adapted legs","weapon":"mandible grab","texture":"pale soft elongated body","movement":"ultra-slow cold-adapted crawl","scale":"thumbnail-sized"},"Mantophasmatodea":{"body":"predatory wingless rock-crawler","armor":"cylindrical smooth plates","legs":"raptorial grip limbs","weapon":"raptorial grip claws","texture":"pale brown cylindrical smooth body","movement":"slow predatory stalk","scale":"thumbnail-sized"},"Lacewing":{"body":"delicate net-wing frame","armor":"transparent wing panels","legs":"grasping precision limbs","weapon":"net-web launcher","texture":"transparent green net-veined wings","movement":"weak fluttering night flight","scale":"thumb-sized"},"Antlion":{"body":"pit-trap burrowing body","armor":"dusty sand-plate armor","legs":"backward-only digging limbs","weapon":"sand-trap crushing jaws","texture":"dusty grey sand-coated body","movement":"backward spiral pit-digging","scale":"thumb-sized"},"Owlfly":{"body":"large-eyed aerial predator frame","armor":"patterned cryptic wings","legs":"perch grip limbs","weapon":"aerial interception ambush","texture":"brown patterned dragonfly-like body","movement":"hawking aerial patrol","scale":"thumb-length"},"Giant Lacewing":{"body":"large ancient net-wing frame","armor":"patterned cryptic wings","legs":"resting grip limbs","weapon":"pheromone cloud release","texture":"pale brown net-patterned large wings","movement":"slow weak night drift","scale":"palm-wingspan"},"Water Boatman":{"body":"oval aquatic sculling frame","armor":"air-pocket hull shell","legs":"oar sculling limbs","weapon":"rasp-scrape sonic song","texture":"grey-brown oval hydrodynamic body","movement":"underwater sculling with air bubble","scale":"thumbnail-sized"},"Dobsonfly":{"body":"large mottled wing predator frame","armor":"mottled cryptic wings","legs":"crawler legs","weapon":"huge mandible crush","texture":"pale mottled patterned large wings","movement":"clumsy heavy night flight","scale":"hand-wingspan"},"Giant Waterbug":{"body":"large flat aquatic ambush frame","armor":"flat hydrodynamic back plates","legs":"raptorial capture limbs","weapon":"enzyme-dissolving beak","texture":"flat olive-brown hydrodynamic body","movement":"still underwater ambush then explosive grab","scale":"forearm-length"},"Raft Spider":{"body":"surface-hunting spread-leg frame","armor":"water-repellent plates","legs":"surface-tension spread limbs","weapon":"vibration-sense attack","texture":"brown with pale stripe water-proof body","movement":"skating surface patrol","scale":"hand-sized including legs"},"Diving Bell Spider":{"body":"aquatic silk-dome frame","armor":"air-bubble shell","legs":"web-anchor limbs","weapon":"underwater silk-web trap","texture":"grey silk-wrapped body with air bubble","movement":"underwater silk-bell construction","scale":"thumbnail-sized"},"Velvet Worm":{"body":"flexible onychophoran body","armor":"soft papillae-covered armor","legs":"stubby hydraulic limb pads","weapon":"slime adhesive net cannon","texture":"velvety iridescent soft skin","movement":"slow velvet ripple advance","scale":"forearm-length"},"Giraffe Weevil":{"body":"elongated neck-crowned chassis","armor":"rigid red-black plates","legs":"long neck-support limbs","weapon":"neck-reach strike","texture":"glossy red-black neck and body","movement":"slow deliberate neck-wrestling advance","scale":"thumb-length"},"Twisted-Wing Parasite":{"body":"fan-wing parasitic miniature frame","armor":"twisted fan elytra","legs":"grip host-clinging limbs","weapon":"host injection parasitoid","texture":"bizarre fan-shaped twisted wings","movement":"brief emergence flight then host re-entry","scale":"pinhead-sized"},"Zorapteran":{"body":"tiny colonial termite-like frame","armor":"minimal soft plates","legs":"worker legs","weapon":"fungus cultivation tools","texture":"pale soft small body","movement":"cryptic fungus gallery patrol","scale":"pinhead-sized"},"Barklouse":{"body":"flattened bark-surface frame","armor":"cryptic bark plates","legs":"sliding bark limbs","weapon":"silk spinner","texture":"flat grey bark-cryptic body","movement":"flat bark surface sliding","scale":"pinhead-sized"},"Angel Insect":{"body":"tiny amber-preserved wood frame","armor":"minimal plates","legs":"bark-grip legs","weapon":"bark tunnel borer","texture":"translucent amber-yellow tiny body","movement":"bark micro-tunnel crawl","scale":"pinhead-sized"},"Thrips":{"body":"tiny sliver-body frame","armor":"fringed feather-wings","legs":"rasping adhesive limbs","weapon":"rasp-pierce mouthparts","texture":"pale or dark tiny elongated body","movement":"weak flutter and grip","scale":"pinhead-sized"},"Scale Insect":{"body":"armored disc sedentary frame","armor":"hard wax shell disc","legs":"anchor cemented limbs","weapon":"phloem tap stylus","texture":"waxy or hard disc-shell surface","movement":"sessile anchored stillness","scale":"pea-sized"},"Mealybug":{"body":"oval waxy powdered frame","armor":"white powdery wax coat","legs":"crawler limbs","weapon":"phloem sap drainer","texture":"white powdery waxy oval body","movement":"slow waxy crawl","scale":"pea-sized"},"Emerald Ash Borer":{"body":"sleek emerald-plated chassis","armor":"brilliant metallic green plates","legs":"rapid bark legs","weapon":"wood-bore drill mandibles","texture":"brilliant metallic emerald green","movement":"fast darting flight then boring drill","scale":"thumbnail-sized"},"Japanese Beetle":{"body":"metallic iridescent compact body","armor":"copper-green hard plates","legs":"crawler legs","weapon":"mandible feeding jaws","texture":"metallic copper-green iridescent","movement":"slow plant-feeding cluster","scale":"thumbnail-sized"},"Ladybug":{"body":"rounded dome defensive frame","armor":"spotted warning shell","legs":"crawler legs","weapon":"reflex-bleed chemical spray","texture":"vivid red with black spots dome","movement":"slow deliberate warning walk","scale":"pea-sized"},"Weevil":{"body":"snout-nosed borer frame","armor":"armored rough shell","legs":"grip crawler legs","weapon":"snout drill bore","texture":"brown or grey rough matte shell","movement":"slow methodical snout-boring advance","scale":"pea-sized"},"Cockchafer":{"body":"heavy hairy flying frame","armor":"thick rough exoskeleton","legs":"clumsy crawler legs","weapon":"mandible ram","texture":"brown hairy rough shell","movement":"blundering heavy night flight","scale":"thumb-sized"},"Leafcutter Bee":{"body":"hairy pollen-collector frame","armor":"dense fur plates","legs":"scissor-cutting limbs","weapon":"mandible scissor shear","texture":"dense striped fur body","movement":"precise leaf-cutting hover and carry","scale":"thumbnail-sized"},"Solifuge":{"body":"fast giant-jaw ten-leg frame","armor":"hairy flexible plates","legs":"ten racing limbs","weapon":"enormous crushing chelicerae","texture":"sandy hairy body","movement":"explosive sprint toward shadow","scale":"palm-sized"},"Whip Scorpion":{"body":"large vinegar-sprayer arachnid","armor":"dark heavy plates","legs":"sensory whip and walk limbs","weapon":"directed acid spray","texture":"dark brown shiny heavy body","movement":"slow deliberate whip-sweep advance","scale":"hand-length"},"Glowworm":{"body":"soft glowing larval body","armor":"soft bioluminescent plates","legs":"crawler limbs","weapon":"bioluminescent lure trap","texture":"soft brown with glowing green tip","movement":"slow crawl with steady glow signal","scale":"finger-length"},"Firefly Larva":{"body":"soft armored larval frame","armor":"segmented soft plates","legs":"crawler limbs","weapon":"bioluminescent warning lure","texture":"dark brown soft segmented larva","movement":"slow crawling patrol","scale":"finger-length"},"Sphinx Moth":{"body":"heavy-bodied rocket hover frame","armor":"banded abdomen plates","legs":"hovering limbs","weapon":"long proboscis lance","texture":"brown streaked wing with banded abdomen","movement":"hummingbird precision hover","scale":"hand-wingspan"},"Garden Tiger Moth":{"body":"aposematic warning-wing frame","armor":"vivid warning plates","legs":"landing limbs","weapon":"toxic hair spray","texture":"white-spotted brown forewings, vivid red-spotted hindwing","movement":"slow deliberate warning walk and flight","scale":"hand-wingspan"},"Cinnabar Moth":{"body":"red-and-black warning frame","armor":"warning signal plates","legs":"landing limbs","weapon":"alkaloid chemical spray","texture":"black forewings with red patches, crimson hindwings","movement":"slow deliberate warning flight","scale":"thumb-wingspan"}},"BEASTS":{"Dragon":{"body":"winged apex predator frame","armor":"scale-reinforced overlapping plates","legs":"quad taloned crushing limbs","weapon":"superheated flame cannon","texture":"massive iridescent or matte dark scales","movement":"ground-shaking wing-launch and diving strafe","scale":"airliner-sized"},"Komodo Dragon":{"body":"low slung armored tank frame","armor":"osteodermal bead-plate armor","legs":"wide powerful crawler limbs","weapon":"bacteria-venom bite","texture":"rough grey-brown bead-scale skin","movement":"slow methodical ambush then explosive sprint","scale":"car-sized"},"Cobra":{"body":"hooded rearing strike frame","armor":"smooth scale hood-plate","legs":"serpentine drive limbs","weapon":"venom spit cannon","texture":"glossy brown or spectacled scale skin","movement":"rearing hood-spread threat then strike","scale":"car-length"},"Crocodile":{"body":"hydraulic jaw armored tank frame","armor":"armored scute plates","legs":"low-slung sprawling legs","weapon":"death-roll crushing jaw","texture":"rough dark osteodermal scutes","movement":"still surface float then explosive lunge","scale":"car-sized"},"Gecko":{"body":"adhesive wall-climbing frame","armor":"grip-pad soft plates","legs":"adhesive toe-pad limbs","weapon":"camouflage color burst","texture":"soft granular or vivid pattern skin","movement":"rapid vertical surface sprint and freeze","scale":"hand-sized"},"Frog":{"body":"spring-loaded launch frame","armor":"moist smooth or toxic skin","legs":"explosive spring launch limbs","weapon":"long tongue harpoon","texture":"smooth moist skin in vivid or cryptic color","movement":"explosive leap and silent landing","scale":"fist-sized"},"Salamander":{"body":"regenerating elemental skin chassis","armor":"moist toxic skin plates","legs":"four agile limbs","weapon":"elemental skin toxin spray","texture":"smooth glossy black with vivid warning marks","movement":"slow deliberate salamander walk","scale":"forearm-length"},"Wolf":{"body":"feral mech wolf frame","armor":"layered fur-metal plates","legs":"sprint pursuit limbs","weapon":"pack-coordinated fang strike","texture":"dense grey-brown fur over muscled frame","movement":"loping pack pursuit","scale":"large-dog-sized"},"Lion":{"body":"regal mane-crowned tank frame","armor":"dense hide mane-plate armor","legs":"ambush pounce limbs","weapon":"throat-crush claw rake","texture":"tawny short fur with dense mane","movement":"stalking crouch then explosive pride charge","scale":"car-bonnet-sized"},"Tiger":{"body":"sleek striped hunter frame","armor":"stripe-pattern cryptic plates","legs":"silent pounce limbs","weapon":"neck-break fang slash","texture":"vivid orange-black stripe pattern","movement":"slow silent stalk then explosive sprint","scale":"large-car-bonnet-sized"},"Bear":{"body":"brutal heavy upright frame","armor":"dense layered hide plates","legs":"powerful standing crush limbs","weapon":"swipe claws and bite crush","texture":"dense brown or black fur coat","movement":"loping charge then standing swipe","scale":"van-sized"},"Gorilla":{"body":"bipedal knuckle-walking powerhouse","armor":"dense muscle-plate armor","legs":"ground-pound knuckle limbs","weapon":"fist cannon and tooth display","texture":"dense black fur over enormous muscle","movement":"chest-beat display then explosive charge","scale":"car-sized"},"Panther":{"body":"sleek black stealth hunter frame","armor":"light-absorbing dark plates","legs":"silent-stride limbs","weapon":"ambush shadow slash","texture":"glossy black melanistic fur","movement":"completely silent stalking crouch","scale":"large-dog-sized"},"Hyena":{"body":"powerful front-heavy scavenger frame","armor":"spotted asymmetric plates","legs":"loping tireless limbs","weapon":"bone-crushing jaws","texture":"spotted rough coarse fur","movement":"tireless loping endurance pursuit","scale":"large-dog-sized"},"Rhino":{"body":"armored battering-ram frame","armor":"thick layered keratin plate hide","legs":"charge locomotive limbs","weapon":"horn gore ram","texture":"thick grey wrinkled folded hide","movement":"low-head horn-first charge","scale":"car-sized"},"Bull":{"body":"muscle-bound charging frame","armor":"hide-plate armor","legs":"hoofed charge limbs","weapon":"horn gore charge","texture":"short dense hide over muscle","movement":"pawing display then explosive charge","scale":"car-sized"},"Falcon":{"body":"swept-wing precision strike frame","armor":"streamlined feather plates","legs":"talon grip limbs","weapon":"270mph dive strike","texture":"grey-blue barred feather pattern","movement":"high soaring then vertical stoop dive","scale":"arm-wingspan"},"Owl":{"body":"disc-face silent night hunter","armor":"sound-dampening feather plates","legs":"silent grip limbs","weapon":"night vision optic array","texture":"mottled cryptic feather pattern","movement":"completely silent ghost flight","scale":"arm-wingspan"},"Raven":{"body":"dark intelligent recon frame","armor":"iridescent black feather plates","legs":"perch grip limbs","weapon":"beak shadow bolt","texture":"glossy iridescent blue-black feathers","movement":"soaring patrol with aerobatic rolls","scale":"arm-wingspan"},"Eagle":{"body":"majestic apex aerial frame","armor":"patriot scale-feather plates","legs":"talon-grip crushing limbs","weapon":"talon-impact diving strike","texture":"dark brown with white head and tail","movement":"thermal soar then diving strike","scale":"dinner-table wingspan"},"Vulture":{"body":"bald-head scavenger frame","armor":"bare-neck acid-proof plates","legs":"hunched perch limbs","weapon":"acid-stomach bile spray","texture":"bare red neck, dark brown body feathers","movement":"wide thermal soaring patrol","scale":"table-top wingspan"},"Phoenix":{"body":"flame-wreathed rebirth frame","armor":"living ember-plate armor","legs":"fire-trail talons","weapon":"rebirth nova explosion","texture":"vivid flame and gold living fire feathers","movement":"rising thermal ascent with flame trail","scale":"airliner-sized"},"Bat":{"body":"membrane-wing echolocation frame","armor":"leathery membrane wing plates","legs":"inverted hang limbs","weapon":"sonic pulse echolocation beam","texture":"dark brown leathery membrane body","movement":"erratic fluttering echolocation flight","scale":"hand-wingspan"},"Shark":{"body":"torpedo-hull apex predator frame","armor":"denticle micro-scale plates","legs":"fin and tail drive limbs","weapon":"row-teeth jaw crush","texture":"grey denticle micro-scale skin","movement":"silent circling then explosive acceleration","scale":"car-to-bus-sized"},"Octopus":{"body":"soft eight-arm shape-shift frame","armor":"chromatophore color-change plates","legs":"eight sucker tentacle limbs","weapon":"ink dispersal and beak strike","texture":"constantly shifting color and texture","movement":"jet pulse with arm-ripple flow","scale":"car-sized"},"Squid":{"body":"jet-propelled torpedo frame","armor":"mantle iridescent plates","legs":"ten tentacle limbs","weapon":"beak strike and ink siphon","texture":"iridescent shifting chromatophores","movement":"jet-propulsion backward burst","scale":"car-to-bus-sized"},"Anglerfish":{"body":"deep-horror toothy frame","armor":"dark bio-pressure plates","legs":"fin hover limbs","weapon":"bioluminescent lure trap jaws","texture":"mottled deep-black rough skin with glowing lure","movement":"motionless dark drift with glowing lure","scale":"arm-length to car-sized"},"Stingray":{"body":"flat diamond glide frame","armor":"flat cartilage disc plates","legs":"undulating wing limbs","weapon":"barb sting tail lance","texture":"smooth grey-brown flat disc skin","movement":"silent manta-ray undulating glide","scale":"table-top-sized"},"Dolphin":{"body":"hydrodynamic intelligent scout frame","armor":"smooth elastic skin plates","legs":"fin and fluke drive limbs","weapon":"echolocation sonic blast","texture":"smooth grey rubbery skin","movement":"leaping bow-wave sprint","scale":"car-length"},"Lobster":{"body":"armored tank-claw frame","armor":"hard segmented shell plates","legs":"ten crawler limbs","weapon":"crushing claw grip","texture":"dark mottled hard segmented shell","movement":"backward escape jet then forward claw advance","scale":"arm-length"},"Man O'War":{"body":"colonial float terror frame","armor":"translucent gas-bag plates","legs":"long trailing tentacle limbs","weapon":"nematocyst venom grid sting","texture":"vivid blue and pink translucent float","movement":"wind-sail drift with trailing sting curtain","scale":"bus-length tentacles"},"Jellyfish":{"body":"pulsing bell medusa frame","armor":"transparent gel plates","legs":"trailing tentacle limbs","weapon":"nematocyst venom net","texture":"transparent gelatinous bell","movement":"gentle pulsing bell drift","scale":"hand to car-sized"},"Giant Isopod":{"body":"deep-sea armored crustacean frame","armor":"overlapping grey scute plates","legs":"many crawler limbs","weapon":"mandible crush","texture":"pale grey overlapping segmented plates","movement":"slow deliberate deep-sea crawl","scale":"forearm-length"},"Kraken":{"body":"mythic tentacle oceanic horror","armor":"deep-pressure plates","legs":"massive tentacle limbs","weapon":"ship-crushing tentacle wrap","texture":"dark mottled deep-ocean skin","movement":"deep-surge tentacle expansion","scale":"island-sized"},"Leviathan":{"body":"biblical deep-sea terror frame","armor":"abyssal armor plates","legs":"serpentine drive limbs","weapon":"void beam","texture":"dark abyssal matte skin","movement":"ocean-displacing serpentine surge","scale":"city-block-sized"},"Xenomorph":{"body":"biomechanical H.R.Giger alien frame","armor":"exo-chitin ribbed plates","legs":"quad and bi-pedal limbs","weapon":"acid blood spray and inner jaw","texture":"glossy black biomechanical ribbed exoskeleton","movement":"wall-ceiling-floor skittering ambush","scale":"tall-human-sized"},"Predator (Yautja)":{"body":"armored trophy-hunter frame","armor":"cloaking mesh plates","legs":"powerful leaping limbs","weapon":"plasma caster and wrist blades","texture":"mesh-cloaking netting over dark armor","movement":"treetop ambush leap","scale":"tall-human-sized"},"Kaiju":{"body":"colossal city-scale monster frame","armor":"ultra-thick nuclear-hide plates","legs":"city-crusher limbs","weapon":"energy beam","texture":"thick rough dark monster hide","movement":"city-shaking stride","scale":"skyscraper-sized"},"Chimera":{"body":"multi-beast hybrid fusion frame","armor":"mixed beast plates","legs":"lion, goat and serpent limbs","weapon":"elemental tri-attack","texture":"mixed fur scale and feather texture","movement":"lion charge with serpent tail lash","scale":"car-sized"},"Hydra":{"body":"multi-headed serpent frame","armor":"regenerating scale plates","legs":"serpentine coil base","weapon":"nine-head bite and acid breath","texture":"dark green iridescent serpent scales","movement":"multi-head strike from coiled base","scale":"building-sized"},"Basilisk":{"body":"serpentine petrification frame","armor":"iridescent petrifying plates","legs":"serpentine drive limbs","weapon":"death-gaze beam","texture":"vivid iridescent serpent scales","movement":"serpentine deadly approach","scale":"bus-length"},"Cerberus":{"body":"three-headed guardian hound frame","armor":"triple-layer black plates","legs":"quad power limbs","weapon":"tri-head fang strike","texture":"black fur with three snarling heads","movement":"three-directional guard stance","scale":"elephant-sized"},"Manticore":{"body":"lion-scorpion-wing hybrid frame","armor":"composite lion and chitin plates","legs":"quad lion and tail limbs","weapon":"spine volley and tail sting","texture":"red lion fur with scorpion tail","movement":"lion charge with tail-spine barrage","scale":"car-sized"},"Behemoth":{"body":"massive ancient creature frame","armor":"mountain-thick hide plates","legs":"earth-shake pillar limbs","weapon":"mass crush and earth-shake","texture":"rough ancient hide","movement":"slow earth-shaking unstoppable advance","scale":"building-sized"},"Mecha Godzilla":{"body":"biomechanical nuclear kaiju frame","armor":"nuclear-alloy titanium plates","legs":"city-scale limbs","weapon":"nuclear beam ray","texture":"dark metallic scaled biomechanical shell","movement":"city-shaking advance with beam sweep","scale":"skyscraper-sized"},"Godzilla":{"body":"apex nuclear kaiju frame","armor":"nuclear-hardened dorsal plates","legs":"city-scale pillar limbs","weapon":"atomic breath","texture":"rough dark nuclear-charred scutes","movement":"ocean-to-city devastating advance","scale":"skyscraper-sized"},"King Ghidorah":{"body":"three-headed golden dragon frame","armor":"golden scale plates","legs":"dragon wing-walk limbs","weapon":"gravity beam from three heads","texture":"brilliant golden scales","movement":"flying three-head sweeping beam attack","scale":"multiple-skyscraper-sized"},"Mothra":{"body":"divine giant moth deity frame","armor":"scale-dust wing plates","legs":"landing divine limbs","weapon":"scale-powder divine blast","texture":"vivid multicolored divine wing scales","movement":"slow divine wing-beat","scale":"airliner-wingspan"},"Biollante":{"body":"plant-beast vine hybrid frame","armor":"vine-wrapped organic plates","legs":"root-anchor tentacle limbs","weapon":"acid vine spray and sap cannon","texture":"dark green vine and organic tissue","movement":"root-anchor vine-lash reach","scale":"skyscraper-sized"},"Jorōgumo":{"body":"spider-woman hybrid frame","armor":"silk-armored half-spider plates","legs":"eight spider silk limbs","weapon":"silk-web entrapment trap","texture":"vivid pattern arachnid lower body","movement":"silk-web swing and spider sprint","scale":"car-sized"},"Cthulhu":{"body":"cosmic horror wing-tentacle frame","armor":"reality-warping ancient plates","legs":"tentacle and wing base limbs","weapon":"sanity-breaking madness ray","texture":"dark green rubbery ancient hide","movement":"reality-distorting tentacle surge","scale":"city-sized"},"Griffin":{"body":"eagle-lion apex hybrid frame","armor":"feather and scale combined plates","legs":"lion-talon raptorial limbs","weapon":"aerial dive slash","texture":"golden eagle feathers over lion fur","movement":"lion pounce then aerial eagle dive","scale":"car-sized"},"Minotaur":{"body":"bull-headed humanoid warrior frame","armor":"labyrinth-stone plate armor","legs":"bull-hoofed charge limbs","weapon":"axe-smash and gore","texture":"bull-hide skin over humanoid muscle","movement":"labyrinth-charge shoulder-down ram","scale":"large-car-sized"},"Pegasus":{"body":"winged divine horse frame","armor":"cloud-plate scale armor","legs":"gallop and wing limbs","weapon":"lightning hoofstrike","texture":"pure white or dark divine horse fur","movement":"thundering gallop then divine wing ascent","scale":"horse-sized"},"Gargoyle":{"body":"stone-carved guardian frame","armor":"carved stone-fused plates","legs":"perch gargoyle limbs","weapon":"stone-shard projectile volley","texture":"rough carved stone surface","movement":"stone-still then stone-wing launch","scale":"human-sized"},"Golem":{"body":"earth-clay construct frame","armor":"packed earth and stone plates","legs":"heavy-tread construct limbs","weapon":"boulder-fist crush","texture":"rough clay and rock surface","movement":"slow grinding unstoppable advance","scale":"building-height"},"Oni":{"body":"Japanese demon warrior frame","armor":"iron-club demon plates","legs":"demon-stride limbs","weapon":"thunder club smash","texture":"red or blue demon skin with wild hair","movement":"thunderous heavy demon charge","scale":"giant-human-sized"},"Wendigo":{"body":"starved skeletal horror frame","armor":"bone-fused antler plates","legs":"elongated horror limbs","weapon":"cold-grasp freeze","texture":"stretched pallid skin over visible bone","movement":"impossible limb-distortion sprint","scale":"tall-building-height"},"Werewolf":{"body":"organic metal muscle-fiber frame","armor":"adaptive fur-plate armor","legs":"lunge-spring limbs","weapon":"rending claws","texture":"dense dark fur over muscle-metal fibers","movement":"loping then explosive transformation charge","scale":"large-car-sized"},"Vampire":{"body":"sleek immortal dark frame","armor":"red-black cape-plate armor","legs":"predator silent limbs","weapon":"fanged drain bite","texture":"pale skin with dark flowing armor","movement":"shadow teleport and silent sprint","scale":"tall-human-sized"},"Demon":{"body":"infernal molten-core spiked frame","armor":"infernal spike plates","legs":"cloven-hoof flame-stride limbs","weapon":"hellfire burst","texture":"dark volcanic skin with molten cracks","movement":"explosive ground-crack charge","scale":"large-building-height"},"Reaper":{"body":"scythe-arm floating void frame","armor":"void-black cloak plates","legs":"floating void limbs","weapon":"soul-harvest scythe","texture":"void-black flowing shadow","movement":"silent floating approach","scale":"tall-human-sized"},"Pangolin":{"body":"overlapping scale ball-roll frame","armor":"layered keratin scale plates","legs":"burrowing limb pads","weapon":"curled ball battering ram","texture":"overlapping brown keratin scales","movement":"rolling into impenetrable ball","scale":"arm-length"},"Armadillo":{"body":"jointed shell roll-ball frame","armor":"osteoderm bony plate shell","legs":"burrowing limbs","weapon":"armored roll ram","texture":"bony grey-pink plate shell","movement":"rolling into armored ball","scale":"arm-length"},"Tortoise":{"body":"shell-domed ancient frame","armor":"fused spine domed carapace","legs":"column pillar limbs","weapon":"shell-slam retreat","texture":"rough pyramidal dome shell scutes","movement":"slow deliberate ancient plod","scale":"table-sized"},"Horseshoe Crab":{"body":"ancient carapace tank frame","armor":"tough horseshoe shell","legs":"ten crawler limbs","weapon":"spike tail defense","texture":"dark rough horseshoe shell","movement":"wave-washing crawl","scale":"dinner-plate-sized"},"Porcupine":{"body":"quill-covered defense frame","armor":"barbed quill plates","legs":"lumber limbs","weapon":"reversing quill volley","texture":"dense barbed quill coat over dark fur","movement":"lumbering advance with quill presentation","scale":"medium-dog-sized"},"Hedgehog":{"body":"spine-coat ball frame","armor":"dense spine plate coat","legs":"fast scurry limbs","weapon":"ball-curl spine slam","texture":"dense short spine coat over soft fur","movement":"fast scurry then instant ball curl","scale":"fist-sized"},"Echidna":{"body":"spine-fur monotreme frame","armor":"mixed spine and fur plates","legs":"powerful digging limbs","weapon":"spine barrage","texture":"coarse fur with spine patches","movement":"rapid burial escape dig","scale":"arm-length"},"Sea Urchin":{"body":"sphere spine-covered frame","armor":"calcite dome spine shell","legs":"tube-foot sucker limbs","weapon":"venomous spine barrage","texture":"dense long spines over round calcite shell","movement":"slow tube-foot crawl","scale":"fist-sized"},"Nautilus":{"body":"coiled shell buoyancy frame","armor":"hard coiled shell","legs":"tentacle jet limbs","weapon":"jet propulsion ram","texture":"cream and brown spiral coiled shell","movement":"buoyancy-adjusted jet hover","scale":"dinner-plate-sized"},"Boxfish":{"body":"rigid triangular boxy frame","armor":"fused scute-box plates","legs":"fin hover limbs","weapon":"toxin poison cloud","texture":"yellow and black polka-dot box body","movement":"slow hovering fin maneuver","scale":"fist-sized"},"Hippopotamus":{"body":"dense barrel-body frame","armor":"thick bulletproof hide plates","legs":"semi-aquatic pillar limbs","weapon":"tusk-gore jaw crush","texture":"grey-pink smooth thick hide","movement":"thundering water-to-land charge","scale":"car-sized"},"Elephant":{"body":"largest land animal frame","armor":"thick wrinkled hide plates","legs":"column pillar limbs","weapon":"tusk ram and trunk crush","texture":"wrinkled grey thick hide","movement":"silent foot-pad rumbling advance","scale":"double-car-sized"},"Rhinoceros (Beast)":{"body":"thick-hide horn frame","armor":"layered folded horn-plate hide","legs":"charge locomotive limbs","weapon":"single or double horn gore","texture":"thick grey folded hide","movement":"low-head thundering charge","scale":"car-sized"},"Gnome":{"body":"compact earth-spirit frame","armor":"stone-stitch earthy plates","legs":"stubby root limbs","weapon":"earth spike eruption","texture":"bark and moss covered gnome hide","movement":"burrowing earth-travel pop-up","scale":"child-sized"},"Tarantula (Mech)":{"body":"heavy-legged arachnid mech frame","armor":"dense hair-plate armor","legs":"eight crushing hydraulic legs","weapon":"urticating hair volley and fang","texture":"dense hair over armored plates","movement":"slow deliberate advance with sudden charge","scale":"car-sized"},"Spider Queen":{"body":"arachnid humanoid hybrid frame","armor":"silk-woven armored plates","legs":"eight articulated mech limbs","weapon":"silk-bind cannon","texture":"dark silk-woven armor over arachnid body","movement":"spider sprint with web rappel","scale":"large-human-sized"}},"PB_BUILTIN_PARTICLES":[{"id":101,"builtin":true,"type":"subject","cat":"Mech","text":"giant biomechanical hybrid mech"},{"id":102,"builtin":true,"type":"subject","cat":"Mech","text":"colossal insectoid war machine"},{"id":103,"builtin":true,"type":"subject","cat":"Mech","text":"sleek nano-engineered combat drone"},{"id":104,"builtin":true,"type":"subject","cat":"Creature","text":"ancient armoured battle creature"},{"id":105,"builtin":true,"type":"subject","cat":"Creature","text":"biomechanical apex predator"},{"id":106,"builtin":true,"type":"subject","cat":"Character","text":"lone mech pilot in full exosuit"},{"id":107,"builtin":true,"type":"subject","cat":"Character","text":"enhanced cyber-soldier hybrid"},{"id":201,"builtin":true,"type":"form","cat":"Structure","text":"scarab-shell chassis with segmented carapace"},{"id":202,"builtin":true,"type":"form","cat":"Structure","text":"spider-mech eight-legged hydraulic frame"},{"id":203,"builtin":true,"type":"form","cat":"Structure","text":"dragonfly twin-wing fuselage body"},{"id":204,"builtin":true,"type":"form","cat":"Armour","text":"iridescent overlapping wing-case plates"},{"id":205,"builtin":true,"type":"form","cat":"Armour","text":"urticating hair armour with quill spines"},{"id":206,"builtin":true,"type":"form","cat":"Armour","text":"fused bone-chitin layered carapace"},{"id":207,"builtin":true,"type":"form","cat":"Features","text":"compound eye sensor array"},{"id":208,"builtin":true,"type":"form","cat":"Features","text":"scorpion arc-reactor tail weapon"},{"id":209,"builtin":true,"type":"form","cat":"Features","text":"mantis raptorial scythe forearms"},{"id":301,"builtin":true,"type":"action","cat":"Combat","text":"poised mid-strike, claws fully extended"},{"id":302,"builtin":true,"type":"action","cat":"Combat","text":"charging at full sprint, dust-cloud wake"},{"id":303,"builtin":true,"type":"action","cat":"Combat","text":"locked in battle, weapons clashing"},{"id":304,"builtin":true,"type":"action","cat":"Movement","text":"hovering above ruined terrain, jets firing"},{"id":305,"builtin":true,"type":"action","cat":"Movement","text":"silent stalking approach, low to ground"},{"id":306,"builtin":true,"type":"action","cat":"Movement","text":"mid-leap, silhouetted against sky"},{"id":307,"builtin":true,"type":"action","cat":"Pose","text":"coiled defensive stance, spines raised"},{"id":308,"builtin":true,"type":"action","cat":"Pose","text":"rearing up, full scale revealed"},{"id":309,"builtin":true,"type":"action","cat":"Pose","text":"static display pose, wings spread wide"},{"id":401,"builtin":true,"type":"material","cat":"Metal","text":"kraken-ink blackened titanium alloy"},{"id":402,"builtin":true,"type":"material","cat":"Metal","text":"liquid-metal adaptive plating"},{"id":403,"builtin":true,"type":"material","cat":"Metal","text":"oxidised iron and carbon-nanotube weave"},{"id":404,"builtin":true,"type":"material","cat":"Organic","text":"living chitin-steel hybrid"},{"id":405,"builtin":true,"type":"material","cat":"Organic","text":"bone-fused carbon fibre composite"},{"id":406,"builtin":true,"type":"material","cat":"Organic","text":"grown bio-ceramic exoskeleton"},{"id":407,"builtin":true,"type":"material","cat":"Composite","text":"obsidian-ceramic bioweapon shell"},{"id":408,"builtin":true,"type":"material","cat":"Composite","text":"crystal-lattice energy-reactive armour"},{"id":409,"builtin":true,"type":"material","cat":"Composite","text":"woven nano-silk over tungsten skeleton"},{"id":501,"builtin":true,"type":"colour","cat":"Monochrome","text":"deep matte black and chalk white"},{"id":502,"builtin":true,"type":"colour","cat":"Monochrome","text":"oxidised silver and gun-metal grey"},{"id":503,"builtin":true,"type":"colour","cat":"Vivid","text":"volcanic red and soot black"},{"id":504,"builtin":true,"type":"colour","cat":"Vivid","text":"bioluminescent teal and deep ocean blue"},{"id":505,"builtin":true,"type":"colour","cat":"Vivid","text":"ghost white and ultraviolet purple"},{"id":506,"builtin":true,"type":"colour","cat":"Natural","text":"bark brown and jungle green"},{"id":507,"builtin":true,"type":"colour","cat":"Natural","text":"sand ochre and bone ivory"},{"id":508,"builtin":true,"type":"colour","cat":"Natural","text":"blood crimson and rust orange"},{"id":601,"builtin":true,"type":"environment","cat":"Urban","text":"collapsed neon megalopolis ruins"},{"id":602,"builtin":true,"type":"environment","cat":"Urban","text":"rain-soaked brutalist city streets"},{"id":603,"builtin":true,"type":"environment","cat":"Natural","text":"subterranean crystal cave complex"},{"id":604,"builtin":true,"type":"environment","cat":"Natural","text":"volcanic wasteland under ash clouds"},{"id":605,"builtin":true,"type":"environment","cat":"Natural","text":"ancient overgrown jungle temple"},{"id":606,"builtin":true,"type":"environment","cat":"Alien","text":"toxic alien swampland at dusk"},{"id":607,"builtin":true,"type":"environment","cat":"Alien","text":"deep ocean floor trench, zero visibility"},{"id":608,"builtin":true,"type":"environment","cat":"Alien","text":"gas giant atmospheric platform"},{"id":701,"builtin":true,"type":"lighting","cat":"Natural","text":"dramatic single shaft of sunlight through smoke"},{"id":702,"builtin":true,"type":"lighting","cat":"Natural","text":"golden hour backlight, long shadows"},{"id":703,"builtin":true,"type":"lighting","cat":"Artificial","text":"harsh industrial floodlights from below"},{"id":704,"builtin":true,"type":"lighting","cat":"Artificial","text":"neon city reflections on wet surfaces"},{"id":705,"builtin":true,"type":"lighting","cat":"Artificial","text":"cold blue-white facility lighting"},{"id":706,"builtin":true,"type":"lighting","cat":"Atmospheric","text":"bioluminescent blue-green underglow"},{"id":707,"builtin":true,"type":"lighting","cat":"Atmospheric","text":"aurora borealis glow, shifting curtains"},{"id":708,"builtin":true,"type":"lighting","cat":"Atmospheric","text":"volcanic lava-glow from below"},{"id":801,"builtin":true,"type":"style","cat":"Realism","text":"hyper-detailed photorealistic concept art, 8K render"},{"id":802,"builtin":true,"type":"style","cat":"Realism","text":"documentary photography aesthetic, naturalistic"},{"id":803,"builtin":true,"type":"style","cat":"Painterly","text":"dark fantasy oil painting, brooding atmosphere"},{"id":804,"builtin":true,"type":"style","cat":"Painterly","text":"watercolour and ink, loose expressive marks"},{"id":805,"builtin":true,"type":"style","cat":"Painterly","text":"epic matte painting, cinematic scale"},{"id":806,"builtin":true,"type":"style","cat":"Digital","text":"cyberpunk aesthetic, greebled surfaces, HUD elements"},{"id":807,"builtin":true,"type":"style","cat":"Digital","text":"anime mecha key visual, speed lines, vivid colour"},{"id":808,"builtin":true,"type":"style","cat":"Digital","text":"biomechanical Giger organic-industrial fusion"},{"id":901,"builtin":true,"type":"reference","cat":"Anime·Manga","text":"inspired by Neon Genesis Evangelion Unit-01"},{"id":902,"builtin":true,"type":"reference","cat":"Anime·Manga","text":"aesthetic of Armored Core VI"},{"id":903,"builtin":true,"type":"reference","cat":"Anime·Manga","text":"Studio Ghibli mechanical creature design"},{"id":904,"builtin":true,"type":"reference","cat":"Film·Game","text":"visual language of Pacific Rim Jaegers"},{"id":905,"builtin":true,"type":"reference","cat":"Film·Game","text":"inspired by Zerg from StarCraft 2"},{"id":906,"builtin":true,"type":"reference","cat":"Film·Game","text":"Xenomorph biomechanical aesthetic"},{"id":907,"builtin":true,"type":"reference","cat":"Artist","text":"in the style of H.R. Giger"},{"id":908,"builtin":true,"type":"reference","cat":"Artist","text":"concept art by Yoji Shinkawa"},{"id":909,"builtin":true,"type":"reference","cat":"Artist","text":"creature design by Neville Page"},{"id":1001,"builtin":true,"type":"technical","cat":"Camera","text":"cinematic composition, shallow depth of field"},{"id":1002,"builtin":true,"type":"technical","cat":"Camera","text":"low angle hero shot, extreme foreshortening"},{"id":1003,"builtin":true,"type":"technical","cat":"Camera","text":"bird's eye overhead view, dramatic scale"},{"id":1004,"builtin":true,"type":"technical","cat":"Format","text":"16:9 widescreen, rule of thirds framing"},{"id":1005,"builtin":true,"type":"technical","cat":"Format","text":"square 1:1 portrait, centred composition"},{"id":1006,"builtin":true,"type":"technical","cat":"Format","text":"ultra-wide panoramic, sprawling environment"},{"id":1007,"builtin":true,"type":"technical","cat":"Render","text":"octane render, ray-traced lighting, 16K"},{"id":1008,"builtin":true,"type":"technical","cat":"Render","text":"unreal engine 5, photorealistic global illumination"},{"id":1009,"builtin":true,"type":"technical","cat":"Render","text":"macro close-up, extreme surface micro-detail"},{"id":1101,"builtin":true,"type":"connector","cat":"Origin","text":"inspired by"},{"id":1102,"builtin":true,"type":"connector","cat":"Origin","text":"evolved from"},{"id":1103,"builtin":true,"type":"connector","cat":"Origin","text":"based on the anatomy of"},{"id":1104,"builtin":true,"type":"connector","cat":"Origin","text":"fusing the design of"},{"id":1105,"builtin":true,"type":"connector","cat":"Origin","text":"derived from"},{"id":1106,"builtin":true,"type":"connector","cat":"Origin","text":"a biomechanical reimagining of"},{"id":1107,"builtin":true,"type":"connector","cat":"Origin","text":"in the tradition of"},{"id":1111,"builtin":true,"type":"connector","cat":"Composition","text":"constructed from"},{"id":1112,"builtin":true,"type":"connector","cat":"Composition","text":"armoured with"},{"id":1113,"builtin":true,"type":"connector","cat":"Composition","text":"bristling with"},{"id":1114,"builtin":true,"type":"connector","cat":"Composition","text":"fused with"},{"id":1115,"builtin":true,"type":"connector","cat":"Composition","text":"encased in"},{"id":1116,"builtin":true,"type":"connector","cat":"Composition","text":"wrapped in"},{"id":1117,"builtin":true,"type":"connector","cat":"Composition","text":"layered with"},{"id":1118,"builtin":true,"type":"connector","cat":"Composition","text":"wielding"},{"id":1119,"builtin":true,"type":"connector","cat":"Composition","text":"bearing"},{"id":1121,"builtin":true,"type":"connector","cat":"Setting","text":"deployed in"},{"id":1122,"builtin":true,"type":"connector","cat":"Setting","text":"emerging from"},{"id":1123,"builtin":true,"type":"connector","cat":"Setting","text":"towering over"},{"id":1124,"builtin":true,"type":"connector","cat":"Setting","text":"against a backdrop of"},{"id":1125,"builtin":true,"type":"connector","cat":"Setting","text":"lurking within"},{"id":1126,"builtin":true,"type":"connector","cat":"Setting","text":"ascending from"},{"id":1127,"builtin":true,"type":"connector","cat":"Setting","text":"silhouetted against"},{"id":1128,"builtin":true,"type":"connector","cat":"Setting","text":"embedded in the landscape of"},{"id":1131,"builtin":true,"type":"connector","cat":"Motion","text":"with the movement of"},{"id":1132,"builtin":true,"type":"connector","cat":"Motion","text":"moving like"},{"id":1133,"builtin":true,"type":"connector","cat":"Motion","text":"stalking through"},{"id":1134,"builtin":true,"type":"connector","cat":"Motion","text":"charging across"},{"id":1135,"builtin":true,"type":"connector","cat":"Motion","text":"hovering above"},{"id":1136,"builtin":true,"type":"connector","cat":"Motion","text":"coiled and ready to strike in"},{"id":1137,"builtin":true,"type":"connector","cat":"Motion","text":"scuttling through"},{"id":1141,"builtin":true,"type":"connector","cat":"Style","text":"rendered in the style of"},{"id":1142,"builtin":true,"type":"connector","cat":"Style","text":"painted in the manner of"},{"id":1143,"builtin":true,"type":"connector","cat":"Style","text":"photographed as if by"},{"id":1144,"builtin":true,"type":"connector","cat":"Style","text":"drawn in the aesthetic of"},{"id":1145,"builtin":true,"type":"connector","cat":"Style","text":"lit as in the films of"},{"id":1146,"builtin":true,"type":"connector","cat":"Style","text":"with the colour palette of"},{"id":1147,"builtin":true,"type":"connector","cat":"Style","text":"with the texture quality of"}],"PB_INSECT_CATS":{"Rhinoceros Beetle":"Beetles","Hercules Beetle":"Beetles","Goliath Beetle":"Beetles","Stag Beetle":"Beetles","Ironclad Beetle":"Beetles","Bombardier Beetle":"Beetles","Trilobite Beetle":"Beetles","Tiger Beetle":"Beetles","Diving Beetle":"Beetles","Longhorn Beetle":"Beetles","Jewel Beetle":"Beetles","Whirligig Beetle":"Beetles","Firefly":"Beetles","Titan Beetle":"Beetles","Click Beetle":"Beetles","Violin Beetle":"Exotic","Dung Beetle":"Beetles","Ground Beetle":"Beetles","Bark Beetle":"Beetles","Blister Beetle":"Beetles","Rove Beetle":"Beetles","Hister Beetle":"Beetles","Soldier Beetle":"Beetles","Atlas Beetle":"Beetles","Elephant Beetle":"Beetles","Palo Verde Root Borer":"Beetles","Wallace's Giant Bee":"Beetles","Dragonfly":"Flies","Emperor Dragonfly":"Flies","Glasstail Dragonfly":"Flies","Damselfly":"Flies","Stalk-Eyed Fly":"Flies","Tsetse Fly":"Flies","Horse Fly":"Flies","Robber Fly":"Flies","Hoverfly":"Flies","Crane Fly":"Flies","Botfly":"Flies","Mayfly":"Flies","Blow Fly":"Flies","Scorpion Fly":"Flies","Gnat":"Flies","Mosquito":"Flies","Black Fly":"Flies","Sand Fly":"Flies","Fungus Gnat":"Flies","March Fly":"Flies","Midge":"Flies","Bumblebee":"Wasps & Bees","Yellowjacket Wasp":"Wasps & Bees","Hornet":"Wasps & Bees","Japanese Giant Hornet":"Wasps & Bees","Tarantula Hawk":"Wasps & Bees","Paper Wasp":"Wasps & Bees","Mud Dauber":"Wasps & Bees","Cicada Killer":"Wasps & Bees","Orchid Bee":"Wasps & Bees","Velvet Ant":"Wasps & Bees","Cuckoo Wasp":"Wasps & Bees","Wood Wasp":"Wasps & Bees","Giant Ichneumon Wasp":"Wasps & Bees","Warrior Wasp":"Wasps & Bees","Fire Ant":"Ants","Bullet Ant":"Ants","Army Ant":"Ants","Driver Ant":"Ants","Carpenter Ant":"Ants","Leafcutter Ant":"Ants","Trap-Jaw Ant":"Ants","Weaver Ant":"Ants","Praying Mantis":"Mantids","Orchid Mantis":"Mantids","Dead Leaf Mantis":"Mantids","Ghost Mantis":"Mantids","Spiny Flower Mantis":"Mantids","Budwing Mantis":"Mantids","Mantis Fly":"Mantids","Assassin Bug":"Mantids","Treehopper":"Mantids","Cicada":"Mantids","Leafhopper":"Mantids","Planthopper":"Mantids","Water Strider":"Mantids","Cockroach":"Mantids","Giant Water Bug":"Mantids","Backswimmer":"Mantids","Shield Bug":"Mantids","Bed Bug":"Mantids","Aphid":"Mantids","Water Scorpion":"Mantids","Peanut Head Bug":"Mantids","Monarch Butterfly":"Moths & Butterflies","Blue Morpho Butterfly":"Moths & Butterflies","Glasswing Butterfly":"Moths & Butterflies","Swallowtail Butterfly":"Moths & Butterflies","Queen Alexandra Birdwing":"Moths & Butterflies","Atlas Moth":"Moths & Butterflies","Luna Moth":"Moths & Butterflies","Death's Head Hawk-Moth":"Moths & Butterflies","Hawk Moth":"Moths & Butterflies","Hummingbird Hawk-Moth":"Moths & Butterflies","Peppered Moth":"Moths & Butterflies","Silkworm Moth":"Moths & Butterflies","Io Moth":"Moths & Butterflies","Comet Moth":"Moths & Butterflies","Hercules Moth":"Moths & Butterflies","Armyworm Moth":"Moths & Butterflies","Grasshopper":"Moths & Butterflies","Cricket":"Moths & Butterflies","Locust":"Moths & Butterflies","Katydid":"Moths & Butterflies","Mole Cricket":"Moths & Butterflies","Cave Cricket":"Moths & Butterflies","Weta":"Moths & Butterflies","Giant Weta":"Moths & Butterflies","Jerusalem Cricket":"Moths & Butterflies","Stick Insect":"Stick Insects","Leaf Insect":"Stick Insects","Thorny Stick Insect":"Stick Insects","Chan's Megastick":"Stick Insects","Peacock Spider":"Arachnids","Whip Spider":"Arachnids","Scorpion":"Arachnids","Emperor Scorpion":"Arachnids","Deathstalker Scorpion":"Arachnids","Fat-Tail Scorpion":"Arachnids","Centipede":"Arachnids","Giant Desert Centipede":"Arachnids","Vietnamese Centipede":"Arachnids","Amazonian Giant Centipede":"Arachnids","Millipede":"Arachnids","Giant African Millipede":"Arachnids","Harvestman":"Arachnids","Vinegaroon":"Arachnids","Giant Vinegaroon":"Arachnids","Sun Spider":"Arachnids","Camel Spider":"Arachnids","Pseudoscorpion":"Arachnids","Tailless Whip Scorpion":"Arachnids","Goliath Bird-Eater":"Arachnids","Black Widow Spider":"Arachnids","Funnel Web Spider":"Arachnids","Trapdoor Spider":"Arachnids","Brazilian Wandering Spider":"Arachnids","Huntsman Spider":"Arachnids","Tarantula":"Arachnids","Termite":"Social Insects","Termite Soldier":"Social Insects","Earwig":"Primitive","Silverfish":"Primitive","Firebrat":"Primitive","Springtail":"Primitive","Bristletail":"Primitive","Flea":"Primitive","Body Louse":"Primitive","Webspinner":"Primitive","Rock Crawler":"Primitive","Grylloblattid":"Primitive","Mantophasmatodea":"Primitive","Lacewing":"Lacewings","Antlion":"Lacewings","Owlfly":"Lacewings","Giant Lacewing":"Lacewings","Water Boatman":"Water Insects","Dobsonfly":"Water Insects","Giant Waterbug":"Water Insects","Raft Spider":"Water Insects","Diving Bell Spider":"Water Insects","Velvet Worm":"Exotic","Giraffe Weevil":"Exotic","Twisted-Wing Parasite":"Exotic","Zorapteran":"Exotic","Barklouse":"Exotic","Angel Insect":"Exotic","Thrips":"Exotic","Scale Insect":"Exotic","Mealybug":"Exotic","Emerald Ash Borer":"Beetles","Japanese Beetle":"Beetles","Ladybug":"Beetles","Weevil":"Beetles","Cockchafer":"Beetles","Leafcutter Bee":"Beetles","Solifuge":"Arachnids","Whip Scorpion":"Arachnids","Glowworm":"Flies","Firefly Larva":"Flies","Sphinx Moth":"Moths & Butterflies","Garden Tiger Moth":"Moths & Butterflies","Cinnabar Moth":"Moths & Butterflies"},"PB_BEAST_CATS":{"Dragon":"Reptilian","Komodo Dragon":"Reptilian","Cobra":"Reptilian","Crocodile":"Reptilian","Gecko":"Reptilian","Frog":"Reptilian","Salamander":"Reptilian","Wolf":"Predators","Lion":"Predators","Tiger":"Predators","Bear":"Predators","Gorilla":"Predators","Panther":"Predators","Hyena":"Predators","Rhino":"Predators","Bull":"Predators","Falcon":"Avian","Owl":"Avian","Raven":"Avian","Eagle":"Avian","Vulture":"Avian","Phoenix":"Avian","Bat":"Avian","Shark":"Aquatic","Octopus":"Aquatic","Squid":"Aquatic","Anglerfish":"Aquatic","Stingray":"Aquatic","Dolphin":"Aquatic","Lobster":"Aquatic","Man O'War":"Aquatic","Jellyfish":"Aquatic","Giant Isopod":"Aquatic","Kraken":"Aquatic","Leviathan":"Aquatic","Xenomorph":"Mythic","Predator (Yautja)":"Mythic","Kaiju":"Mythic","Chimera":"Mythic","Hydra":"Mythic","Basilisk":"Mythic","Cerberus":"Mythic","Manticore":"Mythic","Behemoth":"Mythic","Mecha Godzilla":"Mythic","Godzilla":"Mythic","King Ghidorah":"Mythic","Mothra":"Mythic","Biollante":"Mythic","Jorōgumo":"Mythic","Cthulhu":"Mythic","Griffin":"Mythic","Minotaur":"Mythic","Pegasus":"Mythic","Gargoyle":"Mythic","Golem":"Mythic","Oni":"Mythic","Wendigo":"Mythic","Werewolf":"Mythic","Vampire":"Mythic","Demon":"Mythic","Reaper":"Mythic","Pangolin":"Armoured","Armadillo":"Armoured","Tortoise":"Armoured","Horseshoe Crab":"Armoured","Porcupine":"Armoured","Hedgehog":"Armoured","Echidna":"Armoured","Sea Urchin":"Armoured","Nautilus":"Armoured","Boxfish":"Armoured","Hippopotamus":"Armoured","Elephant":"Armoured","Rhinoceros (Beast)":"Armoured","Gnome":"Other","Tarantula (Mech)":"Other","Spider Queen":"Other"}}
 </script>
 <script>
+// ════════════════════════════════════════════════════════════════════
+// FUNCTION INDEX — auto-generated
+// Quick grep:  grep -n "^function \|^async function " file.html
+// ════════════════════════════════════════════════════════════════════
+//
+// ── DATA
+//    3551   getAllPresets()
+//    3555   getPreset()
+//
+// ── COLOUR TUNER
+//    3604   hexToHSL()
+//    3617   hslToHex()
+//    3624   hexToName()
+//    3644   updatePickerUI()
+//    3660   updateTunerSummary()
+//    3671   onHSLChange()
+//    3689   onValueInput()
+//    3709   onPaletteChange()
+//    3731   getColourString()
+//
+// ── function getList(slot){
+//    3783   getList()
+//
+// ── const imgCache   = {}  name → { thumb, large, source } | 'missing' | 'loading'
+//    3964   getSearchTerm()
+//    3972  async fetchFromINaturalist()
+//    3989  async fetchFromWikimedia()
+//    4002  async fetchThumb()
+//    4017   applyThumbToDOM()
+//    4052   showPreview()
+//    4087   showPreviewImage()
+//    4096   positionPreview()
+//    4117   hidePreview()
+//    4124   isTouch()
+//    4133   makeOption()
+//
+// ── const sdState = {
+//    4190   toggleSD()
+//    4207   closeSD()
+//    4224   setSortSD()
+//    4231   filterSD()
+//    4236   selectSDOption()
+//    4246   renderSDList()
+//    4302   toggleInsp()
+//    4318   closeInsp()
+//    4324   filterInsp()
+//    4329   selectInspOption()
+//    4338   renderInspList()
+//    4369   populateDropdowns()
+//    4417   populateStatic()
+//    4439   init()
+//
+// ── function setMode(mode){
+//    4449   setMode()
+//    4465   renderPresetRow()
+//    4507   setPreset()
+//    4524   openStyleEditor()
+//    4529   closeStyleEditor()
+//    4533   switchStyleTab()
+//    4543   renderStylePresetList()
+//    4575   showNewPresetForm()
+//    4581   cancelNewPreset()
+//    4589   saveNewPreset()
+//    4606   deleteCustomPreset()
+//    4620  async driveCustomPresetsSync()
+//    4640  async driveCustomPresetsLoad()
+//
+// ── FIELD SELECTOR ENGINE
+//    4659   getDefaultFields()
+//    4665   toggleFieldSel()
+//    4686   renderFieldSelector()
+//    4760   updateFieldSelTitle()
+//    4772   resetFieldState()
+//    4781   getSelectedFields()
+//
+// ── function buildPrompt(aName, bName, colour, material, env, lighting, insp1, insp2){
+//    4793   buildPrompt()
+//    4806   applySettings()
+//    4862   generateSingle()
+//    4888   extractSettings()
+//    4896   onLoadTextareaInput()
+//    4918   loadFromText()
+//    4930   onFileImport()
+//    4948   clearLoadPanel()
+//    4955   generateBatch()
+//    4976   randomiseAll()
+//    5012   deleteFav()
+//    5019   copyFav()
+//    5037   renderFavs()
+//    5061   copyPromptOnly()
+//    5076   copyOutput()
+//    5092   exportAll()
+//    5128   restoreFav()
+//
+// ── CLOUD SYNC — ABSTRACTION LAYER
+//    5171   setCookie()
+//    5175   getCookie()
+//    5180   cloudSetProvider()
+//    5190   cloudIsConnected()
+//    5195  async cloudListFiles()
+//    5212  async cloudReadFile()
+//    5216  async cloudCreateFile()
+//    5220  async cloudPatchFile()
+//    5224  async cloudSync()
+//
+// ── DROPBOX INTEGRATION
+//    5239  async dbxGenCodeVerifier()
+//    5244  async dbxCodeChallenge()
+//    5250  async dbxSignIn()
+//    5265  async dbxHandleCallback()
+//    5299  async dbxRestoreSession()
+//    5328   dbxSignOut()
+//    5337  async dbxGetAccount()
+//    5349   dbxShowSignedIn()
+//    5367  async dbxListFiles()
+//    5384  async dbxReadFile()
+//    5398  async dbxWriteFile()
+//    5417  async dbxDeleteFile()
+//    5428  async dbxEnsureFolder()
+//    5439  async dbxSync()
+//    5447  async initDropbox()
+//
+// ── const DRIVE_CLIENT_ID       = '115162218034-eoub6c46sqcmhamb72hoj3l69ov1321d.apps.googleusercontent.com'
+//    5473   initDrive()
+//    5558   onGoogleSignIn()
+//    5578  async driveOnSignedIn()
+//    5604   showDriveSignedIn()
+//    5631   driveSignOut()
+//    5656   setDriveStatus()
+//    5664   showRestorePopup()
+//    5670   driveRestoreAccept()
+//    5679   driveRestoreDecline()
+//    5685  async driveSaveCurrentSettings()
+//    5698   driveSaveCurrentDebounced()
+//    5704  async driveLoadCurrentSettings()
+//    5721  async driveSavePrompt()
+//    5739  async driveDeletePrompt()
+//    5754  async driveLoadAllPrompts()
+//    5775  async driveSync()
+//    5778  async driveListFiles()
+//    5786  async driveReadFile()
+//    5794  async driveCreateFile()
+//    5806  async drivePatchFile()
+//    5814   toggleLoadPanel()
+//    5830   openLoadPanel()
+//    5840   collapseLoadPanel()
+//    5849   toggleLightMode()
+//
+// ── NAVIGATION
+//    5891   switchView()
+//    5927   switchViewFromHash()
+//
+// ── PROMPT METADATA — extends favourite objects
+//    5960   closeImageModal()
+//    5967   populateModelSelect()
+//    5986   onModelSelectChange()
+//    5991   onImageFileSelected()
+//    6006   compressImage()
+//    6019   clearImageUpload()
+//    6026   getModalModel()
+//    6032   confirmImageSave()
+//    6065   savePromptNoImage()
+//
+// ── SAVE FLOW — opens modal instead of saving directly
+//    6089   saveFav()
+//    6098   doSaveFav()
+//
+// ── LIBRARY VIEW
+//    6141   libSearchDebounced()
+//    6147   debounce()
+//    6155   formatDate()
+//    6167   extractCreatures()
+//    6174   renderLibFilters()
+//    6207   renderLibrary()
+//    6289   buildLibCard()
+//    6505   togglePromptExpand()
+//    6510   buildAutoTitle()
+//    6517   renderRatingStars()
+//    6535   updateLibBadge()
+//
+// ── FOLDERS
+//    6549   renderFolderSidebar()
+//    6585   libAddFolder()
+//    6595   libDeleteFolder()
+//    6605   libMoveFavToFolder()
+//    6615  async libFoldersSync()
+//    6630  async libFoldersLoad()
+//
+// ── VERSION HISTORY
+//    6647   openVersionHistory()
+//    6688   closeVersionHistory()
+//    6692   restoreVersion()
+//    6709   pbAddVersion()
+//
+// ── PARTICLE ITERATE
+//    6734   openIterate()
+//    6764   iterGoToParticleSelect()
+//    6822   closeIterate()
+//    6829   iterGoToStep1()
+//    6845   iterGoToStep2()
+//    6852   iterGoToStep3()
+//    6861   iterRenderModeTabs()
+//    6882   iterRenderTypePicker()
+//    6898   iterRenderAnnotated()
+//    6938   iterTokenTap()
+//    6952   iterRenderParticleList()
+//    6996   iterRandomise()
+//    7009   iterClearPicks()
+//    7016   iterGenerate()
+//    7047   iterCopyVariant()
+//    7059   iterSaveVariant()
+//
+// ── DRIVE PHOTO PICKER
+//    7095   driveRenderSortTabs()
+//    7117   driveToggleSortDir()
+//    7123   openDrivePhoto()
+//    7142   closeDrivePhoto()
+//    7146  async drivePhotoBrowse()
+//    7228   drivePhotoBrowseParent()
+//    7233   drivePhotoGoHome()
+//    7238  async drivePhotoSelect()
+//    7268   setDriveDefaultFolder()
+//    7276   updateDriveDefaultLabel()
+//    7286   libShowMoveMenu()
+//    7306   openLightbox()
+//    7310   closeLightbox()
+//
+// ── SETTINGS VIEW
+//    7321   renderSettingsView()
+//    7376   renderSettingsModelsList()
+//    7392   addCustomModelFromSettings()
+//    7403   removeCustomModel()
+//    7410   exportLibraryJSON()
+//    7421   updateNavDriveDot()
+//
+// ── CUSTOM MODELS — DRIVE SYNC
+//    7458  async driveModelsSync()
+//    7477  async driveModelsLoad()
+//
+// ── PATCH: driveOnSignedIn — add models load + UI updates
+//    7499   initElCache()
+//
+// ── SYNC GATE
+//    7554   syncGateCheck()
+//    7567   syncGateChooseGdrive()
+//    7578   syncGateChooseDropbox()
+//    7584   syncGateImportZip()
+//    7589   syncGateSkip()
+//    7596   closeSyncGate()
+//    7600   updateLocalWarning()
+//
+// ── LOCAL PERSISTENCE — localStorage as working copy
+//    7620   lsSave()
+//    7623   lsLoad()
+//    7629   lsSaveAll()
+//    7639   lsRestoreAll()
+//
+// ── ZIP EXPORT / IMPORT
+//    7685   closeZipImport()
+//    7690  async exportZip()
+//    7734  async handleZipFile()
+//
+// ── PARTICLE BUILDER
+//    7900   pbInit()
+//    7929   pbRenderLegend()
+//    7945   pbJumpToType()
+//    7965   pbRenderLibrary()
+//    8361   pbRenderTypeNav()
+//    8421   pbAddInlineParticle()
+//    8433   pbDeleteParticle()
+//    8441   pbAddCategory()
+//    8461   pbBuildSpecialList()
+//    8619   pbBuildParticleChip()
+//    8649   pbBuildCreatureRow()
+//    8730   pbBuildSubGroup()
+//    8785   pbAddToFormula()
+//    8812   pbRemoveFromFormula()
+//    8823   pbSyncFormulaFromDOM()
+//    8840   pbShowPlaceholderIfEmpty()
+//    8852   pbMakeChipEl()
+//    8888   pbInsertParticleAtRange()
+//    8903   pbStartReplace()
+//    8943   pbEndReplace()
+//    8955   pbDoReplace()
+//    8969   pbFormulaFocus()
+//    8972   pbFormulaBlur()
+//    8978   pbFormulaSaveRange()
+//    8990   pbRenderFormula()
+//    9018   pbRenderOutput()
+//    9020   pbGetPlainText()
+//    9029   pbUpdateBottomBar()
+//    9066   pbToggleBottomExpand()
+//    9075   pbPeekTap()
+//    9080   pbInitBottomObserver()
+//    9099   pbCopyOutput()
+//    9113   pbRandomiseAll()
+//    9123   pbClearFormula()
+//    9130   pbToggleAddForm()
+//    9136   pbInitAddSelects()
+//    9147   pbUpdateCategorySelect()
+//    9161   pbSaveParticle()
+//    9180  async pbParticlesDriveSync()
+//    9196   pbIsFav()
+//    9200   pbToggleFavParticle()
+//    9209   pbAddFavParticle()
+//    9218  async pbFavParticlesSync()
+//    9236  async pbFavParticlesLoad()
+//    9249  async pbParticlesLoad()
+//    9283   pbHexAlpha()
+//    9287   pbTrunc()
+//    9288   pbEsc()
+//    9291   pbRenderLibBar()
+//    9331   pbSwitchLib()
+//    9337   pbToggleBuiltin()
+//
+// ── GENERATOR → PARTICLE BRIDGE
+//    9355   pbSetLabMode()
+//    9373   pbCreatorSetFilter()
+//    9384   pbCreatorToggleFavs()
+//    9391   pbCreatorSetSub()
+//    9401   pbApplyCreatorFilter()
+//    9438   pbGetGeneratorParticles()
+//    9482   pbGetCreatureFieldParticles()
+//   11124   pbGetParticles()
+//   11137   pbUpdateColUI()
+//   11159   pbOnHSLChange()
+//   11182   pbOnValueInput()
+//   11193   pbOnPaletteChange()
+//   11209   pbUpdateColTunerSummary()
+//   11219   pbAddCustomColour()
+//   11234   pbSetAllCollapsed()
+//   11241   pbSyncExpandToggle()
+//
+// ── IMPORT PROMPT MODAL
+//   11258   pbOpenImport()
+//   11272   pbCloseImport()
+//   11276   pbRenderTypePicker()
+//   11293   pbImportOnInput()
+//   11305   pbImportCommit()
+//   11328   pbImportReset()
+//   11337   pbRenderAnnotated()
+//   11382   pbTokenTap()
+//   11403   pbApplyTag()
+//   11423   pbRemoveTagFromToken()
+//   11433   pbUpdateSelStatus()
+//   11440   pbClearTags()
+//   11450   pbBuildFormulaFromMixed()
+//   11477   editInPromptLab()
+//   11504   editVersionInLab()
+//   11522   pbCancelEdit()
+//   11535   sendToParticleLab()
+//   11549   pbSaveToLibrary()
+//   11594   pbSavePlainPrompt()
+//   11602   pbSaveTagged()
+//
+// ════════════════════════════════════════════════════════════════════
+
+
+//
+// ── DATA
+//    3268  getAllPresets()
+//    3272  getPreset()
+//
+// ── COLOUR TUNER
+//    3321  hexToHSL()
+//    3334  hslToHex()
+//    3341  hexToName()
+//    3361  updatePickerUI()
+//    3377  updateTunerSummary()
+//    3388  onHSLChange()
+//    3406  onValueInput()
+//    3426  onPaletteChange()
+//    3448  getColourString()
+//
+// ── function getList(slot){
+//    3500  getList()
+//    3527  addGroupedOptions()
+//
+// ── const imgCache   = {}  name → { thumb, large, source } | 'missing' | 'loading'
+//    3699  getSearchTerm()
+//    3707  async fetchFromINaturalist()
+//    3724  async fetchFromWikimedia()
+//    3737  async fetchThumb()
+//    3752  applyThumbToDOM()
+//    3787  showPreview()
+//    3822  showPreviewImage()
+//    3831  positionPreview()
+//    3852  hidePreview()
+//    3859  isTouch()
+//    3868  makeOption()
+//
+// ── const sdState = {
+//    3925  toggleSD()
+//    3942  closeSD()
+//    3959  setSortSD()
+//    3966  filterSD()
+//    3971  selectSDOption()
+//    3981  renderSDList()
+//    4037  toggleInsp()
+//    4053  closeInsp()
+//    4059  filterInsp()
+//    4064  selectInspOption()
+//    4073  renderInspList()
+//    4104  populateDropdowns()
+//    4152  populateStatic()
+//    4174  init()
+//
+// ── function setMode(mode){
+//    4184  setMode()
+//    4200  renderPresetRow()
+//    4242  setPreset()
+//    4259  openStyleEditor()
+//    4264  closeStyleEditor()
+//    4268  switchStyleTab()
+//    4278  renderStylePresetList()
+//    4310  showNewPresetForm()
+//    4316  cancelNewPreset()
+//    4324  saveNewPreset()
+//    4341  deleteCustomPreset()
+//    4355  async driveCustomPresetsSync()
+//    4375  async driveCustomPresetsLoad()
+//
+// ── FIELD SELECTOR ENGINE
+//    4394  getDefaultFields()
+//    4400  toggleFieldSel()
+//    4421  renderFieldSelector()
+//    4495  updateFieldSelTitle()
+//    4507  resetFieldState()
+//    4516  getSelectedFields()
+//
+// ── function buildPrompt(aName, bName, colour, material, env, lighting, insp1, insp2){
+//    4528  buildPrompt()
+//    4541  getRandItem()
+//    4542  getRandName()
+//
+// ── const SETTINGS_DELIMITER = '\n\n---SETTINGS---\n'
+//    4549  captureSettings()
+//    4577  applySettings()
+//    4633  generateSingle()
+//    4660  extractSettings()
+//    4668  onLoadTextareaInput()
+//    4690  loadFromText()
+//    4702  onFileImport()
+//    4720  clearLoadPanel()
+//    4727  generateBatch()
+//    4748  randomiseAll()
+//    4784  saveFav()
+//    4808  deleteFav()
+//    4815  copyFav()
+//    4833  renderFavs()
+//    4857  copyPromptOnly()
+//    4872  copyOutput()
+//    4888  exportAll()
+//    4924  restoreFav()
+//
+// ── CLOUD SYNC — ABSTRACTION LAYER
+//    4967  setCookie()
+//    4971  getCookie()
+//    4975  deleteCookie()
+//    4980  cloudSetProvider()
+//    4990  cloudIsConnected()
+//    4995  async cloudListFiles()
+//    5012  async cloudReadFile()
+//    5016  async cloudCreateFile()
+//    5020  async cloudPatchFile()
+//    5024  async cloudDeleteFile()
+//    5028  async cloudSync()
+//
+// ── DROPBOX INTEGRATION
+//    5043  async dbxGenCodeVerifier()
+//    5048  async dbxCodeChallenge()
+//    5054  async dbxSignIn()
+//    5069  async dbxHandleCallback()
+//    5103  async dbxRestoreSession()
+//    5132  dbxSignOut()
+//    5141  async dbxGetAccount()
+//    5153  dbxShowSignedIn()
+//    5171  async dbxListFiles()
+//    5188  async dbxReadFile()
+//    5202  async dbxWriteFile()
+//    5221  async dbxDeleteFile()
+//    5232  async dbxEnsureFolder()
+//    5243  async dbxSync()
+//    5251  async initDropbox()
+//
+// ── const DRIVE_CLIENT_ID       = '115162218034-eoub6c46sqcmhamb72hoj3l69ov1321d.apps.googleusercontent.com'
+//    5277  initDrive()
+//    5362  onGoogleSignIn()
+//    5382  async driveOnSignedIn()
+//    5408  showDriveSignedIn()
+//    5435  driveSignOut()
+//    5460  setDriveStatus()
+//    5468  showRestorePopup()
+//    5474  driveRestoreAccept()
+//    5483  driveRestoreDecline()
+//    5489  async driveSaveCurrentSettings()
+//    5502  driveSaveCurrentDebounced()
+//    5508  async driveLoadCurrentSettings()
+//    5525  async driveSavePrompt()
+//    5543  async driveDeletePrompt()
+//    5558  async driveLoadAllPrompts()
+//    5579  async driveSync()
+//    5582  async driveListFiles()
+//    5590  async driveReadFile()
+//    5598  async driveCreateFile()
+//    5610  async drivePatchFile()
+//    5618  toggleLoadPanel()
+//    5634  openLoadPanel()
+//    5644  collapseLoadPanel()
+//    5653  toggleLightMode()
+//
+// ── NAVIGATION
+//    5695  switchView()
+//    5731  switchViewFromHash()
+//
+// ── PROMPT METADATA — extends favourite objects
+//    5764  getAllModels()
+//
+// ── IMAGE UPLOAD MODAL
+//    5770  openImageModal()
+//    5789  closeImageModal()
+//    5796  populateModelSelect()
+//    5815  onModelSelectChange()
+//    5820  onImageFileSelected()
+//    5835  compressImage()
+//    5848  clearImageUpload()
+//    5855  getModalModel()
+//    5861  confirmImageSave()
+//    5894  savePromptNoImage()
+//
+// ── SAVE FLOW — opens modal instead of saving directly
+//    5918  saveFav()
+//    5927  doSaveFav()
+//
+// ── LIBRARY VIEW
+//    5970  libSearchDebounced()
+//    5976  debounce()
+//    5984  formatDate()
+//    5996  extractCreatures()
+//    6003  renderLibFilters()
+//    6036  renderLibrary()
+//    6118  buildLibCard()
+//    6334  togglePromptExpand()
+//    6339  buildAutoTitle()
+//    6346  renderRatingStars()
+//    6364  updateLibBadge()
+//    6371  updateLibBadge()
+//
+// ── FOLDERS
+//    6385  renderFolderSidebar()
+//    6421  libAddFolder()
+//    6431  libDeleteFolder()
+//    6441  libMoveFavToFolder()
+//    6451  async libFoldersSync()
+//    6466  async libFoldersLoad()
+//
+// ── VERSION HISTORY
+//    6483  openVersionHistory()
+//    6524  closeVersionHistory()
+//    6528  restoreVersion()
+//    6545  pbAddVersion()
+//
+// ── PARTICLE ITERATE
+//    6570  openIterate()
+//    6600  iterGoToParticleSelect()
+//    6658  closeIterate()
+//    6665  iterGoToStep1()
+//    6681  iterGoToStep2()
+//    6688  iterGoToStep3()
+//    6697  iterRenderModeTabs()
+//    6718  iterRenderTypePicker()
+//    6734  iterRenderAnnotated()
+//    6774  iterTokenTap()
+//    6788  iterRenderParticleList()
+//    6832  iterRandomise()
+//    6845  iterClearPicks()
+//    6852  iterGenerate()
+//    6883  iterCopyVariant()
+//    6895  iterSaveVariant()
+//
+// ── DRIVE PHOTO PICKER
+//    6931  driveRenderSortTabs()
+//    6953  driveToggleSortDir()
+//    6959  openDrivePhoto()
+//    6978  closeDrivePhoto()
+//    6982  async drivePhotoBrowse()
+//    7064  drivePhotoBrowseParent()
+//    7069  drivePhotoGoHome()
+//    7074  async drivePhotoSelect()
+//    7104  setDriveDefaultFolder()
+//    7112  updateDriveDefaultLabel()
+//    7122  libShowMoveMenu()
+//    7142  openLightbox()
+//    7146  closeLightbox()
+//
+// ── SETTINGS VIEW
+//    7157  renderSettingsView()
+//    7212  renderSettingsModelsList()
+//    7228  addCustomModelFromSettings()
+//    7239  removeCustomModel()
+//    7246  exportLibraryJSON()
+//    7257  updateNavDriveDot()
+//
+// ── CUSTOM MODELS — DRIVE SYNC
+//    7294  async driveModelsSync()
+//    7313  async driveModelsLoad()
+//
+// ── PATCH: driveOnSignedIn — add models load + UI updates
+//    7335  initElCache()
+//
+// ── SYNC GATE
+//    7390  syncGateCheck()
+//    7403  syncGateChooseGdrive()
+//    7414  syncGateChooseDropbox()
+//    7420  syncGateImportZip()
+//    7425  syncGateSkip()
+//    7432  closeSyncGate()
+//    7436  updateLocalWarning()
+//
+// ── LOCAL PERSISTENCE — localStorage as working copy
+//    7456  lsSave()
+//    7459  lsLoad()
+//    7465  lsSaveAll()
+//    7475  lsRestoreAll()
+//
+// ── ZIP EXPORT / IMPORT
+//    7521  closeZipImport()
+//    7526  async exportZip()
+//    7570  async handleZipFile()
+//
+// ── PARTICLE BUILDER
+//    7737  pbInit()
+//    7766  pbRenderLegend()
+//    7782  pbJumpToType()
+//    7802  pbRenderLibrary()
+//    8198  pbRenderTypeNav()
+//    8258  pbAddInlineParticle()
+//    8270  pbDeleteParticle()
+//    8278  pbAddCategory()
+//    8298  pbBuildSpecialList()
+//    8456  pbBuildParticleChip()
+//    8486  pbBuildCreatureRow()
+//    8567  pbBuildSubGroup()
+//    8622  pbAddToFormula()
+//    8649  pbRemoveFromFormula()
+//    8660  pbSyncFormulaFromDOM()
+//    8677  pbShowPlaceholderIfEmpty()
+//    8689  pbMakeChipEl()
+//    8725  pbInsertParticleAtRange()
+//    8740  pbStartReplace()
+//    8780  pbEndReplace()
+//    8792  pbDoReplace()
+//    8806  pbFormulaFocus()
+//    8809  pbFormulaBlur()
+//    8815  pbFormulaSaveRange()
+//    8827  pbRenderFormula()
+//    8855  pbRenderOutput()
+//    8857  pbGetPlainText()
+//    8866  pbUpdateBottomBar()
+//    8903  pbToggleBottomExpand()
+//    8912  pbPeekTap()
+//    8917  pbInitBottomObserver()
+//    8936  pbCopyOutput()
+//    8950  pbRandomiseAll()
+//    8960  pbClearFormula()
+//    8967  pbToggleAddForm()
+//    8973  pbInitAddSelects()
+//    8984  pbUpdateCategorySelect()
+//    8998  pbSaveParticle()
+//    9017  async pbParticlesDriveSync()
+//    9033  pbIsFav()
+//    9037  pbToggleFavParticle()
+//    9046  pbAddFavParticle()
+//    9055  async pbFavParticlesSync()
+//    9073  async pbFavParticlesLoad()
+//    9086  async pbParticlesLoad()
+//    9120  pbHexAlpha()
+//    9124  pbTrunc()
+//    9125  pbEsc()
+//    9128  pbRenderLibBar()
+//    9168  pbSwitchLib()
+//    9174  pbToggleBuiltin()
+//
+// ── GENERATOR → PARTICLE BRIDGE
+//    9192  pbSetLabMode()
+//    9210  pbCreatorSetFilter()
+//    9221  pbCreatorToggleFavs()
+//    9228  pbCreatorSetSub()
+//    9238  pbApplyCreatorFilter()
+//    9275  pbGetGeneratorParticles()
+//    9319  pbGetCreatureFieldParticles()
+//   10961  pbGetParticles()
+//   10974  pbUpdateColUI()
+//   10996  pbOnHSLChange()
+//   11019  pbOnValueInput()
+//   11030  pbOnPaletteChange()
+//   11046  pbUpdateColTunerSummary()
+//   11056  pbAddCustomColour()
+//   11071  pbToggleDrawer()
+//   11085  pbSetAllCollapsed()
+//   11092  pbSyncExpandToggle()
+//   11099  pbSetSubjectMode()
+//
+// ── IMPORT PROMPT MODAL
+//   11114  pbOpenImport()
+//   11128  pbCloseImport()
+//   11132  pbRenderTypePicker()
+//   11149  pbImportOnInput()
+//   11161  pbImportCommit()
+//   11184  pbImportReset()
+//   11193  pbRenderAnnotated()
+//   11238  pbTokenTap()
+//   11259  pbApplyTag()
+//   11279  pbRemoveTagFromToken()
+//   11289  pbUpdateSelStatus()
+//   11296  pbOnSelection()
+//   11298  pbClearTags()
+//   11307  pbRenderTaggedList()
+//   11376  pbClearTags()
+//   11386  pbBuildFormulaFromMixed()
+//   11413  editInPromptLab()
+//   11440  editVersionInLab()
+//   11458  pbCancelEdit()
+//   11471  sendToParticleLab()
+//   11485  sendToParticleLabById()
+//   11490  pbSaveToLibrary()
+//   11535  pbSavePlainPrompt()
+//   11543  pbSaveTagged()
+//
+// ═══════════════════════════════════════════════════════════════════
+
+
 
 const _bmData = JSON.parse(document.getElementById('bm-data').textContent)
 // ═══════════════════════════════════════════════════════════════════
@@ -3436,24 +4248,6 @@ const INSECT_GROUPS = {
   "🌿 Exotic & Rare":  ["Velvet Worm","Giraffe Weevil","Twisted-Wing Parasite","Zorapteran","Barklouse","Angel Insect","Glowworm","Firefly Larva"],
 }
 
-function addGroupedOptions(selectEl, groups) {
-  selectEl.innerHTML = ''
-  let totalAdded = 0
-  for (const [groupName, members] of Object.entries(groups)) {
-    const sorted = [...members].sort((a,b) => a.localeCompare(b))
-    const og = document.createElement('optgroup')
-    og.label = groupName
-    sorted.forEach(name => {
-      if (INSECTS[name]) { // only add if exists in data
-        og.appendChild(new Option(name, name))
-        totalAdded++
-      }
-    })
-    if (og.children.length) selectEl.appendChild(og)
-  }
-  return totalAdded
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // WIKIPEDIA THUMBNAIL ENGINE
 // ═══════════════════════════════════════════════════════════════════
@@ -3605,7 +4399,7 @@ const WIKI_ONLY = new Set([
   "Nier Automata YoRHa Units","Titanfall Titans","Chappie",
 ])
 
-// ─── CURATED INSPIRATION SEARCH TERMS ───────────────────────────────────────
+// ── CURATED INSPIRATION SEARCH TERMS
 // These go straight to Wikipedia API (skipping iNaturalist entirely).
 // Tuned for the best image result per entry.
 function getSearchTerm(name) {
@@ -3693,7 +4487,7 @@ const thumbObserver = new IntersectionObserver((entries) => {
   })
 }, { rootMargin: '60px' })
 
-// ─── HOVER PREVIEW ───────────────────────────────────────────────────────────
+// ── HOVER PREVIEW
 let previewTimeout = null
 
 function showPreview(name, thumbEl) {
@@ -3940,7 +4734,7 @@ function renderSDList(id) {
   list.appendChild(frag)
 }
 
-// ─── INSPIRATION THUMBNAIL DROPDOWNS ─────────────────────────────────────────
+// ── INSPIRATION THUMBNAIL DROPDOWNS
 const inspState = {
   I1: { value: '', query: '' },
   I2: { value: '', query: '' },
@@ -4165,7 +4959,7 @@ function setPreset(id) {
   driveSaveCurrentDebounced()
 }
 
-// ─── STYLE EDITOR ─────────────────────────────────────────────────
+// ── STYLE EDITOR
 let styleEditorTab = 'realism'
 
 function openStyleEditor() {
@@ -4260,7 +5054,7 @@ function deleteCustomPreset(id, e) {
   driveCustomPresetsSync()
 }
 
-// ─── DRIVE SYNC FOR CUSTOM PRESETS ────────────────────────────────
+// ── DRIVE SYNC FOR CUSTOM PRESETS
 const CUSTOM_PRESETS_FILE = 'beast-mode-custom-presets.json'
 let driveCustomPresetsId  = null
 
@@ -4450,42 +5244,6 @@ function buildPrompt(aName, bName, colour, material, env, lighting, insp1, insp2
   return `giant biomechanical hybrid mech inspired by ${aName} and ${bName} — ${fieldStr} — coloured ${colour} — constructed from ${material} — deployed in a ${env} — ${lighting}${inspStr} — ${s.adj} — exposed hydraulic pistons, glowing optical sensors — ${s.suffix}`
 }
 
-function getRandItem(arr){ return arr[Math.floor(Math.random()*arr.length)] }
-function getRandName(slot){ const k=Object.keys(getList(slot)); return k[Math.floor(Math.random()*k.length)] }
-
-// ═══════════════════════════════════════════════════════════════════
-// ACTIONS
-// ═══════════════════════════════════════════════════════════════════
-const SETTINGS_DELIMITER = '\n\n---SETTINGS---\n'
-
-function captureSettings() {
-  return {
-    _v: 1,
-    mode:     currentMode,
-    preset:   currentPreset,
-    creatureA: document.getElementById('creatureA').value,
-    creatureB: document.getElementById('creatureB').value,
-    colour:   document.getElementById('colourSel').value,
-    colAHex:  colState.A,
-    colBHex:  colState.B,
-    colAH:    document.getElementById('colAH').value,
-    colAS:    document.getElementById('colAS').value,
-    colAL:    document.getElementById('colAL').value,
-    colBH:    document.getElementById('colBH').value,
-    colBS:    document.getElementById('colBS').value,
-    colBL:    document.getElementById('colBL').value,
-    modA:     document.getElementById('modA').value,
-    modB:     document.getElementById('modB').value,
-    material: document.getElementById('materialSel').value,
-    env:      document.getElementById('envSel').value,
-    lighting: document.getElementById('lightSel').value,
-    insp1:    document.getElementById('insp1Sel').value,
-    insp2:    document.getElementById('insp2Sel').value,
-    fieldStateA: fieldState.A,
-    fieldStateB: fieldState.B,
-  }
-}
-
 function applySettings(s) {
   // Mode first — this re-populates creature dropdowns
   if (s.mode && ['insect','beast','fusion'].includes(s.mode)) {
@@ -4567,8 +5325,7 @@ function generateSingle(){
   }, 200)
 }
 
-// ─── LOAD FROM PASTE ─────────────────────────────────────────────────────────
-
+// ── LOAD FROM PASTE
 function extractSettings(text) {
   const idx = text.indexOf('---SETTINGS---')
   if (idx === -1) return null
@@ -4691,30 +5448,6 @@ function randomiseAll(){
   }
 
   generateSingle()
-}
-
-function saveFav(){
-  const out = document.getElementById('output')
-  const visible = out.textContent
-  if(!visible || visible.startsWith('//')) return
-
-  let full = out.dataset.full || ''
-
-  // If no full text stored (e.g. output was set without a settings block),
-  // generate a fresh settings block and embed it now
-  if (!full || !full.includes('---SETTINGS---')) {
-    const settings = JSON.stringify(captureSettings())
-    full = visible + SETTINGS_DELIMITER + settings
-  }
-
-  const promptOnly = full.includes('---SETTINGS---')
-    ? full.slice(0, full.indexOf('---SETTINGS---')).trim()
-    : visible
-
-  favourites.unshift({ text: full, promptOnly, mode: currentMode, preset: currentPreset, id: Date.now() })
-  renderFavs()
-  driveSavePrompt(favourites[0])
-  driveSaveCurrentDebounced()
 }
 
 function deleteFav(id){
@@ -4884,10 +5617,6 @@ function getCookie(name) {
   const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
   return m ? decodeURIComponent(m[1]) : null
 }
-function deleteCookie(name) {
-  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/`
-}
-
 // ── Provider switching ─────────────────────────────────────────────
 function cloudSetProvider(p) {
   cloudProvider = p
@@ -4932,10 +5661,6 @@ async function cloudCreateFile(name, body) {
 async function cloudPatchFile(id, body) {
   if (cloudProvider === 'gdrive') return drivePatchFile(id, body)
   return dbxWriteFile(id, body)  // Dropbox uses path as id; overwrite = patch
-}
-async function cloudDeleteFile(id) {
-  if (cloudProvider === 'gdrive') return driveDeletePrompt(id)
-  return dbxDeleteFile(id)
 }
 async function cloudSync() {
   if (cloudProvider === 'gdrive') return driveSync()
@@ -5185,7 +5910,7 @@ let driveCurrentTimer = null
 let drivePromptIds   = {}
 let driveTokenClient = null   // pre-created, reused for silent refresh
 
-// ─── AUTH ─────────────────────────────────────────────────────────
+// ── AUTH
 function initDrive() {
   if (typeof google === 'undefined') { setTimeout(initDrive, 600); return }
 
@@ -5316,7 +6041,7 @@ async function driveOnSignedIn() {
   setTimeout(() => { if (cloudIsConnected()) setDriveStatus('✓ CONNECTED', 'ok') }, 4000)
 }
 
-// ─── UI HELPERS ───────────────────────────────────────────────────
+// ── UI HELPERS
 function showDriveSignedIn(name, picture) {
   const so = El.driveSignedOut || document.getElementById('driveSignedOut')
   const si = El.driveSignedIn  || document.getElementById('driveSignedIn')
@@ -5376,7 +6101,7 @@ function setDriveStatus(msg, type='') {
   if (sl && cloudIsConnected()) sl.textContent = msg
 }
 
-// ─── RESTORE SESSION POPUP ────────────────────────────────────────
+// ── RESTORE SESSION POPUP
 function showRestorePopup(settings) {
   const popup = document.getElementById('driveRestorePopup')
   popup.style.display = 'flex'
@@ -5397,7 +6122,7 @@ function driveRestoreDecline() {
   setDriveStatus('✓ READY','ok')
 }
 
-// ─── CURRENT SETTINGS ─────────────────────────────────────────────
+// ── CURRENT SETTINGS
 async function driveSaveCurrentSettings() {
   lsSave(LS.SETTINGS, captureSettings())
   if (!cloudIsConnected()) return
@@ -5433,7 +6158,7 @@ async function driveLoadCurrentSettings() {
   } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
 }
 
-// ─── INDIVIDUAL PROMPT FILES ──────────────────────────────────────
+// ── INDIVIDUAL PROMPT FILES
 async function driveSavePrompt(fav) {
   // Always save to localStorage regardless of cloud state
   if (!fav.versions) fav.versions = [{ text: fav.text, savedAt: fav.createdAt || fav.id, label: 'Original' }]
@@ -5490,7 +6215,7 @@ async function driveLoadAllPrompts() {
 
 async function driveSync() { await driveLoadAllPrompts() }
 
-// ─── DRIVE API HELPERS ────────────────────────────────────────────
+// ── DRIVE API HELPERS
 async function driveListFiles(q) {
   const res = await fetch(
     'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=' + encodeURIComponent(q) + '&fields=files(id,name)',
@@ -5526,7 +6251,7 @@ async function drivePatchFile(id, body) {
   )
 }
 
-// ─── ACCORDION HELPERS ────────────────────────────────────────────
+// ── ACCORDION HELPERS
 function toggleLoadPanel() {
   const body  = document.getElementById('loadBody')
   const arrow = document.getElementById('loadArrow')
@@ -5672,31 +6397,6 @@ let pendingImageModalFavId = null  // fav id being edited, or null for new save
 let pendingRating = 0
 const MODELS_FILE = 'beast-mode-models.json'
 let driveModelsId = null
-
-function getAllModels() { return [...BUILTIN_MODELS, ...customModels] }
-
-// ═══════════════════════════════════════════════════════════════════
-// IMAGE UPLOAD MODAL
-// ═══════════════════════════════════════════════════════════════════
-
-function openImageModal(favId) {
-  pendingImageModalFavId = favId || null
-  pendingImageData = null
-  pendingRating = 0
-  document.getElementById('imgDropZone').style.display = 'flex'
-  document.getElementById('imgPreviewWrap').style.display = 'none'
-  document.getElementById('imgModelSelect').value = ''
-  document.getElementById('customModelWrap').style.display = 'none'
-  document.getElementById('customModelInput').value = ''
-  document.getElementById('saveModelCheck').checked = false
-  document.getElementById('imgTitleInput').value = favId
-    ? (favourites.find(f=>f.id===favId)?.title || '') : ''
-  renderRatingStars('imgRatingStars', pendingRating, r => { pendingRating = r })
-  document.getElementById('imageUploadModal').classList.add('open')
-
-  // Populate custom models in select
-  populateModelSelect()
-}
 
 function closeImageModal() {
   document.getElementById('imageUploadModal').classList.remove('open')
@@ -5945,6 +6645,89 @@ function renderLibFilters() {
   })
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// BULK SELECT
+// ═══════════════════════════════════════════════════════════════════
+
+let libSelectMode = false
+let libSelected   = new Set()   // Set of fav IDs
+
+function libToggleSelectMode() {
+  libSelectMode = !libSelectMode
+  libSelected.clear()
+  const btn = document.getElementById('libSelectToggle')
+  const bar = document.getElementById('libBulkBar')
+  if (btn) {
+    btn.textContent = libSelectMode ? '✕ CANCEL' : '☐ SELECT'
+    btn.classList.toggle('active', libSelectMode)
+  }
+  if (bar) bar.style.display = libSelectMode ? 'flex' : 'none'
+  renderLibrary()
+}
+
+function libSelectCard(id) {
+  if (libSelected.has(id)) libSelected.delete(id)
+  else libSelected.add(id)
+  // Update just this card's visual state
+  const card = document.querySelector(`.lib-card[data-fav-id="${id}"]`)
+  if (card) card.classList.toggle('selected', libSelected.has(id))
+  // Update checkbox
+  const cb = card?.querySelector('.lib-card-checkbox')
+  if (cb) cb.textContent = libSelected.has(id) ? '✓' : ''
+  // Update bulk bar count
+  const count = document.getElementById('libBulkCount')
+  if (count) count.textContent = `${libSelected.size} SELECTED`
+}
+
+function libBulkDelete() {
+  if (!libSelected.size) return
+  if (!confirm(`Delete ${libSelected.size} prompt${libSelected.size>1?'s':''}? This cannot be undone.`)) return
+  libSelected.forEach(id => {
+    favourites = favourites.filter(f => f.id !== id)
+    driveDeletePrompt(id)
+  })
+  lsSave(LS.FAVS, favourites)
+  libSelected.clear()
+  libToggleSelectMode()
+}
+
+function libBulkStar() {
+  const allStarred = [...libSelected].every(id => favourites.find(f=>f.id===id)?.starred)
+  libSelected.forEach(id => {
+    const f = favourites.find(x => x.id === id)
+    if (f) { f.starred = !allStarred; f.updatedAt = Date.now(); driveSavePrompt(f) }
+  })
+  lsSave(LS.FAVS, favourites)
+  renderLibrary()
+}
+
+function libBulkMove() {
+  const allFolders = [{ id: null, name: 'All Prompts (no folder)' }, ...libFolders]
+  const names = allFolders.map((f, i) => `${i+1}. ${f.name}`).join('\n')
+  const choice = prompt(`Move ${libSelected.size} prompt${libSelected.size>1?'s':''} to:\n\n${names}\n\nEnter number:`)
+  const idx = parseInt(choice) - 1
+  if (isNaN(idx) || idx < 0 || idx >= allFolders.length) return
+  const targetFolder = allFolders[idx]
+  libSelected.forEach(id => {
+    const f = favourites.find(x => x.id === id)
+    if (f) { f.folderId = targetFolder.id; f.updatedAt = Date.now(); driveSavePrompt(f) }
+  })
+  lsSave(LS.FAVS, favourites)
+  libSelected.clear()
+  libToggleSelectMode()
+}
+
+function libBulkExport() {
+  const selected = favourites.filter(f => libSelected.has(f.id))
+  const text = selected.map((f, i) =>
+    `[${i+1}] ${f.title || buildAutoTitle(f)}\n${'-'.repeat(40)}\n${f.promptOnly || f.text}\n`
+  ).join('\n')
+  const a = document.createElement('a')
+  a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text)
+  a.download = `beast-mode-selected-${Date.now()}.txt`
+  a.click()
+}
+
 function renderLibrary() {
   renderLibFilters()
   renderFolderSidebar()
@@ -6022,9 +6805,76 @@ function renderLibrary() {
   }
 
   const frag = document.createDocumentFragment()
-  items.forEach(f => frag.appendChild(buildLibCard(f)))
+  items.forEach(f => {
+    if (libSelectMode) {
+      const card = buildLibCard(f)
+      card.dataset.favId = f.id
+      card.classList.toggle('selected', libSelected.has(f.id))
+      // Add checkbox
+      const cb = document.createElement('div')
+      cb.className = 'lib-card-checkbox'
+      cb.textContent = libSelected.has(f.id) ? '✓' : ''
+      card.appendChild(cb)
+      card.onclick = e => { e.stopPropagation(); libSelectCard(f.id) }
+      frag.appendChild(card)
+    } else {
+      frag.appendChild(buildLibCardWithSwipe(f))
+    }
+  })
   grid.appendChild(frag)
   updateLibBadge()
+}
+
+function buildLibCardWithSwipe(f) {
+  const wrap = document.createElement('div')
+  wrap.className = 'lib-card-swipe-wrap'
+
+  const card = buildLibCard(f)
+  wrap.appendChild(card)
+
+  // Swipe-action buttons (revealed on swipe left)
+  const actions = document.createElement('div')
+  actions.className = 'lib-card-swipe-actions'
+
+  const moveBtn = document.createElement('button')
+  moveBtn.className = 'swipe-action-btn swipe-btn-move'
+  moveBtn.innerHTML = '<span>📁</span>MOVE'
+  moveBtn.onclick = () => { libShowMoveMenu(f.id); wrap.classList.remove('swiped') }
+
+  const delBtn = document.createElement('button')
+  delBtn.className = 'swipe-action-btn swipe-btn-delete'
+  delBtn.innerHTML = '<span>✕</span>DELETE'
+  delBtn.onclick = () => { deleteFav(f.id); renderLibrary() }
+
+  actions.appendChild(moveBtn)
+  actions.appendChild(delBtn)
+  wrap.appendChild(actions)
+
+  // Touch swipe detection
+  let touchStartX = 0, touchStartY = 0, swiping = false
+  wrap.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX
+    touchStartY = e.touches[0].clientY
+    swiping = false
+  }, { passive: true })
+  wrap.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - touchStartX
+    const dy = Math.abs(e.touches[0].clientY - touchStartY)
+    if (!swiping && dy > 10) return  // vertical scroll, ignore
+    if (dx < -20) { swiping = true; e.preventDefault() }
+  }, { passive: false })
+  wrap.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX
+    if (dx < -60) wrap.classList.add('swiped')
+    else if (dx > 20) wrap.classList.remove('swiped')
+  })
+
+  // Close swipe when tapping elsewhere
+  document.addEventListener('touchstart', e => {
+    if (!wrap.contains(e.target)) wrap.classList.remove('swiped')
+  }, { passive: true })
+
+  return wrap
 }
 
 function buildLibCard(f) {
@@ -6271,13 +7121,6 @@ function renderRatingStars(containerId, currentRating, onChange, containerEl) {
     }
     wrap.appendChild(star)
   }
-}
-
-function updateLibBadge() {
-  const badge = document.getElementById('libBadge')
-  if (!badge) return
-  badge.textContent = favourites.length
-  badge.style.display = favourites.length ? 'inline' : 'none'
 }
 
 function updateLibBadge() {
@@ -7617,7 +8460,6 @@ const PB_TYPES = [
     cats:['Origin','Composition','Setting','Motion','Style'] },
 ]
 
-const PB_SEP = '—'
 
 // Particle library
 const PB_BUILTIN_PARTICLES = _bmData.PB_BUILTIN_PARTICLES
@@ -7657,6 +8499,21 @@ function pbInit() {
   pbUpdateBottomBar()
   // Delay observer init so DOM is fully laid out
   setTimeout(pbInitBottomObserver, 100)
+
+  // Wire contenteditable formula events
+  const bar = document.getElementById('pbFormula')
+  if (bar) {
+    bar.addEventListener('focus', pbFormulaFocus)
+    bar.addEventListener('blur',  pbFormulaBlur)
+    bar.addEventListener('mouseup',   pbFormulaSaveRange)
+    bar.addEventListener('keyup',     pbFormulaSaveRange)
+    bar.addEventListener('touchend',  pbFormulaSaveRange)
+    bar.addEventListener('input', () => {
+      pbSyncFormulaFromDOM()
+      pbUpdateBottomBar()
+      pbShowPlaceholderIfEmpty(bar)
+    })
+  }
 }
 
 // ── LEGEND ─────────────────────────────────────────────────────────
@@ -7935,23 +8792,23 @@ function pbRenderLibrary() {
     body.appendChild(tabs)
     } // end editor-mode category tabs
 
-    // Particles list — sub-grouped if large generator category
+    // Particles list — type-specific layouts for large categories
     const list = document.createElement('div')
     list.className = 'pb-particles'
 
     const GROUP_THRESHOLD = 20
     const hasGeneratorParticles = filtered.some(p => p.source === 'generator')
-    // Use groups in editor mode, and also in creator mode when showing built-in or all
     const creatorNeedsGroups = isCreator && (pbCreatorFilter === 'builtin' || pbCreatorFilter === 'all')
     const useGroups = !query && hasGeneratorParticles && filtered.length >= GROUP_THRESHOLD
       && (pbLabMode !== 'creator' || creatorNeedsGroups)
 
+    // Special layouts for specific types
+    const handled = pbBuildSpecialList(t.key, filtered, t, list, query, useGroups)
+
+    if (!handled) {
     if (useGroups) {
-      // Separate user particles from generator particles
       const userPs  = filtered.filter(p => p.source !== 'generator')
       const genPs   = filtered.filter(p => p.source === 'generator')
-
-      // Group generator particles by creature family
       const groupMap = new Map()
       genPs.forEach(p => {
         const group = (p.mode === 'insect')
@@ -7960,21 +8817,14 @@ function pbRenderLibrary() {
         if (!groupMap.has(group)) groupMap.set(group, [])
         groupMap.get(group).push(p)
       })
-
-      // User particles at the top if any
-      if (userPs.length) {
-        list.appendChild(pbBuildSubGroup('My Particles', userPs, t, true))
-      }
-
-      // Generator sub-groups, sorted by size desc
+      if (userPs.length) list.appendChild(pbBuildSubGroup('My Particles', userPs, t, true))
       const sortedGroups = [...groupMap.entries()].sort((a,b) => b[1].length - a[1].length)
       sortedGroups.forEach(([groupName, groupPs]) => {
         const groupKey = `${t.key}/${resolvedCat}/${groupName}`
-        const startOpen = sortedGroups.length <= 3  // auto-open if only a few groups
+        const startOpen = sortedGroups.length <= 3
         list.appendChild(pbBuildSubGroup(groupName, groupPs, t, startOpen, groupKey))
       })
     } else {
-      // Flat list for small categories or search results
       filtered.forEach(p => list.appendChild(pbBuildParticleChip(p, t)))
 
       if (!filtered.length) {
@@ -8005,6 +8855,7 @@ function pbRenderLibrary() {
         list.appendChild(empty)
       }
     }
+    } // end if (!handled)
 
     body.appendChild(list)
 
@@ -8189,6 +9040,171 @@ function pbAddCategory(typeKey) {
 
 // ── FORMULA ────────────────────────────────────────────────────────
 // ── PARTICLE SUB-GROUP HELPERS ─────────────────────────────────────
+// ── TYPE-SPECIFIC PARTICLE LAYOUTS ────────────────────────────────
+// Returns true if it handled the rendering, false to fall through to generic
+
+const MATERIAL_GROUPS = {
+  'Natural':    ['living chitin-steel hybrid','bio-organic mech tissue','coral-infused metal','bone-lattice composite','keratin-reinforced plating','calcified shell-alloy','venom-soaked titanium','silk-woven carbon fiber','crystallized carapace alloy','bark-fused iron plates','deep-sea pressure metal','root-infused obsidian'],
+  'Industrial': ['titanium alloy','carbon fiber plating','obsidian armor','nano-ceramic composite','plasma-forged chromite','magnetized ferrofluid shell','reactive smart-metal','graphene-wrapped steel','void-cast iron','neutronium plating'],
+  'Exotic':     ['living muscle-metal hybrid','ghost-phase alloy','bioluminescent polymer shell','shadow-forged dark matter plates','ancient stone-fused mech hide','phoenix-tempered alloy','kraken-ink composite','cursed bone-metal','soul-forged obsidian','radioactive isotope shell'],
+}
+
+function pbBuildSpecialList(typeKey, filtered, t, list, query, useGroups) {
+  // Subject — compact name-chip grid within family groups
+  if (typeKey === 'subject' && useGroups && !query) {
+    list.style.cssText = 'display:block;padding:0;'
+    const userPs = filtered.filter(p => p.source !== 'generator')
+    const genPs  = filtered.filter(p => p.source === 'generator')
+    if (userPs.length) list.appendChild(pbBuildSubGroup('My Particles', userPs, t, true))
+    // Group by family
+    const groupMap = new Map()
+    genPs.forEach(p => {
+      const g = p.mode === 'insect' ? (PB_INSECT_CATS[p.text] || 'Other') : (PB_BEAST_CATS[p.text] || 'Other')
+      if (!groupMap.has(g)) groupMap.set(g, [])
+      groupMap.get(g).push(p)
+    })
+    ;[...groupMap.entries()].sort((a,b) => b[1].length - a[1].length).forEach(([grpName, grpPs]) => {
+      const grpKey = `subject/${grpName}`
+      const isOpen = !(pbSubGroupCollapsed[grpKey] ?? false)
+      const wrap = document.createElement('div')
+      wrap.className = 'pb-sub-group'
+      const hdr = document.createElement('div')
+      hdr.className = 'pb-sub-group-hdr'
+      hdr.innerHTML = `<span class="pb-sub-group-name">${grpName}</span><span class="pb-sub-group-count">${grpPs.length}</span><span class="pb-sub-group-arrow ${isOpen?'open':''}">▾</span>`
+      const body2 = document.createElement('div')
+      body2.className = 'pb-sub-group-body' + (isOpen ? '' : ' collapsed')
+      // Compact name-chip grid
+      const grid = document.createElement('div')
+      grid.className = 'pb-name-chip-grid'
+      grpPs.forEach(p => {
+        const chip = document.createElement('span')
+        chip.className = 'pb-name-chip'
+        chip.style.setProperty('--tc', t.color)
+        chip.dataset.particleId = p.id
+        chip.dataset.particleType = p.type
+        chip.textContent = p.text
+        chip.title = `${p.text} — click to add to formula`
+        // Star toggle
+        const isFav = pbIsFav(t.key, p.id)
+        chip.classList.toggle('pb-name-chip-fav', isFav)
+        chip.addEventListener('contextmenu', e => { e.preventDefault(); pbToggleFavParticle(t.key, p.id) })
+        grid.appendChild(chip)
+      })
+      body2.appendChild(grid)
+      hdr.onclick = () => {
+        const nowOpen = !body2.classList.contains('collapsed')
+        body2.classList.toggle('collapsed', nowOpen)
+        hdr.querySelector('.pb-sub-group-arrow').classList.toggle('open', !nowOpen)
+        pbSubGroupCollapsed[grpKey] = nowOpen
+      }
+      wrap.appendChild(hdr); wrap.appendChild(body2)
+      list.appendChild(wrap)
+    })
+    return true
+  }
+
+  // Colour — swatch chips
+  if (typeKey === 'colour' && !query) {
+    const genPs  = filtered.filter(p => p.source === 'generator' && p.cat === 'Generator')
+    const others = filtered.filter(p => p.source !== 'generator' || p.cat !== 'Generator')
+    others.forEach(p => list.appendChild(pbBuildParticleChip(p, t)))
+    if (genPs.length) {
+      list.style.display = 'block'
+      const swatchGrid = document.createElement('div')
+      swatchGrid.className = 'pb-swatch-grid'
+      genPs.forEach(p => {
+        const item = document.createElement('div')
+        item.className = 'pb-swatch-item'
+        item.dataset.particleId = p.id
+        item.dataset.particleType = p.type
+        item.title = p.text
+        // Parse two colours from the text (e.g. "red and blue")
+        const parts = p.text.split(' and ')
+        const swatch = document.createElement('div')
+        swatch.className = 'pb-swatch-preview'
+        if (parts.length >= 2) {
+          swatch.style.background = `linear-gradient(135deg, ${parts[0].trim()} 50%, ${parts[1].trim()} 50%)`
+        } else {
+          swatch.style.background = p.text
+        }
+        const label = document.createElement('span')
+        label.className = 'pb-swatch-label'
+        label.textContent = p.text
+        item.appendChild(swatch)
+        item.appendChild(label)
+        swatchGrid.appendChild(item)
+      })
+      list.appendChild(swatchGrid)
+      return true
+    }
+    return others.length > 0 ? true : false
+  }
+
+  // Material — Natural / Industrial / Exotic sections
+  if (typeKey === 'material' && !query) {
+    const genPs  = filtered.filter(p => p.source === 'generator')
+    const others = filtered.filter(p => p.source !== 'generator')
+    others.forEach(p => list.appendChild(pbBuildParticleChip(p, t)))
+    if (genPs.length) {
+      list.style.cssText = 'display:block;padding:0;'
+      Object.entries(MATERIAL_GROUPS).forEach(([secName, texts]) => {
+        const secPs = genPs.filter(p => texts.includes(p.text))
+        if (!secPs.length) return
+        const secKey = `material/${secName}`
+        const isOpen = !(pbSubGroupCollapsed[secKey] ?? false)
+        const wrap = document.createElement('div')
+        wrap.className = 'pb-sub-group'
+        const hdr = document.createElement('div')
+        hdr.className = 'pb-sub-group-hdr'
+        hdr.innerHTML = `<span class="pb-sub-group-name">${secName}</span><span class="pb-sub-group-count">${secPs.length}</span><span class="pb-sub-group-arrow ${isOpen?'open':''}">▾</span>`
+        const body2 = document.createElement('div')
+        body2.className = 'pb-sub-group-body' + (isOpen ? '' : ' collapsed')
+        const chipRow = document.createElement('div')
+        chipRow.className = 'pb-particles'
+        chipRow.style.padding = '8px 10px'
+        secPs.forEach(p => chipRow.appendChild(pbBuildParticleChip(p, t)))
+        body2.appendChild(chipRow)
+        hdr.onclick = () => {
+          const nowOpen = !body2.classList.contains('collapsed')
+          body2.classList.toggle('collapsed', nowOpen)
+          hdr.querySelector('.pb-sub-group-arrow').classList.toggle('open', !nowOpen)
+          pbSubGroupCollapsed[secKey] = nowOpen
+        }
+        wrap.appendChild(hdr); wrap.appendChild(body2)
+        list.appendChild(wrap)
+      })
+      return true
+    }
+    return others.length > 0 ? true : false
+  }
+
+  // Reference — compact alphabetical chip grid
+  if (typeKey === 'reference' && !query) {
+    const genPs  = filtered.filter(p => p.source === 'generator').sort((a,b) => a.text.localeCompare(b.text))
+    const others = filtered.filter(p => p.source !== 'generator')
+    others.forEach(p => list.appendChild(pbBuildParticleChip(p, t)))
+    if (genPs.length) {
+      const refGrid = document.createElement('div')
+      refGrid.className = 'pb-ref-grid'
+      genPs.forEach(p => {
+        const chip = document.createElement('span')
+        chip.className = 'pb-ref-chip'
+        chip.style.setProperty('--tc', t.color)
+        chip.dataset.particleId = p.id
+        chip.dataset.particleType = p.type
+        chip.textContent = p.text
+        chip.title = p.text
+        refGrid.appendChild(chip)
+      })
+      list.appendChild(refGrid)
+      return true
+    }
+    return others.length > 0 ? true : false
+  }
+
+  return false  // not handled — use generic renderer
+}
+
 const pbSubGroupCollapsed = {}  // groupKey → bool
 
 function pbBuildParticleChip(p, t) {
@@ -8351,16 +9367,254 @@ function pbBuildSubGroup(name, particles, t, defaultOpen = false, key = null) {
   return wrap
 }
 
+// ── FORMULA STATE ─────────────────────────────────────────────────
+// Formula entries: { uid, particleId } | { uid, isText:true, text:'' }
+let pbReplaceMode = null   // { uid, typeKey } — chip being replaced
+let pbInsertMode  = false  // true when formula has focus, particles insert at cursor
+let pbSavedRange  = null   // saved selection range for insertion
+
 function pbAddToFormula(particle) {
-  pbFormula.push({ uid: pbNextUid++, particleId: particle.id })
-  pbRenderFormula()
+  if (pbReplaceMode) {
+    // Replace the chip being swapped
+    pbDoReplace(particle)
+    return
+  }
+  if (pbInsertMode && pbSavedRange) {
+    // Insert at saved cursor position inside the formula
+    pbInsertParticleAtRange(particle, pbSavedRange)
+    pbSavedRange = null
+    pbInsertMode = false
+    pbSyncFormulaFromDOM()
+    pbUpdateBottomBar()
+    return
+  }
+  // Default: append to end
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  if (!bar) return
+  // Remove placeholder
+  bar.querySelector('.pb-formula-ph')?.remove()
+  // Insert chip then sync
+  const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: particle.id }, particle)
+  bar.appendChild(chip)
+  pbSyncFormulaFromDOM()
   pbUpdateBottomBar()
 }
 
 function pbRemoveFromFormula(uid) {
-  pbFormula = pbFormula.filter(f => f.uid !== uid)
-  pbRenderFormula()
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  if (!bar) return
+  const chip = bar.querySelector(`[data-uid="${uid}"]`)
+  if (chip) chip.remove()
+  pbSyncFormulaFromDOM()
   pbUpdateBottomBar()
+  pbShowPlaceholderIfEmpty(bar)
+}
+
+// Sync DOM → pbFormula array (called after any DOM mutation)
+function pbSyncFormulaFromDOM() {
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  if (!bar) return
+  const newFormula = []
+  bar.childNodes.forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.textContent
+      if (t) newFormula.push({ uid: pbNextUid++, isText: true, text: t })
+    } else if (node.nodeType === Node.ELEMENT_NODE && node.dataset.uid) {
+      const uid = parseInt(node.dataset.uid)
+      const pid = parseInt(node.dataset.particleId)
+      if (!isNaN(pid)) newFormula.push({ uid, particleId: pid })
+    }
+  })
+  pbFormula = newFormula
+}
+
+function pbShowPlaceholderIfEmpty(bar) {
+  if (!bar) return
+  const hasContent = [...bar.childNodes].some(n =>
+    (n.nodeType === Node.TEXT_NODE && n.textContent.trim()) ||
+    (n.nodeType === Node.ELEMENT_NODE && n.dataset.uid)
+  )
+  if (!hasContent) {
+    bar.innerHTML = '<span class="pb-formula-ph" contenteditable="false">Click particles below to build your prompt…</span>'
+  }
+}
+
+// Build a chip DOM element from a formula entry + particle
+function pbMakeChipEl(entry, particle) {
+  const t = PB_TYPES.find(x => x.key === particle.type)
+  const chip = document.createElement('span')
+  chip.className = 'pb-formula-chip'
+  chip.contentEditable = 'false'
+  chip.dataset.uid = entry.uid
+  chip.dataset.particleId = particle.id
+  if (t) chip.style.setProperty('--tc', t.color)
+  chip.title = `${t?.label || particle.type} · ${particle.cat || ''}\nClick to replace`
+
+  const textSpan = document.createElement('span')
+  textSpan.className = 'pfc-text'
+  textSpan.textContent = particle.text
+  chip.appendChild(textSpan)
+
+  const rm = document.createElement('span')
+  rm.className = 'pfc-rm'
+  rm.contentEditable = 'false'
+  rm.textContent = '×'
+  rm.title = 'Remove'
+  const doRemove = e => { e.stopPropagation(); e.preventDefault(); pbRemoveFromFormula(entry.uid) }
+  rm.addEventListener('click', doRemove)
+  rm.addEventListener('touchend', doRemove, { passive: false })
+  chip.appendChild(rm)
+
+  // Tap chip body (not ×) = enter replace mode
+  chip.addEventListener('click', e => {
+    if (e.target === rm) return
+    e.preventDefault()
+    pbStartReplace(entry.uid, particle.type)
+  })
+
+  return chip
+}
+
+// Insert a chip span at a saved range position
+function pbInsertParticleAtRange(particle, range) {
+  const uid = pbNextUid++
+  const chip = pbMakeChipEl({ uid, particleId: particle.id }, particle)
+  range.deleteContents()
+  range.insertNode(chip)
+  // Place cursor after the chip
+  const newRange = document.createRange()
+  newRange.setStartAfter(chip)
+  newRange.collapse(true)
+  const sel = window.getSelection()
+  sel.removeAllRanges()
+  sel.addRange(newRange)
+}
+
+// ── REPLACE MODE ──────────────────────────────────────────────────
+function pbStartReplace(uid, typeKey) {
+  pbReplaceMode = { uid, typeKey }
+  // Highlight the replacing chip
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  bar?.querySelectorAll('.pb-formula-chip').forEach(c => {
+    c.classList.toggle('pfc-replacing', c.dataset.uid == uid)
+  })
+  // Dim all type blocks except the target type; add cancel button to target
+  const grid = document.getElementById('pbGrid')
+  if (!grid) return
+  grid.querySelectorAll('.pb-type-block').forEach(block => {
+    const isTarget = block.id === 'pbt_' + typeKey
+    block.classList.toggle('pb-replace-active', isTarget)
+    block.classList.toggle('pb-replace-dimmed', !isTarget)
+    if (isTarget) {
+      // Add cancel X if not already there
+      if (!block.querySelector('.pb-replace-cancel')) {
+        const hdr = block.querySelector('.pb-type-header')
+        if (hdr) {
+          const cancel = document.createElement('button')
+          cancel.className = 'pb-replace-cancel'
+          cancel.textContent = '✕ CANCEL'
+          cancel.title = 'Cancel replace'
+          cancel.onclick = e => { e.stopPropagation(); pbEndReplace() }
+          hdr.appendChild(cancel)
+        }
+      }
+      // Ensure expanded
+      if (pbCollapsed[typeKey]) {
+        pbCollapsed[typeKey] = false
+        pbRenderLibrary()
+        pbStartReplace(uid, typeKey)  // re-apply after render
+        return
+      }
+      // Scroll to block
+      setTimeout(() => block.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50)
+    }
+  })
+}
+
+function pbEndReplace() {
+  pbReplaceMode = null
+  // Clear chip highlights
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  bar?.querySelectorAll('.pb-formula-chip').forEach(c => c.classList.remove('pfc-replacing'))
+  // Clear grid dim state
+  document.getElementById('pbGrid')?.querySelectorAll('.pb-type-block').forEach(block => {
+    block.classList.remove('pb-replace-active', 'pb-replace-dimmed')
+    block.querySelector('.pb-replace-cancel')?.remove()
+  })
+}
+
+function pbDoReplace(particle) {
+  const { uid } = pbReplaceMode
+  pbEndReplace()
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  const oldChip = bar?.querySelector(`[data-uid="${uid}"]`)
+  if (!oldChip) return
+  const newEntry = { uid: parseInt(oldChip.dataset.uid), particleId: particle.id }
+  const newChip = pbMakeChipEl(newEntry, particle)
+  oldChip.replaceWith(newChip)
+  pbSyncFormulaFromDOM()
+  pbUpdateBottomBar()
+}
+
+// ── INSERT MODE (cursor in formula) ───────────────────────────────
+function pbFormulaFocus() {
+  pbInsertMode = true
+}
+function pbFormulaBlur() {
+  // Small delay so a particle click can read pbSavedRange before insert mode clears
+  setTimeout(() => {
+    if (!pbReplaceMode) pbInsertMode = false
+  }, 300)
+}
+function pbFormulaSaveRange() {
+  const sel = window.getSelection()
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0)
+    // Only save if range is inside the formula div
+    const bar = El.pbFormula || document.getElementById('pbFormula')
+    if (bar && bar.contains(range.commonAncestorContainer)) {
+      pbSavedRange = range.cloneRange()
+    }
+  }
+}
+
+function pbRenderFormula() {
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  if (!bar) return
+
+  // Preserve any ongoing replace mode state
+  const wasReplacing = pbReplaceMode
+
+  bar.innerHTML = ''
+
+  if (!pbFormula.length) {
+    bar.innerHTML = '<span class="pb-formula-ph" contenteditable="false">Click particles below or type to build your prompt…</span>'
+    return
+  }
+
+  pbFormula.forEach(entry => {
+    if (entry.isText) {
+      bar.appendChild(document.createTextNode(entry.text))
+    } else {
+      const p = pbGetParticles().find(x => x.id === entry.particleId)
+      if (p) bar.appendChild(pbMakeChipEl(entry, p))
+    }
+  })
+
+  // Re-apply replace highlight if we were mid-replace
+  if (wasReplacing) pbStartReplace(wasReplacing.uid, wasReplacing.typeKey)
+}
+
+// pbRenderOutput is an alias
+function pbRenderOutput() { pbRenderFormula() }
+
+function pbGetPlainText() {
+  // If formula is non-empty in DOM, sync first
+  pbSyncFormulaFromDOM()
+  return pbFormula.map(entry => {
+    if (entry.isText) return entry.text
+    return pbGetParticles().find(x => x.id === entry.particleId)?.text || ''
+  }).join('').trim()
 }
 
 function pbUpdateBottomBar() {
@@ -8429,88 +9683,9 @@ function pbInitBottomObserver() {
   pbBottomObserver.observe(wrap)
 }
 
-function pbRenderFormula() {
-  const bar = El.pbFormula || document.getElementById('pbFormula')
-  if (!bar) return
-  bar.innerHTML = ''
+// pbRandomiseAll, pbClearFormula, pbCopyOutput below
 
-  if (!pbFormula.length) {
-    const ph = document.createElement('span')
-    ph.className = 'pb-formula-ph'
-    ph.textContent = 'Click particles below to build your prompt…'
-    bar.appendChild(ph)
-    return
-  }
-
-  pbFormula.forEach((entry, idx) => {
-    const p = pbGetParticles().find(x => x.id === entry.particleId)
-    const t = p ? PB_TYPES.find(x => x.key === p.type) : null
-    if (!p || !t) return
-
-    if (idx > 0) {
-      const sep = document.createElement('span')
-      sep.className = 'pb-formula-sep'
-      sep.textContent = PB_SEP
-      bar.appendChild(sep)
-    }
-
-    const chip = document.createElement('div')
-    chip.className = 'pb-formula-chip'
-    chip.style.setProperty('--tc', t.color)
-    chip.title     = p.text
-    chip.draggable = true
-    chip.dataset.uid = entry.uid
-
-    // Text — no type label
-    const textSpan = document.createElement('span')
-    textSpan.className = 'pfc-text'
-    textSpan.textContent = pbTrunc(p.text, 32)
-    chip.appendChild(textSpan)
-
-    // × remove — works on both mouse and touch
-    const rm = document.createElement('span')
-    rm.className = 'pfc-rm'
-    rm.textContent = '×'
-    rm.draggable = false
-    const doRemove = e => { e.stopPropagation(); e.preventDefault(); pbRemoveFromFormula(entry.uid) }
-    rm.addEventListener('click',       doRemove)
-    rm.addEventListener('touchend',    doRemove, { passive: false })
-    rm.addEventListener('pointerdown', e => e.stopPropagation())
-    chip.appendChild(rm)
-
-    // Drag to reorder
-    chip.addEventListener('dragstart', e => {
-      pbDragIdx = idx
-      e.dataTransfer.effectAllowed = 'move'
-    })
-    chip.addEventListener('dragover', e => {
-      e.preventDefault()
-      chip.classList.add('drag-over')
-    })
-    chip.addEventListener('dragleave', () => chip.classList.remove('drag-over'))
-    chip.addEventListener('drop', e => {
-      e.preventDefault()
-      chip.classList.remove('drag-over')
-      if (pbDragIdx === null || pbDragIdx === idx) return
-      const moved = pbFormula.splice(pbDragIdx, 1)[0]
-      pbFormula.splice(idx, 0, moved)
-      pbDragIdx = null
-      pbRenderFormula()
-    })
-
-    bar.appendChild(chip)
-  })
-}
-
-// pbRenderOutput is now an alias — formula IS the output
-function pbRenderOutput() { pbRenderFormula() }
-
-function pbGetPlainText() {
-  return pbFormula
-    .map(entry => pbGetParticles().find(x => x.id === entry.particleId)?.text || '')
-    .filter(Boolean)
-    .join(` ${PB_SEP} `)
-}
+// pbRandomiseAll, pbClearFormula, pbCopyOutput below
 
 function pbCopyOutput() {
   const text = pbGetPlainText()
@@ -8527,17 +9702,19 @@ function pbCopyOutput() {
 
 // ── FORMULA CONTROLS ───────────────────────────────────────────────
 function pbRandomiseAll() {
+  pbEndReplace()
   pbFormula = []
   PB_TYPES.forEach(t => {
     const pool = pbGetParticles().filter(p => p.type === t.key)
     if (pool.length) pbFormula.push({ uid: pbNextUid++, particleId: pool[Math.floor(Math.random()*pool.length)].id })
   })
-  pbRenderFormula(); pbRenderOutput(); pbUpdateBottomBar()
+  pbRenderFormula(); pbUpdateBottomBar()
 }
 
 function pbClearFormula() {
+  pbEndReplace()
   pbFormula = []
-  pbRenderFormula(); pbRenderOutput(); pbUpdateBottomBar()
+  pbRenderFormula(); pbUpdateBottomBar()
 }
 
 // ── GLOBAL ADD FORM ────────────────────────────────────────────────
@@ -10645,20 +11822,6 @@ function pbAddCustomColour() {
 // ── DRAWER TOGGLE ──────────────────────────────────────────────────
 let pbDrawerOpen = true
 
-function pbToggleDrawer() {
-  pbDrawerOpen = !pbDrawerOpen
-  const pane   = document.getElementById('pbLeftPane')
-  const toggle = document.getElementById('pbDrawerToggle')
-  if (!pane || !toggle) return
-  pane.classList.toggle('collapsed', !pbDrawerOpen)
-  toggle.textContent = pbDrawerOpen ? '‹‹' : '›› '
-  toggle.title = pbDrawerOpen ? 'Collapse panel' : 'Expand panel'
-  // Flip border side
-  toggle.style.borderLeft  = pbDrawerOpen ? 'none' : '1px solid var(--border)'
-  toggle.style.borderRight = pbDrawerOpen ? '1px solid var(--border)' : 'none'
-  toggle.style.borderRadius = pbDrawerOpen ? '0 4px 4px 0' : '4px 0 0 4px'
-}
-
 function pbSetAllCollapsed(collapse) {
   PB_TYPES.forEach(t => { pbCollapsed[t.key] = collapse })
   document.getElementById('pbExpandAllBtn')?.classList.toggle('active', !collapse)
@@ -10671,11 +11834,6 @@ function pbSyncExpandToggle() {
   const allCollapsed = PB_TYPES.every(t => pbCollapsed[t.key])
   document.getElementById('pbExpandAllBtn')?.classList.toggle('active', !allCollapsed)
   document.getElementById('pbCollapseAllBtn')?.classList.toggle('active', allCollapsed)
-}
-
-function pbSetSubjectMode(mode) {
-  pbSubjectMode = mode
-  pbRenderLibrary()
 }
 
 // pbInitDone flag declared at top of builder section
@@ -10870,86 +12028,6 @@ function pbUpdateSelStatus(msg, isActive) {
   el.className = 'pb-selection-status' + (isActive !== false && msg ? ' active' : '')
 }
 
-function pbOnSelection() {} // no-op — kept for safety, not used
-
-function pbClearTags() {
-  pbTokens.forEach(tok => { tok.tagUid = null })
-  pbPendingIdx = null
-  pbTagged = []
-  pbRenderAnnotated()
-  pbRenderTaggedList()
-  pbUpdateSelStatus('All tags cleared')
-}
-
-function pbRenderTaggedList() {
-  const section = document.getElementById('pbTaggedSection')
-  const list    = document.getElementById('pbTaggedList')
-  const count   = document.getElementById('pbTaggedCount')
-  const saveBtn = document.getElementById('pbSaveTaggedBtn')
-  if (!list) return
-
-  if (!pbTagged.length) {
-    section.style.display = 'none'
-    saveBtn.disabled = true
-    return
-  }
-
-  section.style.display = 'block'
-  saveBtn.disabled = false
-  count.textContent = `(${pbTagged.length})`
-  list.innerHTML = ''
-
-  pbTagged.forEach(item => {
-    const t = PB_TYPES.find(x => x.key === item.type)
-    if (!t) return
-
-    const row = document.createElement('div')
-    row.className = 'pb-tagged-item'
-    row.style.background = pbHexAlpha(t.color, 0.08)
-    row.style.borderColor = pbHexAlpha(t.color, 0.2)
-
-    // Type label
-    const typeLabel = document.createElement('div')
-    typeLabel.className = 'pb-tagged-item-type'
-    typeLabel.style.color = t.color
-    typeLabel.style.setProperty('--tc', t.color)
-    typeLabel.innerHTML = `<span class="pb-type-pick-dot"></span>${t.label.toUpperCase()}`
-
-    // Category select
-    const catWrap = document.createElement('div')
-    catWrap.className = 'pb-tagged-item-cat'
-    const catSel = document.createElement('select')
-    const allCats = [...new Set(pbGetParticles().filter(p=>p.type===item.type).map(p=>p.cat).concat(t.cats))]
-    allCats.forEach(c => {
-      const opt = document.createElement('option')
-      opt.value = c; opt.textContent = c
-      opt.selected = c === item.cat
-      catSel.appendChild(opt)
-    })
-    catSel.onchange = () => { item.cat = catSel.value }
-    catWrap.appendChild(catSel)
-
-    // Text preview
-    const textEl = document.createElement('div')
-    textEl.className = 'pb-tagged-item-text'
-    textEl.textContent = item.text.length > 60 ? item.text.slice(0,60)+'…' : item.text
-    textEl.title = item.text
-
-    // Delete
-    const del = document.createElement('span')
-    del.className = 'pb-tagged-item-del'
-    del.textContent = '×'
-    del.title = 'Remove this tagged segment'
-    del.onclick = () => pbRemoveTagFromToken(item.uid)
-
-    row.appendChild(typeLabel)
-    row.appendChild(catWrap)
-    row.appendChild(textEl)
-    row.appendChild(del)
-    list.appendChild(row)
-  })
-}
-
 function pbClearTags() {
   // Restore annotated div to plain text
   const annotated = document.getElementById('pbAnnotated')
@@ -10958,53 +12036,58 @@ function pbClearTags() {
   pbRenderTaggedList()
 }
 
-// ── EDIT IN PROMPT LAB ────────────────────────────────────────────
-// Tracks which library prompt is being edited
-window._pbEditingFavId = null
+// Build a mixed formula from prompt text + particle array
+// Finds particle texts within the full prompt, creates text entries for gaps
+function pbBuildFormulaFromMixed(promptText, particles) {
+  if (!particles || !particles.length) {
+    return [{ uid: pbNextUid++, isText: true, text: promptText }]
+  }
+  const formula = []
+  let remaining = promptText
+  particles.forEach(p => {
+    const idx = remaining.indexOf(p.text)
+    if (idx > 0) {
+      formula.push({ uid: pbNextUid++, isText: true, text: remaining.slice(0, idx) })
+    }
+    // Find or create particle in library
+    let existing = pbGetParticles().find(x => x.id === p.id && x.text === p.text)
+    if (!existing) {
+      const temp = { id: p.id, type: p.type, cat: p.cat, text: p.text }
+      pbLibraries[pbActiveLib].particles.push(temp)
+      existing = temp
+    }
+    formula.push({ uid: pbNextUid++, particleId: existing.id })
+    remaining = idx >= 0 ? remaining.slice(idx + p.text.length) : remaining
+  })
+  if (remaining.trim()) {
+    formula.push({ uid: pbNextUid++, isText: true, text: remaining })
+  }
+  return formula
+}
 
 function editInPromptLab(f) {
   window._pbEditingFavId = f.id
   switchView('builder')
   const init = () => {
-    // Clear current formula
-    pbFormula = []
+    pbEndReplace()
+    const promptText = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
 
     if (f.particles && f.particles.length) {
-      // Prompt has particle structure — load directly into formula
-      f.particles.forEach(p => {
-        // Try to find the particle in the current library
-        let existing = pbGetParticles().find(x => x.id === p.id)
-        if (!existing) {
-          // Particle not in current library — create a temporary one in active library
-          const temp = { id: p.id, type: p.type, cat: p.cat, text: p.text }
-          pbLibraries[pbActiveLib].particles.push(temp)
-          existing = temp
-        }
-        pbFormula.push({ uid: pbNextUid++, particleId: existing.id })
-      })
-      pbRenderLibrary()
-      pbRenderFormula()
-      pbRenderOutput()
-      pbUpdateBottomBar()
+      pbFormula = pbBuildFormulaFromMixed(promptText, f.particles)
     } else {
-      // No particles — open the import modal pre-populated with the text
-      const text = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
-      pbOpenImport()
-      setTimeout(() => {
-        const ta = document.getElementById('pbImportTextarea')
-        if (ta) { ta.value = text; ta.dispatchEvent(new Event('input')) }
-      }, 100)
+      pbFormula = [{ uid: pbNextUid++, isText: true, text: promptText }]
     }
+    pbRenderLibrary()
+    pbRenderFormula()
+    pbUpdateBottomBar()
 
-    // Show edit banner
     const banner = document.getElementById('pbEditBanner')
     const titleEl = document.getElementById('pbEditBannerTitle')
     const saveBtn = document.getElementById('pbSaveBtn')
     if (banner) banner.style.display = 'flex'
-    if (titleEl) titleEl.textContent = f.title || f.promptOnly?.slice(0, 60) || 'Untitled prompt'
+    if (titleEl) titleEl.textContent = f.title || promptText.slice(0, 60) || 'Untitled prompt'
     if (saveBtn) saveBtn.textContent = '♥ SAVE EDIT'
   }
-
   if (pbInitDone) init()
   else setTimeout(init, 400)
 }
@@ -11054,16 +12137,14 @@ function sendToParticleLab(f) {
   }, pbInitDone ? 0 : 400)
 }
 
-function sendToParticleLabById(id) {
-  const f = favourites.find(x => x.id === id)
-  if (f) sendToParticleLab(f)
-}
-
 function pbSaveToLibrary() {
   const text = pbGetPlainText()
   if (!text) return
-  // Resolve current formula to particle objects for library card display
+  // Sync DOM → formula before saving
+  pbSyncFormulaFromDOM()
+  // Particle snapshot (exclude plain text entries)
   const particles = pbFormula
+    .filter(e => e.particleId)
     .map(e => pbGetParticles().find(x => x.id === e.particleId))
     .filter(Boolean)
     .map(p => ({ id: p.id, type: p.type, cat: p.cat, text: p.text }))
@@ -11144,8 +12225,123 @@ function pbSaveTagged() {
     pbCloseImport()
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PROMPT LAB WALKTHROUGH TOUR
+// ═══════════════════════════════════════════════════════════════════
+
+const TOUR_STEPS = [
+  {
+    title: 'ASSEMBLED PROMPT',
+    body: 'This is your prompt canvas. Type freely or click particles below to build it. Particle chips appear inline — tap a chip to replace it.',
+    target: 'pbAssembledWrap',
+    pos: 'below',
+  },
+  {
+    title: 'PARTICLE LIBRARY',
+    body: 'Each of the 11 coloured blocks is a particle type — Subject, Form, Action and so on. Click any chip to add it to your prompt instantly.',
+    target: 'pbGrid',
+    pos: 'above',
+  },
+  {
+    title: 'REPLACE A PARTICLE',
+    body: 'Tap any coloured chip in your prompt to enter replace mode. That particle\'s category lights up below — pick a replacement or press ✕ to cancel.',
+    target: 'pbFormula',
+    pos: 'below',
+  },
+  {
+    title: 'CREATOR MODE',
+    body: 'Switch to ⚡ CREATOR for a cleaner view — no add/edit controls, just particles ready to use. Great for building prompts quickly.',
+    target: 'pbModeToggle',
+    pos: 'below',
+  },
+  {
+    title: 'SAVE YOUR WORK',
+    body: 'When your prompt looks good, hit ♥ SAVE EDIT to save it to the Library — or save as a new prompt. Your particle structure is preserved for easy editing later.',
+    target: 'pbSaveBtn',
+    pos: 'above',
+  },
+]
+
+let tourStep = 0
+let tourActive = false
+let tourHighlighted = null
+
+function tourStart() {
+  if (lsLoad('bm_tour_done')) return
+  tourStep = 0
+  tourActive = true
+  document.getElementById('tourOverlay').style.display = 'block'
+  tourShow()
+}
+
+function tourShow() {
+  const step = TOUR_STEPS[tourStep]
+  if (!step) { tourEnd(); return }
+
+  document.getElementById('tourTitle').textContent = step.title
+  document.getElementById('tourBody').textContent = step.body
+  document.getElementById('tourStepBadge').textContent = `${tourStep + 1} / ${TOUR_STEPS.length}`
+  document.getElementById('tourNextBtn').textContent = tourStep < TOUR_STEPS.length - 1 ? 'NEXT →' : '✓ DONE'
+
+  // Remove previous highlight
+  if (tourHighlighted) { tourHighlighted.classList.remove('tour-highlight'); tourHighlighted = null }
+
+  // Highlight target element
+  const target = document.getElementById(step.target)
+  const spotlight = document.getElementById('tourSpotlight')
+  const card = document.getElementById('tourCard')
+
+  if (target) {
+    target.classList.add('tour-highlight')
+    tourHighlighted = target
+    const rect = target.getBoundingClientRect()
+    const pad = 8
+    spotlight.style.left   = (rect.left - pad) + 'px'
+    spotlight.style.top    = (rect.top - pad) + 'px'
+    spotlight.style.width  = (rect.width + pad * 2) + 'px'
+    spotlight.style.height = (rect.height + pad * 2) + 'px'
+
+    // Position card above or below target
+    const cardW = 300, cardH = 180
+    if (step.pos === 'below') {
+      card.style.top  = Math.min(rect.bottom + 16, window.innerHeight - cardH - 16) + 'px'
+    } else {
+      card.style.top  = Math.max(rect.top - cardH - 16, 16) + 'px'
+    }
+    card.style.left = Math.min(Math.max(rect.left, 16), window.innerWidth - cardW - 16) + 'px'
+  } else {
+    // No target — centre card
+    spotlight.style.width = '0'; spotlight.style.height = '0'
+    card.style.top  = '50%'; card.style.left = '50%'
+    card.style.transform = 'translate(-50%,-50%)'
+  }
+}
+
+function tourNext() {
+  tourStep++
+  if (tourStep >= TOUR_STEPS.length) { tourEnd(); return }
+  tourShow()
+}
+
+function tourSkip() { tourEnd() }
+
+function tourEnd() {
+  tourActive = false
+  if (tourHighlighted) { tourHighlighted.classList.remove('tour-highlight'); tourHighlighted = null }
+  document.getElementById('tourOverlay').style.display = 'none'
+  lsSave('bm_tour_done', true)
+}
+
+// Trigger tour when Prompt Lab is opened for the first time
+const _origSwitchView = switchView
+function switchView(view, pushState) {
+  _origSwitchView(view, pushState)
+  if (view === 'builder' && !lsLoad('bm_tour_done') && !tourActive) {
+    setTimeout(tourStart, 600)
+  }
+}
 </script>
-<!-- ═══════════════════ SYNC GATE MODAL ═══════════════════ -->
 <div id="syncGateModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
@@ -11227,6 +12423,20 @@ function pbSaveTagged() {
         <input type="file" id="zipFileInput" accept=".zip" style="display:none;" onchange="handleZipFile(this.files[0])">
       </div>
       <div id="zipImportStatus" style="margin-top:12px;font-size:11px;color:var(--muted);text-align:center;min-height:24px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ PROMPT LAB WALKTHROUGH ══════════════════ -->
+<div id="tourOverlay" style="display:none;position:fixed;inset:0;z-index:30000;pointer-events:none;">
+  <div id="tourSpotlight" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,.72);border-radius:8px;transition:all .35s ease;pointer-events:none;"></div>
+  <div id="tourCard" class="tour-card" style="position:absolute;pointer-events:all;">
+    <div class="tour-step-badge" id="tourStepBadge">1 / 5</div>
+    <div class="tour-title" id="tourTitle"></div>
+    <div class="tour-body" id="tourBody"></div>
+    <div class="tour-actions">
+      <button class="btn btn-ghost" onclick="tourSkip()" style="font-size:11px;">SKIP TOUR</button>
+      <button class="btn btn-primary" onclick="tourNext()" id="tourNextBtn" style="font-size:11px;">NEXT →</button>
     </div>
   </div>
 </div>
