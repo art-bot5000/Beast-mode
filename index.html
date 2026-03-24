@@ -550,34 +550,40 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 .fav-restore:hover { background:color-mix(in srgb,var(--accent) 15%,transparent); }
 
 /* PRESET CATEGORY SELECTS */
-.preset-cat-select {
-  flex:1;min-width:0;
-  padding:7px 28px 7px 10px;cursor:pointer;border-radius:var(--radius);
+/* Custom preset dropdown */
+.preset-dd-wrap {
+  position:relative;flex:1;min-width:0;
+}
+.preset-dd-btn {
+  width:100%;padding:7px 28px 7px 10px;cursor:pointer;border-radius:var(--radius);
   font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;
   letter-spacing:1px;border:1px solid var(--border);
-  background:var(--surface2);
-  color:var(--muted);
-  transition:border-color .15s, color .15s;
-  appearance:none;-webkit-appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 8px center;
-  width:100%;
+  background:var(--surface2);color:var(--muted);
+  transition:border-color .15s,color .15s;
+  display:flex;align-items:center;justify-content:space-between;gap:4px;
+  text-align:left;white-space:nowrap;overflow:hidden;
 }
-.preset-cat-select:hover { border-color:var(--accent);color:var(--accent); }
-.preset-cat-select.has-active {
-  border-color:var(--accent);color:var(--accent);
-  background-color:var(--surface);
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
+.preset-dd-btn:hover { border-color:var(--accent);color:var(--accent); }
+.preset-dd-btn.has-active { border-color:var(--accent);color:var(--accent); }
+.preset-dd-label { flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0; }
+.preset-dd-arrow { flex-shrink:0;font-size:12px;opacity:.6; }
+.preset-dd-panel {
+  position:fixed;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:9999;overflow:hidden;
+  min-width:140px;
 }
-.preset-cat-select:focus { outline:none;border-color:var(--accent); }
-body.light .preset-cat-select {
-  background-color:#ffffff;
+.preset-dd-item {
+  display:block;width:100%;padding:9px 14px;text-align:left;
+  font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  letter-spacing:.5px;border:none;background:transparent;cursor:pointer;
+  color:var(--muted);transition:background .1s,color .1s;
 }
-body.light .preset-cat-select.has-active {
-  background-color:#ffffff;
-  border-color:var(--accent);
-  color:var(--accent);
-}
+.preset-dd-item:hover { background:var(--surface2);color:var(--text); }
+.preset-dd-item.active { color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent); }
+body.light .preset-dd-btn { background:#ffffff; }
+body.light .preset-dd-panel { background:#ffffff;box-shadow:0 8px 24px rgba(0,0,0,.15); }
+body.light .preset-dd-item:hover { background:var(--surface2); }
 
 
 /* STYLE EDITOR */
@@ -5058,10 +5064,28 @@ function setMode(mode){
 }
 
 // Close all preset dropdowns
+function closeAllPresetDropdowns() {
+  document.querySelectorAll('.preset-dd-panel.open').forEach(p => {
+    p.classList.remove('open')
+    p.style.display = 'none'
+  })
+}
+
 function renderPresetRow() {
   const row = document.getElementById('presetRow')
   if (!row) return
   row.innerHTML = ''
+  // Remove any old portaled panels
+  document.querySelectorAll('.preset-dd-panel').forEach(p => p.remove())
+
+  if (!window._presetDdListener) {
+    window._presetDdListener = true
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.preset-dd-btn')) closeAllPresetDropdowns()
+    })
+    window.addEventListener('scroll', closeAllPresetDropdowns, true)
+    window.addEventListener('resize', closeAllPresetDropdowns)
+  }
 
   PRESET_CATEGORIES.forEach(cat => {
     const presets = cat.id === 'custom'
@@ -5071,32 +5095,55 @@ function renderPresetRow() {
     if (presets.length === 0) return
 
     const catHasActive = presets.some(p => p.id === currentPreset)
+    const activePreset = presets.find(p => p.id === currentPreset)
 
-    const sel = document.createElement('select')
-    sel.className = 'preset-cat-select' + (catHasActive ? ' has-active' : '')
-    sel.title = cat.label
+    // Trigger button (stays in presetRow)
+    const btn = document.createElement('button')
+    btn.className = 'preset-dd-btn' + (catHasActive ? ' has-active' : '')
+    btn.type = 'button'
+    btn.style.cssText = 'flex:1;min-width:80px;max-width:140px;'
+    btn.innerHTML = `<span class="preset-dd-label">${catHasActive ? '▸ ' + activePreset.name : cat.label}</span><span class="preset-dd-arrow">▾</span>`
 
-    // Category label as first disabled option
-    const labelOpt = document.createElement('option')
-    labelOpt.value = ''
-    labelOpt.textContent = cat.label
-    labelOpt.disabled = true
-    labelOpt.selected = !catHasActive
-    sel.appendChild(labelOpt)
+    // Dropdown panel — portaled to body
+    const panel = document.createElement('div')
+    panel.className = 'preset-dd-panel'
+    panel.style.display = 'none'
+    document.body.appendChild(panel)
 
     presets.forEach(p => {
-      const opt = document.createElement('option')
-      opt.value = p.id
-      opt.textContent = (p.id === currentPreset ? '▸ ' : '') + p.name
-      opt.selected = p.id === currentPreset
-      sel.appendChild(opt)
+      const item = document.createElement('button')
+      item.type = 'button'
+      item.className = 'preset-dd-item' + (p.id === currentPreset ? ' active' : '')
+      item.textContent = p.name
+      item.onclick = e => {
+        e.stopPropagation()
+        setPreset(p.id)
+        closeAllPresetDropdowns()
+      }
+      panel.appendChild(item)
     })
 
-    sel.addEventListener('change', function() {
-      if (this.value) setPreset(this.value)
-    })
+    btn.onclick = e => {
+      e.stopPropagation()
+      const isOpen = panel.style.display === 'block'
+      closeAllPresetDropdowns()
+      if (!isOpen) {
+        // Position panel below the button using fixed coords
+        const rect = btn.getBoundingClientRect()
+        panel.style.position = 'fixed'
+        panel.style.top  = (rect.bottom + 4) + 'px'
+        panel.style.left = rect.left + 'px'
+        panel.style.minWidth = Math.max(rect.width, 140) + 'px'
+        panel.style.display = 'block'
+        // Flip above if not enough space below
+        const panelH = panel.offsetHeight || presets.length * 38
+        if (rect.bottom + panelH + 8 > window.innerHeight) {
+          panel.style.top = (rect.top - panelH - 4) + 'px'
+        }
+      }
+    }
 
-    row.appendChild(sel)
+    row.appendChild(btn)
   })
 }
 
