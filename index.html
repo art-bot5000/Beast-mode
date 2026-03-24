@@ -2860,18 +2860,24 @@ body.light .colourTuner { background:var(--surface2); }
 
     <!-- Global add form -->
     <div class="pb-add-form" id="pbAddForm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700;">// ADD PARTICLE</span>
+        <span id="pbClassifyHint" style="font-size:10px;letter-spacing:1.5px;color:var(--accent);font-weight:700;display:none;">⊛ AUTO-CLASSIFIED</span>
+      </div>
       <div class="pb-add-row">
         <div style="flex:2;min-width:180px;">
           <label class="pb-field-label">PARTICLE TEXT</label>
-          <input class="pb-input" id="pbAddText" placeholder="e.g. rain-soaked neon city streets…" onkeydown="if(event.key==='Enter')pbSaveParticle()">
+          <input class="pb-input" id="pbAddText" placeholder="e.g. rain-soaked neon city streets…"
+            onkeydown="if(event.key==='Enter')pbSaveParticle()"
+            oninput="pbClassifyDebounced()">
         </div>
         <div style="flex:1;min-width:120px;">
           <label class="pb-field-label">TYPE</label>
-          <select class="pb-input" id="pbAddType" onchange="pbUpdateCategorySelect()"></select>
+          <select class="pb-input" id="pbAddType" onchange="pbUpdateCategorySelect();pbClassifyHintClear()"></select>
         </div>
         <div style="flex:1;min-width:120px;">
           <label class="pb-field-label">CATEGORY</label>
-          <select class="pb-input" id="pbAddCategory"></select>
+          <select class="pb-input" id="pbAddCategory" onchange="pbClassifyHintClear()"></select>
         </div>
         <div style="display:flex;gap:6px;align-self:flex-end;">
           <button class="btn btn-primary" style="font-size:12px;padding:7px 14px;" onclick="pbSaveParticle()">SAVE</button>
@@ -10211,7 +10217,228 @@ function pbClearFormula() {
 function pbToggleAddForm() {
   const form = document.getElementById('pbAddForm')
   const open = form.classList.toggle('open')
-  if (open) document.getElementById('pbAddText')?.focus()
+  if (open) {
+    const inp = document.getElementById('pbAddText')
+    // Pre-fill with any selected text from the formula box
+    const bar = El.pbFormula || document.getElementById('pbFormula')
+    const sel = window.getSelection()
+    if (sel && !sel.isCollapsed && bar && bar.contains(sel.anchorNode)) {
+      inp.value = sel.toString().trim()
+      pbClassifyDebounced()
+    }
+    inp?.focus()
+  }
+}
+
+// ── LOCAL PARTICLE CLASSIFIER ─────────────────────────────────────
+// Scores text against keyword lists for each type — no API, fully offline
+
+const PB_TYPE_KEYWORDS = {
+  subject: {
+    weight: 1,
+    keywords: ['mech','creature','beast','insect','robot','drone','predator','warrior',
+      'soldier','pilot','exosuit','hybrid','machine','entity','organism','construct',
+      'golem','titan','colossus','spider','beetle','mantis','scorpion','dragon',
+      'wolf','shark','kaiju','xenomorph','android','cyborg','guardian'],
+    cats: {
+      'Mech':     ['mech','machine','robot','drone','construct','armor','suit','titan','colossus'],
+      'Creature': ['creature','beast','organism','predator','spider','beetle','mantis','dragon','wolf','shark'],
+      'Character':['pilot','soldier','warrior','exosuit','android','cyborg','guardian','entity'],
+    }
+  },
+  form: {
+    weight: 1,
+    keywords: ['chassis','frame','body','shell','carapace','plating','armor','armour',
+      'limbs','legs','arms','wings','tail','head','thorax','abdomen','exoskeleton',
+      'hydraulic','segmented','jointed','fused','layered','overlapping','reinforced',
+      'mandible','antenna','claw','talon','blade','spine','horn','structure'],
+    cats: {
+      'Structure': ['chassis','frame','body','thorax','abdomen','structure','hull'],
+      'Armour':    ['shell','carapace','plating','armor','armour','exoskeleton','reinforced','layered','overlapping'],
+      'Features':  ['mandible','antenna','claw','talon','blade','spine','horn','limbs','legs','wings','tail'],
+    }
+  },
+  action: {
+    weight: 1,
+    keywords: ['charging','hovering','stalking','striking','lunging','leaping',
+      'crawling','scuttling','flying','diving','coiled','rearing','crouching',
+      'poised','mid-leap','sprinting','climbing','launching','swooping','circling',
+      'stance','pose','display','attack','strike','defend','patrol','hunt'],
+    cats: {
+      'Combat':   ['striking','lunging','attack','strike','charging','mid-leap','battle','clashing'],
+      'Movement': ['hovering','stalking','crawling','scuttling','flying','diving','sprinting','climbing','swooping','circling','launching'],
+      'Pose':     ['stance','pose','display','coiled','rearing','crouching','poised'],
+    }
+  },
+  material: {
+    weight: 1,
+    keywords: ['titanium','steel','iron','carbon','fiber','alloy','ceramic','obsidian',
+      'chitin','bone','organic','bio','living','crystal','nano','plasma','chrome',
+      'composite','graphene','tungsten','silicon','polymer','resin','metal',
+      'natural','industrial','exotic','void','shadow','ghost','bioluminescent','keratin'],
+    cats: {
+      'Metal':    ['titanium','steel','iron','chrome','graphene','tungsten','alloy','metal','ferrofluid'],
+      'Organic':  ['chitin','bone','organic','bio','living','keratin','silk','venom','coral','bark'],
+      'Composite':['composite','ceramic','crystal','nano','polymer','resin','carbon','fiber','obsidian'],
+    }
+  },
+  colour: {
+    weight: 1,
+    keywords: ['black','white','red','blue','green','gold','silver','orange','purple',
+      'grey','gray','crimson','teal','cyan','violet','amber','bronze','copper',
+      'iridescent','neon','bioluminescent','metallic','matte','glossy','vivid',
+      'dark','pale','deep','toxic','volcanic','midnight','ghost','void'],
+    cats: {
+      'Monochrome':['black','white','grey','gray','silver','midnight','ghost','void','pale','shadow'],
+      'Vivid':     ['neon','bioluminescent','vivid','toxic','crimson','electric','violet','plasma','volcanic'],
+      'Natural':   ['amber','bronze','copper','gold','green','teal','rust','sand','ochre','blood'],
+    }
+  },
+  environment: {
+    weight: 1.2,
+    keywords: ['jungle','desert','ocean','arctic','volcanic','cave','city','urban',
+      'wasteland','ruins','swamp','forest','tundra','trench','asteroid','biome',
+      'megacity','underground','subterranean','alien','post-apocalyptic','flooded',
+      'irradiated','neon','fog','storm','atmosphere','landscape','terrain'],
+    cats: {
+      'Urban':   ['city','urban','megacity','neon','street','flooded','ruins','post-apocalyptic'],
+      'Natural': ['jungle','desert','ocean','arctic','volcanic','cave','swamp','forest','tundra','trench','underground','subterranean'],
+      'Alien':   ['alien','biome','asteroid','atmosphere','gas','irradiated','void'],
+    }
+  },
+  lighting: {
+    weight: 1.2,
+    keywords: ['light','lighting','glow','shadow','dark','bright','spotlight','backlight',
+      'silhouette','sunset','sunrise','moonlight','bioluminescent','neon','floodlight',
+      'aurora','lava','volcanic','fog','haze','diffused','dramatic','cinematic',
+      'golden hour','UV','fluorescence','eclipse','lightning','firelight','beam'],
+    cats: {
+      'Natural':     ['sunset','sunrise','moonlight','golden hour','eclipse','lightning'],
+      'Artificial':  ['floodlight','neon','spotlight','beam','UV','fluorescence'],
+      'Atmospheric': ['bioluminescent','aurora','lava','volcanic','fog','haze','diffused','firelight'],
+    }
+  },
+  style: {
+    weight: 1,
+    keywords: ['photorealistic','cinematic','painting','oil','watercolour','digital',
+      'concept art','render','anime','manga','mecha','giger','biomechanical',
+      'documentary','illustration','sketch','dark fantasy','epic','matte painting',
+      'cyberpunk','greebled','key visual','speed lines','aesthetic','style'],
+    cats: {
+      'Realism':   ['photorealistic','documentary','naturalistic','render','8k','16k'],
+      'Painterly': ['painting','oil','watercolour','dark fantasy','matte painting','epic','illustration'],
+      'Digital':   ['concept art','digital','cyberpunk','anime','manga','mecha','giger','biomechanical','greebled','key visual'],
+    }
+  },
+  reference: {
+    weight: 0.9,
+    keywords: ['inspired by','aesthetic of','style of','in the manner of','based on',
+      'evangelion','armored core','pacific rim','ghibli','gundam','xenomorph',
+      'giger','shinkawa','neville page','starcraft','zerg','dark souls','metal gear'],
+    cats: {
+      'Anime·Manga':['evangelion','armored core','gundam','ghibli','manga','anime'],
+      'Film·Game':  ['pacific rim','xenomorph','starcraft','zerg','metal gear','dark souls'],
+      'Artist':     ['giger','shinkawa','neville page','syd mead','concept artist'],
+    }
+  },
+  technical: {
+    weight: 1,
+    keywords: ['composition','angle','shot','focal','depth of field','wide','close-up',
+      'macro','bird\'s eye','overhead','low angle','hero shot','rule of thirds',
+      'octane','unreal','render','ray-traced','global illumination','16:9','1:1',
+      'panoramic','widescreen','portrait','format','camera','lens'],
+    cats: {
+      'Camera': ['composition','angle','shot','focal','depth of field','bird\'s eye','low angle','hero shot','overhead','macro','close-up'],
+      'Format': ['16:9','1:1','panoramic','widescreen','portrait','format','rule of thirds'],
+      'Render': ['octane','unreal','render','ray-traced','global illumination','8k','16k','photorealistic'],
+    }
+  },
+  connector: {
+    weight: 0.8,
+    keywords: ['inspired by','evolved from','based on','fusing','derived from',
+      'reimagining','constructed from','armoured with','bristling with','fused with',
+      'encased in','wrapped in','wielding','bearing','deployed in','emerging from',
+      'towering over','against','lurking','ascending','silhouetted','embedded',
+      'moving like','stalking through','hovering above','rendered in'],
+    cats: {
+      'Origin':      ['inspired by','evolved from','based on','derived from','reimagining','tradition'],
+      'Composition': ['constructed from','armoured with','bristling with','fused with','encased in','wrapped in','wielding','bearing','layered with'],
+      'Setting':     ['deployed in','emerging from','towering over','against','lurking','ascending','silhouetted','embedded'],
+      'Motion':      ['moving like','stalking through','hovering above','charging','scuttling','coiled'],
+      'Style':       ['rendered in','painted in','photographed','drawn in','lit as','colour palette','texture quality'],
+    }
+  }
+}
+
+function pbClassifyText(text) {
+  if (!text || text.length < 3) return null
+  const lower = text.toLowerCase()
+  const scores = {}
+
+  for (const [typeKey, def] of Object.entries(PB_TYPE_KEYWORDS)) {
+    let score = 0
+    def.keywords.forEach(kw => {
+      if (lower.includes(kw)) score += kw.split(' ').length  // multi-word phrases score higher
+    })
+    if (score > 0) scores[typeKey] = score * def.weight
+  }
+
+  if (!Object.keys(scores).length) return null
+
+  // Best type
+  const bestType = Object.entries(scores).sort((a,b) => b[1]-a[1])[0][0]
+  const def = PB_TYPE_KEYWORDS[bestType]
+
+  // Best category within that type
+  let bestCat = null, bestCatScore = 0
+  if (def.cats) {
+    for (const [cat, catKws] of Object.entries(def.cats)) {
+      let cs = catKws.filter(kw => lower.includes(kw)).length
+      if (cs > bestCatScore) { bestCatScore = cs; bestCat = cat }
+    }
+  }
+
+  // Fall back to first category of the type if none matched
+  if (!bestCat) {
+    const t = PB_TYPES.find(x => x.key === bestType)
+    bestCat = t?.cats[0] || null
+  }
+
+  return { type: bestType, cat: bestCat }
+}
+
+let _pbClassifyTimer = null
+function pbClassifyDebounced() {
+  clearTimeout(_pbClassifyTimer)
+  _pbClassifyTimer = setTimeout(() => {
+    const text = document.getElementById('pbAddText')?.value.trim()
+    if (!text || text.length < 4) return
+    const result = pbClassifyText(text)
+    if (!result) return
+    // Set type select
+    const typeEl = document.getElementById('pbAddType')
+    if (typeEl && typeEl.value !== result.type) {
+      typeEl.value = result.type
+      pbUpdateCategorySelect()
+    }
+    // Set category select
+    if (result.cat) {
+      const catEl = document.getElementById('pbAddCategory')
+      if (catEl) {
+        // Find or add the option
+        const opt = [...catEl.options].find(o => o.value === result.cat)
+        if (opt) catEl.value = result.cat
+      }
+    }
+    // Show hint
+    const hint = document.getElementById('pbClassifyHint')
+    if (hint) hint.style.display = 'inline'
+  }, 400)
+}
+
+function pbClassifyHintClear() {
+  const hint = document.getElementById('pbClassifyHint')
+  if (hint) hint.style.display = 'none'
 }
 
 function pbInitAddSelects() {
