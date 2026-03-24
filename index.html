@@ -20,13 +20,28 @@
   --border: rgba(255,255,255,0.07);
   --accent: #e8ff00;
   --accent2: #ff4d00;
+  /* Theme colours — switched via .theme-X class on body */
+}
+/* ── INTERFACE COLOUR THEMES ─────────────────────────────────────── */
+body.theme-yellow  { --accent:#e8ff00; --accent2:#ff6600; }
+body.theme-cyan    { --accent:#00d4ff; --accent2:#0066ff; }
+body.theme-green   { --accent:#39ff14; --accent2:#00cc66; }
+body.theme-red     { --accent:#ff3333; --accent2:#cc0022; }
+body.theme-purple  { --accent:#c77dff; --accent2:#7b2fff; }
+body.theme-orange  { --accent:#ff8c00; --accent2:#ff4500; }
+/* Muted variants */
+body.theme-slate   { --accent:#8ba3b8; --accent2:#5a7a96; }
+body.theme-sage    { --accent:#7eb89a; --accent2:#4d8870; }
+body.theme-dusk    { --accent:#a08bcc; --accent2:#6e5a9e; }
+body.theme-copper  { --accent:#c4895a; --accent2:#9c5f35; }
+body.theme-rust    { --accent:#c0614a; --accent2:#8c3d2a; }
+body.theme-moss    { --accent:#7a9e5e; --accent2:#50723a; }
+:root {
   --text: #d4dde6;
   --muted: #4a5a68;
   --radius: 3px;
 }
-.preset-horror  { --accent: #cc0033; --accent2: #660022; }
-.preset-scifi   { --accent: #00d4ff; --accent2: #0066ff; }
-.preset-fantasy { --accent: #c77dff; --accent2: #7b2fff; }
+/* preset-* accent classes removed — interface colour controlled via Settings */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { overflow-x: hidden; }
@@ -339,6 +354,9 @@ body.light .drive-bar { background:var(--surface2); }
 body.light #loadTextarea { background:var(--surface2);color:var(--text); }
 body.light .fav-item { background:var(--surface2); }
 body.light .colourTuner { background:var(--surface2); }
+body.light { --formula-bg: var(--surface2); }
+body.light .pb-formula-output { color:var(--text); }
+body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(--text); }
 
 #lightToggle {
   background:transparent;border:1px solid var(--border);border-radius:20px;
@@ -889,7 +907,24 @@ body.light .colourTuner { background:var(--surface2); }
 ═══════════════════════════════════════════════════════ */
 .settings-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
 @media(max-width:640px){ .settings-grid { grid-template-columns:1fr; } }
-.settings-section { background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px; }
+/* ── INTERFACE COLOUR THEMES ─────────────────────────────────────── */
+.theme-swatch {
+  width:36px;height:36px;border-radius:50%;cursor:pointer;
+  border:3px solid transparent;transition:all .15s;flex-shrink:0;
+  position:relative;
+}
+.theme-swatch:hover { transform:scale(1.12); }
+.theme-swatch.active {
+  border-color:#fff;
+  box-shadow:0 0 0 2px rgba(255,255,255,.3);
+}
+.theme-swatch .swatch-check {
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:900;color:#000;opacity:0;
+}
+.theme-swatch.active .swatch-check { opacity:1; }
+
+
 .settings-section-title { font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:14px; }
 .settings-row { display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border); }
 .settings-row:last-child { border-bottom:none; }
@@ -923,12 +958,12 @@ body.light .colourTuner { background:var(--surface2); }
   min-height:52px;
 }
 .pb-formula-output {
-  background:#000;border-left:2px solid #38b6ff;
+  background:var(--formula-bg, #000);border-left:2px solid var(--accent);
   font-family:'Rajdhani',sans-serif;font-size:15px;line-height:1.9;
   outline:none;word-break:break-word;white-space:pre-wrap;
-  cursor:text;
+  cursor:text;color:var(--text);
 }
-.pb-formula-output:focus { border-color:#38b6ff; }
+.pb-formula-output:focus { border-color:var(--accent); }
 .pb-formula-output:empty::before {
   content:'Click particles below or type to build your prompt…';
   color:var(--muted);font-style:italic;pointer-events:none;
@@ -2744,6 +2779,13 @@ body.light .colourTuner { background:var(--surface2); }
             <div class="settings-desc">Switch to light colour scheme</div>
           </div>
           <button class="btn btn-ghost" onclick="toggleLightMode()" style="font-size:12px;" id="settingsLightBtn">☀ LIGHT</button>
+        </div>
+        <div style="margin-top:16px;">
+          <div class="settings-label" style="margin-bottom:10px;">Interface Colour</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;" id="themeColourPicker">
+            <!-- rendered by renderThemePicker() -->
+          </div>
+          <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-top:8px;line-height:1.5;">Choose your accent colour. Applies across the whole interface.</div>
         </div>
       </div>
 
@@ -5019,10 +5061,8 @@ function setPreset(id) {
   const p = getPreset(id)
   if (p) STYLE_MODS[id] = { adj: p.adj, suffix: p.suffix }
 
-  const body = document.body
-  body.className = body.className.replace(/preset-\w[\w-]*/g,'').trim()
-  if (p?.accentClass) body.classList.add(p.accentClass)
-
+  // Note: accentClass intentionally NOT applied — interface colour is
+  // controlled separately via Settings → Interface Colour
   document.getElementById('styleLabel').textContent = (p?.name || id).toUpperCase()
   renderPresetRow()
   driveSaveCurrentDebounced()
@@ -6354,6 +6394,73 @@ function collapseLoadPanel() {
   body.style.maxHeight = body.scrollHeight + 'px'
   requestAnimationFrame(()=>{ body.style.maxHeight = '0'; body.classList.remove('expanded'); body.classList.add('collapsed') })
   arrow.classList.remove('open')
+}
+
+// ── INTERFACE COLOUR THEME ─────────────────────────────────────────
+
+const THEME_COLOURS = [
+  { key: 'yellow',  label: 'Acid Yellow',   hex: '#e8ff00', muted: false },
+  { key: 'cyan',    label: 'Cyber Cyan',    hex: '#00d4ff', muted: false },
+  { key: 'green',   label: 'Neon Green',    hex: '#39ff14', muted: false },
+  { key: 'red',     label: 'Blood Red',     hex: '#ff3333', muted: false },
+  { key: 'purple',  label: 'Void Purple',   hex: '#c77dff', muted: false },
+  { key: 'orange',  label: 'Toxic Orange',  hex: '#ff8c00', muted: false },
+  { key: 'slate',   label: 'Steel Slate',   hex: '#8ba3b8', muted: true  },
+  { key: 'sage',    label: 'Muted Sage',    hex: '#7eb89a', muted: true  },
+  { key: 'dusk',    label: 'Dusk Violet',   hex: '#a08bcc', muted: true  },
+  { key: 'copper',  label: 'Worn Copper',   hex: '#c4895a', muted: true  },
+  { key: 'rust',    label: 'Deep Rust',     hex: '#c0614a', muted: true  },
+  { key: 'moss',    label: 'Forest Moss',   hex: '#7a9e5e', muted: true  },
+]
+
+function applyThemeColour(key) {
+  // Remove all existing theme classes
+  document.body.classList.forEach(c => { if (c.startsWith('theme-')) document.body.classList.remove(c) })
+  if (key && key !== 'yellow') document.body.classList.add('theme-' + key)
+  lsSave('bm_theme_colour', key || 'yellow')
+  renderThemePicker()
+}
+
+function renderThemePicker() {
+  const wrap = document.getElementById('themeColourPicker')
+  if (!wrap) return
+  const current = lsLoad('bm_theme_colour') || 'yellow'
+  wrap.innerHTML = ''
+
+  // Vivid row
+  const vividLabel = document.createElement('div')
+  vividLabel.style.cssText = 'width:100%;font-size:10px;letter-spacing:1.5px;color:var(--muted);font-weight:700;margin-bottom:6px;'
+  vividLabel.textContent = 'VIVID'
+  wrap.appendChild(vividLabel)
+
+  const vividRow = document.createElement('div')
+  vividRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;'
+  wrap.appendChild(vividRow)
+
+  // Muted row
+  const mutedLabel = document.createElement('div')
+  mutedLabel.style.cssText = 'width:100%;font-size:10px;letter-spacing:1.5px;color:var(--muted);font-weight:700;margin-bottom:6px;'
+  mutedLabel.textContent = 'MUTED'
+  wrap.appendChild(mutedLabel)
+
+  const mutedRow = document.createElement('div')
+  mutedRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;'
+  wrap.appendChild(mutedRow)
+
+  THEME_COLOURS.forEach(t => {
+    const sw = document.createElement('button')
+    sw.className = 'theme-swatch' + (t.key === current ? ' active' : '')
+    sw.style.background = t.hex
+    sw.title = t.label
+    sw.innerHTML = '<span class="swatch-check">✓</span>'
+    sw.onclick = () => applyThemeColour(t.key)
+    ;(t.muted ? mutedRow : vividRow).appendChild(sw)
+  })
+}
+
+function initThemeColour() {
+  const saved = lsLoad('bm_theme_colour')
+  if (saved && saved !== 'yellow') document.body.classList.add('theme-' + saved)
 }
 
 function toggleLightMode() {
@@ -7980,6 +8087,7 @@ document.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════════════════
 
 function renderSettingsView() {
+  renderThemePicker()
   // Sync the provider selector buttons
   document.getElementById('providerBtnGdrive')?.classList.toggle('active', cloudProvider === 'gdrive')
   document.getElementById('providerBtnDropbox')?.classList.toggle('active', cloudProvider === 'dropbox')
@@ -8187,6 +8295,7 @@ function initElCache() {
 
 window.addEventListener('load', () => {
   initElCache()
+  initThemeColour()
   // 1. Restore from localStorage immediately — data visible before cloud connects
   lsRestoreAll()
   updateLibBadge()
