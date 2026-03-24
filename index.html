@@ -1794,6 +1794,7 @@ body.light .colourTuner { background:var(--surface2); }
 }
 
 /* ── SYNC GATE ───────────────────────────────────────────────────── */
+.sync-gate-btn {
   display:flex;align-items:center;gap:14px;width:100%;
   padding:14px 16px;border-radius:6px;border:1px solid var(--border);
   background:var(--surface2);cursor:pointer;text-align:left;
@@ -6362,6 +6363,7 @@ function switchView(view, pushState = true) {
     } catch(e) {}
   }
   window.scrollTo({top:0,behavior:'smooth'})
+  document.dispatchEvent(new CustomEvent('viewSwitched', { detail: view }))
 }
 
 // Restore view from hash on load / back-forward navigation
@@ -12334,13 +12336,12 @@ function tourEnd() {
 }
 
 // Trigger tour when Prompt Lab is opened for the first time
-const _origSwitchView = switchView
-function switchView(view, pushState) {
-  _origSwitchView(view, pushState)
-  if (view === 'builder' && !lsLoad('bm_tour_done') && !tourActive) {
+// Inline into switchView by patching the existing function's body via a post-switch hook
+document.addEventListener('viewSwitched', e => {
+  if (e.detail === 'builder' && !lsLoad('bm_tour_done') && !tourActive) {
     setTimeout(tourStart, 600)
   }
-}
+})
 </script>
 <div id="syncGateModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
