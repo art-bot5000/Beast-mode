@@ -2953,6 +2953,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
         <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</h1>
         <span class="version" style="align-self:center;">// PARTICLE FORMULA ENGINE</span>
       </div>
+      <div style="font-size:13px;letter-spacing:1.5px;color:var(--muted);margin-top:4px;font-style:italic;">Your style, your expertise, your prompt.</div>
       <!-- Mode toggle — large, directly below subheading -->
       <div class="pb-mode-toggle pb-mode-toggle-hero" id="pbModeToggle" style="margin-top:12px;">
         <button class="pb-mode-btn active" id="pbModeEditorBtn" onclick="pbSetLabMode('editor')">✏ EDITOR</button>
@@ -2969,13 +2970,46 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
     <!-- // ASSEMBLED PROMPT — formula box, buttons below -->
     <div class="pb-assembled-wrap" id="pbAssembledWrap" style="margin-bottom:20px;">
-      <div class="pb-section-label" style="margin-bottom:8px;">// ASSEMBLED PROMPT</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+        <div class="pb-section-label" style="margin-bottom:0;">// ASSEMBLED PROMPT</div>
+        <div style="display:flex;gap:5px;">
+          <button onclick="pbSurpriseMe()" title="Surprise Me — generate a thematically coherent random prompt" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">⚡ SURPRISE ME</button>
+          <button onclick="pbVoiceToParticle()" title="Voice to Particle — speak your prompt" id="pbVoiceBtn" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🎙 VOICE</button>
+          <button onclick="pbOpenWizard()" title="Prompt Wizard — guided step-by-step builder" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🧙 WIZARD</button>
+        </div>
+      </div>
       <div class="pb-formula pb-formula-output" id="pbFormula" contenteditable="true" spellcheck="false"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbCopyOutput()">⎘ COPY</button>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" id="pbSaveBtn" onclick="pbSaveToLibrary()">♥ SAVE</button>
+      </div>
+
+      <!-- Prompt Analyser -->
+      <div id="pbAnalyser" style="display:none;margin-top:14px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+          <div style="font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700;">// PROMPT ANALYSIS</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div id="pbAnalyserScore" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--accent);line-height:1;"></div>
+            <div id="pbAnalyserStats" style="font-size:10px;color:var(--muted);letter-spacing:.5px;line-height:1.7;"></div>
+          </div>
+        </div>
+        <div id="pbAnalyserCoverage" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;"></div>
+        <div id="pbAnalyserMissing" style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.7;"></div>
+      </div>
+    </div>
+
+    <!-- Particle of the Day card (shown above grid) -->
+    <div id="pbPotdCard" style="display:none;margin-bottom:12px;padding:12px 14px;border-radius:5px;border-left:3px solid var(--accent);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+        <div style="flex:1;">
+          <div style="font-size:10px;letter-spacing:2px;font-weight:700;color:var(--accent);margin-bottom:5px;">✦ PARTICLE OF THE DAY</div>
+          <div id="pbPotdText" style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;"></div>
+          <div id="pbPotdMeta" style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;"></div>
+          <button id="pbPotdAddBtn" onclick="pbPotdAdd()" style="padding:4px 10px;border:1px solid var(--accent);border-radius:3px;background:transparent;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">+ ADD TO PROMPT</button>
+        </div>
+        <button onclick="pbPotdDismiss()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;padding:0;line-height:1;flex-shrink:0;">×</button>
       </div>
     </div>
 
@@ -3057,6 +3091,61 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
     <div class="pb-type-nav" id="pbTypeNav"></div>
 
   </div><!-- /view-inner -->
+</div>
+
+<!-- ═══════════════════════════════ PROMPT WIZARD ═══════════════════════════════ -->
+<div id="pbWizardModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div class="modal-card" style="max-width:560px;width:100%;margin:auto;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">// PROMPT WIZARD</div>
+        <div style="font-size:10px;letter-spacing:1.5px;color:var(--muted);" id="pbWizardSubtitle">Step 1 of 7</div>
+      </div>
+      <button class="modal-close" onclick="pbCloseWizard()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Progress bar -->
+      <div style="height:3px;background:var(--surface2);border-radius:2px;margin-bottom:16px;">
+        <div id="pbWizardProgress" style="height:100%;background:var(--accent);border-radius:2px;transition:width .3s;width:0%;"></div>
+      </div>
+      <div id="pbWizardStep" style="font-size:13px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:6px;"></div>
+      <div id="pbWizardQuestion" style="font-size:15px;color:var(--text);margin-bottom:4px;line-height:1.5;"></div>
+      <div id="pbWizardHint" style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-bottom:12px;"></div>
+      <div id="pbWizardOptions" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+      <div id="pbWizardSummary" style="display:none;padding:12px;background:var(--surface2);border-radius:4px;font-size:13px;color:var(--text);line-height:1.7;margin-bottom:12px;"></div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;">
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="pbWizardBack()" id="pbWizardBackBtn">← BACK</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost" style="font-size:12px;" onclick="pbWizardSkip()" id="pbWizardSkipBtn">SKIP →</button>
+        <button class="btn btn-primary" style="font-size:12px;" onclick="pbWizardNext()" id="pbWizardNextBtn" disabled>NEXT →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ COLOUR PALETTE IMPORTER ═══════════════════════════════ -->
+<div id="pbPaletteModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;">
+  <div class="modal-card" style="max-width:480px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">// COLOUR PALETTE IMPORTER</div>
+      <button class="modal-close" onclick="document.getElementById('pbPaletteModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:14px;line-height:1.6;">Upload an image to extract its dominant colours as particles.</div>
+      <input type="file" id="pbPaletteInput" accept="image/*" style="display:none;" onchange="pbPaletteLoad(this)">
+      <div id="pbPaletteDropzone" onclick="document.getElementById('pbPaletteInput').click()" style="border:2px dashed var(--border);border-radius:6px;padding:32px;text-align:center;cursor:pointer;margin-bottom:14px;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-size:28px;margin-bottom:8px;">🎨</div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:1px;color:var(--muted);">TAP TO CHOOSE IMAGE</div>
+        <div style="font-size:11px;color:var(--muted);opacity:.6;margin-top:4px;">Camera or gallery on mobile</div>
+      </div>
+      <canvas id="pbPaletteCanvas" style="display:none;"></canvas>
+      <div id="pbPaletteResults" style="display:none;">
+        <div id="pbPaletteSwatches" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <button class="btn btn-primary" style="font-size:12px;width:100%;" onclick="pbPaletteAddAll()">+ ADD ALL AS COLOUR PARTICLES</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Mobile bottom prompt bar -->
@@ -6157,7 +6246,6 @@ function dbxShowSignedIn() {
   document.getElementById('dbxSignedIn').style.display  = 'flex'
   document.getElementById('dbxSignedOut').style.display = 'none'
   document.getElementById('dbxStatus').textContent = '✓ Connected'
-  // Flip nav bar to connected state
   const so = document.getElementById('driveSignedOut')
   const si = document.getElementById('driveSignedIn')
   if (so) so.style.display = 'none'
@@ -6167,6 +6255,7 @@ function dbxShowSignedIn() {
   document.getElementById('loadDriveBadge')?.classList.add('show')
   updateNavDriveDot()
   updateLocalWarning()
+  setTimeout(pbCheckFirstRun, 800)
 }
 
 // ── Dropbox file operations ────────────────────────────────────────
@@ -6407,6 +6496,8 @@ async function driveOnSignedIn() {
   updateLocalWarning()
   setDriveStatus('✓ SYNCED', 'ok')
   setTimeout(() => { if (cloudIsConnected()) setDriveStatus('✓ CONNECTED', 'ok') }, 4000)
+  // Show orientation + setup wizard on first connection
+  setTimeout(pbCheckFirstRun, 800)
 }
 
 // ── UI HELPERS
@@ -6804,7 +6895,7 @@ function switchView(view, pushState = true) {
   if (bb) bb.style.display = (view === 'builder') ? '' : 'none'
   if (pushState) {
     try {
-      const hash = VIEW_HASHES[view] || 'generator'
+      const hash = VIEW_HASHES[view] || 'prompt-lab'
       history.pushState({ view }, '', '#' + hash)
     } catch(e) {}
   }
@@ -6814,8 +6905,8 @@ function switchView(view, pushState = true) {
 
 // Restore view from hash on load / back-forward navigation
 function switchViewFromHash() {
-  const hash = location.hash.replace('#', '') || 'generator'
-  const view = HASH_TO_VIEW[hash] || 'generator'
+  const hash = location.hash.replace('#', '') || 'prompt-lab'
+  const view = HASH_TO_VIEW[hash] || 'builder'
   switchView(view, false)
 }
 
@@ -9371,6 +9462,7 @@ function pbInit() {
   pbUpdateBottomBar()
   // Delay observer init so DOM is fully laid out
   setTimeout(pbInitBottomObserver, 100)
+  setTimeout(pbInitPotd, 1000)
 
   // Wire contenteditable formula events
   const bar = document.getElementById('pbFormula')
@@ -9384,6 +9476,7 @@ function pbInit() {
       pbSyncFormulaFromDOM()
       pbFormulaAutocomplete(bar)
       pbShowPlaceholderIfEmpty(bar)
+      pbSetupTrackTyped()
     })
     bar.addEventListener('paste', e => {
       e.preventDefault()
@@ -9932,7 +10025,10 @@ function pbRenderLibrary() {
       const tuner = document.createElement('div')
       tuner.className = 'pb-colour-tuner'
       tuner.innerHTML = `
-        <div style="font-size:11px;letter-spacing:3px;color:${t.color};font-weight:700;margin-bottom:8px;">🎨 CUSTOM COLOUR MIXER</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:11px;letter-spacing:3px;color:${t.color};font-weight:700;">🎨 CUSTOM COLOUR MIXER</div>
+          <button onclick="pbOpenPaletteImporter()" style="padding:4px 10px;border:1px solid ${t.color}66;border-radius:3px;background:transparent;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:${t.color};">📷 IMPORT FROM IMAGE</button>
+        </div>
         <div style="font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;font-weight:700;">BASE PALETTE</div>
         <select id="pbColSel" style="width:100%;margin-bottom:10px;" class="pb-input" onchange="pbOnPaletteChange()">
           <option value="">— select a palette —</option>
@@ -10491,10 +10587,898 @@ function pbSyncFormulaFromDOM() {
     }
   })
   pbFormula = newFormula
+  pbRunAnalyser()
 }
 
 function pbShowPlaceholderIfEmpty(bar) {
   // Placeholder handled via CSS :empty::before — no DOM injection needed
+}
+
+// ── PROMPT ANALYSER ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// ORIENTATION GUIDE
+// ═══════════════════════════════════════════════════════════════════
+const ORIENT_KEY = 'bm_orient_done'
+const ORIENT_STEPS = [
+  {
+    icon: '⊛',
+    title: 'Build Prompts from Particles',
+    body: 'Prompt Lab uses a particle system — small, reusable text fragments organised by type: Subject, Material, Lighting, Style and more. Tap any particle to add it to your prompt. Combine them to create rich, precise image prompts.',
+  },
+  {
+    icon: '✏',
+    title: 'Editor vs Creator Mode',
+    body: 'Editor mode is your workspace — manage your particle libraries, add custom particles, and build prompts freely. Creator mode is a focused view for building prompts quickly from your curated particles. Switch at any time.',
+  },
+  {
+    icon: '✦',
+    title: 'Your Style, Your Library',
+    body: 'Add particles that match your creative voice. Import prompts to extract particles automatically. Use the Wizard to build your first prompt step by step. The more you build your library, the better your prompts become.',
+  },
+]
+let orientStep = 0
+
+function pbOrientShow() {
+  orientStep = 0
+  document.getElementById('pbOrientModal').style.display = 'flex'
+  pbOrientRender()
+}
+
+function pbOrientRender() {
+  const step = ORIENT_STEPS[orientStep]
+  const total = ORIENT_STEPS.length
+  const content = document.getElementById('pbOrientContent')
+  const dots = document.getElementById('pbOrientDots')
+  const backBtn = document.getElementById('pbOrientBackBtn')
+  const nextBtn = document.getElementById('pbOrientNextBtn')
+
+  dots.innerHTML = ''
+  ORIENT_STEPS.forEach((_, i) => {
+    const dot = document.createElement('div')
+    dot.style.cssText = `width:8px;height:8px;border-radius:50%;transition:background .2s;background:${i === orientStep ? 'var(--accent)' : 'var(--border)'};`
+    dots.appendChild(dot)
+  })
+
+  content.innerHTML = `
+    <div style="font-size:32px;margin-bottom:12px;">${step.icon}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);margin-bottom:10px;">${step.title}</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.7;letter-spacing:.3px;">${step.body}</div>
+  `
+
+  backBtn.style.visibility = orientStep === 0 ? 'hidden' : 'visible'
+  nextBtn.textContent = orientStep === total - 1 ? '✓ GOT IT — START SETUP' : 'NEXT →'
+}
+
+function pbOrientNav(dir) {
+  if (dir === 1 && orientStep === ORIENT_STEPS.length - 1) {
+    // Done — close guide, show setup wizard
+    document.getElementById('pbOrientModal').style.display = 'none'
+    localStorage.setItem(ORIENT_KEY, '1')
+    pbSetupInit()
+    return
+  }
+  orientStep = Math.max(0, Math.min(ORIENT_STEPS.length - 1, orientStep + dir))
+  pbOrientRender()
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETUP WIZARD
+// ═══════════════════════════════════════════════════════════════════
+const SETUP_KEY     = 'bm_setup_done'
+const SETUP_PROG_KEY = 'bm_setup_progress'
+
+const SETUP_STEPS = [
+  {
+    id: 'cloud',
+    label: 'Connect cloud sync',
+    desc: 'Keeps your prompts and particles safe and synced.',
+    check: () => cloudIsConnected(),
+    showMe: () => { switchView('settings'); pbSpotlight(document.getElementById('settingsSyncSection')) },
+  },
+  {
+    id: 'builtins',
+    label: 'Choose built-in particles',
+    desc: 'Decide whether to include the 1000+ built-in particles.',
+    check: () => localStorage.getItem('bm_setup_builtins_done') === '1',
+    showMe: () => {
+      switchView('builder')
+      pbSpotlight(document.getElementById('pbBuiltinToggle'))
+    },
+  },
+  {
+    id: 'import',
+    label: 'Import 3 prompts',
+    desc: 'Import existing prompts to build your particle library.',
+    check: () => parseInt(localStorage.getItem('bm_setup_imports') || '0') >= 3,
+    showMe: () => {
+      switchView('builder')
+      const btn = document.querySelector('[onclick="pbOpenImport()"]')
+      pbSpotlight(btn)
+    },
+  },
+  {
+    id: 'type',
+    label: 'Type in the assembled prompt box',
+    desc: 'Type 3+ letters to search particles. Use + Create Particle, select an existing particle, and try swapping one.',
+    check: () => localStorage.getItem('bm_setup_typed') === '1',
+    showMe: () => {
+      switchView('builder')
+      pbSpotlight(document.getElementById('pbFormula'))
+    },
+  },
+  {
+    id: 'particles',
+    label: 'Add 5 particles to your library',
+    desc: () => {
+      const count = parseInt(localStorage.getItem('bm_setup_particle_count') || '0')
+      return `Add particles to build your library. (${Math.min(count, 5)}/5)`
+    },
+    check: () => parseInt(localStorage.getItem('bm_setup_particle_count') || '0') >= 5,
+    showMe: () => {
+      switchView('builder')
+      pbSpotlight(document.querySelector('.pb-add-form') || document.querySelector('[onclick="pbToggleAddForm()"]'))
+    },
+  },
+]
+
+function pbSetupInit() {
+  if (genOnlyMode) return
+  if (localStorage.getItem(SETUP_KEY) === '1') return
+  pbSetupRender()
+  pbSetupPosition()
+  document.getElementById('pbSetupPanel').style.display = 'block'
+}
+
+function pbSetupRender() {
+  const steps = document.getElementById('pbSetupSteps')
+  const bar   = document.getElementById('pbSetupProgressBar')
+  if (!steps) return
+
+  const done = SETUP_STEPS.filter(s => s.check()).length
+  const pct  = Math.round((done / SETUP_STEPS.length) * 100)
+  if (bar) bar.style.width = pct + '%'
+
+  steps.innerHTML = ''
+  SETUP_STEPS.forEach((step, i) => {
+    const complete = step.check()
+    const desc = typeof step.desc === 'function' ? step.desc() : step.desc
+
+    const row = document.createElement('div')
+    row.style.cssText = `display:flex;align-items:flex-start;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);`
+
+    const tick = document.createElement('div')
+    tick.style.cssText = `width:18px;height:18px;border-radius:50%;flex-shrink:0;margin-top:2px;
+      border:2px solid ${complete ? 'var(--accent)' : 'var(--border)'};
+      background:${complete ? 'var(--accent)' : 'transparent'};
+      display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;`
+    tick.textContent = complete ? '✓' : ''
+
+    const text = document.createElement('div')
+    text.style.cssText = 'flex:1;min-width:0;'
+    text.innerHTML = `
+      <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:${complete ? 'var(--muted)' : 'var(--text)'};text-decoration:${complete ? 'line-through' : 'none'};margin-bottom:2px;">${step.label}</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;">${desc}</div>
+    `
+
+    if (!complete) {
+      const showBtn = document.createElement('button')
+      showBtn.style.cssText = `flex-shrink:0;padding:3px 8px;border:1px solid var(--border);border-radius:3px;
+        background:transparent;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+        letter-spacing:1px;cursor:pointer;color:var(--accent);border-color:var(--accent);margin-top:2px;`
+      showBtn.textContent = 'SHOW ME'
+      showBtn.onclick = () => step.showMe()
+      const actions = document.createElement('div')
+      actions.style.cssText = 'flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;'
+      actions.appendChild(showBtn)
+      row.appendChild(tick); row.appendChild(text); row.appendChild(actions)
+    } else {
+      row.appendChild(tick); row.appendChild(text)
+    }
+
+    steps.appendChild(row)
+  })
+
+  // Check if all done
+  if (done === SETUP_STEPS.length) {
+    const finish = document.createElement('div')
+    finish.style.cssText = 'padding:12px 16px;text-align:center;'
+    finish.innerHTML = `
+      <div style="color:var(--accent);font-size:13px;font-weight:700;letter-spacing:1px;margin-bottom:8px;">✓ SETUP COMPLETE</div>
+      <button onclick="pbSetupFinish()" class="btn btn-primary" style="font-size:12px;width:100%;">LET'S CREATE →</button>
+    `
+    steps.appendChild(finish)
+  }
+}
+
+function pbSetupPosition() {
+  const panel = document.getElementById('pbSetupPanel')
+  if (!panel) return
+  panel.style.bottom = '72px'
+  panel.style.right  = '12px'
+  panel.style.top    = 'auto'
+  panel.style.left   = 'auto'
+}
+
+function pbSetupFinish() {
+  localStorage.setItem(SETUP_KEY, '1')
+  document.getElementById('pbSetupPanel').style.display = 'none'
+  pbSpotlightOff()
+}
+
+function pbSetupSkip() {
+  localStorage.setItem(SETUP_KEY, '1')
+  document.getElementById('pbSetupPanel').style.display = 'none'
+  pbSpotlightOff()
+}
+
+// Spotlight: dims everything except target element
+function pbSpotlight(el) {
+  pbSpotlightOff()
+  if (!el) return
+  const overlay = document.getElementById('pbSpotlightOverlay')
+  if (!overlay) return
+  overlay.style.display = 'block'
+  overlay.style.pointerEvents = 'none'
+  el.style.position = 'relative'
+  el.style.zIndex   = '19001'
+  el.style.boxShadow = '0 0 0 4px var(--accent), 0 0 0 8px rgba(0,0,0,.5)'
+  el.style.borderRadius = el.style.borderRadius || '4px'
+  el._spotlit = true
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  // Tap overlay to dismiss
+  overlay.onclick = () => pbSpotlightOff()
+  overlay.style.pointerEvents = 'auto'
+}
+
+function pbSpotlightOff() {
+  const overlay = document.getElementById('pbSpotlightOverlay')
+  if (overlay) { overlay.style.display = 'none'; overlay.onclick = null }
+  document.querySelectorAll('[data-spotlit]').forEach(el => pbUnspotlight(el))
+  // Also clear any manually set _spotlit
+  document.querySelectorAll('*').forEach(el => {
+    if (el._spotlit) {
+      el.style.zIndex = ''
+      el.style.boxShadow = ''
+      el._spotlit = false
+    }
+  })
+}
+
+// Hook setup tracking into existing flows
+function pbSetupTrackImport() {
+  const current = parseInt(localStorage.getItem('bm_setup_imports') || '0')
+  localStorage.setItem('bm_setup_imports', current + 1)
+  pbSetupRefresh()
+}
+
+function pbSetupTrackParticle() {
+  const current = parseInt(localStorage.getItem('bm_setup_particle_count') || '0')
+  localStorage.setItem('bm_setup_particle_count', current + 1)
+  pbSetupRefresh()
+}
+
+function pbSetupTrackTyped() {
+  if (localStorage.getItem('bm_setup_typed') !== '1') {
+    localStorage.setItem('bm_setup_typed', '1')
+    pbSetupRefresh()
+  }
+}
+
+function pbSetupTrackBuiltins() {
+  localStorage.setItem('bm_setup_builtins_done', '1')
+  pbSetupRefresh()
+}
+
+function pbSetupRefresh() {
+  if (document.getElementById('pbSetupPanel')?.style.display !== 'none') {
+    pbSetupRender()
+  }
+}
+
+// Check if first-time setup should run (after cloud sync gate)
+function pbCheckFirstRun() {
+  if (genOnlyMode) return
+  if (localStorage.getItem(SETUP_KEY) === '1') return
+  if (localStorage.getItem(ORIENT_KEY) !== '1') {
+    pbOrientShow()
+  } else {
+    pbSetupInit()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ⚡ SURPRISE ME
+// ═══════════════════════════════════════════════════════════════════
+const pbToast = msg => pbPasteToast(msg)
+function pbSurpriseMe() {
+  const all = pbGetParticles()
+  // Core types for a coherent prompt
+  const coreTypes = ['subject','form','material','colour','environment','lighting','style']
+  const bonusTypes = ['action','reference','technical','connector']
+
+  // Pick subject first
+  const subjects = all.filter(p => p.type === 'subject')
+  if (!subjects.length) return
+  const subject = subjects[Math.floor(Math.random() * subjects.length)]
+
+  // For remaining types, bias toward particles semantically close to subject
+  const pick = (typeKey) => {
+    const pool = all.filter(p => p.type === typeKey)
+    if (!pool.length) return null
+    // Score each by similarity to subject text
+    const scored = pool.map(p => ({ p, score: strSimilarity(p.text, subject.text) + Math.random() * 0.4 }))
+    scored.sort((a, b) => b.score - a.score)
+    // Pick from top 30% with randomness
+    const topN = Math.max(1, Math.floor(scored.length * 0.3))
+    return scored[Math.floor(Math.random() * topN)].p
+  }
+
+  pbClearFormula()
+  const picked = [subject]
+  coreTypes.slice(1).forEach(t => { const p = pick(t); if (p) picked.push(p) })
+  // 50% chance to add a bonus type
+  if (Math.random() > 0.5) {
+    const bt = bonusTypes[Math.floor(Math.random() * bonusTypes.length)]
+    const bp = pick(bt); if (bp) picked.push(bp)
+  }
+
+  // Add all to formula
+  picked.forEach(p => pbAddToFormula(p))
+  pbToast('⚡ Surprise prompt generated!')
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ✦ PARTICLE OF THE DAY
+// ═══════════════════════════════════════════════════════════════════
+const POTD_DISMISS_KEY = 'bm_potd_dismissed'
+let pbPotdParticle = null
+
+function pbInitPotd() {
+  const today = new Date().toISOString().slice(0, 10)
+  const dismissed = localStorage.getItem(POTD_DISMISS_KEY)
+  if (dismissed === today) return
+
+  const all = pbGetParticles().filter(p => !p.source?.includes('generator'))
+  if (!all.length) return
+
+  // Seed random from today's date
+  const seed = today.split('-').reduce((acc, n) => acc * 31 + parseInt(n), 0)
+  const idx = Math.abs(seed) % all.length
+  pbPotdParticle = all[idx]
+
+  const card = document.getElementById('pbPotdCard')
+  const textEl = document.getElementById('pbPotdText')
+  const metaEl = document.getElementById('pbPotdMeta')
+  if (!card || !pbPotdParticle) return
+
+  const t = PB_TYPES.find(x => x.key === pbPotdParticle.type)
+  card.style.cssText += `background:color-mix(in srgb,${t?.color || 'var(--accent)'} 6%,transparent);border-left:3px solid ${t?.color || 'var(--accent)'};display:block;`
+  textEl.textContent = pbPotdParticle.text
+  metaEl.textContent = (t?.label || pbPotdParticle.type).toUpperCase() + ' · ' + (pbPotdParticle.cat || '')
+  metaEl.style.color = t?.color || 'var(--accent)'
+  document.getElementById('pbPotdAddBtn').style.borderColor = t?.color || 'var(--accent)'
+  document.getElementById('pbPotdAddBtn').style.color = t?.color || 'var(--accent)'
+}
+
+function pbPotdAdd() {
+  if (pbPotdParticle) {
+    pbAddToFormula(pbPotdParticle)
+    pbToast('✦ Particle of the Day added!')
+    pbPotdDismiss()
+  }
+}
+
+function pbPotdDismiss() {
+  const today = new Date().toISOString().slice(0, 10)
+  localStorage.setItem(POTD_DISMISS_KEY, today)
+  const card = document.getElementById('pbPotdCard')
+  if (card) card.style.display = 'none'
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎙 VOICE TO PARTICLE
+// ═══════════════════════════════════════════════════════════════════
+let pbVoiceRecognition = null
+let pbVoiceActive = false
+
+function pbVoiceToParticle() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SpeechRecognition) {
+    pbToast('⚠ Voice not supported in this browser')
+    return
+  }
+
+  const btn = document.getElementById('pbVoiceBtn')
+
+  if (pbVoiceActive) {
+    pbVoiceRecognition?.stop()
+    pbVoiceActive = false
+    if (btn) { btn.textContent = '🎙 VOICE'; btn.style.color = '' }
+    return
+  }
+
+  pbVoiceRecognition = new SpeechRecognition()
+  pbVoiceRecognition.continuous = false
+  pbVoiceRecognition.interimResults = false
+  pbVoiceRecognition.lang = 'en-US'
+
+  pbVoiceRecognition.onstart = () => {
+    pbVoiceActive = true
+    if (btn) { btn.textContent = '⏹ STOP'; btn.style.color = '#ff3b3b'; btn.style.borderColor = '#ff3b3b' }
+    pbToast('🎙 Listening… speak your prompt')
+  }
+
+  pbVoiceRecognition.onresult = e => {
+    const transcript = e.results[0][0].transcript.trim()
+    pbToast('🎙 Processing: "' + transcript.slice(0, 40) + '…"')
+    pbVoiceClassify(transcript)
+  }
+
+  pbVoiceRecognition.onerror = err => {
+    pbToast('⚠ Voice error: ' + err.error)
+    pbVoiceActive = false
+    if (btn) { btn.textContent = '🎙 VOICE'; btn.style.color = ''; btn.style.borderColor = '' }
+  }
+
+  pbVoiceRecognition.onend = () => {
+    pbVoiceActive = false
+    if (btn) { btn.textContent = '🎙 VOICE'; btn.style.color = ''; btn.style.borderColor = '' }
+  }
+
+  pbVoiceRecognition.start()
+}
+
+function pbVoiceClassify(transcript) {
+  // Split transcript into phrases by commas, dashes, conjunctions
+  const phrases = transcript
+    .split(/[,;—\-]|\band\b|\bwith\b|\bin\b|\bat\b|\bon\b/i)
+    .map(p => p.trim())
+    .filter(p => p.length > 2)
+
+  const all = pbGetParticles()
+  let matched = 0
+
+  phrases.forEach(phrase => {
+    // Find best matching particle
+    let best = null, bestScore = 0
+    all.forEach(p => {
+      const score = strSimilarity(phrase, p.text)
+      if (score > bestScore) { bestScore = score; best = p }
+    })
+    if (bestScore >= 0.35 && best) {
+      pbAddToFormula(best)
+      matched++
+    } else {
+      // Insert as free text
+      const bar = document.getElementById('pbFormula')
+      if (bar) {
+        const textNode = document.createTextNode((bar.textContent ? ' ' : '') + phrase)
+        bar.appendChild(textNode)
+        pbSyncFormulaFromDOM()
+      }
+    }
+  })
+
+  pbToast(`🎙 Added ${matched} particle${matched !== 1 ? 's' : ''} from voice`)
+  pbRenderLibrary() // refresh in-use indicators
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎨 COLOUR PALETTE IMPORTER
+// ═══════════════════════════════════════════════════════════════════
+function pbOpenPaletteImporter() {
+  document.getElementById('pbPaletteModal').style.display = 'flex'
+  document.getElementById('pbPaletteResults').style.display = 'none'
+  document.getElementById('pbPaletteDropzone').style.display = 'block'
+}
+
+function pbPaletteLoad(input) {
+  const file = input.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.getElementById('pbPaletteCanvas')
+      const size = 100
+      canvas.width = size; canvas.height = size
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, size, size)
+      const data = ctx.getImageData(0, 0, size, size).data
+      const colours = pbExtractPalette(data, size)
+      pbPaletteShowResults(colours)
+    }
+    img.src = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+function pbExtractPalette(data, size) {
+  // Sample a grid of pixels, cluster into 5 colours using simple k-means
+  const pixels = []
+  for (let i = 0; i < data.length; i += 4) {
+    // Skip near-black and near-white
+    const r = data[i], g = data[i+1], b = data[i+2]
+    const brightness = (r + g + b) / 3
+    if (brightness > 20 && brightness < 235) {
+      pixels.push([r, g, b])
+    }
+  }
+
+  // k-means with k=5
+  const k = 5
+  let centres = []
+  for (let i = 0; i < k; i++) {
+    centres.push(pixels[Math.floor((i / k) * pixels.length)] || [128,128,128])
+  }
+
+  for (let iter = 0; iter < 8; iter++) {
+    const clusters = Array.from({length: k}, () => [])
+    pixels.forEach(px => {
+      let minD = Infinity, minI = 0
+      centres.forEach((c, ci) => {
+        const d = Math.hypot(px[0]-c[0], px[1]-c[1], px[2]-c[2])
+        if (d < minD) { minD = d; minI = ci }
+      })
+      clusters[minI].push(px)
+    })
+    centres = clusters.map(cl => {
+      if (!cl.length) return [128,128,128]
+      const avg = cl.reduce((a,p) => [a[0]+p[0], a[1]+p[1], a[2]+p[2]], [0,0,0])
+      return avg.map(v => Math.round(v / cl.length))
+    })
+  }
+
+  return centres.map(c => {
+    const hex = '#' + c.map(v => v.toString(16).padStart(2,'0')).join('')
+    const name = pbRgbToName(c[0], c[1], c[2])
+    return { hex, name, r: c[0], g: c[1], b: c[2] }
+  })
+}
+
+function pbRgbToName(r, g, b) {
+  // Simple hue-based naming
+  const [h, s, l] = rgbToHSL(r, g, b)
+  const sat = s * 100, lum = l * 100
+  if (sat < 12) return lum < 20 ? 'deep black' : lum < 45 ? 'charcoal grey' : lum < 65 ? 'mid grey' : lum < 80 ? 'light grey' : 'off white'
+  const hue = h * 360
+  const lAdj = lum < 30 ? 'deep ' : lum < 50 ? 'dark ' : lum > 75 ? 'pale ' : ''
+  const sAdj = sat < 35 ? 'muted ' : sat > 70 ? 'vivid ' : ''
+  if (hue < 15 || hue >= 345) return lAdj + sAdj + 'red'
+  if (hue < 40) return lAdj + sAdj + 'orange'
+  if (hue < 65) return lAdj + sAdj + 'yellow'
+  if (hue < 150) return lAdj + sAdj + 'green'
+  if (hue < 195) return lAdj + sAdj + 'cyan'
+  if (hue < 255) return lAdj + sAdj + 'blue'
+  if (hue < 295) return lAdj + sAdj + 'purple'
+  if (hue < 345) return lAdj + sAdj + 'pink'
+  return 'coloured'
+}
+
+function rgbToHSL(r, g, b) {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), l = (max+min)/2
+  if (max === min) return [0, 0, l]
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h = max === r ? (g-b)/d + (g<b?6:0) : max === g ? (b-r)/d+2 : (r-g)/d+4
+  return [h/6, s, l]
+}
+
+function pbPaletteShowResults(colours) {
+  document.getElementById('pbPaletteDropzone').style.display = 'none'
+  const results = document.getElementById('pbPaletteResults')
+  const swatches = document.getElementById('pbPaletteSwatches')
+  results.style.display = 'block'
+  swatches.innerHTML = ''
+  colours.forEach(c => {
+    const swatch = document.createElement('div')
+    swatch.style.cssText = 'cursor:pointer;border-radius:6px;overflow:hidden;border:2px solid var(--border);flex:1;min-width:80px;'
+    swatch.title = 'Click to add: ' + c.name
+    swatch.innerHTML = `
+      <div style="height:60px;background:${c.hex};"></div>
+      <div style="padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--text);background:var(--surface2);">${c.name.toUpperCase()}</div>
+      <div style="padding:0 6px 5px;font-size:9px;color:var(--muted);background:var(--surface2);">${c.hex}</div>
+    `
+    swatch.addEventListener('click', () => pbPaletteAddColour(c))
+    swatches.appendChild(swatch)
+  })
+  swatches._colours = colours
+}
+
+function pbPaletteAddColour(c) {
+  const text = `${c.name} (${c.hex})`
+  // Add as a particle to the user's library
+  const p = { id: Date.now() + Math.random(), text, type: 'colour', cat: 'Custom', source: 'palette' }
+  pbLibraries[pbActiveLib].particles.push(p)
+  pbParticlesDriveSync()
+  pbAddToFormula(p)
+  pbToast(`🎨 Added: ${c.name}`)
+  pbRenderLibrary()
+}
+
+function pbPaletteAddAll() {
+  const colours = document.getElementById('pbPaletteSwatches')._colours || []
+  colours.forEach(c => pbPaletteAddColour(c))
+  document.getElementById('pbPaletteModal').style.display = 'none'
+  pbToast(`🎨 Added ${colours.length} colour particles`)
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 🧙 PROMPT WIZARD
+// ═══════════════════════════════════════════════════════════════════
+const WIZARD_STEPS = [
+  { type:'subject',     q:'What is the core subject?',           hint:'The main creature, character or object.' },
+  { type:'form',        q:'What is its shape and structure?',    hint:'Body form, armour, key structural features.' },
+  { type:'material',    q:'What is it made of?',                 hint:'The primary material or texture.' },
+  { type:'colour',      q:'What colours define it?',             hint:'A dominant colour palette.' },
+  { type:'environment', q:'Where does it exist?',                hint:'The world or setting it inhabits.' },
+  { type:'lighting',    q:'How is it lit?',                      hint:'The quality and direction of light.' },
+  { type:'style',       q:'What is the visual style?',           hint:'The artistic language or aesthetic.' },
+]
+let wizardStep = 0
+let wizardPicks = {}
+
+function pbOpenWizard() {
+  wizardStep = 0
+  wizardPicks = {}
+  document.getElementById('pbWizardModal').style.display = 'flex'
+  pbWizardRender()
+}
+
+function pbCloseWizard() {
+  document.getElementById('pbWizardModal').style.display = 'none'
+}
+
+function pbWizardRender() {
+  const step = WIZARD_STEPS[wizardStep]
+  const total = WIZARD_STEPS.length
+  const all = pbGetParticles().filter(p => p.type === step.type)
+
+  document.getElementById('pbWizardSubtitle').textContent = `Step ${wizardStep + 1} of ${total}`
+  document.getElementById('pbWizardProgress').style.width = `${((wizardStep) / total) * 100}%`
+
+  const t = PB_TYPES.find(x => x.key === step.type)
+  document.getElementById('pbWizardStep').textContent = (t?.label || step.type).toUpperCase()
+  document.getElementById('pbWizardStep').style.color = t?.color || 'var(--accent)'
+  document.getElementById('pbWizardQuestion').textContent = step.q
+
+  // Show hint below question
+  const hintEl = document.getElementById('pbWizardHint')
+  if (hintEl) hintEl.textContent = step.hint || ''
+
+  document.getElementById('pbWizardSummary').style.display = 'none'
+  document.getElementById('pbWizardBackBtn').disabled = wizardStep === 0
+  document.getElementById('pbWizardNextBtn').disabled = !wizardPicks[step.type]
+  document.getElementById('pbWizardSkipBtn').style.display = wizardStep < total - 1 ? 'block' : 'none'
+  document.getElementById('pbWizardNextBtn').textContent = wizardStep === total - 1 ? '✓ BUILD PROMPT' : 'NEXT →'
+
+  // Build option list — always include already-selected particle
+  const cats = [...new Set(all.map(p => p.cat))]
+  let options = []
+  cats.forEach(cat => {
+    const pool = all.filter(p => p.cat === cat)
+    if (pool.length) options.push(pool[Math.floor(Math.random() * pool.length)])
+  })
+  while (options.length < 8 && all.length > options.length) {
+    const candidate = all[Math.floor(Math.random() * all.length)]
+    if (!options.find(o => o.id === candidate.id)) options.push(candidate)
+  }
+  options = options.slice(0, 8)
+
+  // Always ensure the currently selected particle is visible
+  const picked = wizardPicks[step.type]
+  if (picked && !options.find(o => o.id === picked.id)) {
+    options[options.length - 1] = picked  // replace last option with selected
+  }
+
+  const optContainer = document.getElementById('pbWizardOptions')
+  optContainer.innerHTML = ''
+
+  // Selected particle summary at top if one is chosen
+  if (picked) {
+    const sel = document.createElement('div')
+    sel.style.cssText = `
+      width:100%;padding:8px 12px;border-radius:4px;margin-bottom:4px;
+      border:2px solid ${t?.color || 'var(--accent)'};
+      background:color-mix(in srgb,${t?.color || 'var(--accent)'} 15%,transparent);
+      display:flex;align-items:center;gap:8px;
+    `
+    sel.innerHTML = `
+      <span style="color:${t?.color || 'var(--accent)'};font-size:14px;">✓</span>
+      <span style="font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;color:${t?.color || 'var(--accent)'};flex:1;">${picked.text.length > 60 ? picked.text.slice(0,60)+'…' : picked.text}</span>
+      <span style="font-size:10px;color:${t?.color || 'var(--accent)'};opacity:.6;letter-spacing:1px;">SELECTED</span>
+    `
+    optContainer.appendChild(sel)
+  }
+
+  // Divider label
+  const divLabel = document.createElement('div')
+  divLabel.style.cssText = 'width:100%;font-size:10px;letter-spacing:1.5px;color:var(--muted);margin:4px 0 2px;font-weight:700;'
+  divLabel.textContent = picked ? 'CHANGE SELECTION:' : 'CHOOSE ONE:'
+  optContainer.appendChild(divLabel)
+
+  options.forEach(p => {
+    const isSelected = picked?.id === p.id
+    const btn = document.createElement('button')
+    btn.style.cssText = `
+      padding:8px 12px;border-radius:4px;cursor:pointer;text-align:left;width:100%;
+      font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:.3px;
+      border:1px solid ${isSelected ? (t?.color || 'var(--accent)') : 'var(--border)'};
+      background:${isSelected ? `color-mix(in srgb,${t?.color || 'var(--accent)'} 12%,transparent)` : 'transparent'};
+      color:${isSelected ? (t?.color || 'var(--accent)') : 'var(--text)'};
+      transition:all .1s;
+      ${isSelected ? `outline:2px solid ${t?.color || 'var(--accent)'}33;` : ''}
+    `
+    btn.innerHTML = `${isSelected ? '<span style="margin-right:6px;">✓</span>' : ''}<span>${p.text.length > 55 ? p.text.slice(0, 55) + '…' : p.text}</span>`
+    btn.addEventListener('click', () => {
+      wizardPicks[step.type] = p
+      document.getElementById('pbWizardNextBtn').disabled = false
+      pbWizardRender()
+    })
+    optContainer.appendChild(btn)
+  })
+}
+
+function pbWizardNext() {
+  const step = WIZARD_STEPS[wizardStep]
+  if (wizardStep < WIZARD_STEPS.length - 1) {
+    wizardStep++
+    pbWizardRender()
+  } else {
+    // Final step — build the prompt
+    pbCloseWizard()
+    pbClearFormula()
+    const bar = El.pbFormula || document.getElementById('pbFormula')
+    WIZARD_STEPS.forEach((s, idx) => {
+      if (!wizardPicks[s.type]) return
+      const p = wizardPicks[s.type]
+      const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
+      bar.appendChild(chip)
+      // Space separator between chips
+      bar.appendChild(document.createTextNode(' '))
+    })
+    pbSyncFormulaFromDOM()
+    pbUpdateBottomBar()
+    pbToast('🧙 Wizard complete — prompt assembled!')
+  }
+}
+
+function pbWizardSkip() {
+  if (wizardStep < WIZARD_STEPS.length - 1) {
+    wizardStep++
+    pbWizardRender()
+  }
+}
+
+function pbWizardBack() {
+  if (wizardStep > 0) {
+    wizardStep--
+    pbWizardRender()
+  }
+}
+
+function pbRunAnalyser() {
+  const panel   = document.getElementById('pbAnalyser')
+  const scoreEl = document.getElementById('pbAnalyserScore')
+  const statsEl = document.getElementById('pbAnalyserStats')
+  const covEl   = document.getElementById('pbAnalyserCoverage')
+  const missEl  = document.getElementById('pbAnalyserMissing')
+  if (!panel) return
+
+  // Build snapshot of what's in the formula
+  const allParticles = pbGetParticles()
+  const presentTypes = new Set()
+  let particleCount = 0
+  let freeWordCount = 0
+
+  pbFormula.forEach(entry => {
+    if (entry.isText) {
+      freeWordCount += entry.text.trim().split(/\s+/).filter(Boolean).length
+    } else {
+      const p = allParticles.find(x => x.id === entry.particleId)
+      if (p) {
+        presentTypes.add(p.type)
+        particleCount++
+        // Also count words in particle text
+        freeWordCount += p.text.trim().split(/\s+/).filter(Boolean).length
+      }
+    }
+  })
+
+  const totalWords  = freeWordCount
+  const tokenEst    = Math.round(totalWords * 1.35)
+  const coverage    = presentTypes.size
+  const total       = PB_TYPES.length  // 11
+
+  // Hide panel if formula is empty
+  if (particleCount === 0 && freeWordCount === 0) {
+    panel.style.display = 'none'
+    return
+  }
+  panel.style.display = 'block'
+
+  // Score: weighted coverage (60%) + balance (20%) + length sweet spot (20%)
+  const coverageScore = Math.round((coverage / total) * 100)
+
+  // Balance: penalise if any one type is used >3x more than average
+  const typeCounts = {}
+  pbFormula.forEach(e => {
+    if (!e.isText) {
+      const p = allParticles.find(x => x.id === e.particleId)
+      if (p) typeCounts[p.type] = (typeCounts[p.type] || 0) + 1
+    }
+  })
+  const counts = Object.values(typeCounts)
+  const maxCount = Math.max(...counts, 1)
+  const avgCount = counts.length ? counts.reduce((a,b) => a+b, 0) / counts.length : 1
+  const balanceScore = Math.min(100, Math.round(100 - ((maxCount / avgCount - 1) * 20)))
+
+  // Length sweet spot: 30–80 words = 100, outside tapers
+  const lengthScore = totalWords < 10 ? Math.round(totalWords * 7)
+    : totalWords <= 80 ? 100
+    : Math.max(40, Math.round(100 - (totalWords - 80) * 1.5))
+
+  const composite = Math.round(coverageScore * 0.6 + balanceScore * 0.2 + lengthScore * 0.2)
+  const grade = composite >= 85 ? 'EXCELLENT'
+    : composite >= 70 ? 'STRONG'
+    : composite >= 50 ? 'GOOD'
+    : composite >= 30 ? 'DEVELOPING'
+    : 'SPARSE'
+
+  const gradeColor = composite >= 85 ? 'var(--accent)'
+    : composite >= 70 ? '#22d46e'
+    : composite >= 50 ? '#ffd426'
+    : composite >= 30 ? '#ff7c2a'
+    : '#ff3b3b'
+
+  scoreEl.innerHTML = `<span style="color:${gradeColor}">${composite}<span style="font-size:13px;opacity:.6;">/100</span></span>`
+  statsEl.innerHTML = `${particleCount} particle${particleCount!==1?'s':''} · ~${tokenEst} tokens<br>${coverage}/${total} categories covered`
+
+  // Coverage chips — one per PB_TYPE
+  covEl.innerHTML = ''
+  PB_TYPES.forEach(t => {
+    const present = presentTypes.has(t.key)
+    const chip = document.createElement('div')
+    chip.title = t.label + (present ? ' ✓' : ' — missing')
+    chip.style.cssText = `
+      display:inline-flex;align-items:center;gap:4px;
+      padding:3px 7px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:.5px;
+      border:1px solid ${present ? t.color+'66' : 'var(--border)'};
+      background:${present ? `color-mix(in srgb,${t.color} 15%,transparent)` : 'transparent'};
+      color:${present ? t.color : 'var(--muted)'};
+      opacity:${present ? '1' : '0.45'};
+      transition:all .2s;
+    `
+    chip.innerHTML = `<span style="width:5px;height:5px;border-radius:50%;background:${present ? t.color : 'var(--muted)'};flex-shrink:0;display:inline-block;"></span>${t.label}`
+    covEl.appendChild(chip)
+  })
+
+  // Missing suggestions
+  const missing = PB_TYPES.filter(t => !presentTypes.has(t.key))
+  if (missing.length === 0) {
+    missEl.innerHTML = '<span style="color:#22d46e;">✓ All 11 categories covered — exceptional prompt.</span>'
+  } else if (missing.length <= 4) {
+    const suggestions = {
+      lighting:    'Try adding how your subject is lit — it transforms the mood.',
+      environment: 'Where does this exist? A setting grounds the viewer.',
+      action:      'What is it doing? Motion adds life.',
+      connector:   'A connector particle can tie ideas together elegantly.',
+      colour:      'Specifying colour gives the generator a tonal anchor.',
+      reference:   'An aesthetic reference helps the AI understand your style intent.',
+      technical:   'Camera or render specs sharpen the final output.',
+      style:       'A style particle defines the overall visual language.',
+      material:    'What is it made of? Material defines physicality.',
+      form:        'Describe its shape and structure more specifically.',
+      subject:     'Be more specific about the core subject.',
+    }
+    const tip = suggestions[missing[0].key] || ''
+    missEl.innerHTML = `<span style="opacity:.6;">Missing: </span>${missing.map(t => `<span style="color:${t.color};font-weight:700;">${t.label}</span>`).join(' · ')}`
+      + (tip ? `<br><span style="opacity:.5;font-size:10px;">${tip}</span>` : '')
+  } else {
+    missEl.innerHTML = `<span style="opacity:.6;">Missing ${missing.length} categories — keep building to increase your score.</span>`
+  }
 }
 
 // Build a chip DOM element from a formula entry + particle
@@ -11219,6 +12203,7 @@ function pbRenderFormula() {
 
   // Re-apply replace highlight if we were mid-replace
   if (wasReplacing) pbStartReplace(wasReplacing.uid, wasReplacing.typeKey)
+  pbRunAnalyser()
 }
 
 // pbRenderOutput is an alias
@@ -11699,9 +12684,8 @@ function pbSaveParticle() {
   const el = document.getElementById('pbt_' + type)
   if (el) { pbCollapsed[type] = false; setTimeout(() => el.scrollIntoView({behavior:'smooth',block:'center'}), 50) }
   pbParticlesDriveSync()
+  pbSetupTrackParticle()
 }
-
-// ── DRIVE SYNC ─────────────────────────────────────────────────────
 async function pbParticlesDriveSync() {
   lsSave(LS.PB_LIBS, pbLibraries)
   if (!cloudIsConnected()) return
@@ -11913,6 +12897,10 @@ function pbRenderLibBar() {
   })
 
   document.addEventListener('click', () => { panel.style.display = 'none' }, { once: false })
+  // Close on scroll or resize so panel doesn't drift from its anchor
+  const closeOnScroll = () => { panel.style.display = 'none' }
+  window.addEventListener('scroll', closeOnScroll, { passive: true, capture: true })
+  window.addEventListener('resize', closeOnScroll, { passive: true })
 
   wrap.appendChild(btn)
 
@@ -11930,9 +12918,10 @@ function pbSwitchLib(i) {
 
 function pbToggleBuiltin() {
   pbShowBuiltin = !pbShowBuiltin
-  _pbGenParticleCache = null  // force rebuild
+  _pbGenParticleCache = null
   pbRenderLibBar()
   pbRenderLibrary()
+  pbSetupTrackBuiltins()
 }
 
 
@@ -14267,6 +15256,9 @@ function pbSaveTagged() {
     added++
   })
   pbParticlesDriveSync()
+  // Track particles added via import for setup wizard
+  for (let i = 0; i < added; i++) pbSetupTrackParticle()
+  pbSetupTrackImport()
   pbRenderLibBar()
   pbRenderLibrary()
   pbRenderFormula()
@@ -14433,7 +15425,9 @@ document.addEventListener('viewSwitched', e => {
 <div id="syncGateModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
-      <div class="modal-title">// CONNECT CLOUD SYNC</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:var(--accent);line-height:1;">// PROMPT LAB</div>
+      <div style="font-size:10px;letter-spacing:2px;color:var(--muted);">YOUR STYLE, YOUR EXPERTISE, YOUR PROMPT.</div>
+      <div class="modal-title" style="margin-top:8px;">// CONNECT CLOUD SYNC</div>
       <div style="font-size:10px;letter-spacing:1.5px;color:var(--muted);line-height:1.7;">
         Your prompts, particles and settings sync across devices.<br>
         Choose a service to get started.
@@ -14507,6 +15501,42 @@ document.addEventListener('viewSwitched', e => {
     </div>
   </div>
 </div>
+
+<!-- ═══════════════════ ORIENTATION GUIDE ═══════════════════ -->
+<div id="pbOrientModal" style="display:none;position:fixed;inset:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
+  <div class="modal-card" style="max-width:460px;width:100%;">
+    <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:4px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</div>
+      <div style="font-size:10px;letter-spacing:2px;color:var(--muted);">QUICK ORIENTATION</div>
+    </div>
+    <div class="modal-body" style="padding-top:0;">
+      <!-- Progress dots -->
+      <div style="display:flex;gap:6px;margin-bottom:16px;" id="pbOrientDots"></div>
+      <div id="pbOrientContent"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button class="btn btn-ghost" style="font-size:12px;" id="pbOrientBackBtn" onclick="pbOrientNav(-1)">← BACK</button>
+      <button class="btn btn-primary" style="font-size:12px;" id="pbOrientNextBtn" onclick="pbOrientNav(1)">NEXT →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SETUP WIZARD PANEL ═══════════════════ -->
+<div id="pbSetupPanel" style="display:none;position:fixed;z-index:19000;background:var(--surface);border:1px solid var(--accent);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);width:300px;transition:all .3s;">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:var(--accent);">⚙ SETUP</div>
+      <button onclick="pbSetupSkip()" style="background:none;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);padding:2px 6px;">SKIP SETUP</button>
+    </div>
+    <div id="pbSetupProgress" style="height:3px;background:var(--surface2);border-radius:2px;margin-top:8px;">
+      <div id="pbSetupProgressBar" style="height:100%;background:var(--accent);border-radius:2px;transition:width .4s;width:0%;"></div>
+    </div>
+  </div>
+  <div id="pbSetupSteps" style="padding:8px 0;"></div>
+</div>
+
+<!-- Spotlight overlay for Show Me -->
+<div id="pbSpotlightOverlay" style="display:none;position:fixed;inset:0;z-index:18999;background:rgba(0,0,0,.6);pointer-events:none;"></div>
 
 <!-- ═══════════════════ ZIP IMPORT MODAL ═══════════════════ -->
 <div id="zipImportModal" style="display:none;position:fixed;inset:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
