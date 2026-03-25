@@ -58,7 +58,7 @@ body {
 /* animated scanline bg */
 body::before {
   content:'';
-  position:fixed;inset:0;
+  position:fixed;top:0;right:0;bottom:0;left:0;
   background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px);
   pointer-events:none;z-index:0;
 }
@@ -286,7 +286,7 @@ select:focus { border-color: var(--accent); }
 
 /* HOVER PREVIEW POPUP */
 #thumbPreviewBackdrop {
-  display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);
+  display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:9998;background:rgba(0,0,0,.6);
 }
 #thumbPreviewBackdrop.visible { display:block; }
 #thumbPreview {
@@ -505,7 +505,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 
 /* RESTORE POPUP */
 #driveRestorePopup {
-  display:none;position:fixed;inset:0;z-index:10000;
+  display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10000;
   align-items:center;justify-content:center;
   background:rgba(0,0,0,.75);
 }
@@ -856,7 +856,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
 
 #libLightbox {
-  display:none;position:fixed;inset:0;z-index:10002;
+  display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10002;
   background:rgba(0,0,0,.92);align-items:center;justify-content:center;
   cursor:zoom-out;
 }
@@ -876,7 +876,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
    IMAGE UPLOAD MODAL
 ═══════════════════════════════════════════════════════ */
 #imageUploadModal {
-  display:none;position:fixed;inset:0;z-index:10001;
+  display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10001;
   background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;
 }
 #imageUploadModal.open { display:flex; }
@@ -933,7 +933,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   box-shadow:0 0 0 2px rgba(255,255,255,.3);
 }
 .theme-swatch .swatch-check {
-  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;
   font-size:16px;font-weight:900;color:#000;opacity:0;
 }
 .theme-swatch.active .swatch-check { opacity:1; }
@@ -2215,7 +2215,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- HOVER PREVIEW POPUP -->
-<div id="thumbPreviewBackdrop" onclick="hidePreview()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);"></div>
+<div id="thumbPreviewBackdrop" onclick="hidePreview()" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:9998;background:rgba(0,0,0,.6);"></div>
 <div id="thumbPreview">
   <div style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;">
     <div class="preview-label" id="thumbPreviewLabel"></div>
@@ -2320,7 +2320,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- STYLE EDITOR MODAL -->
-<div id="styleEditorOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">
+<div id="styleEditorOverlay" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10000;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--surface);border:1px solid var(--accent);border-radius:4px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
@@ -2758,7 +2758,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   </div>
 </div>
 <!-- STYLE EDITOR MODAL -->
-<div id="styleEditorOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">
+<div id="styleEditorOverlay" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10000;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--surface);border:1px solid var(--accent);border-radius:4px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
@@ -3094,7 +3094,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- ═══════════════════════════════ PROMPT WIZARD ═══════════════════════════════ -->
-<div id="pbWizardModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+<div id="pbWizardModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
   <div class="modal-card" style="max-width:560px;width:100%;margin:auto;">
     <div class="modal-header">
       <div>
@@ -3125,7 +3125,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- ═══════════════════════════════ COLOUR PALETTE IMPORTER ═══════════════════════════════ -->
-<div id="pbPaletteModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;">
+<div id="pbPaletteModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
     <div class="modal-header">
       <div class="modal-title">// COLOUR PALETTE IMPORTER</div>
@@ -3179,7 +3179,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
 
 <!-- ═══════════════════════════════ IMPORT PROMPT MODAL ════════════ -->
-<div id="pbImportModal" style="display:none;position:fixed;inset:0;z-index:10003;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+<div id="pbImportModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10003;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
   <div class="pb-import-card">
 
     <div class="pb-import-header">
@@ -3227,7 +3227,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- ═══════════════════════ VERSION HISTORY MODAL ═══════════════════════ -->
-<div id="versionHistoryModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+<div id="versionHistoryModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10010;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
   <div class="modal-card" style="max-width:600px;">
     <div class="modal-header">
       <div class="modal-title">// VERSION HISTORY</div>
@@ -3238,7 +3238,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- ═══════════════════════ ITERATE MODAL ═══════════════════════ -->
-<div id="iterModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+<div id="iterModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
   <div class="modal-card" style="max-width:700px;width:100%;">
     <div class="modal-header">
       <div>
@@ -3291,7 +3291,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- Iterate results panel (appears below iterate modal trigger) -->
-<div id="iterResultsModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+<div id="iterResultsModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10010;background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
   <div class="modal-card" style="max-width:700px;width:100%;">
     <div class="modal-header">
       <div class="modal-title">// VARIANTS</div>
@@ -3306,7 +3306,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- ═══════════════════════ DRIVE PHOTO PICKER MODAL ═══════════════════════ -->
-<div id="drivePhotoModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+<div id="drivePhotoModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10010;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
   <div class="modal-card" style="max-width:700px;">
     <div class="modal-header">
       <div>
@@ -11851,7 +11851,7 @@ function pbAcShowSimilarityModal(newText, similar) {
 
   const overlay = document.createElement('div')
   overlay.id = 'pbAcSimilarModal'
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:20px;'
+  overlay.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:20px;'
 
   const card = document.createElement('div')
   card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;max-width:440px;width:100%;padding:20px;'
@@ -15423,15 +15423,13 @@ function tourEnd() {
   lsSave('bm_tour_done', TOUR_VERSION)
 }
 
-// Trigger tour when Prompt Lab is opened for the first time
-// Inline into switchView by patching the existing function's body via a post-switch hook
+// Old tour suppressed — replaced by orientation guide + setup wizard
+// Kept in place to avoid breaking existing tour_done localStorage keys
 document.addEventListener('viewSwitched', e => {
-  if (e.detail === 'builder' && lsLoad('bm_tour_done') !== TOUR_VERSION && !tourActive) {
-    setTimeout(tourStart, 600)
-  }
+  // No-op: tour disabled, orientation guide handles first-run experience
 })
 </script>
-<div id="syncGateModal" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
+<div id="syncGateModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:var(--accent);line-height:1;">// PROMPT LAB</div>
@@ -15507,7 +15505,7 @@ document.addEventListener('viewSwitched', e => {
 </div>
 
 <!-- ═══════════════════ ORIENTATION GUIDE ═══════════════════ -->
-<div id="pbOrientModal" style="display:none;position:fixed;inset:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
+<div id="pbOrientModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:460px;width:100%;">
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:4px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</div>
@@ -15540,10 +15538,10 @@ document.addEventListener('viewSwitched', e => {
 </div>
 
 <!-- Spotlight overlay for Show Me -->
-<div id="pbSpotlightOverlay" style="display:none;position:fixed;inset:0;z-index:18999;background:rgba(0,0,0,.6);pointer-events:none;"></div>
+<div id="pbSpotlightOverlay" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:18999;background:rgba(0,0,0,.6);pointer-events:none;"></div>
 
 <!-- ═══════════════════ ZIP IMPORT MODAL ═══════════════════ -->
-<div id="zipImportModal" style="display:none;position:fixed;inset:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
+<div id="zipImportModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
     <div class="modal-header">
       <div class="modal-title">// IMPORT FROM ZIP</div>
@@ -15565,7 +15563,7 @@ document.addEventListener('viewSwitched', e => {
 </div>
 
 <!-- ══════════════════ PROMPT LAB WALKTHROUGH ══════════════════ -->
-<div id="tourOverlay" style="display:none;position:fixed;inset:0;z-index:30000;pointer-events:none;">
+<div id="tourOverlay" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:30000;pointer-events:none;">
   <div id="tourSpotlight" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,.72);border-radius:8px;transition:all .35s ease;pointer-events:none;"></div>
   <div id="tourCard" class="tour-card" style="position:absolute;pointer-events:all;">
     <div class="tour-step-badge" id="tourStepBadge">1 / 5</div>
