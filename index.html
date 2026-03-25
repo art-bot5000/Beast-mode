@@ -1861,11 +1861,14 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
 /* ── FORMULA AUTOCOMPLETE ─────────────────────────────────────── */
 .pb-ac-dropdown {
-  position:absolute;z-index:99999;
+  position:fixed;z-index:99999;
   background:var(--surface);border:1px solid var(--accent);border-radius:6px;
-  min-width:240px;max-width:360px;max-height:300px;overflow-y:auto;
+  min-width:240px;max-width:360px;
   box-shadow:0 8px 24px rgba(0,0,0,.7);
   display:none;
+  flex-direction:column;
+  max-height:360px;
+  overflow:hidden;
 }
 .pb-ac-item {
   display:flex;align-items:center;gap:8px;
@@ -10696,10 +10699,10 @@ function pbAcShow(particles, caretRange) {
   searchWrap.appendChild(searchInp)
   pbAcDropdown.appendChild(searchWrap)
 
-  // Items container
+  // Items container — scrolls within the flex dropdown
   const list = document.createElement('div')
   list.className = 'pb-ac-list'
-  list.style.cssText = 'max-height:260px;overflow-y:auto;'
+  list.style.cssText = 'flex:1;overflow-y:auto;min-height:0;'
   pbAcDropdown.appendChild(list)
   pbAcDropdown._typedWord = pbAcWordRange ? pbAcGetTypedWord() : ''
   pbAcRenderItems(particles, list, pbAcDropdown._typedWord)
@@ -10721,7 +10724,7 @@ function pbAcShow(particles, caretRange) {
 
   pbAcDropdown.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + 'px'
   pbAcDropdown.style.top  = top + 'px'
-  pbAcDropdown.style.display = 'block'
+  pbAcDropdown.style.display = 'flex'
 
   // Pre-fill search with typed word but keep focus in formula box
   setTimeout(() => {
