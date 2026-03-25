@@ -10651,10 +10651,11 @@ function pbOrientRender() {
 
 function pbOrientNav(dir) {
   if (dir === 1 && orientStep === ORIENT_STEPS.length - 1) {
-    // Done — close guide, show setup wizard
+    // Done — close guide, switch to Prompt Lab, show setup wizard
     document.getElementById('pbOrientModal').style.display = 'none'
     localStorage.setItem(ORIENT_KEY, '1')
-    pbSetupInit()
+    switchView('builder')
+    setTimeout(pbSetupInit, 300)
     return
   }
   orientStep = Math.max(0, Math.min(ORIENT_STEPS.length - 1, orientStep + dir))
@@ -10793,10 +10794,14 @@ function pbSetupRender() {
 function pbSetupPosition() {
   const panel = document.getElementById('pbSetupPanel')
   if (!panel) return
-  panel.style.bottom = '72px'
+  const navH = document.querySelector('nav')?.offsetHeight || 56
+  panel.style.bottom = (navH + 12) + 'px'
   panel.style.right  = '12px'
+  panel.style.left   = '12px'
   panel.style.top    = 'auto'
-  panel.style.left   = 'auto'
+  panel.style.width  = 'auto'
+  panel.style.maxWidth = '360px'
+  panel.style.margin = '0 auto'
 }
 
 function pbSetupFinish() {
@@ -10881,9 +10886,13 @@ function pbCheckFirstRun() {
   if (genOnlyMode) return
   if (localStorage.getItem(SETUP_KEY) === '1') return
   if (localStorage.getItem(ORIENT_KEY) !== '1') {
-    pbOrientShow()
+    // Show orientation guide first
+    switchView('builder')
+    setTimeout(pbOrientShow, 200)
   } else {
-    pbSetupInit()
+    // Orientation done, show setup wizard
+    switchView('builder')
+    setTimeout(pbSetupInit, 200)
   }
 }
 
@@ -15427,20 +15436,8 @@ document.addEventListener('viewSwitched', e => {
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:var(--accent);line-height:1;">// PROMPT LAB</div>
       <div style="font-size:10px;letter-spacing:2px;color:var(--muted);">YOUR STYLE, YOUR EXPERTISE, YOUR PROMPT.</div>
-      <div class="modal-title" style="margin-top:8px;">// CONNECT CLOUD SYNC</div>
-      <div style="font-size:10px;letter-spacing:1.5px;color:var(--muted);line-height:1.7;">
-        Your prompts, particles and settings sync across devices.<br>
-        Choose a service to get started.
-      </div>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
-      <!-- Recommendation notice -->
-      <div style="background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:5px;padding:10px 14px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:5px;">⊛ RECOMMENDED FOR FULL ACCESS</div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.7;letter-spacing:.3px;">
-          Connecting a cloud service unlocks the full app — <strong style="color:var(--text);">Generator</strong>, <strong style="color:var(--text);">Prompt Lab</strong> and <strong style="color:var(--text);">Prompt Library</strong> — with all your prompts, particles and settings saved and synced across devices. Without it, data is stored in your browser only and can be lost if storage is cleared.
-        </div>
-      </div>
       <!-- Google Drive -->
       <button class="sync-gate-btn" onclick="syncGateChooseGdrive()" id="syncGateGdriveBtn">
         <span class="sync-gate-icon" style="background:color-mix(in srgb,#4285F4 20%,transparent);color:#4285F4;">▲</span>
@@ -15467,6 +15464,13 @@ document.addEventListener('viewSwitched', e => {
           CREATE ACCOUNT
         </a>
       </button>
+      <!-- Recommendation notice -->
+      <div style="background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:5px;padding:10px 14px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:5px;">⊛ RECOMMENDED FOR FULL ACCESS</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.7;letter-spacing:.3px;">
+          Connecting a cloud service unlocks the full app — <strong style="color:var(--text);">Generator</strong>, <strong style="color:var(--text);">Prompt Lab</strong> and <strong style="color:var(--text);">Prompt Library</strong> — with all your prompts, particles and settings saved and synced across devices. Without it, data is stored in your browser only and can be lost if storage is cleared.
+        </div>
+      </div>
       <!-- Divider -->
       <div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
         <div style="flex:1;height:1px;background:var(--border);"></div>
