@@ -2964,12 +2964,6 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
       <button onclick="pbCancelEdit()" style="background:none;border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:#38b6ff;">✕ CANCEL EDIT</button>
     </div>
 
-    <!-- // PARTICLE LIBRARY label + library tabs -->
-    <div class="pb-section-label" style="margin-bottom:8px;">// PARTICLE LIBRARY</div>
-    <div class="pb-lib-bar" style="margin-bottom:16px;">
-      <div class="pb-lib-tabs" id="pbLibTabs"></div>
-    </div>
-
     <!-- // ASSEMBLED PROMPT — formula box, buttons below -->
     <div class="pb-assembled-wrap" id="pbAssembledWrap" style="margin-bottom:20px;">
       <div class="pb-section-label" style="margin-bottom:8px;">// ASSEMBLED PROMPT</div>
@@ -2990,7 +2984,6 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
       <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-outline" style="font-size:12px;padding:5px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
-        <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
       </div>
     </div>
 
@@ -3040,12 +3033,17 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
       </div>
     </div>
 
-    <!-- Expand/Minimise All -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+    <!-- // PARTICLE LIBRARY label + library dropdown -->
+    <div class="pb-section-label" style="margin-bottom:6px;">// PARTICLE LIBRARY</div>
+    <div id="pbLibBar" style="position:relative;margin-bottom:10px;"></div>
+
+    <!-- Expand/Minimise + visibility controls -->
+    <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:6px;flex-wrap:wrap;">
       <div class="pb-expand-toggle" id="pbExpandToggle">
         <button class="pb-expand-btn active" id="pbExpandAllBtn" onclick="pbSetAllCollapsed(false)">▼ EXPAND ALL</button>
         <button class="pb-expand-btn" id="pbCollapseAllBtn" onclick="pbSetAllCollapsed(true)">▲ MINIMISE ALL</button>
       </div>
+      <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
       <button id="pbAddPersonalCatBtn" onclick="pcAddCategory()" style="display:none;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 12px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">+ PERSONAL CATEGORY</button>
     </div>
 
@@ -9579,7 +9577,7 @@ function pbRenderLibrary() {
     block.style.setProperty('--tc', t.color)
     const totalCount = allItems.length
 
-    // Drag handle
+    // Drag handle — Editor mode only
     const dragHandle = document.createElement('span')
     dragHandle.className = 'pb-type-drag-handle'
     dragHandle.title = 'Drag to reorder'
@@ -9593,7 +9591,11 @@ function pbRenderLibrary() {
       <span class="pb-hide-btn" title="${isHidden ? 'Show category' : 'Hide category'}" style="opacity:.4;cursor:pointer;font-size:13px;padding:0 4px;flex-shrink:0;transition:opacity .1s;">${isHidden ? '👁' : '🙈'}</span>
       <span class="pb-type-arrow ${isOpen && !isHidden?'open':''}">▼</span>
     `
-    hdr.insertBefore(dragHandle, hdr.firstChild)
+
+    // Only add drag handle in Editor mode
+    if (pbLabMode === 'editor') {
+      hdr.insertBefore(dragHandle, hdr.firstChild)
+    }
 
     // Hide toggle
     hdr.querySelector('.pb-hide-btn').addEventListener('click', e => {
@@ -9608,41 +9610,47 @@ function pbRenderLibrary() {
       pbCollapsed[t.key] = isOpen; pbRenderLibrary()
     }
 
-    // Drag to reorder
-    block.draggable = true
-    block.dataset.typeKey = t.key
-    block.addEventListener('dragstart', e => {
-      dragSrcKey = t.key
-      e.dataTransfer.effectAllowed = 'move'
-      setTimeout(() => block.style.opacity = '.4', 0)
-    })
-    block.addEventListener('dragend', () => { block.style.opacity = '' })
-    block.addEventListener('dragover', e => {
-      e.preventDefault()
-      block.classList.add('pb-drag-over')
-    })
-    block.addEventListener('dragleave', () => block.classList.remove('pb-drag-over'))
-    block.addEventListener('drop', e => {
-      e.preventDefault()
-      block.classList.remove('pb-drag-over')
-      if (!dragSrcKey || dragSrcKey === t.key) return
-      const order = catOrderLoad()
-      // Ensure all types are in order array
-      const allKeys = [...orderedTypes.map(x => x.key)]
-      const fullOrder = allKeys.filter(k => order.includes(k) ? true : true)
-        .sort((a,b) => {
-          const ia = order.indexOf(a), ib = order.indexOf(b)
-          return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
-        })
-      const srcIdx  = fullOrder.indexOf(dragSrcKey)
-      const tgtIdx  = fullOrder.indexOf(t.key)
-      if (srcIdx !== -1) {
-        fullOrder.splice(srcIdx, 1)
-        fullOrder.splice(tgtIdx, 0, dragSrcKey)
-      }
-      catOrderSave(fullOrder)
-      pbRenderLibrary()
-    })
+    // Drag to reorder — Editor mode only, initiated from handle only
+    if (pbLabMode === 'editor') {
+      block.draggable = false  // only enabled when handle is grabbed
+
+      dragHandle.addEventListener('mousedown', () => { block.draggable = true })
+      dragHandle.addEventListener('touchstart', () => { block.draggable = true }, { passive: true })
+      block.addEventListener('dragend', () => {
+        block.draggable = false
+        block.style.opacity = ''
+        dragSrcKey = null
+      })
+
+      block.addEventListener('dragstart', e => {
+        if (!block.draggable) { e.preventDefault(); return }
+        dragSrcKey = t.key
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', t.key)
+        setTimeout(() => block.style.opacity = '.4', 0)
+      })
+      block.addEventListener('dragover', e => {
+        if (!dragSrcKey) return
+        e.preventDefault()
+        block.classList.add('pb-drag-over')
+      })
+      block.addEventListener('dragleave', () => block.classList.remove('pb-drag-over'))
+      block.addEventListener('drop', e => {
+        e.preventDefault()
+        block.classList.remove('pb-drag-over')
+        if (!dragSrcKey || dragSrcKey === t.key) return
+        // Re-derive full current order from orderedTypes
+        const fullOrder = orderedTypes.map(x => x.key)
+        const srcIdx = fullOrder.indexOf(dragSrcKey)
+        const tgtIdx = fullOrder.indexOf(t.key)
+        if (srcIdx !== -1 && tgtIdx !== -1) {
+          fullOrder.splice(srcIdx, 1)
+          fullOrder.splice(tgtIdx, 0, dragSrcKey)
+        }
+        catOrderSave(fullOrder)
+        pbRenderLibrary()
+      })
+    }
 
     block.appendChild(hdr)
 
@@ -11803,38 +11811,107 @@ function pbEsc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 
 // ── LIBRARY SELECTOR ───────────────────────────────────────────────
 function pbRenderLibBar() {
-  const tabs = document.getElementById('pbLibTabs')
+  // Render into the library bar above assembled prompt
+  const wrap = document.getElementById('pbLibBar')
   const toggle = document.getElementById('pbBuiltinToggle')
-  if (!tabs) return
+  if (!wrap) return
 
-  tabs.innerHTML = ''
-  pbLibraries.forEach((lib, i) => {
-    const tab = document.createElement('div')
-    tab.className = 'pb-lib-tab' + (i === pbActiveLib ? ' active' : '')
+  wrap.innerHTML = ''
 
-    const nameEl = document.createElement('input')
-    nameEl.className = 'pb-lib-tab-name'
-    nameEl.value = lib.name
-    nameEl.title = 'Click to rename library'
-    nameEl.maxLength = 20
-    nameEl.onclick  = e => { if (i !== pbActiveLib) { pbSwitchLib(i); return } e.stopPropagation() }
-    nameEl.onkeydown = e => { if (e.key === 'Enter') nameEl.blur() }
-    nameEl.onblur   = () => {
-      const name = nameEl.value.trim() || PB_LIB_DEFAULTS[i]
-      if (name !== lib.name) { lib.name = name; pbParticlesDriveSync() }
+  const activeLib = pbLibraries[pbActiveLib] || pbLibraries[0]
+
+  // Trigger button
+  const btn = document.createElement('button')
+  btn.className = 'preset-dd-btn'
+  btn.style.cssText = 'width:100%;text-align:left;'
+  btn.innerHTML = `
+    <span class="preset-dd-label" style="font-size:13px;">
+      ${activeLib.name}
+      <span style="opacity:.5;font-weight:400;margin-left:6px;">${activeLib.particles.length} particles</span>
+    </span>
+    <span class="preset-dd-arrow">▾</span>
+  `
+
+  // Dropdown panel — portaled to body like preset dropdowns
+  const panel = document.createElement('div')
+  panel.className = 'preset-dd-panel'
+  panel.style.cssText = 'display:none;min-width:220px;'
+  document.body.appendChild(panel)
+
+  const buildPanel = () => {
+    panel.innerHTML = ''
+    pbLibraries.forEach((lib, i) => {
+      const row = document.createElement('div')
+      row.style.cssText = `display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;${i === pbActiveLib ? 'background:color-mix(in srgb,var(--accent) 8%,transparent);' : ''}`
+      row.addEventListener('mouseenter', () => { if (i !== pbActiveLib) row.style.background = 'var(--surface2)' })
+      row.addEventListener('mouseleave', () => { if (i !== pbActiveLib) row.style.background = '' })
+
+      const nameWrap = document.createElement('div')
+      nameWrap.style.cssText = 'flex:1;min-width:0;'
+
+      if (i === pbActiveLib) {
+        // Editable name for active lib
+        const nameInp = document.createElement('input')
+        nameInp.value = lib.name
+        nameInp.maxLength = 20
+        nameInp.style.cssText = 'background:none;border:none;outline:none;font-family:\'Rajdhani\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--accent);width:100%;cursor:text;'
+        nameInp.addEventListener('click', e => e.stopPropagation())
+        nameInp.addEventListener('mousedown', e => e.stopPropagation())
+        nameInp.addEventListener('keydown', e => { if (e.key === 'Enter') nameInp.blur() })
+        nameInp.addEventListener('blur', () => {
+          const name = nameInp.value.trim() || PB_LIB_DEFAULTS[i]
+          if (name !== lib.name) { lib.name = name; pbParticlesDriveSync(); pbRenderLibBar() }
+        })
+        nameWrap.appendChild(nameInp)
+      } else {
+        const nameEl = document.createElement('div')
+        nameEl.style.cssText = 'font-family:\'Rajdhani\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--text);'
+        nameEl.textContent = lib.name
+        nameWrap.appendChild(nameEl)
+      }
+
+      const cnt = document.createElement('span')
+      cnt.style.cssText = 'font-size:11px;color:var(--muted);letter-spacing:1px;flex-shrink:0;'
+      cnt.textContent = lib.particles.length + (lib.particles.length === 1 ? ' particle' : ' particles')
+
+      if (i === pbActiveLib) {
+        const tick = document.createElement('span')
+        tick.style.cssText = 'color:var(--accent);font-size:14px;flex-shrink:0;'
+        tick.textContent = '✓'
+        row.appendChild(tick)
+      }
+      row.appendChild(nameWrap)
+      row.appendChild(cnt)
+
+      row.addEventListener('mousedown', e => {
+        if (e.target.tagName === 'INPUT') return
+        e.preventDefault()
+        panel.style.display = 'none'
+        pbSwitchLib(i)
+      })
+      panel.appendChild(row)
+    })
+  }
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation()
+    const isOpen = panel.style.display === 'block'
+    // Close all other preset dropdowns
+    document.querySelectorAll('.preset-dd-panel').forEach(p => p.style.display = 'none')
+    if (!isOpen) {
+      buildPanel()
+      const rect = btn.getBoundingClientRect()
+      panel.style.position = 'fixed'
+      panel.style.top = (rect.bottom + 4) + 'px'
+      panel.style.left = rect.left + 'px'
+      panel.style.minWidth = rect.width + 'px'
+      panel.style.display = 'block'
     }
-    // Prevent click on active tab input from bubbling to tab
-    nameEl.addEventListener('mousedown', e => { if (i === pbActiveLib) e.stopPropagation() })
-
-    const count = document.createElement('span')
-    count.className = 'pb-lib-tab-count'
-    count.textContent = lib.particles.length
-
-    tab.appendChild(nameEl)
-    tab.appendChild(count)
-    tab.onclick = () => pbSwitchLib(i)
-    tabs.appendChild(tab)
   })
+
+  document.addEventListener('click', () => { panel.style.display = 'none' }, { once: false })
+
+  wrap.appendChild(btn)
 
   if (toggle) {
     toggle.className = 'pb-builtin-toggle' + (pbShowBuiltin ? ' on' : '')
