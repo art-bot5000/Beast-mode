@@ -1079,6 +1079,10 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   overflow:hidden;margin-bottom:10px;
   border-left:3px solid var(--tc, var(--border));
 }
+.pb-type-block.pb-drag-over { outline:2px dashed var(--accent);outline-offset:2px; }
+.pb-type-drag-handle { cursor:grab;opacity:.35;font-size:16px;flex-shrink:0;padding:0 4px 0 0;user-select:none; }
+.pb-type-drag-handle:hover { opacity:.8; }
+.pb-hide-btn:hover { opacity:1 !important; }
 .pb-type-header {
   display:flex;align-items:center;gap:10px;padding:10px 14px;
   cursor:pointer;user-select:none;
@@ -1126,6 +1130,20 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.3);
   background: color-mix(in srgb, var(--tc, var(--accent)) 16%, transparent);
   border-color: color-mix(in srgb, var(--tc, var(--accent)) 35%, transparent);
+}
+.pb-particle-in-use {
+  border-style:solid !important;
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 70%, transparent) !important;
+  background: color-mix(in srgb, var(--tc, var(--accent)) 28%, transparent) !important;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--tc, var(--accent)) 30%, transparent);
+}
+.pb-particle-in-use .pp-add { opacity:1 !important; color:inherit !important; }
+.pb-name-chip.pb-particle-in-use,
+.pb-ref-chip.pb-particle-in-use {
+  border-style:solid !important;
+  border-color: color-mix(in srgb, var(--tc, var(--accent)) 70%, transparent) !important;
+  background: color-mix(in srgb, var(--tc, var(--accent)) 28%, transparent) !important;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--tc, var(--accent)) 30%, transparent);
 }
 .pb-particle .pp-add { font-size:14px;opacity:.5;flex-shrink:0;margin-right:1px; }
 .pb-particle-text { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
@@ -1775,6 +1793,44 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   border-radius:6px;
 }
 
+/* ── LIBRARY LIST VIEW ────────────────────────────────────────── */
+.lib-grid.list-view {
+  display:flex;flex-direction:column;gap:0;
+}
+.lib-grid.list-view .lib-card-swipe-wrap { border-radius:0; }
+.lib-grid.list-view .lib-card-swipe-wrap:first-child { border-radius:6px 6px 0 0; }
+.lib-grid.list-view .lib-card-swipe-wrap:last-child  { border-radius:0 0 6px 6px; }
+.lib-grid.list-view .lib-card {
+  flex-direction:row;align-items:stretch;border-radius:0;
+  border-bottom:none;border-left:none;border-right:none;border-top:1px solid var(--border);
+}
+.lib-grid.list-view .lib-card-swipe-wrap:first-child .lib-card { border-top:none; }
+.lib-grid.list-view .lib-card-image { display:none; }
+.lib-grid.list-view .lib-card-body {
+  flex-direction:row;align-items:center;gap:12px;padding:9px 12px;flex:1;
+}
+.lib-grid.list-view .lib-card-header { flex:1;min-width:0;margin:0; }
+.lib-grid.list-view .lib-card-prompt { display:none; }
+.lib-grid.list-view .lib-card-particles { display:none; }
+.lib-grid.list-view .lib-card-meta { flex-shrink:0;flex-direction:row;align-items:center;gap:8px;margin:0; }
+.lib-grid.list-view .lib-card-tags { display:none; }
+.lib-grid.list-view .lib-card-actions {
+  border-top:none;border-left:1px solid var(--border);flex-shrink:0;
+  flex-direction:column;padding:4px 2px;min-width:36px;
+}
+.lib-grid.list-view .lib-action-btn { border-right:none;border-bottom:1px solid var(--border);font-size:11px;padding:6px 8px; }
+.lib-grid.list-view .lib-action-btn:last-child { border-bottom:none; }
+.lib-view-toggle.list-active { color:var(--accent);border-color:var(--accent); }
+
+/* ── PROMPT HISTORY ────────────────────────────────────────────── */
+.ph-item {
+  background:var(--surface2);border:1px solid var(--border);border-radius:4px;
+  padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+}
+.ph-item-meta { font-size:10px;color:var(--muted);letter-spacing:1px; }
+.ph-item-text { font-size:12px;color:var(--text);line-height:1.5; }
+.ph-item-actions { display:flex;gap:6px; }
+
 .lib-card-particles {
   display:flex;flex-wrap:wrap;gap:3px;align-items:center;
 }
@@ -2377,6 +2433,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
             <option value="rating">TOP RATED</option>
             <option value="name">A–Z</option>
           </select>
+          <button class="btn btn-ghost lib-view-toggle" id="libViewToggle" onclick="libToggleView()" style="font-size:14px;padding:5px 10px;" title="Toggle list/grid view">⊟</button>
           <button class="btn btn-ghost lib-select-toggle" id="libSelectToggle" onclick="libToggleSelectMode()" style="font-size:11px;padding:5px 12px;white-space:nowrap;">☐ SELECT</button>
         </div>
         <!-- Bulk action bar — slides up when items selected -->
@@ -2639,6 +2696,15 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
     <div class="stat">STYLE: <span id="styleLabel">DEFAULT</span></div>
     <div class="stat">SAVED: <span id="favCount">0</span></div>
   </div>
+</div>
+
+<!-- PROMPT HISTORY -->
+<div class="panel" id="promptHistoryPanel" style="display:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="panel-title" style="margin-bottom:0;">// RECENT PROMPTS <span style="font-size:10px;color:var(--muted);font-weight:400;letter-spacing:1px;">(last 10)</span></div>
+    <button onclick="clearPromptHistory()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕ CLEAR</button>
+  </div>
+  <div id="promptHistoryList" style="display:flex;flex-direction:column;gap:8px;"></div>
 </div>
 
 <!-- FAVOURITES -->
@@ -2975,11 +3041,12 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
     </div>
 
     <!-- Expand/Minimise All -->
-    <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
       <div class="pb-expand-toggle" id="pbExpandToggle">
         <button class="pb-expand-btn active" id="pbExpandAllBtn" onclick="pbSetAllCollapsed(false)">▼ EXPAND ALL</button>
         <button class="pb-expand-btn" id="pbCollapseAllBtn" onclick="pbSetAllCollapsed(true)">▲ MINIMISE ALL</button>
       </div>
+      <button id="pbAddPersonalCatBtn" onclick="pcAddCategory()" style="display:none;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 12px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">+ PERSONAL CATEGORY</button>
     </div>
 
     <!-- Particle grid -->
@@ -5521,6 +5588,73 @@ function captureSettings() {
   }
 }
 
+// ── PROMPT HISTORY ─────────────────────────────────────────────────
+const PROMPT_HISTORY_KEY = 'bm_prompt_history'
+
+function promptHistoryAdd(promptText, fullText) {
+  let history = []
+  try { history = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) {}
+  history.unshift({ text: promptText, full: fullText, savedAt: Date.now() })
+  if (history.length > 10) history = history.slice(0, 10)
+  localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(history))
+  promptHistoryRender()
+}
+
+function promptHistoryRender() {
+  let history = []
+  try { history = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) {}
+  const panel = document.getElementById('promptHistoryPanel')
+  const list  = document.getElementById('promptHistoryList')
+  if (!panel || !list) return
+  panel.style.display = history.length ? 'block' : 'none'
+  list.innerHTML = ''
+  history.forEach((entry, i) => {
+    const item = document.createElement('div')
+    item.className = 'ph-item'
+    const meta = document.createElement('div')
+    meta.className = 'ph-item-meta'
+    meta.textContent = `RECENT ${i+1} — ${new Date(entry.savedAt).toLocaleTimeString()}`
+    const text = document.createElement('div')
+    text.className = 'ph-item-text'
+    text.textContent = entry.text.slice(0, 200) + (entry.text.length > 200 ? '…' : '')
+    const actions = document.createElement('div')
+    actions.className = 'ph-item-actions'
+    const copyBtn = document.createElement('button')
+    copyBtn.className = 'btn btn-ghost'
+    copyBtn.style.fontSize = '11px'
+    copyBtn.textContent = '⎘ COPY'
+    copyBtn.onclick = () => {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = entry.text; ta.style.cssText = 'position:fixed;opacity:0'
+        document.body.appendChild(ta); ta.select()
+        document.execCommand('copy'); document.body.removeChild(ta)
+        const orig = copyBtn.textContent; copyBtn.textContent = '✓ COPIED'
+        setTimeout(() => copyBtn.textContent = orig, 1500)
+      } catch(e) {}
+    }
+    const saveBtn = document.createElement('button')
+    saveBtn.className = 'btn btn-ghost'
+    saveBtn.style.fontSize = '11px'
+    saveBtn.textContent = '♥ SAVE'
+    saveBtn.onclick = () => {
+      window._pendingOutput = { visible: entry.text, full: entry.full || entry.text }
+      openImageModal(null)
+    }
+    actions.appendChild(copyBtn)
+    actions.appendChild(saveBtn)
+    item.appendChild(meta)
+    item.appendChild(text)
+    item.appendChild(actions)
+    list.appendChild(item)
+  })
+}
+
+function clearPromptHistory() {
+  localStorage.removeItem(PROMPT_HISTORY_KEY)
+  promptHistoryRender()
+}
+
 function generateSingle(){
   const aName = document.getElementById('creatureA').value
   const bName = document.getElementById('creatureB').value
@@ -5545,6 +5679,8 @@ function generateSingle(){
     driveSaveCurrentDebounced()
     // Track in generate-only recent list if in that mode
     genOnlyAddRecent(prompt)
+    // Track in prompt history for all users
+    promptHistoryAdd(prompt, full)
   }, 200)
 }
 
@@ -6255,6 +6391,7 @@ async function driveOnSignedIn() {
   await pbParticlesLoad()
   await libFoldersLoad()
   await pbFavParticlesLoad()
+  await pcDriveLoad()
   // Save merged cloud data to localStorage
   lsSaveAll()
   // Full UI refresh
@@ -6973,7 +7110,21 @@ function renderLibFilters() {
 // ═══════════════════════════════════════════════════════════════════
 
 let libSelectMode = false
-let libSelected   = new Set()   // Set of fav IDs
+let libSelected   = new Set()
+let libListView   = lsLoad('bm_lib_list_view') || false
+
+function libToggleView() {
+  libListView = !libListView
+  lsSave('bm_lib_list_view', libListView)
+  const btn = document.getElementById('libViewToggle')
+  if (btn) {
+    btn.textContent = libListView ? '⊞' : '⊟'
+    btn.title = libListView ? 'Switch to grid view' : 'Switch to list view'
+    btn.classList.toggle('list-active', libListView)
+  }
+  const grid = document.getElementById('libGrid')
+  if (grid) grid.classList.toggle('list-view', libListView)
+}   // Set of fav IDs
 
 function libToggleSelectMode() {
   libSelectMode = !libSelectMode
@@ -7145,6 +7296,14 @@ function renderLibrary() {
     }
   })
   grid.appendChild(frag)
+  grid.classList.toggle('list-view', libListView)
+  // Sync toggle button state
+  const vBtn = document.getElementById('libViewToggle')
+  if (vBtn) {
+    vBtn.textContent = libListView ? '⊞' : '⊟'
+    vBtn.title = libListView ? 'Switch to grid view' : 'Switch to list view'
+    vBtn.classList.toggle('list-active', libListView)
+  }
   updateLibBadge()
 }
 
@@ -7802,7 +7961,7 @@ function iterRenderTypePicker() {
     btn.className = 'pb-type-pick-btn' + (t.key === iterActiveType ? ' active' : '')
     btn.style.setProperty('--tc', t.color)
     btn.classList.toggle('active-type', t.key === iterActiveType)
-    btn.innerHTML = `<span class="pb-type-pick-dot"></span>${t.id}. ${t.label}`
+    btn.innerHTML = `<span class="pb-type-pick-dot"></span>${t.label}`
     btn.onclick = () => { iterActiveType = t.key; iterRenderTypePicker() }
     wrap.appendChild(btn)
   })
@@ -8527,6 +8686,12 @@ window.addEventListener('load', () => {
   initElCache()
   initThemeColour()
   initGenerateOnlyMode()
+  // One-time migration: clear personal categories from v0 testing
+  if (!localStorage.getItem('bm_pc_migrated_v1')) {
+    localStorage.removeItem(PC_STORAGE_KEY)
+    localStorage.setItem('bm_pc_migrated_v1', '1')
+  }
+  promptHistoryRender()
   // 1. Restore from localStorage immediately — data visible before cloud connects
   lsRestoreAll()
   updateLibBadge()
@@ -8853,6 +9018,8 @@ async function exportZip() {
   folder.file(PB_LIBRARIES_FILE, JSON.stringify({ libraries: pbLibraries, savedAt: new Date().toISOString() }))
   // Fav particles
   folder.file(PB_FAV_PARTICLES_FILE, JSON.stringify({ favs: pbFavParticles, savedAt: new Date().toISOString() }))
+  // Personal categories
+  folder.file(PC_DRIVE_FILE, JSON.stringify({ personalCats: pcLoad(), savedAt: new Date().toISOString() }))
   // Folders
   if (libFolders.length) {
     folder.file(FOLDERS_FILE, JSON.stringify({ folders: libFolders, savedAt: new Date().toISOString() }))
@@ -8944,6 +9111,12 @@ async function handleZipFile(file) {
     const favData = await readZipJSON(PB_FAV_PARTICLES_FILE)
     if (favData?.favs) pbFavParticles = favData.favs
 
+    // Personal categories
+    const pcData = await readZipJSON(PC_DRIVE_FILE)
+    if (Array.isArray(pcData?.personalCats)) {
+      localStorage.setItem(PC_STORAGE_KEY, JSON.stringify(pcData.personalCats))
+    }
+
     // Folders
     const foldersData = await readZipJSON(FOLDERS_FILE)
     if (Array.isArray(foldersData?.folders)) libFolders = foldersData.folders
@@ -9012,6 +9185,151 @@ const PB_TYPES = [
   { id:11, key:'connector',   label:'Connector',   color:'#e8d5b0',
     cats:['Origin','Composition','Setting','Motion','Style'] },
 ]
+
+// ── CATEGORY ORDER & VISIBILITY ────────────────────────────────────
+const CAT_ORDER_KEY  = 'bm_cat_order'
+const CAT_HIDDEN_KEY = 'bm_cat_hidden'
+
+function catOrderLoad() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CAT_ORDER_KEY) || 'null')
+    if (Array.isArray(saved)) return saved
+  } catch(e) {}
+  return PB_TYPES.map(t => t.key)  // default order
+}
+
+function catOrderSave(order) {
+  localStorage.setItem(CAT_ORDER_KEY, JSON.stringify(order))
+}
+
+function catHiddenLoad() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CAT_HIDDEN_KEY) || '[]')
+    if (Array.isArray(saved)) return new Set(saved)
+  } catch(e) {}
+  return new Set()
+}
+
+function catHiddenSave(hidden) {
+  localStorage.setItem(CAT_HIDDEN_KEY, JSON.stringify([...hidden]))
+}
+
+function catToggleHidden(typeKey) {
+  const hidden = catHiddenLoad()
+  if (hidden.has(typeKey)) hidden.delete(typeKey)
+  else hidden.add(typeKey)
+  catHiddenSave(hidden)
+  pbRenderLibrary()
+}
+
+// ── PERSONAL CATEGORIES ────────────────────────────────────────────
+const PC_MAX = 5
+const PC_COLORS = ['#c084fc','#34d399','#fb923c','#60a5fa','#f472b6']
+const PC_STORAGE_KEY = 'bm_personal_cats'
+const PC_DRIVE_FILE  = 'beast-mode-personal-categories.json'
+let   pcDriveId      = null
+
+function pcLoad() {
+  try { return JSON.parse(localStorage.getItem(PC_STORAGE_KEY) || '[]') } catch(e) { return [] }
+}
+function pcSave(cats) {
+  localStorage.setItem(PC_STORAGE_KEY, JSON.stringify(cats))
+  pcDriveSync()
+}
+function pcGetAll() { return pcLoad() }
+
+async function pcDriveSync() {
+  if (!cloudIsConnected()) return
+  try {
+    const body = JSON.stringify({ personalCats: pcLoad(), savedAt: new Date().toISOString() })
+    if (pcDriveId) {
+      await cloudPatchFile(pcDriveId, body)
+    } else {
+      const files = await cloudListFiles(`name='${PC_DRIVE_FILE}'`)
+      if (files.length) { pcDriveId = files[0].id; await cloudPatchFile(pcDriveId, body) }
+      else { pcDriveId = await cloudCreateFile(PC_DRIVE_FILE, body) }
+    }
+  } catch(e) {}
+}
+
+async function pcDriveLoad() {
+  if (!cloudIsConnected()) return
+  try {
+    const files = await cloudListFiles(`name='${PC_DRIVE_FILE}'`)
+    if (!files.length) return
+    pcDriveId = files[0].id
+    const data = await cloudReadFile(pcDriveId)
+    if (Array.isArray(data?.personalCats)) {
+      localStorage.setItem(PC_STORAGE_KEY, JSON.stringify(data.personalCats))
+    }
+  } catch(e) {}
+}
+
+function pcTypeKey(idx) { return `personal_${idx}` }
+
+function pcGetPBTypes() {
+  // Returns PB_TYPE-compatible objects for each personal category
+  return pcGetAll().map((pc, i) => ({
+    id: 100 + i,
+    key: pcTypeKey(i),
+    label: pc.name,
+    color: PC_COLORS[i % PC_COLORS.length],
+    cats: [pc.name],
+    isPersonalCat: true,
+    pcIndex: i,
+  }))
+}
+
+function pcAddCategory() {
+  const cats = pcLoad()
+  if (cats.length >= PC_MAX) return
+  const idx = cats.length
+  cats.push({ name: `Personal Category ${idx + 1}`, particles: [] })
+  pcSave(cats)
+  pbRenderLibrary()
+}
+
+function pcRenameCategory(idx, newName) {
+  const cats = pcLoad()
+  if (!cats[idx]) return
+  cats[idx].name = newName.trim() || `Personal Category ${idx + 1}`
+  pcSave(cats)
+  pbRenderLibrary()
+}
+
+function pcDeleteCategory(idx) {
+  if (!confirm('Delete this personal category and all its particles?')) return
+  const cats = pcLoad()
+  cats.splice(idx, 1)
+  pcSave(cats)
+  pbRenderLibrary()
+}
+
+function pcGetParticles(idx) {
+  const cats = pcLoad()
+  return (cats[idx]?.particles || []).map(p => ({
+    ...p,
+    type: pcTypeKey(idx),
+    source: 'personal_cat',
+  }))
+}
+
+function pcAddParticle(idx, text, cat) {
+  const cats = pcLoad()
+  if (!cats[idx]) return
+  cats[idx].particles = cats[idx].particles || []
+  cats[idx].particles.push({ id: Date.now(), text, cat: cat || cats[idx].name })
+  pcSave(cats)
+  pbRenderLibrary()
+}
+
+function pcDeleteParticle(catIdx, particleId) {
+  const cats = pcLoad()
+  if (!cats[catIdx]) return
+  cats[catIdx].particles = (cats[catIdx].particles || []).filter(p => p.id !== particleId)
+  pcSave(cats)
+  pbRenderLibrary()
+}
 
 
 // Particle library
@@ -9088,7 +9406,7 @@ function pbRenderLegend() {
     chip.style.setProperty('--tc', t.color)
     chip.style.cursor = 'pointer'
     chip.title = `Jump to ${t.label}`
-    chip.innerHTML = `<span class="pb-legend-dot"></span>${t.id}. ${t.label.toUpperCase()}`
+    chip.innerHTML = `<span class="pb-legend-dot"></span>${t.label.toUpperCase()}`
     chip.onclick = () => pbJumpToType(t.key)
     el.appendChild(chip)
   })
@@ -9183,8 +9501,33 @@ function pbRenderLibrary() {
   }
 
   const frag = document.createDocumentFragment()
+  const catOrder  = catOrderLoad()
+  const hiddenCats = catHiddenLoad()
+  let   dragSrcKey = null
 
-  PB_TYPES.forEach(t => {
+  // Show/hide the personal category button based on mode
+  const addPcBtn = document.getElementById('pbAddPersonalCatBtn')
+  if (addPcBtn) {
+    const canAdd = pbLabMode === 'editor' && pcGetAll().length < PC_MAX
+    addPcBtn.style.display = canAdd ? 'block' : 'none'
+    if (canAdd) addPcBtn.textContent = `+ PERSONAL CATEGORY (${pcGetAll().length}/${PC_MAX})`
+  }
+
+  // Build ordered list — standard types in saved order, then personal cats appended
+  const pcTypes = pcGetPBTypes()
+  const orderedTypes = []
+  catOrder.forEach(key => {
+    const t = PB_TYPES.find(x => x.key === key) || pcTypes.find(x => x.key === key)
+    if (t) orderedTypes.push(t)
+  })
+  // Add any not yet in saved order (new types added since last save)
+  PB_TYPES.forEach(t => { if (!orderedTypes.find(x => x.key === t.key)) orderedTypes.push(t) })
+  pcTypes.forEach(t => { if (!orderedTypes.find(x => x.key === t.key)) orderedTypes.push(t) })
+
+  orderedTypes.forEach(t => {
+    const isPersonal = !!t.isPersonalCat
+    const isHidden = hiddenCats.has(t.key)
+
     // Apply mode filter to subject, form, action and technical (which have mode-tagged generator particles)
     const modeFilteredTypes = ['subject','form','action','technical']
     const applyMode = modeFilteredTypes.includes(t.key)
@@ -9235,14 +9578,138 @@ function pbRenderLibrary() {
     hdr.className = 'pb-type-header'
     block.style.setProperty('--tc', t.color)
     const totalCount = allItems.length
+
+    // Drag handle
+    const dragHandle = document.createElement('span')
+    dragHandle.className = 'pb-type-drag-handle'
+    dragHandle.title = 'Drag to reorder'
+    dragHandle.innerHTML = '⠿'
+    dragHandle.style.cssText = 'cursor:grab;opacity:.35;font-size:16px;flex-shrink:0;padding:0 4px 0 0;touch-action:none;user-select:none;'
+
     hdr.innerHTML = `
       <span class="pb-type-dot"></span>
-      <span class="pb-type-name">${t.id}. ${t.label.toUpperCase()}</span>
-      <span class="pb-type-count">${totalCount} PARTICLE${totalCount!==1?'S':''}</span>
-      <span class="pb-type-arrow ${isOpen?'open':''}">▼</span>
+      <span class="pb-type-name">${t.label.toUpperCase()}</span>
+      <span class="pb-type-count">${isHidden ? 'HIDDEN' : totalCount + ' PARTICLE' + (totalCount!==1?'S':'')}</span>
+      <span class="pb-hide-btn" title="${isHidden ? 'Show category' : 'Hide category'}" style="opacity:.4;cursor:pointer;font-size:13px;padding:0 4px;flex-shrink:0;transition:opacity .1s;">${isHidden ? '👁' : '🙈'}</span>
+      <span class="pb-type-arrow ${isOpen && !isHidden?'open':''}">▼</span>
     `
-    hdr.onclick = () => { pbCollapsed[t.key] = isOpen; pbRenderLibrary() }
+    hdr.insertBefore(dragHandle, hdr.firstChild)
+
+    // Hide toggle
+    hdr.querySelector('.pb-hide-btn').addEventListener('click', e => {
+      e.stopPropagation()
+      catToggleHidden(t.key)
+    })
+
+    // Collapse toggle (ignore if hidden)
+    hdr.onclick = e => {
+      if (e.target.closest('.pb-hide-btn') || e.target.closest('.pb-type-drag-handle')) return
+      if (isHidden) return
+      pbCollapsed[t.key] = isOpen; pbRenderLibrary()
+    }
+
+    // Drag to reorder
+    block.draggable = true
+    block.dataset.typeKey = t.key
+    block.addEventListener('dragstart', e => {
+      dragSrcKey = t.key
+      e.dataTransfer.effectAllowed = 'move'
+      setTimeout(() => block.style.opacity = '.4', 0)
+    })
+    block.addEventListener('dragend', () => { block.style.opacity = '' })
+    block.addEventListener('dragover', e => {
+      e.preventDefault()
+      block.classList.add('pb-drag-over')
+    })
+    block.addEventListener('dragleave', () => block.classList.remove('pb-drag-over'))
+    block.addEventListener('drop', e => {
+      e.preventDefault()
+      block.classList.remove('pb-drag-over')
+      if (!dragSrcKey || dragSrcKey === t.key) return
+      const order = catOrderLoad()
+      // Ensure all types are in order array
+      const allKeys = [...orderedTypes.map(x => x.key)]
+      const fullOrder = allKeys.filter(k => order.includes(k) ? true : true)
+        .sort((a,b) => {
+          const ia = order.indexOf(a), ib = order.indexOf(b)
+          return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+        })
+      const srcIdx  = fullOrder.indexOf(dragSrcKey)
+      const tgtIdx  = fullOrder.indexOf(t.key)
+      if (srcIdx !== -1) {
+        fullOrder.splice(srcIdx, 1)
+        fullOrder.splice(tgtIdx, 0, dragSrcKey)
+      }
+      catOrderSave(fullOrder)
+      pbRenderLibrary()
+    })
+
     block.appendChild(hdr)
+
+    // If hidden, show stub only
+    if (isHidden) {
+      frag.appendChild(block)
+      return
+    }
+
+    // Personal category: use simplified body (inline add + particle list)
+    if (isPersonal) {
+      const pcIdx = t.pcIndex
+      const pc    = pcGetAll()[pcIdx]
+      if (!pc) { frag.appendChild(block); return }
+      const body = document.createElement('div')
+      body.className = 'pb-type-body' + (isOpen ? '' : ' collapsed')
+      const list = document.createElement('div')
+      list.className = 'pb-particles'
+      const pcParts = pcGetParticles(pcIdx)
+      if (pcParts.length) {
+        pcParts.forEach(p => list.appendChild(pbBuildParticleChip(p, t)))
+      } else {
+        const empty = document.createElement('div')
+        empty.style.cssText = 'padding:8px 4px;font-size:12px;color:var(--muted);letter-spacing:.5px;'
+        empty.textContent = 'No particles yet — add some below.'
+        list.appendChild(empty)
+      }
+      body.appendChild(list)
+      if (pbLabMode === 'editor') {
+        const addRow = document.createElement('div')
+        addRow.className = 'pb-add-inline'
+        const inp = document.createElement('input')
+        inp.className = 'pb-inline-input'
+        inp.placeholder = '+ New particle…'
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && inp.value.trim()) { pcAddParticle(pcIdx, inp.value.trim()); inp.value = '' }
+        })
+        const saveBtn = document.createElement('button')
+        saveBtn.className = 'pb-add-cat-btn'
+        saveBtn.style.cssText = `border-color:${t.color}66;color:${t.color};`
+        saveBtn.textContent = 'SAVE'
+        saveBtn.onclick = () => { if (inp.value.trim()) { pcAddParticle(pcIdx, inp.value.trim()); inp.value = '' } }
+        // Rename / delete controls
+        const nameInp = document.createElement('input')
+        nameInp.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:4px 8px;font-family:\'Rajdhani\',sans-serif;font-size:12px;color:var(--text);margin-right:6px;flex:1;'
+        nameInp.value = pc.name
+        nameInp.title = 'Rename category'
+        nameInp.addEventListener('change', () => pcRenameCategory(pcIdx, nameInp.value))
+        nameInp.addEventListener('keydown', e => { if (e.key === 'Enter') nameInp.blur() })
+        const delBtn = document.createElement('button')
+        delBtn.className = 'btn btn-ghost'
+        delBtn.style.cssText = 'font-size:10px;padding:4px 8px;color:var(--muted);'
+        delBtn.textContent = '✕ REMOVE'
+        delBtn.onclick = () => pcDeleteCategory(pcIdx)
+        const renameRow = document.createElement('div')
+        renameRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:8px 14px;border-top:1px solid var(--border);'
+        renameRow.appendChild(nameInp)
+        renameRow.appendChild(delBtn)
+        addRow.appendChild(inp)
+        addRow.appendChild(saveBtn)
+        body.appendChild(addRow)
+        body.appendChild(renameRow)
+      }
+      block.appendChild(body)
+      frag.appendChild(block)
+      return
+    }
 
     // Body
     const body = document.createElement('div')
@@ -9503,6 +9970,7 @@ function pbRenderLibrary() {
     frag.appendChild(block)
   })
   grid.appendChild(frag)
+
   // Render floating type nav after grid is built
   pbRenderTypeNav()
   pbSyncExpandToggle()
@@ -9548,13 +10016,13 @@ function pbRenderTypeNav() {
     const lbl = document.createElement('span')
     lbl.className = 'pb-type-nav-label'
     lbl.style.color = t.color
-    lbl.textContent = `${t.id}. ${t.label}`
+    lbl.textContent = `${t.label}`
     btn.appendChild(lbl)
 
     // Tooltip (visible when collapsed, on hover)
     const tip = document.createElement('span')
     tip.className = 'pb-type-nav-tip'
-    tip.textContent = `${t.id}. ${t.label.toUpperCase()}`
+    tip.textContent = `${t.label.toUpperCase()}`
     tip.style.color = t.color
     btn.appendChild(tip)
 
@@ -9639,13 +10107,13 @@ function pbBuildSpecialList(typeKey, filtered, t, list, query, useGroups) {
       grid.className = 'pb-name-chip-grid'
       grpPs.forEach(p => {
         const chip = document.createElement('span')
-        chip.className = 'pb-name-chip'
+        const inUse = pbFormula.some(e => e.particleId === p.id)
+        chip.className = 'pb-name-chip' + (inUse ? ' pb-particle-in-use' : '')
         chip.style.setProperty('--tc', t.color)
         chip.dataset.particleId = p.id
         chip.dataset.particleType = p.type
         chip.textContent = p.text
-        chip.title = `${p.text} — click to add to formula`
-        // Star toggle
+        chip.title = inUse ? `${p.text} — already in prompt` : `${p.text} — click to add to formula`
         const isFav = pbIsFav(t.key, p.id)
         chip.classList.toggle('pb-name-chip-fav', isFav)
         chip.addEventListener('contextmenu', e => { e.preventDefault(); pbToggleFavParticle(t.key, p.id) })
@@ -9749,12 +10217,13 @@ function pbBuildSpecialList(typeKey, filtered, t, list, query, useGroups) {
       refGrid.className = 'pb-ref-grid'
       genPs.forEach(p => {
         const chip = document.createElement('span')
-        chip.className = 'pb-ref-chip'
+        const inUse = pbFormula.some(e => e.particleId === p.id)
+        chip.className = 'pb-ref-chip' + (inUse ? ' pb-particle-in-use' : '')
         chip.style.setProperty('--tc', t.color)
         chip.dataset.particleId = p.id
         chip.dataset.particleType = p.type
         chip.textContent = p.text
-        chip.title = p.text
+        chip.title = inUse ? `${p.text} — already in prompt` : p.text
         refGrid.appendChild(chip)
       })
       list.appendChild(refGrid)
@@ -9770,11 +10239,11 @@ const pbSubGroupCollapsed = {}  // groupKey → bool
 
 function pbBuildParticleChip(p, t) {
   const chip = document.createElement('div')
-  chip.className = 'pb-particle'
+  const inUse = pbFormula.some(e => e.particleId === p.id)
+  chip.className = 'pb-particle' + (inUse ? ' pb-particle-in-use' : '')
   chip.style.setProperty('--tc', t.color)
-  chip.title     = p.text
+  chip.title     = p.text + (inUse ? ' — already in prompt' : '')
   chip.draggable = true
-  // Data attributes used by delegated grid click/drag handlers
   chip.dataset.particleId   = p.id
   chip.dataset.particleType = p.type
 
@@ -9794,7 +10263,6 @@ function pbBuildParticleChip(p, t) {
     <span class="pb-particle-del" title="Delete particle" onclick="pbDeleteParticle(${p.id},event)">×</span>
   `
   chip.insertBefore(star, chip.querySelector('.pp-add'))
-  // No click/dragstart/dragend listeners — handled by delegated #pbGrid handlers
   return chip
 }
 
@@ -10178,7 +10646,6 @@ function pbFormulaAutocomplete(bar) {
 }
 
 function pbAcShow(particles, caretRange) {
-  // Position dropdown below caret
   const rect = caretRange.getBoundingClientRect()
 
   if (!pbAcDropdown) {
@@ -10189,51 +10656,276 @@ function pbAcShow(particles, caretRange) {
   }
 
   pbAcDropdown.innerHTML = ''
-  particles.forEach(p => {
-    const t = PB_TYPES.find(x => x.key === p.type)
-    const item = document.createElement('div')
-    item.className = 'pb-ac-item'
-    item.dataset.particleId = p.id
+  // Store initial particle set and full set for fallback search
+  pbAcDropdown._initialParticles = particles
+  pbAcDropdown._allParticles = null  // loaded lazily if search expands
 
-    const dot = document.createElement('span')
-    dot.className = 'pb-ac-dot'
-    if (t) dot.style.background = t.color
-
-    const label = document.createElement('span')
-    label.className = 'pb-ac-label'
-    label.textContent = p.text
-
-    const typeTag = document.createElement('span')
-    typeTag.className = 'pb-ac-type'
-    if (t) { typeTag.textContent = t.label; typeTag.style.color = t.color }
-
-    item.appendChild(dot)
-    item.appendChild(label)
-    item.appendChild(typeTag)
-
-    // mousedown not click — fires before blur so pbAcWordRange is still valid
-    item.addEventListener('mousedown', e => {
-      e.preventDefault()
-      pbAcCommit(p)
-    })
-    item.addEventListener('touchend', e => {
-      e.preventDefault()
-      pbAcCommit(p)
-    })
-    pbAcDropdown.appendChild(item)
+  // Search box
+  const searchWrap = document.createElement('div')
+  searchWrap.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--border);'
+  const searchInp = document.createElement('input')
+  searchInp.className = 'pb-ac-search'
+  searchInp.placeholder = 'Search particles…'
+  searchInp.autocomplete = 'off'
+  searchInp.style.cssText = 'width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:5px 8px;font-family:\'Rajdhani\',sans-serif;font-size:12px;color:var(--text);outline:none;'
+  searchInp.addEventListener('mousedown', e => e.stopPropagation())
+  searchInp.addEventListener('input', () => {
+    const q = searchInp.value.trim().toLowerCase()
+    pbAcDropdown._searchTerm = searchInp.value.trim()
+    if (!q) {
+      pbAcRenderItems(particles, list, pbAcDropdown._typedWord || '')
+      return
+    }
+    // Search presented list first
+    let hits = particles.filter(p => p.text.toLowerCase().includes(q))
+    if (!hits.length) {
+      // Fallback: search entire particle DB
+      if (!pbAcDropdown._allParticles) pbAcDropdown._allParticles = pbGetParticles()
+      hits = pbAcDropdown._allParticles.filter(p => p.text.toLowerCase().includes(q)).slice(0, 12)
+    }
+    pbAcRenderItems(hits, list, q)
   })
+  searchWrap.appendChild(searchInp)
+  pbAcDropdown.appendChild(searchWrap)
+
+  // Items container
+  const list = document.createElement('div')
+  list.className = 'pb-ac-list'
+  list.style.cssText = 'max-height:260px;overflow-y:auto;'
+  pbAcDropdown.appendChild(list)
+  pbAcDropdown._typedWord = pbAcWordRange ? pbAcGetTypedWord() : ''
+  pbAcRenderItems(particles, list, pbAcDropdown._typedWord)
+
+  // + CREATE PARTICLE footer
+  const footer = document.createElement('div')
+  footer.id = 'pbAcFooter'
+  footer.style.cssText = 'padding:6px 8px;border-top:1px solid var(--border);'
+  pbAcDropdown.appendChild(footer)
+  pbAcUpdateFooter()
 
   // Position
   const scrollY = window.scrollY || document.documentElement.scrollTop
-  const dropH = Math.min(particles.length * 38, 300)
+  const dropH = Math.min(particles.length * 38 + 46, 320)
   const spaceBelow = window.innerHeight - rect.bottom
   const top = spaceBelow > dropH + 8
     ? rect.bottom + scrollY + 4
     : rect.top + scrollY - dropH - 4
 
-  pbAcDropdown.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 260)) + 'px'
+  pbAcDropdown.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + 'px'
   pbAcDropdown.style.top  = top + 'px'
   pbAcDropdown.style.display = 'block'
+
+  // Focus search and pre-fill with the typed word
+  setTimeout(() => {
+    const typedWord = pbAcDropdown._typedWord || ''
+    searchInp.value = typedWord
+    if (typedWord) {
+      pbAcDropdown._searchTerm = typedWord
+      searchInp.dispatchEvent(new Event('input'))
+    }
+    searchInp.focus()
+    // Place cursor at end
+    searchInp.setSelectionRange(searchInp.value.length, searchInp.value.length)
+  }, 50)
+}
+
+function pbAcRenderItems(particles, container, typedWord) {
+  container.innerHTML = ''
+  if (!particles.length) {
+    const empty = document.createElement('div')
+    empty.style.cssText = 'padding:10px 12px;font-size:12px;color:var(--muted);letter-spacing:.5px;'
+    empty.textContent = 'No particles found'
+    container.appendChild(empty)
+  } else {
+    particles.forEach(p => {
+      const t = PB_TYPES.find(x => x.key === p.type)
+      const item = document.createElement('div')
+      item.className = 'pb-ac-item'
+      item.dataset.particleId = p.id
+
+      const dot = document.createElement('span')
+      dot.className = 'pb-ac-dot'
+      if (t) dot.style.background = t.color
+
+      const label = document.createElement('span')
+      label.className = 'pb-ac-label'
+      label.textContent = p.text
+
+      const typeTag = document.createElement('span')
+      typeTag.className = 'pb-ac-type'
+      if (t) { typeTag.textContent = t.label; typeTag.style.color = t.color }
+
+      item.appendChild(dot)
+      item.appendChild(label)
+      item.appendChild(typeTag)
+
+      item.addEventListener('mousedown', e => { e.preventDefault(); pbAcCommit(p) })
+      item.addEventListener('touchend',  e => { e.preventDefault(); pbAcCommit(p) })
+      container.appendChild(item)
+    })
+  }
+  // Update footer with current word
+  if (typedWord !== undefined && pbAcDropdown) {
+    pbAcDropdown._typedWord = typedWord || pbAcDropdown._typedWord || ''
+    pbAcUpdateFooter()
+  }
+}
+
+function pbAcGetTypedWord() {
+  // Get the word range text
+  if (!pbAcWordRange) return ''
+  try {
+    return pbAcWordRange.toString().trim()
+  } catch(e) { return '' }
+}
+
+function pbAcUpdateFooter() {
+  const footer = document.getElementById('pbAcFooter')
+  if (!footer || !pbAcDropdown) return
+  const word = pbAcDropdown._searchTerm || pbAcDropdown._typedWord || ''
+  footer.innerHTML = ''
+  if (!word) return
+  const btn = document.createElement('button')
+  btn.style.cssText = 'width:100%;text-align:left;padding:6px 8px;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:3px;font-family:\'Rajdhani\',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--accent);cursor:pointer;transition:background .1s;'
+  btn.innerHTML = `<span style="opacity:.6;margin-right:4px;">+</span> CREATE PARTICLE: <em style="font-style:normal;color:var(--text);">${word}</em>`
+  btn.addEventListener('mousedown', e => {
+    e.preventDefault()
+    pbAcHide()
+    pbAcCreateParticle(word)
+  })
+  footer.appendChild(btn)
+}
+
+// ── SIMILARITY ENGINE ──────────────────────────────────────────────
+// Dice coefficient for string similarity (0–1)
+function strSimilarity(a, b) {
+  a = a.toLowerCase().trim()
+  b = b.toLowerCase().trim()
+  if (a === b) return 1
+  if (a.length < 2 || b.length < 2) return 0
+  const getBigrams = s => {
+    const m = new Map()
+    for (let i = 0; i < s.length - 1; i++) {
+      const bg = s.slice(i, i + 2)
+      m.set(bg, (m.get(bg) || 0) + 1)
+    }
+    return m
+  }
+  const aB = getBigrams(a), bB = getBigrams(b)
+  let intersection = 0
+  aB.forEach((count, bg) => {
+    if (bB.has(bg)) intersection += Math.min(count, bB.get(bg))
+  })
+  return (2 * intersection) / (a.length - 1 + b.length - 1)
+}
+
+function pbAcFindSimilar(text, threshold = 0.8) {
+  const all = pbGetParticles()
+  const matches = []
+  all.forEach(p => {
+    const score = strSimilarity(text, p.text)
+    if (score >= threshold) matches.push({ particle: p, score })
+  })
+  return matches.sort((a, b) => b.score - a.score)
+}
+
+function pbAcCreateParticle(text) {
+  if (!text.trim()) return
+
+  // Check for similar existing particles
+  const similar = pbAcFindSimilar(text, 0.8)
+
+  if (similar.length) {
+    pbAcShowSimilarityModal(text, similar)
+  } else {
+    pbAcOpenAddForm(text)
+  }
+}
+
+function pbAcShowSimilarityModal(newText, similar) {
+  // Remove any existing modal
+  document.getElementById('pbAcSimilarModal')?.remove()
+
+  const overlay = document.createElement('div')
+  overlay.id = 'pbAcSimilarModal'
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:20px;'
+
+  const card = document.createElement('div')
+  card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;max-width:440px;width:100%;padding:20px;'
+
+  const title = document.createElement('div')
+  title.style.cssText = 'font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:6px;'
+  title.textContent = '// SIMILAR PARTICLES FOUND'
+
+  const sub = document.createElement('div')
+  sub.style.cssText = 'font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:14px;line-height:1.6;'
+  sub.textContent = `Your text "${newText}" is very similar to ${similar.length === 1 ? 'an existing particle' : 'existing particles'}.`
+
+  const list = document.createElement('div')
+  list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:200px;overflow-y:auto;'
+
+  similar.slice(0, 5).forEach(({ particle: p, score }) => {
+    const t = PB_TYPES.find(x => x.key === p.type)
+    const row = document.createElement('div')
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);'
+    const pct = Math.round(score * 100)
+    const dot = document.createElement('span')
+    dot.style.cssText = `width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${t?.color || 'var(--accent)'};`
+    const label = document.createElement('span')
+    label.style.cssText = 'flex:1;font-size:13px;color:var(--text);'
+    label.textContent = p.text
+    const badge = document.createElement('span')
+    badge.style.cssText = 'font-size:10px;letter-spacing:1px;font-weight:700;color:var(--muted);'
+    badge.textContent = `${pct}% MATCH`
+    const useBtn = document.createElement('button')
+    useBtn.style.cssText = 'padding:3px 8px;border:1px solid var(--border);border-radius:3px;font-family:\'Rajdhani\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;background:transparent;color:var(--muted);'
+    useBtn.textContent = 'USE THIS'
+    useBtn.addEventListener('click', () => {
+      overlay.remove()
+      pbAcCommit(p)
+    })
+    row.appendChild(dot); row.appendChild(label); row.appendChild(badge); row.appendChild(useBtn)
+    list.appendChild(row)
+  })
+
+  const actions = document.createElement('div')
+  actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;'
+
+  const cancelBtn = document.createElement('button')
+  cancelBtn.className = 'btn btn-ghost'
+  cancelBtn.style.fontSize = '12px'
+  cancelBtn.textContent = 'CANCEL'
+  cancelBtn.onclick = () => overlay.remove()
+
+  const newBtn = document.createElement('button')
+  newBtn.className = 'btn btn-outline'
+  newBtn.style.fontSize = '12px'
+  newBtn.textContent = 'CREATE NEW ANYWAY'
+  newBtn.onclick = () => { overlay.remove(); pbAcOpenAddForm(newText) }
+
+  actions.appendChild(cancelBtn)
+  actions.appendChild(newBtn)
+
+  card.appendChild(title); card.appendChild(sub); card.appendChild(list); card.appendChild(actions)
+  overlay.appendChild(card)
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() })
+  document.body.appendChild(overlay)
+}
+
+function pbAcOpenAddForm(text) {
+  // Switch to Editor mode if needed, open the add form pre-filled
+  if (pbLabMode !== 'editor') pbSetLabMode('editor')
+  // Small delay to let mode switch render
+  setTimeout(() => {
+    const form = document.getElementById('pbAddForm')
+    const inp  = document.getElementById('pbAddText')
+    if (form && inp) {
+      form.classList.add('open')
+      inp.value = text
+      inp.focus()
+      pbClassifyDebounced()
+    }
+  }, pbLabMode === 'editor' ? 0 : 300)
 }
 
 function pbAcCommit(particle) {
@@ -10929,7 +11621,7 @@ function pbInitAddSelects() {
   if (!typeEl) return
   PB_TYPES.forEach(t => {
     const opt = document.createElement('option')
-    opt.value = t.key; opt.textContent = `${t.id}. ${t.label}`
+    opt.value = t.key; opt.textContent = `${t.label}`
     typeEl.appendChild(opt)
   })
   pbUpdateCategorySelect()
@@ -12914,12 +13606,13 @@ function pbGetCreatureFieldParticles() {
 
 function pbGetParticles() {
   const userParticles = pbLibraries[pbActiveLib]?.particles || []
-  // Hide built-in only applies in editor mode — creator mode manages visibility via its own filter
   const showBuiltins = pbLabMode === 'creator' || pbShowBuiltin
   const builtins = showBuiltins
     ? [...PB_BUILTIN_PARTICLES, ...pbGetGeneratorParticles(), ...pbGetCreatureFieldParticles()]
     : []
-  return [...builtins, ...userParticles]
+  // Include personal category particles from all personal cats
+  const pcParticles = pcGetAll().flatMap((pc, i) => pcGetParticles(i))
+  return [...builtins, ...userParticles, ...pcParticles]
 }
 
 // ── PROMPT LAB COLOUR TUNER ────────────────────────────────────────
@@ -13024,6 +13717,10 @@ let pbDrawerOpen = true
 
 function pbSetAllCollapsed(collapse) {
   PB_TYPES.forEach(t => { pbCollapsed[t.key] = collapse })
+  if (collapse) {
+    // Also collapse all sub-groups so expanding a type later shows only its header
+    Object.keys(pbSubGroupCollapsed).forEach(k => { pbSubGroupCollapsed[k] = true })
+  }
   document.getElementById('pbExpandAllBtn')?.classList.toggle('active', !collapse)
   document.getElementById('pbCollapseAllBtn')?.classList.toggle('active', collapse)
   pbRenderLibrary()
@@ -13075,7 +13772,7 @@ function pbRenderTypePicker() {
     btn.style.color = t.color
     btn.style.setProperty('--tc', t.color)
     btn.classList.toggle('active-type', t.key === pbImportActiveType)
-    btn.innerHTML = `<span class="pb-type-pick-dot"></span>${t.id}. ${t.label}`
+    btn.innerHTML = `<span class="pb-type-pick-dot"></span>${t.label}`
     btn.onclick = () => { pbImportActiveType = t.key; pbRenderTypePicker() }
     wrap.appendChild(btn)
   })
