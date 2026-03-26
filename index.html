@@ -9878,6 +9878,7 @@ function pbInit() {
     bar.addEventListener('keyup',     pbFormulaSaveRange)
     bar.addEventListener('touchend',  pbFormulaSaveRange)
     bar.addEventListener('input', () => {
+      if (window._pbPasting) return   // suppress during paste handling
       pbSyncFormulaFromDOM()
       pbFormulaAutocomplete(bar)
       pbShowPlaceholderIfEmpty(bar)
@@ -9887,7 +9888,17 @@ function pbInit() {
       e.preventDefault()
       const text = (e.clipboardData || window.clipboardData).getData('text/plain').trim()
       if (!text) return
+      // Set flag to suppress the rogue input event that fires after paste on mobile
+      window._pbPasting = true
+      // Re-render from clean pbFormula state to clear any leaked text
+      pbRenderFormula()
+      // pbSavedRange is now stale (bar was re-rendered) — clear it so we always append
+      pbSavedRange = null
       pbHandleFormulaPaste(text, bar)
+      // Clear flag after the rogue input event has fired
+      requestAnimationFrame(() => {
+        window._pbPasting = false
+      })
     })
   }
   // selectionchange fires even after focus moves away — captures text selections
@@ -12043,6 +12054,7 @@ let pbAcDropdown = null
 let pbAcWordRange = null  // range covering the word being typed
 
 function pbFormulaAutocomplete(bar) {
+  if (window._pbPasting) return   // don't autocomplete during paste
   const sel = window.getSelection()
   if (!sel || sel.rangeCount === 0) { pbAcHide(); return }
   const range = sel.getRangeAt(0)
