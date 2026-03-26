@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Beast Mode // Prompt Manager</title>
+<!-- ── PWA ──────────────────────────────────────────────────────── -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Beast Mode">
+<meta name="theme-color" content="#0d0d0d">
+<link rel="manifest" href="manifest.json">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {})
+  })
+}
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -1014,6 +1028,18 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   -webkit-user-select:none;user-select:none;
 }
 .pb-formula-chip .pfc-rm:hover { opacity:1; }
+/* Pin button */
+.pb-formula-chip .pfc-pin {
+  flex-shrink:0;font-size:11px;line-height:1;
+  opacity:.3;cursor:pointer;transition:opacity .1s;
+  padding:0 1px;touch-action:manipulation;
+  -webkit-user-select:none;user-select:none;
+}
+.pb-formula-chip .pfc-pin:hover { opacity:.8; }
+.pb-formula-chip.pfc-pinned { border-style:dashed;border-width:2px; }
+.pb-formula-chip.pfc-pinned .pfc-pin { opacity:1; }
+/* Undo/redo disabled state */
+#pbUndoBtn:disabled, #pbRedoBtn:disabled { opacity:.3;cursor:not-allowed; }
 /* Replace / dim mode on particle grid */
 .pb-type-block.pb-replace-active { outline:2px solid var(--tc, var(--accent));outline-offset:2px; }
 .pb-type-block.pb-replace-dimmed { opacity:.18;pointer-events:none; }
@@ -2928,6 +2954,30 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
         </div>
       </div>
 
+      <!-- Particle Usage Stats -->
+      <div class="settings-section" style="grid-column:1/-1;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
+          <div class="settings-section-title" style="margin-bottom:0;">Particle Usage</div>
+          <button onclick="pbUsageStats={};try{localStorage.removeItem('bm_particle_usage')}catch(e){};pbRenderUsageStats()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕ RESET</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:14px;">Your most-used particles across all Lab sessions. Top 20 by use count.</div>
+        <div id="pbUsageStatsPanel"></div>
+      </div>
+
+      <!-- Keyboard Shortcuts -->
+      <div class="settings-section" style="grid-column:1/-1;">
+        <div class="settings-section-title">Keyboard Shortcuts</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:2;">
+          <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Z</span><span style="color:var(--muted);">Undo formula change</span>
+          <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Y</span><span style="color:var(--muted);">Redo formula change</span>
+          <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Enter</span><span style="color:var(--muted);">Copy current prompt to clipboard</span>
+          <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Shift + R</span><span style="color:var(--muted);">Randomise formula (Lab) / Generate (Generator)</span>
+          <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Shift + S</span><span style="color:var(--muted);">Save current prompt to Library</span>
+          <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Escape</span><span style="color:var(--muted);">Close any open modal or panel</span>
+          <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">1 / 2 / 3 / 4</span><span style="color:var(--muted);">Switch tabs (Generator / Lab / Library / Settings)</span>
+        </div>
+      </div>
+
       <!-- Feedback -->
       <div class="settings-section" style="grid-column:1/-1;">
         <div class="settings-section-title">Send Feedback</div>
@@ -2979,9 +3029,12 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
         </div>
       </div>
       <div class="pb-formula pb-formula-output" id="pbFormula" contenteditable="true" spellcheck="false"></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center;">
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbRandomiseAll()">⚄ RANDOMISE</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
+        <button id="pbUndoBtn" class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbUndo()" title="Undo (Ctrl+Z)" disabled>↩ UNDO</button>
+        <button id="pbRedoBtn" class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbRedo()" title="Redo (Ctrl+Y)" disabled>↪ REDO</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbOpenFormulaPresets()" title="Formula Presets">◈ PRESETS</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbCopyOutput()">⎘ COPY</button>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" id="pbSaveBtn" onclick="pbSaveToLibrary()">♥ SAVE</button>
       </div>
@@ -3178,6 +3231,31 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
 
 
+<!-- ═══════════════════════════════ FORMULA PRESETS MODAL ══════════ -->
+<div id="pbFormulaPresetsModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10004;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:3px;color:var(--accent);">// FORMULA PRESETS</div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:1.5px;margin-top:2px;">Save &amp; recall named formula states</div>
+      </div>
+      <button onclick="pbCloseFormulaPresets()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <!-- Save current -->
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:1.5px;margin-bottom:8px;">SAVE CURRENT FORMULA AS PRESET</div>
+      <div style="display:flex;gap:8px;">
+        <input id="pbPresetNameInput" type="text" placeholder="Preset name…" maxlength="40"
+          style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;color:var(--text);outline:none;"
+          onkeydown="if(event.key==='Enter')pbSaveFormulaPreset()">
+        <button onclick="pbSaveFormulaPreset()" class="btn btn-primary" style="font-size:12px;padding:6px 14px;white-space:nowrap;">+ SAVE</button>
+      </div>
+    </div>
+    <!-- Preset list -->
+    <div id="pbFormulaPresetList" style="padding:8px 0;max-height:340px;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════ IMPORT PROMPT MODAL ════════════ -->
 <div id="pbImportModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10003;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
   <div class="pb-import-card">
@@ -3335,7 +3413,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 
-<script type="application/json" id="bm-data">
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="application/json" id="bm-data">
 {"INSECTS":{"Rhinoceros Beetle":{"body":"armored beetle chassis","armor":"reinforced horn-plated shell","legs":"powerful crushing legs","weapon":"ram horns","texture":"glossy ribbed carapace with deep grooves","movement":"slow deliberate stomping charge","scale":"car-sized"},"Hercules Beetle":{"body":"long twin-horned frame","armor":"reinforced carapace with dorsal horn","legs":"tank-grip legs","weapon":"horn ram and pincer","texture":"matte black and olive-green banded shell","movement":"low rumbling bulldozer charge","scale":"van-sized"},"Goliath Beetle":{"body":"massive block-like chassis","armor":"dense mosaic plates","legs":"strong grip limbs","weapon":"crushing pincer jaws","texture":"bold black-and-white geometric patterned shell","movement":"heavy plodding gait with sudden lunges","scale":"car-sized"},"Stag Beetle":{"body":"armored antlered frame","armor":"horned iridescent shell","legs":"grip crawler legs","weapon":"massive antler-horn attack","texture":"deep mahogany lacquered shell","movement":"aggressive sideways wrestling stance","scale":"motorbike-sized"},"Ironclad Beetle":{"body":"heavily compressed armored frame","armor":"ultra-dense iron-like shell","legs":"squat stubby legs","weapon":"crushing mandible jaws","texture":"rough stone-like ridged exoskeleton","movement":"immovable defensive crouch with short bursts","scale":"fist-sized"},"Bombardier Beetle":{"body":"blast-chassis with rear cannon","armor":"heat-resistant segmented plates","legs":"multi-jointed rapid legs","weapon":"boiling chemical steam cannon","texture":"metallic blue-black shell with orange head","movement":"fast retreating sprint with directional blast","scale":"boot-sized"},"Trilobite Beetle":{"body":"ancient trilobite-shell frame","armor":"overlapping articulated plates","legs":"many segmented multi-jointed legs","weapon":"crushing mandibles","texture":"rippled fossil-pattern segmented shell","movement":"flat ground-hugging scuttle","scale":"shoebox-sized"},"Tiger Beetle":{"body":"streamlined fast-predator frame","armor":"iridescent metallic plates","legs":"long sprint legs","weapon":"scissor snap jaws","texture":"vivid iridescent green-gold shell","movement":"explosive sprint and stop hunting pattern","scale":"hand-sized"},"Diving Beetle":{"body":"streamlined aquatic tear-drop frame","armor":"waterproof sealed shell","legs":"oar paddle limbs","weapon":"rending mandible bite","texture":"smooth olive-brown hydrodynamic shell","movement":"powerful underwater corkscrewing dive","scale":"palm-sized"},"Longhorn Beetle":{"body":"elongated antenna-crowned frame","armor":"banded black-and-white plates","legs":"clinging bark-grip limbs","weapon":"antenna whip strike","texture":"boldly banded monochrome shell","movement":"slow methodical climbing and boring","scale":"forearm-length"},"Jewel Beetle":{"body":"iridescent gem-like chassis","armor":"faceted metallic gem plates","legs":"agile precision legs","weapon":"focused heat beam","texture":"brilliant metallic green-gold-copper iridescence","movement":"glinting darting aerial hover","scale":"hand-sized"},"Whirligig Beetle":{"body":"disc-shaped gyroscope frame","armor":"split-lens sensor dome","legs":"rowing sculling limbs","weapon":"surface vortex spin","texture":"polished jet-black convex shell","movement":"rapid circular surface spinning","scale":"coin-sized"},"Firefly":{"body":"soft-bodied luminescent frame","armor":"bioluminescent soft plates","legs":"landing clasper limbs","weapon":"blinding light pulse","texture":"soft brown shell with glowing yellow abdomen panels","movement":"slow drifting pulse-flash flight","scale":"finger-length"},"Titan Beetle":{"body":"enormous bark-crushing chassis","armor":"ultra-thick ribbed plates","legs":"powerful grip legs","weapon":"mandible shear capable of snapping pencils","texture":"matte brown rough-ridged bark-like shell","movement":"slow lumbering unstoppable advance","scale":"forearm-length"},"Click Beetle":{"body":"spring-loaded launch chassis","armor":"ridged hard wing cases","legs":"snap-launch legs","weapon":"kinetic body-launch strike","texture":"brown striped ridged shell","movement":"sudden violent body-snap launch","scale":"thumb-sized"},"Violin Beetle":{"body":"flat violin-body silhouette frame","armor":"transparent wing edge extensions","legs":"wide-gait splayed legs","weapon":"acid defensive ooze","texture":"translucent amber flat violin shape","movement":"flat bark-panel crawl","scale":"palm-sized"},"Dung Beetle":{"body":"rounded compact hauler frame","armor":"rugged matte shell","legs":"grip and roll legs","weapon":"rolling ram","texture":"matte black rough shell","movement":"precise rolling backward navigation","scale":"walnut-sized"},"Ground Beetle":{"body":"low-slung patrol frame","armor":"polished dark plates","legs":"fast patrol legs","weapon":"acid mandible spray","texture":"polished jet-black shell","movement":"rapid low-to-ground sprint","scale":"thumb-sized"},"Bark Beetle":{"body":"compact cylindrical borer frame","armor":"wood-pattern cryptic plates","legs":"grip claw limbs","weapon":"bore drill mandibles","texture":"brown wood-grain patterned shell","movement":"slow rotating boring drill advance","scale":"rice-grain-sized"},"Blister Beetle":{"body":"slender soft-bodied frame","armor":"warning-coloured soft plates","legs":"walking limbs","weapon":"cantharidin chemical sprayer","texture":"bright warning-red or metallic blue soft shell","movement":"slow deliberate warning walk","scale":"thumb-sized"},"Rove Beetle":{"body":"flexible abbreviated-wing frame","armor":"shortened elytra","legs":"swift running legs","weapon":"abdominal gland spray","texture":"shiny black flexible body","movement":"fast running with raised abdomen","scale":"thumb-sized"},"Hister Beetle":{"body":"compact box-like frame","armor":"polished jet-black shell","legs":"burrowing limbs","weapon":"clamping mandible jaws","texture":"mirror-polished hard black carapace","movement":"playing dead then explosive escape","scale":"pea-sized"},"Soldier Beetle":{"body":"narrow soft-shelled frame","armor":"leathery soft plates","legs":"patrol limbs","weapon":"pheromone chemical gun","texture":"orange and black leathery soft shell","movement":"steady patrol flight and crawl","scale":"thumbnail-sized"},"Atlas Beetle":{"body":"triple-horned Y-shaped chassis","armor":"thick dark plates","legs":"grip tank legs","weapon":"triple horn wrestling ram","texture":"dark brown rough matte shell","movement":"powerful slow wrestling advance","scale":"fist-sized"},"Elephant Beetle":{"body":"humped horn-crowned chassis","armor":"spotted thick plates","legs":"strong clinging legs","weapon":"trunk horn ram","texture":"black shell with olive-yellow hair patches","movement":"slow deliberate strength-display advance","scale":"fist-sized"},"Palo Verde Root Borer":{"body":"long-horned aerial frame","armor":"mottled bark-pattern plates","legs":"clinging burrowing legs","weapon":"antenna whip","texture":"mottled grey-brown bark-pattern shell","movement":"clumsy heavy night flight","scale":"forearm-length"},"Wallace's Giant Bee":{"body":"massive barrel-bodied bee frame","armor":"dense fur-plate armor","legs":"pollen basket legs","weapon":"massive sting lance","texture":"dense black fur with pale fur bands","movement":"loud heavy deliberate flight","scale":"thumb-length"},"Dragonfly":{"body":"aerodynamic twin-wing fuselage","armor":"lightweight lattice plating","legs":"basket-trap landing limbs","weapon":"precision targeting system","texture":"transparent net-veined wing panels, metallic thorax","movement":"helicopter hover and lightning-fast directional strike","scale":"forearm-length"},"Emperor Dragonfly":{"body":"large aerial interceptor frame","armor":"banded thorax plates","legs":"prey-basket limbs","weapon":"aerial snatch claws","texture":"electric blue and black banded body","movement":"territorial patrol with explosive acceleration","scale":"forearm-length"},"Glasstail Dragonfly":{"body":"transparent-tailed aerial frame","armor":"clear wing panels","legs":"perch grip limbs","weapon":"aerial ambush dive","texture":"transparent abdomen with metallic thorax","movement":"ghost-silent hover and vanish","scale":"hand-length"},"Damselfly":{"body":"slender needle-like hovering frame","armor":"delicate wing panels","legs":"perch clasper limbs","weapon":"precision prey grab","texture":"vivid blue or red iridescent slender body","movement":"weak fluttering hover near water surface","scale":"finger-length"},"Stalk-Eyed Fly":{"body":"compact scout body with extended eye stalks","armor":"sensor dome head","legs":"agile positioning legs","weapon":"wide-angle optic array","texture":"brown striped body with absurd eye stalks","movement":"sideways eye-display posturing","scale":"thumbnail-sized"},"Tsetse Fly":{"body":"compact flying injector body","armor":"chitin plates","legs":"quick landing legs","weapon":"scissor-blade proboscis injector","texture":"dull brown bristled shell","movement":"silent landing and rapid feed","scale":"thumbnail-sized"},"Horse Fly":{"body":"robust heavy-bodied flying frame","armor":"hard wing plates","legs":"landing grip legs","weapon":"blade-slice biting mouth","texture":"brown striped with vivid iridescent compound eyes","movement":"silent fast approach then painful bite","scale":"thumbnail-sized"},"Robber Fly":{"body":"fast predatory bearded frame","armor":"bristle-plate armor","legs":"raptorial grip limbs","weapon":"stabbing hypopharynx beak","texture":"grey bristled hairy body","movement":"ambush perch then supersonic interception","scale":"thumb-sized"},"Hoverfly":{"body":"hovering bee-mimic chassis","armor":"warning-pattern mimic plates","legs":"delicate hovering limbs","weapon":"pollen delivery cannon","texture":"bold yellow-black bee-mimic banding","movement":"precision stationary hover","scale":"thumbnail-sized"},"Crane Fly":{"body":"long-limbed fragile frame","armor":"thin papery shell","legs":"long dangling fragile limbs","weapon":"decoy distraction emitter","texture":"pale grey papery soft body","movement":"bumbling erratic weak flight","scale":"palm-sized"},"Botfly":{"body":"parasitic host-seeker frame","armor":"thick hairy hide","legs":"grip host-clinging limbs","weapon":"larval injection system","texture":"bumblebee-mimicking hairy body","movement":"brief targeted landing then vanish","scale":"thumbnail-sized"},"Mayfly":{"body":"ephemeral long-tailed frame","armor":"transparent wing panels","legs":"brief-contact legs","weapon":"swarm emergence burst","texture":"pale translucent wings and pale body","movement":"weak upward drifting dance flight","scale":"finger-length"},"Blow Fly":{"body":"metallic compact flying frame","armor":"shiny iridescent plates","legs":"sticky landing legs","weapon":"chemical detection sniffer","texture":"brilliant metallic blue-green iridescent shell","movement":"erratic buzzing landing search","scale":"thumbnail-sized"},"Scorpion Fly":{"body":"predatory scorpion-tail flying frame","armor":"yellow-black banded plates","legs":"scavenging limbs","weapon":"scorpion-curl tail sting","texture":"yellow and black banded body with raised tail","movement":"slow deliberate scavenging walk","scale":"thumb-sized"},"Gnat":{"body":"tiny slender flying frame","armor":"minimal transparent plates","legs":"hovering hair-like limbs","weapon":"swarm cloud burst","texture":"near-invisible transparent body","movement":"dancing swarm column","scale":"pin-head-sized"},"Mosquito":{"body":"slender needle-nosed flying frame","armor":"scaled delicate wings","legs":"precision landing legs","weapon":"hypodermic blood-lance proboscis","texture":"dark speckled slender body with banded legs","movement":"silent drift landing","scale":"pin-length"},"Black Fly":{"body":"humpbacked compact biting frame","armor":"dense black plates","legs":"gripping hook legs","weapon":"bladed mandible blood-slice","texture":"glossy black humpbacked body","movement":"fast low swarming attack","scale":"pinhead-sized"},"Sand Fly":{"body":"tiny hairy flying frame","armor":"held-wing hairy plates","legs":"quick escape legs","weapon":"disease vector bite","texture":"pale hairy minute body","movement":"short hopping low flight","scale":"pinhead-sized"},"Fungus Gnat":{"body":"slender delicate-wing frame","armor":"delicate transparent wings","legs":"walking legs","weapon":"spore cloud release","texture":"dark slender body with clear wings","movement":"weak erratic indoor drift","scale":"pinhead-sized"},"March Fly":{"body":"stocky bristled frame","armor":"hairy plate armor","legs":"slow walking legs","weapon":"blood-lance mouthparts","texture":"black hairy soft body","movement":"slow buzzing low flight","scale":"thumbnail-sized"},"Midge":{"body":"tiny soft slender frame","armor":"delicate wing panels","legs":"hovering drift limbs","weapon":"swarm cloud","texture":"near-transparent tiny body","movement":"tight swarm ball dance","scale":"pinhead-sized"},"Bumblebee":{"body":"round fuzzy flying chassis","armor":"dense fur honeycomb plating","legs":"pollen basket hovering limbs","weapon":"venomous barbed stinger","texture":"dense black and yellow fur","movement":"low loud deliberate hovering flight","scale":"thumb-sized"},"Yellowjacket Wasp":{"body":"slender aggressive wasp body","armor":"hard smooth exoskeleton","legs":"quick aggressive legs","weapon":"smooth reusable venom stinger","texture":"bright yellow-black glossy smooth bands","movement":"rapid aggressive darting flight","scale":"thumbnail-sized"},"Hornet":{"body":"large aggressive wasp frame","armor":"hard banded plates","legs":"swift powerful legs","weapon":"large venom stinger","texture":"brown orange-yellow banded smooth shell","movement":"loud fast aggressive patrol","scale":"thumb-sized"},"Japanese Giant Hornet":{"body":"massive predator wasp frame","armor":"orange-yellow banded plates","legs":"swift powerful legs","weapon":"large mandible saw and sting","texture":"vivid orange head with brown-banded body","movement":"loud fast terrifying patrol flight","scale":"finger-length"},"Tarantula Hawk":{"body":"large metallic flying predator","armor":"iridescent blue-black wing casing","legs":"grappling hook limbs","weapon":"paralyzing sting lance","texture":"vivid blue-black metallic body with orange wings","movement":"low deliberate hunting ground patrol","scale":"thumb-length"},"Paper Wasp":{"body":"slender hanging-leg wasp frame","armor":"segmented paper-thin waist","legs":"dangling leg limbs","weapon":"venom lance sting","texture":"brown and yellow banded paper-thin body","movement":"slow hovering nest patrol","scale":"thumbnail-sized"},"Mud Dauber":{"body":"needle-thin tube-wasp frame","armor":"clay-daubed cylinder plates","legs":"construction grip limbs","weapon":"paralysis sting lance","texture":"black shiny narrow metallic body","movement":"precise hovering mud-carry flight","scale":"finger-length"},"Cicada Killer":{"body":"massive hunting wasp frame","armor":"banded yellow-black plates","legs":"carry-clamp limbs","weapon":"paralysis sting","texture":"black with yellow bands, rust-red wings","movement":"dramatic low hunting patrol","scale":"finger-length"},"Orchid Bee":{"body":"compact iridescent bee frame","armor":"metallic jewel plates","legs":"specialized scent-collecting legs","weapon":"mandible snip","texture":"brilliant metallic green gold iridescence","movement":"fast darting precision hover","scale":"thumbnail-sized"},"Velvet Ant":{"body":"fuzzy warning-colored ant-wasp","armor":"dense fur warning plates","legs":"fast running limbs","weapon":"extremely painful sting","texture":"vivid orange-red dense fur on black body","movement":"fast ground running","scale":"thumb-sized"},"Cuckoo Wasp":{"body":"gem-like compact wasp frame","armor":"deep-pitted metallic shell","legs":"agile curl-up limbs","weapon":"ovipositor dart","texture":"brilliant metallic blue-green deeply pitted shell","movement":"darting nervous hover","scale":"thumbnail-sized"},"Wood Wasp":{"body":"robust cylindrical wasp frame","armor":"banded plates","legs":"wood-grip limbs","weapon":"wood-drilling ovipositor","texture":"black yellow-banded cylindrical body","movement":"slow deliberate drilling bore","scale":"finger-length"},"Giant Ichneumon Wasp":{"body":"long-ovipositor hunting frame","armor":"orange-banded plates","legs":"bark-grip limbs","weapon":"metre-long drill ovipositor","texture":"orange and black with absurdly long tail","movement":"slow methodical bark-drilling","scale":"hand-length including ovipositor"},"Warrior Wasp":{"body":"colonial ranked soldier frame","armor":"hard striped plates","legs":"marching combat limbs","weapon":"repeated intense stings","texture":"dark brown uniform banding","movement":"synchronized marching swarm","scale":"thumbnail-sized"},"Fire Ant":{"body":"aggressive compact ant frame","armor":"hard chitin exoskeleton","legs":"rapid six-leg sprint","weapon":"mandible bite and acid sting","texture":"reddish-brown smooth chitin","movement":"frantic coordinated swarm attack","scale":"grain-of-rice-sized"},"Bullet Ant":{"body":"large powerful ant frame","armor":"tough pitted chitin","legs":"powerful grip legs","weapon":"most painful sting known","texture":"dark brown matte rough chitin","movement":"deliberate slow warning patrol","scale":"thumbnail-sized"},"Army Ant":{"body":"swarm colonial raider frame","armor":"massed soldier plates","legs":"marching coordinated limbs","weapon":"mandible shear in masses","texture":"dark brown matte chitin","movement":"unstoppable river-like swarm flood","scale":"grain-sized individually, bus-sized as swarm"},"Driver Ant":{"body":"colonial mass-raider frame","armor":"massed layered armor","legs":"coordinated racing limbs","weapon":"mandible blade in thousands","texture":"dark reddish-brown matte chitin","movement":"unstoppable flooding column","scale":"grain-sized individually"},"Carpenter Ant":{"body":"large wood-boring ant frame","armor":"segmented black shell","legs":"strong grip legs","weapon":"formic acid spray","texture":"shiny black segmented chitin","movement":"methodical precise wood-boring advance","scale":"thumbnail-sized"},"Leafcutter Ant":{"body":"carrying-frame ant","armor":"ridged plate armor","legs":"worker carrying limbs","weapon":"mandible scissor saw","texture":"rust-brown rough chitin","movement":"steady leaf-fragment carrying column","scale":"grain-sized"},"Trap-Jaw Ant":{"body":"spring-loaded jaw-dominant frame","armor":"hard chitin","legs":"escape-launch sprint legs","weapon":"fastest closing snap jaws","texture":"dark brown with oversized mandibles","movement":"explosive mandible snap escape launch","scale":"thumbnail-sized"},"Weaver Ant":{"body":"arboreal silk-builder frame","armor":"vivid green chitin","legs":"silk-pull limbs","weapon":"acid silk binder","texture":"lime-green translucent chitin","movement":"coordinated bridge-chain formation","scale":"thumbnail-sized"},"Praying Mantis":{"body":"slender raptorial predator frame","armor":"segmented leaf-green armor","legs":"raptorial strike limbs","weapon":"serrated scythe arms","texture":"rough leaf-textured green exoskeleton","movement":"slow sway then sub-millisecond strike","scale":"palm-length"},"Orchid Mantis":{"body":"floral petal-torso frame","armor":"pink-white petal plating","legs":"petal-lobe bladed limbs","weapon":"raptorial ambush scythe","texture":"translucent pink-white petal-like surfaces","movement":"gentle flower-sway ambush","scale":"palm-length"},"Dead Leaf Mantis":{"body":"flat crinkled leaf-shaped frame","armor":"brown crinkled camouflage plates","legs":"dry twig limbs","weapon":"ambush raptorial claws","texture":"perfect dead-leaf brown crinkle texture","movement":"dead-leaf tremble in false wind","scale":"palm-length"},"Ghost Mantis":{"body":"wispy bark-fragment frame","armor":"bark-pattern ragged plates","legs":"swaying dead-twig limbs","weapon":"raptorial strike","texture":"mottled brown-grey bark pattern","movement":"swaying ghost-like stillness","scale":"thumb-length"},"Spiny Flower Mantis":{"body":"spiral eye-spot patterned frame","armor":"false-eye deterrent plates","legs":"grasping display limbs","weapon":"spine lance","texture":"white with vivid spiral eye patterns on wings","movement":"warning display then sudden strike","scale":"thumb-length"},"Budwing Mantis":{"body":"compact brown camo frame","armor":"camo wing plates","legs":"grip ambush limbs","weapon":"raptorial claws","texture":"brown wood-grain patterned body","movement":"still ground ambush","scale":"thumb-length"},"Mantis Fly":{"body":"raptorial-armed flying frame","armor":"wasp-mimic warning plates","legs":"mantis-strike raptorial limbs","weapon":"raptorial ambush claws","texture":"wasp yellow-black mimic pattern","movement":"hover then raptorial snatch","scale":"thumbnail-sized"},"Assassin Bug":{"body":"predatory narrow-waisted frame","armor":"armored exoskeleton","legs":"grasping raptorial legs","weapon":"curved piercing proboscis","texture":"dark brown or red rough exoskeleton","movement":"slow stalk then explosive stab","scale":"thumbnail-sized"},"Treehopper":{"body":"angular horn-crested chassis","armor":"elaborate horn plating","legs":"jumping articulated legs","weapon":"spike horn emitter","texture":"vivid green with bizarre horn shapes","movement":"jump to new stem and freeze","scale":"pea-sized"},"Cicada":{"body":"resonant drum-thorax frame","armor":"sound-panel plates","legs":"gripping bark limbs","weapon":"170dB sonic vibration cannon","texture":"dark body with translucent veined wings","movement":"17-year dormancy then explosive emergence","scale":"thumb-sized"},"Leafhopper":{"body":"slender wedge-shaped jumping body","armor":"leaf-pattern plates","legs":"powerful catapult legs","weapon":"piercing spear stylets","texture":"vivid green or multicolour leaf mimic","movement":"sideways crab-shuffle then sudden leap","scale":"thumbnail-sized"},"Planthopper":{"body":"slender camouflage wedge frame","armor":"cryptic pattern plates","legs":"jump launch legs","weapon":"piercing plant-tap appendages","texture":"bark or lichen camouflage pattern","movement":"angled cryptic posture then escape jump","scale":"thumbnail-sized"},"Water Strider":{"body":"long-legged floating chassis","armor":"hydrophobic wax plates","legs":"surface-tension skimming limbs","weapon":"piercing predator claws","texture":"dark slender body on spread hairy feet","movement":"skating glide on water surface","scale":"hand-sized"},"Cockroach":{"body":"flat oval armored frame","armor":"flexible armor plates","legs":"six rapid escape limbs","weapon":"spiked mandibles","texture":"glossy brown oval chitinous shell","movement":"lightning-fast omnidirectional escape sprint","scale":"palm-sized"},"Giant Water Bug":{"body":"powerful flat aquatic predator","armor":"flat streamlined shell","legs":"rowing capture limbs","weapon":"dissolving enzyme beak","texture":"flat mottled brown hydrodynamic body","movement":"ambush from underwater vegetation","scale":"forearm-length"},"Backswimmer":{"body":"keel-hulled inverted swimmer","armor":"boat-keel plates","legs":"oar rowing limbs","weapon":"piercing ventral beak","texture":"pale underside with dark back, upside-down swimmer","movement":"upside-down rapid rowing","scale":"thumbnail-sized"},"Shield Bug":{"body":"shield-pentagonal chassis","armor":"heraldic shield plates","legs":"gripping plant limbs","weapon":"chemical spray","texture":"vivid green or brown shield-shaped body","movement":"slow deliberate plant patrol","scale":"thumbnail-sized"},"Bed Bug":{"body":"flat oval parasitic frame","armor":"reddish leathery plates","legs":"crawling host-seeking limbs","weapon":"blood-sucking lance","texture":"flat reddish-brown leathery oval","movement":"flat gap-squeezing night crawl","scale":"apple-seed-sized"},"Aphid":{"body":"soft pear-shaped swarm body","armor":"waxy soft coat","legs":"clinging tube-feet","weapon":"phloem tap stylets","texture":"green, black or pink soft waxy body","movement":"stationary cluster feeding","scale":"pinhead-sized"},"Water Scorpion":{"body":"flat twig-like aquatic frame","armor":"leaf-pattern plates","legs":"predatory raptorial limbs","weapon":"breathing siphon sting","texture":"flat brown twig-like body","movement":"motionless ambush","scale":"finger-length"},"Peanut Head Bug":{"body":"peanut-head hollow-dome frame","armor":"peanut-shaped false-head dome","legs":"stout plant limbs","weapon":"false eye bluff display","texture":"brown mottled body with huge false head","movement":"slow plant crawl then startle display","scale":"thumb-length"},"Monarch Butterfly":{"body":"winged migratory chassis","armor":"warning orange scale plates","legs":"landing clasper limbs","weapon":"chemical deterrent gust","texture":"vivid orange-black-white scale pattern","movement":"leisurely gliding migration flight","scale":"hand-wingspan"},"Blue Morpho Butterfly":{"body":"iridescent wing-flash chassis","armor":"structural-colour scale plates","legs":"landing clasper limbs","weapon":"blinding light refractor","texture":"brilliant structural-blue iridescent wings","movement":"slow alternating flap and glide","scale":"hand-wingspan"},"Glasswing Butterfly":{"body":"transparent ghost-wing frame","armor":"clear glass-panel wings","legs":"delicate landing limbs","weapon":"stealth invisible glide","texture":"transparent wings with thin opaque borders","movement":"slow invisible ghost glide","scale":"hand-wingspan"},"Swallowtail Butterfly":{"body":"tailed wing frame","armor":"vivid patterned scale plates","legs":"landing clasper limbs","weapon":"wing-gust defense","texture":"yellow black-striped or vivid patterned wings","movement":"graceful soaring glide","scale":"hand-wingspan"},"Queen Alexandra Birdwing":{"body":"largest butterfly wing frame","armor":"teal-black scaled wings","legs":"landing clasper limbs","weapon":"wing-size intimidation gust","texture":"vivid teal-green and black scaled wings","movement":"slow majestic gliding flight","scale":"dinner-plate wingspan"},"Atlas Moth":{"body":"massive wing-snake-head frame","armor":"thick brown-scale wing plates","legs":"landing limbs","weapon":"wing-tip snake-head bluff","texture":"rich brown with transparent window patches","movement":"slow heavy night flight","scale":"dinner-plate wingspan"},"Luna Moth":{"body":"pale green tailed-wing frame","armor":"soft lime-green scale plates","legs":"landing limbs","weapon":"tail decoy and wind slash","texture":"pale lime-green with long tail streamers","movement":"gentle slow night drift","scale":"hand-wingspan"},"Death's Head Hawk-Moth":{"body":"robust skull-marked frame","armor":"skull-pattern thorax","legs":"hovering limbs","weapon":"skull-squeak emitter","texture":"dark brown with vivid skull face on thorax","movement":"fast hovering flower feed","scale":"hand-wingspan"},"Hawk Moth":{"body":"streamlined rocket-body hover frame","armor":"camouflage cryptic wings","legs":"hovering limbs","weapon":"long proboscis lance","texture":"grey-brown streaked cryptic wings","movement":"hummingbird hovering","scale":"hand-wingspan"},"Hummingbird Hawk-Moth":{"body":"hovering day-flying compact frame","armor":"olive-green scaled plates","legs":"hovering limbs","weapon":"long proboscis lance","texture":"olive-green and orange abdomen","movement":"rapid hummingbird hovering","scale":"thumb-length"},"Peppered Moth":{"body":"bark-cryptic resting frame","armor":"speckled bark-pattern wings","legs":"resting flat limbs","weapon":"dust-scatter escape","texture":"white with black pepper speckle pattern","movement":"cryptic flat bark rest then burst flight","scale":"hand-wingspan"},"Silkworm Moth":{"body":"silk-wrapped flightless frame","armor":"white fiber plates","legs":"clinging limbs","weapon":"silk cocoon binder","texture":"white fuzzy wing and body","movement":"slow flightless walk","scale":"thumb-length"},"Io Moth":{"body":"eyespot-wing display frame","armor":"eyespot deterrent plates","legs":"landing limbs","weapon":"false-eye startle bluff","texture":"yellow wings with vivid bull's-eye eyespots","movement":"sudden wing-flash startle display","scale":"hand-wingspan"},"Comet Moth":{"body":"long-tailed streamer wing frame","armor":"gold-dusted scale plates","legs":"landing limbs","weapon":"tail-streamer distraction slash","texture":"vivid yellow with red borders and long tail","movement":"slow drifting night hover","scale":"dinner-plate including tails"},"Hercules Moth":{"body":"world's largest wing-area frame","armor":"pale brown scale wing plates","legs":"landing limbs","weapon":"sheer wing-size gale","texture":"pale brown large wing patches","movement":"slow massive night glide","scale":"dinner-plate wingspan"},"Armyworm Moth":{"body":"larval-phase soft body","armor":"protective soft shell","legs":"crawling prolegs","weapon":"acid spray","texture":"striped green or brown soft larva body","movement":"steady marching crawl","scale":"finger-length"},"Grasshopper":{"body":"spring-loaded jumping frame","armor":"strong ridged exoskeleton","legs":"long catapult legs","weapon":"powerful kick limbs","texture":"green or brown cryptic rough exoskeleton","movement":"still camouflage then explosive leap","scale":"thumb-length"},"Cricket":{"body":"stridulating chirp-body frame","armor":"smooth brown thin plates","legs":"jump escape legs","weapon":"sonic chirp strike","texture":"dark brown smooth glossy shell","movement":"rapid escape bursts with chirp warning","scale":"thumb-length"},"Locust":{"body":"swarming plague chassis","armor":"hard brown or yellow plates","legs":"launch legs","weapon":"coordinated mandible shear","texture":"brown or yellow cryptic exoskeleton","movement":"billion-strong unstoppable swarm migration","scale":"thumb-length individually, city-covering swarm"},"Katydid":{"body":"leaf-shaped stridulating frame","armor":"leaf vein-patterned plates","legs":"long sensory legs","weapon":"stridulation sonic pulse","texture":"perfect green leaf vein pattern","movement":"slow leaf-sway camouflage","scale":"palm-length"},"Mole Cricket":{"body":"subterranean burrowing frame","armor":"velvety soil-proof plates","legs":"shovel digging forelimbs","weapon":"underground tunnel strike","texture":"dense velvety brown soil-repelling coat","movement":"rapid underground tunneling","scale":"thumb-length"},"Cave Cricket":{"body":"humpbacked sensory cave frame","armor":"pale reduced plates","legs":"long sensory walking legs","weapon":"kick blast","texture":"pale tan smooth humpbacked body","movement":"erratic sensory-search walk in dark","scale":"palm-length"},"Weta":{"body":"heavy armored cricket frame","armor":"ridge-spiked thick plates","legs":"powerful spine-covered legs","weapon":"rear spine defense","texture":"dark brown rough spiked exoskeleton","movement":"slow defensive threat display","scale":"palm-length"},"Giant Weta":{"body":"massive armored cricket frame","armor":"ridge-spiked heavy plates","legs":"powerful legs","weapon":"spine defense","texture":"dark brown heavy ridged exoskeleton","movement":"slow ground patrol","scale":"forearm-length"},"Jerusalem Cricket":{"body":"large bald-headed burrowing frame","armor":"banded smooth plates","legs":"digging legs","weapon":"powerful bite","texture":"banded orange-black smooth shiny body","movement":"slow deliberate underground burrowing","scale":"thumb-length"},"Stick Insect":{"body":"elongated twig-body frame","armor":"branch-texture bark armor","legs":"flexible clinging twig limbs","weapon":"defensive sway and grapple","texture":"perfect twig or bark surface texture","movement":"slow swaying twig mimicry","scale":"forearm-length"},"Leaf Insect":{"body":"flat leaf-body frame","armor":"vein-etched leaf plates","legs":"swaying leaf limbs","weapon":"camouflage burst and startle","texture":"perfect green leaf with vein detail and bite marks","movement":"leaf-trembling wind sway","scale":"palm-sized"},"Thorny Stick Insect":{"body":"thorn-studded spine-body frame","armor":"spiked bark plates","legs":"gripping thorn limbs","weapon":"spine rake defense","texture":"brown spiked thorny twig texture","movement":"slow sway with spine presentation","scale":"forearm-length"},"Chan's Megastick":{"body":"world's longest stick frame","armor":"green branch-like plates","legs":"grip camouflage legs","weapon":"absolute camouflage lock","texture":"perfect green-brown stick texture","movement":"absolute stillness","scale":"arm-length"},"Peacock Spider":{"body":"ornate display-abdomen frame","armor":"iridescent fan-pattern plates","legs":"agile dance limbs","weapon":"raptorial strike claws","texture":"vivid iridescent mosaic pattern on abdomen fan","movement":"vibrating semaphore courtship dance","scale":"thumbnail-sized"},"Whip Spider":{"body":"flat stealth wide-body frame","armor":"stealth dark plates","legs":"long sensory whip limbs","weapon":"pedipalp grasp and crush","texture":"flat dark brown cryptic body","movement":"sideways crab walk with whip-sensing","scale":"hand-sized including legs"},"Scorpion":{"body":"armored segmented tail-weapon frame","armor":"hard carapace plates","legs":"crawler legs","weapon":"barb tail venom sting","texture":"smooth dark chitinous plates","movement":"slow stalking sideways advance","scale":"hand-length"},"Emperor Scorpion":{"body":"large glossy black imperial frame","armor":"polished black carapace plates","legs":"crusher legs","weapon":"claw-and-sting combo","texture":"glossy jet-black smooth carapace","movement":"slow deliberate imperial advance","scale":"forearm-length"},"Deathstalker Scorpion":{"body":"slender pale lethal frame","armor":"yellow translucent plates","legs":"fast escape legs","weapon":"potent neurotoxin sting","texture":"pale yellow translucent smooth shell","movement":"fast darting nervous advance","scale":"hand-length"},"Fat-Tail Scorpion":{"body":"robust thick-tailed frame","armor":"thick dark plates","legs":"sturdy legs","weapon":"fat-tail powerful sting","texture":"dark brown rough thick carapace","movement":"slow aggressive advance","scale":"hand-length"},"Centipede":{"body":"elongated venomous segmented body","armor":"flexible armored segments","legs":"many fast coordinated limbs","weapon":"forcipule venom fang strike","texture":"reddish-brown smooth-jointed segments","movement":"fast undulating wave-motion sprint","scale":"arm-length"},"Giant Desert Centipede":{"body":"large venomous desert runner","armor":"orange-red plate rings","legs":"many sprint limbs","weapon":"powerful venom claws","texture":"vivid red-orange segmented body","movement":"rapid aggressive undulating charge","scale":"forearm-length"},"Vietnamese Centipede":{"body":"large armored giant centipede","armor":"hard teal-brown plates","legs":"many power limbs","weapon":"venom fangs","texture":"teal-blue and brown banded segments","movement":"rapid aggressive sprint","scale":"forearm-length"},"Amazonian Giant Centipede":{"body":"longest centipede body frame","armor":"thick yellow-brown segments","legs":"many grip limbs","weapon":"bat-hunting venom fangs","texture":"yellow-brown banded robust segments","movement":"powerful ceiling-hang ambush drop","scale":"arm-length"},"Millipede":{"body":"long cylinder multi-segment frame","armor":"overlapping ring plates","legs":"crawler wave limbs","weapon":"defensive cyanide spray","texture":"smooth brown or black polished cylinder segments","movement":"slow flowing cylindrical wave crawl","scale":"arm-length"},"Giant African Millipede":{"body":"massive cylinder many-segment frame","armor":"stacked ring armor","legs":"hundred wave limbs","weapon":"defensive cyanide gland spray","texture":"shiny dark brown cylinder body","movement":"slow majestic rolling wave","scale":"arm-length"},"Harvestman":{"body":"oval body on spider-stilts frame","armor":"minimal soft plates","legs":"extreme stilted sensory limbs","weapon":"chemical gland stink defense","texture":"small brown oval body on impossibly long legs","movement":"stilt-walking stumble patrol","scale":"coin-body, hand-span legs"},"Vinegaroon":{"body":"armored whip-tail arachnid frame","armor":"dark hard plates","legs":"sensory whip-limbs","weapon":"acid vinegar spray","texture":"dark brown shiny heavy body","movement":"slow deliberate whip-sensing advance","scale":"hand-length"},"Giant Vinegaroon":{"body":"large armored whip arachnid","armor":"dark heavy plates","legs":"sensory limbs","weapon":"directed acid whip spray","texture":"dark brown massive body","movement":"slow deliberate territorial advance","scale":"forearm-length"},"Sun Spider":{"body":"fast giant-jaw hairy frame","armor":"flexible hairy plates","legs":"ten racing limbs","weapon":"enormous chelicera crushing jaws","texture":"sandy yellow hairy body","movement":"explosive sprint then pause","scale":"palm-sized"},"Camel Spider":{"body":"large jaw-dominant hairy frame","armor":"hairy camouflage plates","legs":"fast ten-limb sprint","weapon":"massive serrated chelicerae","texture":"sandy brown hairy body","movement":"fast aggressive sprint toward shade","scale":"palm-sized"},"Pseudoscorpion":{"body":"tiny pincered arachnid frame","armor":"hard plates","legs":"eight limbs","weapon":"venom pedipalp claws","texture":"reddish-brown smooth tiny body","movement":"backward walking grip","scale":"pinhead-sized"},"Tailless Whip Scorpion":{"body":"flat wide terror frame","armor":"wide body plates","legs":"long sensory whip-limbs","weapon":"raptorial pedipalp crush","texture":"flat brown wide body","movement":"ultra-fast sideways dash","scale":"hand-sized including legs"},"Goliath Bird-Eater":{"body":"massive hairy arachnid frame","armor":"dense urticating hair-plates","legs":"eight crushing legs","weapon":"urticating hair barrage and fang","texture":"dense dark brown hair coat","movement":"slow deliberate advance then explosive charge","scale":"dinner-plate-sized"},"Black Widow Spider":{"body":"round red-hourglass abdomen frame","armor":"glossy black hourglass plates","legs":"web-anchor legs","weapon":"neurotoxin fangs","texture":"glossy jet-black with vivid red hourglass","movement":"slow deliberate web patrol","scale":"thumb-sized"},"Funnel Web Spider":{"body":"robust aggressive burrow frame","armor":"glossy dark plates","legs":"high-speed attack legs","weapon":"powerful neurotoxin fangs","texture":"glossy black smooth carapace","movement":"explosive lunge from tunnel mouth","scale":"palm-sized"},"Trapdoor Spider":{"body":"squat burrow-lid frame","armor":"smooth lid-door plates","legs":"ambush launch limbs","weapon":"spring-trap ambush attack","texture":"smooth brown silk-lined body","movement":"motionless wait then explosive spring","scale":"thumb-sized"},"Brazilian Wandering Spider":{"body":"aggressive patrol frame","armor":"brown banded plates","legs":"fast patrol legs","weapon":"potent neurotoxin fangs","texture":"brown hairy banded body","movement":"fast erratic threatening posture advance","scale":"palm-sized"},"Huntsman Spider":{"body":"flat lateral-leg spread frame","armor":"cryptic bark plates","legs":"lateral-spread crab legs","weapon":"rapid crushing fangs","texture":"flat grey-brown bark-cryptic body","movement":"lightning sideways sprint","scale":"dinner-plate-sized including legs"},"Tarantula":{"body":"hairy heavy-bodied arachnid frame","armor":"urticating hair coat","legs":"eight powerful legs","weapon":"urticating hair barrage and fang venom","texture":"dense brown or black hair coat","movement":"slow deliberate heavy advance","scale":"hand-sized"},"Termite":{"body":"swarm soft-body chassis","armor":"pale soft armor","legs":"crawler limbs","weapon":"mandible bite and acid spray","texture":"pale white soft body","movement":"blind chemical-trail swarm","scale":"grain-sized"},"Termite Soldier":{"body":"large-headed defender frame","armor":"hardened head capsule","legs":"patrol limbs","weapon":"mandible crusher and chemical spray","texture":"large dark-brown head with pale body","movement":"defensive frontline stance","scale":"thumbnail-sized"},"Earwig":{"body":"slender forcep-tail chassis","armor":"leathery wing plates","legs":"scuttling limbs","weapon":"rearward forcep claws","texture":"dark brown shiny leathery body","movement":"rapid scuttling run with raised forceps","scale":"thumbnail-sized"},"Silverfish":{"body":"slender scale-covered ancient frame","armor":"iridescent silver scales","legs":"fast crawler legs","weapon":"spike tail escape","texture":"silvery metallic scales over slender body","movement":"fast sinuous paper-flat sprint","scale":"finger-length"},"Firebrat":{"body":"heat-resistant bristle-scale frame","armor":"grey bristled scales","legs":"fast runner legs","weapon":"vanishing escape dash","texture":"grey mottled bristled scales","movement":"extremely fast erratic sprint near heat","scale":"finger-length"},"Springtail":{"body":"tiny springboard chassis","armor":"waxy smooth coat","legs":"furcula launch legs","weapon":"spring-launch escape","texture":"pale smooth tiny body","movement":"explosive spring-launch somersault escape","scale":"pinhead-sized"},"Bristletail":{"body":"archaic scale-covered frame","armor":"scaly metallic plates","legs":"agile running legs","weapon":"tail-filament whip","texture":"metallic grey-brown scale pattern","movement":"fast rock-surface sprint","scale":"thumbnail-sized"},"Flea":{"body":"laterally compressed jumping frame","armor":"hard smooth chitin plates","legs":"spring catapult legs","weapon":"piercing bite","texture":"shiny brown compressed smooth chitin","movement":"explosive 100x body-length leap","scale":"pinhead-sized"},"Body Louse":{"body":"flat gripping parasite frame","armor":"transparent grip plates","legs":"clamp claw limbs","weapon":"blood lance","texture":"transparent pale gripping body","movement":"grip and feed stillness","scale":"sesame-seed-sized"},"Webspinner":{"body":"slender silk-tunnel builder frame","armor":"silk-walled plates","legs":"fast running limbs","weapon":"silk cocoon trap","texture":"pale silk-lined slender body","movement":"fast backward running in silk tunnel","scale":"thumbnail-sized"},"Rock Crawler":{"body":"cold-adapted mountain frame","armor":"thin flexible plates","legs":"ice-grip climbing limbs","weapon":"mandible grip","texture":"pale yellowish soft thin body","movement":"slow cold-adapted high-altitude patrol","scale":"thumbnail-sized"},"Grylloblattid":{"body":"wingless ice-crawler frame","armor":"soft reduced plates","legs":"slow cold-adapted legs","weapon":"mandible grab","texture":"pale soft elongated body","movement":"ultra-slow cold-adapted crawl","scale":"thumbnail-sized"},"Mantophasmatodea":{"body":"predatory wingless rock-crawler","armor":"cylindrical smooth plates","legs":"raptorial grip limbs","weapon":"raptorial grip claws","texture":"pale brown cylindrical smooth body","movement":"slow predatory stalk","scale":"thumbnail-sized"},"Lacewing":{"body":"delicate net-wing frame","armor":"transparent wing panels","legs":"grasping precision limbs","weapon":"net-web launcher","texture":"transparent green net-veined wings","movement":"weak fluttering night flight","scale":"thumb-sized"},"Antlion":{"body":"pit-trap burrowing body","armor":"dusty sand-plate armor","legs":"backward-only digging limbs","weapon":"sand-trap crushing jaws","texture":"dusty grey sand-coated body","movement":"backward spiral pit-digging","scale":"thumb-sized"},"Owlfly":{"body":"large-eyed aerial predator frame","armor":"patterned cryptic wings","legs":"perch grip limbs","weapon":"aerial interception ambush","texture":"brown patterned dragonfly-like body","movement":"hawking aerial patrol","scale":"thumb-length"},"Giant Lacewing":{"body":"large ancient net-wing frame","armor":"patterned cryptic wings","legs":"resting grip limbs","weapon":"pheromone cloud release","texture":"pale brown net-patterned large wings","movement":"slow weak night drift","scale":"palm-wingspan"},"Water Boatman":{"body":"oval aquatic sculling frame","armor":"air-pocket hull shell","legs":"oar sculling limbs","weapon":"rasp-scrape sonic song","texture":"grey-brown oval hydrodynamic body","movement":"underwater sculling with air bubble","scale":"thumbnail-sized"},"Dobsonfly":{"body":"large mottled wing predator frame","armor":"mottled cryptic wings","legs":"crawler legs","weapon":"huge mandible crush","texture":"pale mottled patterned large wings","movement":"clumsy heavy night flight","scale":"hand-wingspan"},"Giant Waterbug":{"body":"large flat aquatic ambush frame","armor":"flat hydrodynamic back plates","legs":"raptorial capture limbs","weapon":"enzyme-dissolving beak","texture":"flat olive-brown hydrodynamic body","movement":"still underwater ambush then explosive grab","scale":"forearm-length"},"Raft Spider":{"body":"surface-hunting spread-leg frame","armor":"water-repellent plates","legs":"surface-tension spread limbs","weapon":"vibration-sense attack","texture":"brown with pale stripe water-proof body","movement":"skating surface patrol","scale":"hand-sized including legs"},"Diving Bell Spider":{"body":"aquatic silk-dome frame","armor":"air-bubble shell","legs":"web-anchor limbs","weapon":"underwater silk-web trap","texture":"grey silk-wrapped body with air bubble","movement":"underwater silk-bell construction","scale":"thumbnail-sized"},"Velvet Worm":{"body":"flexible onychophoran body","armor":"soft papillae-covered armor","legs":"stubby hydraulic limb pads","weapon":"slime adhesive net cannon","texture":"velvety iridescent soft skin","movement":"slow velvet ripple advance","scale":"forearm-length"},"Giraffe Weevil":{"body":"elongated neck-crowned chassis","armor":"rigid red-black plates","legs":"long neck-support limbs","weapon":"neck-reach strike","texture":"glossy red-black neck and body","movement":"slow deliberate neck-wrestling advance","scale":"thumb-length"},"Twisted-Wing Parasite":{"body":"fan-wing parasitic miniature frame","armor":"twisted fan elytra","legs":"grip host-clinging limbs","weapon":"host injection parasitoid","texture":"bizarre fan-shaped twisted wings","movement":"brief emergence flight then host re-entry","scale":"pinhead-sized"},"Zorapteran":{"body":"tiny colonial termite-like frame","armor":"minimal soft plates","legs":"worker legs","weapon":"fungus cultivation tools","texture":"pale soft small body","movement":"cryptic fungus gallery patrol","scale":"pinhead-sized"},"Barklouse":{"body":"flattened bark-surface frame","armor":"cryptic bark plates","legs":"sliding bark limbs","weapon":"silk spinner","texture":"flat grey bark-cryptic body","movement":"flat bark surface sliding","scale":"pinhead-sized"},"Angel Insect":{"body":"tiny amber-preserved wood frame","armor":"minimal plates","legs":"bark-grip legs","weapon":"bark tunnel borer","texture":"translucent amber-yellow tiny body","movement":"bark micro-tunnel crawl","scale":"pinhead-sized"},"Thrips":{"body":"tiny sliver-body frame","armor":"fringed feather-wings","legs":"rasping adhesive limbs","weapon":"rasp-pierce mouthparts","texture":"pale or dark tiny elongated body","movement":"weak flutter and grip","scale":"pinhead-sized"},"Scale Insect":{"body":"armored disc sedentary frame","armor":"hard wax shell disc","legs":"anchor cemented limbs","weapon":"phloem tap stylus","texture":"waxy or hard disc-shell surface","movement":"sessile anchored stillness","scale":"pea-sized"},"Mealybug":{"body":"oval waxy powdered frame","armor":"white powdery wax coat","legs":"crawler limbs","weapon":"phloem sap drainer","texture":"white powdery waxy oval body","movement":"slow waxy crawl","scale":"pea-sized"},"Emerald Ash Borer":{"body":"sleek emerald-plated chassis","armor":"brilliant metallic green plates","legs":"rapid bark legs","weapon":"wood-bore drill mandibles","texture":"brilliant metallic emerald green","movement":"fast darting flight then boring drill","scale":"thumbnail-sized"},"Japanese Beetle":{"body":"metallic iridescent compact body","armor":"copper-green hard plates","legs":"crawler legs","weapon":"mandible feeding jaws","texture":"metallic copper-green iridescent","movement":"slow plant-feeding cluster","scale":"thumbnail-sized"},"Ladybug":{"body":"rounded dome defensive frame","armor":"spotted warning shell","legs":"crawler legs","weapon":"reflex-bleed chemical spray","texture":"vivid red with black spots dome","movement":"slow deliberate warning walk","scale":"pea-sized"},"Weevil":{"body":"snout-nosed borer frame","armor":"armored rough shell","legs":"grip crawler legs","weapon":"snout drill bore","texture":"brown or grey rough matte shell","movement":"slow methodical snout-boring advance","scale":"pea-sized"},"Cockchafer":{"body":"heavy hairy flying frame","armor":"thick rough exoskeleton","legs":"clumsy crawler legs","weapon":"mandible ram","texture":"brown hairy rough shell","movement":"blundering heavy night flight","scale":"thumb-sized"},"Leafcutter Bee":{"body":"hairy pollen-collector frame","armor":"dense fur plates","legs":"scissor-cutting limbs","weapon":"mandible scissor shear","texture":"dense striped fur body","movement":"precise leaf-cutting hover and carry","scale":"thumbnail-sized"},"Solifuge":{"body":"fast giant-jaw ten-leg frame","armor":"hairy flexible plates","legs":"ten racing limbs","weapon":"enormous crushing chelicerae","texture":"sandy hairy body","movement":"explosive sprint toward shadow","scale":"palm-sized"},"Whip Scorpion":{"body":"large vinegar-sprayer arachnid","armor":"dark heavy plates","legs":"sensory whip and walk limbs","weapon":"directed acid spray","texture":"dark brown shiny heavy body","movement":"slow deliberate whip-sweep advance","scale":"hand-length"},"Glowworm":{"body":"soft glowing larval body","armor":"soft bioluminescent plates","legs":"crawler limbs","weapon":"bioluminescent lure trap","texture":"soft brown with glowing green tip","movement":"slow crawl with steady glow signal","scale":"finger-length"},"Firefly Larva":{"body":"soft armored larval frame","armor":"segmented soft plates","legs":"crawler limbs","weapon":"bioluminescent warning lure","texture":"dark brown soft segmented larva","movement":"slow crawling patrol","scale":"finger-length"},"Sphinx Moth":{"body":"heavy-bodied rocket hover frame","armor":"banded abdomen plates","legs":"hovering limbs","weapon":"long proboscis lance","texture":"brown streaked wing with banded abdomen","movement":"hummingbird precision hover","scale":"hand-wingspan"},"Garden Tiger Moth":{"body":"aposematic warning-wing frame","armor":"vivid warning plates","legs":"landing limbs","weapon":"toxic hair spray","texture":"white-spotted brown forewings, vivid red-spotted hindwing","movement":"slow deliberate warning walk and flight","scale":"hand-wingspan"},"Cinnabar Moth":{"body":"red-and-black warning frame","armor":"warning signal plates","legs":"landing limbs","weapon":"alkaloid chemical spray","texture":"black forewings with red patches, crimson hindwings","movement":"slow deliberate warning flight","scale":"thumb-wingspan"}},"BEASTS":{"Dragon":{"body":"winged apex predator frame","armor":"scale-reinforced overlapping plates","legs":"quad taloned crushing limbs","weapon":"superheated flame cannon","texture":"massive iridescent or matte dark scales","movement":"ground-shaking wing-launch and diving strafe","scale":"airliner-sized"},"Komodo Dragon":{"body":"low slung armored tank frame","armor":"osteodermal bead-plate armor","legs":"wide powerful crawler limbs","weapon":"bacteria-venom bite","texture":"rough grey-brown bead-scale skin","movement":"slow methodical ambush then explosive sprint","scale":"car-sized"},"Cobra":{"body":"hooded rearing strike frame","armor":"smooth scale hood-plate","legs":"serpentine drive limbs","weapon":"venom spit cannon","texture":"glossy brown or spectacled scale skin","movement":"rearing hood-spread threat then strike","scale":"car-length"},"Crocodile":{"body":"hydraulic jaw armored tank frame","armor":"armored scute plates","legs":"low-slung sprawling legs","weapon":"death-roll crushing jaw","texture":"rough dark osteodermal scutes","movement":"still surface float then explosive lunge","scale":"car-sized"},"Gecko":{"body":"adhesive wall-climbing frame","armor":"grip-pad soft plates","legs":"adhesive toe-pad limbs","weapon":"camouflage color burst","texture":"soft granular or vivid pattern skin","movement":"rapid vertical surface sprint and freeze","scale":"hand-sized"},"Frog":{"body":"spring-loaded launch frame","armor":"moist smooth or toxic skin","legs":"explosive spring launch limbs","weapon":"long tongue harpoon","texture":"smooth moist skin in vivid or cryptic color","movement":"explosive leap and silent landing","scale":"fist-sized"},"Salamander":{"body":"regenerating elemental skin chassis","armor":"moist toxic skin plates","legs":"four agile limbs","weapon":"elemental skin toxin spray","texture":"smooth glossy black with vivid warning marks","movement":"slow deliberate salamander walk","scale":"forearm-length"},"Wolf":{"body":"feral mech wolf frame","armor":"layered fur-metal plates","legs":"sprint pursuit limbs","weapon":"pack-coordinated fang strike","texture":"dense grey-brown fur over muscled frame","movement":"loping pack pursuit","scale":"large-dog-sized"},"Lion":{"body":"regal mane-crowned tank frame","armor":"dense hide mane-plate armor","legs":"ambush pounce limbs","weapon":"throat-crush claw rake","texture":"tawny short fur with dense mane","movement":"stalking crouch then explosive pride charge","scale":"car-bonnet-sized"},"Tiger":{"body":"sleek striped hunter frame","armor":"stripe-pattern cryptic plates","legs":"silent pounce limbs","weapon":"neck-break fang slash","texture":"vivid orange-black stripe pattern","movement":"slow silent stalk then explosive sprint","scale":"large-car-bonnet-sized"},"Bear":{"body":"brutal heavy upright frame","armor":"dense layered hide plates","legs":"powerful standing crush limbs","weapon":"swipe claws and bite crush","texture":"dense brown or black fur coat","movement":"loping charge then standing swipe","scale":"van-sized"},"Gorilla":{"body":"bipedal knuckle-walking powerhouse","armor":"dense muscle-plate armor","legs":"ground-pound knuckle limbs","weapon":"fist cannon and tooth display","texture":"dense black fur over enormous muscle","movement":"chest-beat display then explosive charge","scale":"car-sized"},"Panther":{"body":"sleek black stealth hunter frame","armor":"light-absorbing dark plates","legs":"silent-stride limbs","weapon":"ambush shadow slash","texture":"glossy black melanistic fur","movement":"completely silent stalking crouch","scale":"large-dog-sized"},"Hyena":{"body":"powerful front-heavy scavenger frame","armor":"spotted asymmetric plates","legs":"loping tireless limbs","weapon":"bone-crushing jaws","texture":"spotted rough coarse fur","movement":"tireless loping endurance pursuit","scale":"large-dog-sized"},"Rhino":{"body":"armored battering-ram frame","armor":"thick layered keratin plate hide","legs":"charge locomotive limbs","weapon":"horn gore ram","texture":"thick grey wrinkled folded hide","movement":"low-head horn-first charge","scale":"car-sized"},"Bull":{"body":"muscle-bound charging frame","armor":"hide-plate armor","legs":"hoofed charge limbs","weapon":"horn gore charge","texture":"short dense hide over muscle","movement":"pawing display then explosive charge","scale":"car-sized"},"Falcon":{"body":"swept-wing precision strike frame","armor":"streamlined feather plates","legs":"talon grip limbs","weapon":"270mph dive strike","texture":"grey-blue barred feather pattern","movement":"high soaring then vertical stoop dive","scale":"arm-wingspan"},"Owl":{"body":"disc-face silent night hunter","armor":"sound-dampening feather plates","legs":"silent grip limbs","weapon":"night vision optic array","texture":"mottled cryptic feather pattern","movement":"completely silent ghost flight","scale":"arm-wingspan"},"Raven":{"body":"dark intelligent recon frame","armor":"iridescent black feather plates","legs":"perch grip limbs","weapon":"beak shadow bolt","texture":"glossy iridescent blue-black feathers","movement":"soaring patrol with aerobatic rolls","scale":"arm-wingspan"},"Eagle":{"body":"majestic apex aerial frame","armor":"patriot scale-feather plates","legs":"talon-grip crushing limbs","weapon":"talon-impact diving strike","texture":"dark brown with white head and tail","movement":"thermal soar then diving strike","scale":"dinner-table wingspan"},"Vulture":{"body":"bald-head scavenger frame","armor":"bare-neck acid-proof plates","legs":"hunched perch limbs","weapon":"acid-stomach bile spray","texture":"bare red neck, dark brown body feathers","movement":"wide thermal soaring patrol","scale":"table-top wingspan"},"Phoenix":{"body":"flame-wreathed rebirth frame","armor":"living ember-plate armor","legs":"fire-trail talons","weapon":"rebirth nova explosion","texture":"vivid flame and gold living fire feathers","movement":"rising thermal ascent with flame trail","scale":"airliner-sized"},"Bat":{"body":"membrane-wing echolocation frame","armor":"leathery membrane wing plates","legs":"inverted hang limbs","weapon":"sonic pulse echolocation beam","texture":"dark brown leathery membrane body","movement":"erratic fluttering echolocation flight","scale":"hand-wingspan"},"Shark":{"body":"torpedo-hull apex predator frame","armor":"denticle micro-scale plates","legs":"fin and tail drive limbs","weapon":"row-teeth jaw crush","texture":"grey denticle micro-scale skin","movement":"silent circling then explosive acceleration","scale":"car-to-bus-sized"},"Octopus":{"body":"soft eight-arm shape-shift frame","armor":"chromatophore color-change plates","legs":"eight sucker tentacle limbs","weapon":"ink dispersal and beak strike","texture":"constantly shifting color and texture","movement":"jet pulse with arm-ripple flow","scale":"car-sized"},"Squid":{"body":"jet-propelled torpedo frame","armor":"mantle iridescent plates","legs":"ten tentacle limbs","weapon":"beak strike and ink siphon","texture":"iridescent shifting chromatophores","movement":"jet-propulsion backward burst","scale":"car-to-bus-sized"},"Anglerfish":{"body":"deep-horror toothy frame","armor":"dark bio-pressure plates","legs":"fin hover limbs","weapon":"bioluminescent lure trap jaws","texture":"mottled deep-black rough skin with glowing lure","movement":"motionless dark drift with glowing lure","scale":"arm-length to car-sized"},"Stingray":{"body":"flat diamond glide frame","armor":"flat cartilage disc plates","legs":"undulating wing limbs","weapon":"barb sting tail lance","texture":"smooth grey-brown flat disc skin","movement":"silent manta-ray undulating glide","scale":"table-top-sized"},"Dolphin":{"body":"hydrodynamic intelligent scout frame","armor":"smooth elastic skin plates","legs":"fin and fluke drive limbs","weapon":"echolocation sonic blast","texture":"smooth grey rubbery skin","movement":"leaping bow-wave sprint","scale":"car-length"},"Lobster":{"body":"armored tank-claw frame","armor":"hard segmented shell plates","legs":"ten crawler limbs","weapon":"crushing claw grip","texture":"dark mottled hard segmented shell","movement":"backward escape jet then forward claw advance","scale":"arm-length"},"Man O'War":{"body":"colonial float terror frame","armor":"translucent gas-bag plates","legs":"long trailing tentacle limbs","weapon":"nematocyst venom grid sting","texture":"vivid blue and pink translucent float","movement":"wind-sail drift with trailing sting curtain","scale":"bus-length tentacles"},"Jellyfish":{"body":"pulsing bell medusa frame","armor":"transparent gel plates","legs":"trailing tentacle limbs","weapon":"nematocyst venom net","texture":"transparent gelatinous bell","movement":"gentle pulsing bell drift","scale":"hand to car-sized"},"Giant Isopod":{"body":"deep-sea armored crustacean frame","armor":"overlapping grey scute plates","legs":"many crawler limbs","weapon":"mandible crush","texture":"pale grey overlapping segmented plates","movement":"slow deliberate deep-sea crawl","scale":"forearm-length"},"Kraken":{"body":"mythic tentacle oceanic horror","armor":"deep-pressure plates","legs":"massive tentacle limbs","weapon":"ship-crushing tentacle wrap","texture":"dark mottled deep-ocean skin","movement":"deep-surge tentacle expansion","scale":"island-sized"},"Leviathan":{"body":"biblical deep-sea terror frame","armor":"abyssal armor plates","legs":"serpentine drive limbs","weapon":"void beam","texture":"dark abyssal matte skin","movement":"ocean-displacing serpentine surge","scale":"city-block-sized"},"Xenomorph":{"body":"biomechanical H.R.Giger alien frame","armor":"exo-chitin ribbed plates","legs":"quad and bi-pedal limbs","weapon":"acid blood spray and inner jaw","texture":"glossy black biomechanical ribbed exoskeleton","movement":"wall-ceiling-floor skittering ambush","scale":"tall-human-sized"},"Predator (Yautja)":{"body":"armored trophy-hunter frame","armor":"cloaking mesh plates","legs":"powerful leaping limbs","weapon":"plasma caster and wrist blades","texture":"mesh-cloaking netting over dark armor","movement":"treetop ambush leap","scale":"tall-human-sized"},"Kaiju":{"body":"colossal city-scale monster frame","armor":"ultra-thick nuclear-hide plates","legs":"city-crusher limbs","weapon":"energy beam","texture":"thick rough dark monster hide","movement":"city-shaking stride","scale":"skyscraper-sized"},"Chimera":{"body":"multi-beast hybrid fusion frame","armor":"mixed beast plates","legs":"lion, goat and serpent limbs","weapon":"elemental tri-attack","texture":"mixed fur scale and feather texture","movement":"lion charge with serpent tail lash","scale":"car-sized"},"Hydra":{"body":"multi-headed serpent frame","armor":"regenerating scale plates","legs":"serpentine coil base","weapon":"nine-head bite and acid breath","texture":"dark green iridescent serpent scales","movement":"multi-head strike from coiled base","scale":"building-sized"},"Basilisk":{"body":"serpentine petrification frame","armor":"iridescent petrifying plates","legs":"serpentine drive limbs","weapon":"death-gaze beam","texture":"vivid iridescent serpent scales","movement":"serpentine deadly approach","scale":"bus-length"},"Cerberus":{"body":"three-headed guardian hound frame","armor":"triple-layer black plates","legs":"quad power limbs","weapon":"tri-head fang strike","texture":"black fur with three snarling heads","movement":"three-directional guard stance","scale":"elephant-sized"},"Manticore":{"body":"lion-scorpion-wing hybrid frame","armor":"composite lion and chitin plates","legs":"quad lion and tail limbs","weapon":"spine volley and tail sting","texture":"red lion fur with scorpion tail","movement":"lion charge with tail-spine barrage","scale":"car-sized"},"Behemoth":{"body":"massive ancient creature frame","armor":"mountain-thick hide plates","legs":"earth-shake pillar limbs","weapon":"mass crush and earth-shake","texture":"rough ancient hide","movement":"slow earth-shaking unstoppable advance","scale":"building-sized"},"Mecha Godzilla":{"body":"biomechanical nuclear kaiju frame","armor":"nuclear-alloy titanium plates","legs":"city-scale limbs","weapon":"nuclear beam ray","texture":"dark metallic scaled biomechanical shell","movement":"city-shaking advance with beam sweep","scale":"skyscraper-sized"},"Godzilla":{"body":"apex nuclear kaiju frame","armor":"nuclear-hardened dorsal plates","legs":"city-scale pillar limbs","weapon":"atomic breath","texture":"rough dark nuclear-charred scutes","movement":"ocean-to-city devastating advance","scale":"skyscraper-sized"},"King Ghidorah":{"body":"three-headed golden dragon frame","armor":"golden scale plates","legs":"dragon wing-walk limbs","weapon":"gravity beam from three heads","texture":"brilliant golden scales","movement":"flying three-head sweeping beam attack","scale":"multiple-skyscraper-sized"},"Mothra":{"body":"divine giant moth deity frame","armor":"scale-dust wing plates","legs":"landing divine limbs","weapon":"scale-powder divine blast","texture":"vivid multicolored divine wing scales","movement":"slow divine wing-beat","scale":"airliner-wingspan"},"Biollante":{"body":"plant-beast vine hybrid frame","armor":"vine-wrapped organic plates","legs":"root-anchor tentacle limbs","weapon":"acid vine spray and sap cannon","texture":"dark green vine and organic tissue","movement":"root-anchor vine-lash reach","scale":"skyscraper-sized"},"Jorōgumo":{"body":"spider-woman hybrid frame","armor":"silk-armored half-spider plates","legs":"eight spider silk limbs","weapon":"silk-web entrapment trap","texture":"vivid pattern arachnid lower body","movement":"silk-web swing and spider sprint","scale":"car-sized"},"Cthulhu":{"body":"cosmic horror wing-tentacle frame","armor":"reality-warping ancient plates","legs":"tentacle and wing base limbs","weapon":"sanity-breaking madness ray","texture":"dark green rubbery ancient hide","movement":"reality-distorting tentacle surge","scale":"city-sized"},"Griffin":{"body":"eagle-lion apex hybrid frame","armor":"feather and scale combined plates","legs":"lion-talon raptorial limbs","weapon":"aerial dive slash","texture":"golden eagle feathers over lion fur","movement":"lion pounce then aerial eagle dive","scale":"car-sized"},"Minotaur":{"body":"bull-headed humanoid warrior frame","armor":"labyrinth-stone plate armor","legs":"bull-hoofed charge limbs","weapon":"axe-smash and gore","texture":"bull-hide skin over humanoid muscle","movement":"labyrinth-charge shoulder-down ram","scale":"large-car-sized"},"Pegasus":{"body":"winged divine horse frame","armor":"cloud-plate scale armor","legs":"gallop and wing limbs","weapon":"lightning hoofstrike","texture":"pure white or dark divine horse fur","movement":"thundering gallop then divine wing ascent","scale":"horse-sized"},"Gargoyle":{"body":"stone-carved guardian frame","armor":"carved stone-fused plates","legs":"perch gargoyle limbs","weapon":"stone-shard projectile volley","texture":"rough carved stone surface","movement":"stone-still then stone-wing launch","scale":"human-sized"},"Golem":{"body":"earth-clay construct frame","armor":"packed earth and stone plates","legs":"heavy-tread construct limbs","weapon":"boulder-fist crush","texture":"rough clay and rock surface","movement":"slow grinding unstoppable advance","scale":"building-height"},"Oni":{"body":"Japanese demon warrior frame","armor":"iron-club demon plates","legs":"demon-stride limbs","weapon":"thunder club smash","texture":"red or blue demon skin with wild hair","movement":"thunderous heavy demon charge","scale":"giant-human-sized"},"Wendigo":{"body":"starved skeletal horror frame","armor":"bone-fused antler plates","legs":"elongated horror limbs","weapon":"cold-grasp freeze","texture":"stretched pallid skin over visible bone","movement":"impossible limb-distortion sprint","scale":"tall-building-height"},"Werewolf":{"body":"organic metal muscle-fiber frame","armor":"adaptive fur-plate armor","legs":"lunge-spring limbs","weapon":"rending claws","texture":"dense dark fur over muscle-metal fibers","movement":"loping then explosive transformation charge","scale":"large-car-sized"},"Vampire":{"body":"sleek immortal dark frame","armor":"red-black cape-plate armor","legs":"predator silent limbs","weapon":"fanged drain bite","texture":"pale skin with dark flowing armor","movement":"shadow teleport and silent sprint","scale":"tall-human-sized"},"Demon":{"body":"infernal molten-core spiked frame","armor":"infernal spike plates","legs":"cloven-hoof flame-stride limbs","weapon":"hellfire burst","texture":"dark volcanic skin with molten cracks","movement":"explosive ground-crack charge","scale":"large-building-height"},"Reaper":{"body":"scythe-arm floating void frame","armor":"void-black cloak plates","legs":"floating void limbs","weapon":"soul-harvest scythe","texture":"void-black flowing shadow","movement":"silent floating approach","scale":"tall-human-sized"},"Pangolin":{"body":"overlapping scale ball-roll frame","armor":"layered keratin scale plates","legs":"burrowing limb pads","weapon":"curled ball battering ram","texture":"overlapping brown keratin scales","movement":"rolling into impenetrable ball","scale":"arm-length"},"Armadillo":{"body":"jointed shell roll-ball frame","armor":"osteoderm bony plate shell","legs":"burrowing limbs","weapon":"armored roll ram","texture":"bony grey-pink plate shell","movement":"rolling into armored ball","scale":"arm-length"},"Tortoise":{"body":"shell-domed ancient frame","armor":"fused spine domed carapace","legs":"column pillar limbs","weapon":"shell-slam retreat","texture":"rough pyramidal dome shell scutes","movement":"slow deliberate ancient plod","scale":"table-sized"},"Horseshoe Crab":{"body":"ancient carapace tank frame","armor":"tough horseshoe shell","legs":"ten crawler limbs","weapon":"spike tail defense","texture":"dark rough horseshoe shell","movement":"wave-washing crawl","scale":"dinner-plate-sized"},"Porcupine":{"body":"quill-covered defense frame","armor":"barbed quill plates","legs":"lumber limbs","weapon":"reversing quill volley","texture":"dense barbed quill coat over dark fur","movement":"lumbering advance with quill presentation","scale":"medium-dog-sized"},"Hedgehog":{"body":"spine-coat ball frame","armor":"dense spine plate coat","legs":"fast scurry limbs","weapon":"ball-curl spine slam","texture":"dense short spine coat over soft fur","movement":"fast scurry then instant ball curl","scale":"fist-sized"},"Echidna":{"body":"spine-fur monotreme frame","armor":"mixed spine and fur plates","legs":"powerful digging limbs","weapon":"spine barrage","texture":"coarse fur with spine patches","movement":"rapid burial escape dig","scale":"arm-length"},"Sea Urchin":{"body":"sphere spine-covered frame","armor":"calcite dome spine shell","legs":"tube-foot sucker limbs","weapon":"venomous spine barrage","texture":"dense long spines over round calcite shell","movement":"slow tube-foot crawl","scale":"fist-sized"},"Nautilus":{"body":"coiled shell buoyancy frame","armor":"hard coiled shell","legs":"tentacle jet limbs","weapon":"jet propulsion ram","texture":"cream and brown spiral coiled shell","movement":"buoyancy-adjusted jet hover","scale":"dinner-plate-sized"},"Boxfish":{"body":"rigid triangular boxy frame","armor":"fused scute-box plates","legs":"fin hover limbs","weapon":"toxin poison cloud","texture":"yellow and black polka-dot box body","movement":"slow hovering fin maneuver","scale":"fist-sized"},"Hippopotamus":{"body":"dense barrel-body frame","armor":"thick bulletproof hide plates","legs":"semi-aquatic pillar limbs","weapon":"tusk-gore jaw crush","texture":"grey-pink smooth thick hide","movement":"thundering water-to-land charge","scale":"car-sized"},"Elephant":{"body":"largest land animal frame","armor":"thick wrinkled hide plates","legs":"column pillar limbs","weapon":"tusk ram and trunk crush","texture":"wrinkled grey thick hide","movement":"silent foot-pad rumbling advance","scale":"double-car-sized"},"Rhinoceros (Beast)":{"body":"thick-hide horn frame","armor":"layered folded horn-plate hide","legs":"charge locomotive limbs","weapon":"single or double horn gore","texture":"thick grey folded hide","movement":"low-head thundering charge","scale":"car-sized"},"Gnome":{"body":"compact earth-spirit frame","armor":"stone-stitch earthy plates","legs":"stubby root limbs","weapon":"earth spike eruption","texture":"bark and moss covered gnome hide","movement":"burrowing earth-travel pop-up","scale":"child-sized"},"Tarantula (Mech)":{"body":"heavy-legged arachnid mech frame","armor":"dense hair-plate armor","legs":"eight crushing hydraulic legs","weapon":"urticating hair volley and fang","texture":"dense hair over armored plates","movement":"slow deliberate advance with sudden charge","scale":"car-sized"},"Spider Queen":{"body":"arachnid humanoid hybrid frame","armor":"silk-woven armored plates","legs":"eight articulated mech limbs","weapon":"silk-bind cannon","texture":"dark silk-woven armor over arachnid body","movement":"spider sprint with web rappel","scale":"large-human-sized"}},"PB_BUILTIN_PARTICLES":[{"id":101,"builtin":true,"type":"subject","cat":"Mech","text":"giant biomechanical hybrid mech"},{"id":102,"builtin":true,"type":"subject","cat":"Mech","text":"colossal insectoid war machine"},{"id":103,"builtin":true,"type":"subject","cat":"Mech","text":"sleek nano-engineered combat drone"},{"id":104,"builtin":true,"type":"subject","cat":"Creature","text":"ancient armoured battle creature"},{"id":105,"builtin":true,"type":"subject","cat":"Creature","text":"biomechanical apex predator"},{"id":106,"builtin":true,"type":"subject","cat":"Character","text":"lone mech pilot in full exosuit"},{"id":107,"builtin":true,"type":"subject","cat":"Character","text":"enhanced cyber-soldier hybrid"},{"id":201,"builtin":true,"type":"form","cat":"Structure","text":"scarab-shell chassis with segmented carapace"},{"id":202,"builtin":true,"type":"form","cat":"Structure","text":"spider-mech eight-legged hydraulic frame"},{"id":203,"builtin":true,"type":"form","cat":"Structure","text":"dragonfly twin-wing fuselage body"},{"id":204,"builtin":true,"type":"form","cat":"Armour","text":"iridescent overlapping wing-case plates"},{"id":205,"builtin":true,"type":"form","cat":"Armour","text":"urticating hair armour with quill spines"},{"id":206,"builtin":true,"type":"form","cat":"Armour","text":"fused bone-chitin layered carapace"},{"id":207,"builtin":true,"type":"form","cat":"Features","text":"compound eye sensor array"},{"id":208,"builtin":true,"type":"form","cat":"Features","text":"scorpion arc-reactor tail weapon"},{"id":209,"builtin":true,"type":"form","cat":"Features","text":"mantis raptorial scythe forearms"},{"id":301,"builtin":true,"type":"action","cat":"Combat","text":"poised mid-strike, claws fully extended"},{"id":302,"builtin":true,"type":"action","cat":"Combat","text":"charging at full sprint, dust-cloud wake"},{"id":303,"builtin":true,"type":"action","cat":"Combat","text":"locked in battle, weapons clashing"},{"id":304,"builtin":true,"type":"action","cat":"Movement","text":"hovering above ruined terrain, jets firing"},{"id":305,"builtin":true,"type":"action","cat":"Movement","text":"silent stalking approach, low to ground"},{"id":306,"builtin":true,"type":"action","cat":"Movement","text":"mid-leap, silhouetted against sky"},{"id":307,"builtin":true,"type":"action","cat":"Pose","text":"coiled defensive stance, spines raised"},{"id":308,"builtin":true,"type":"action","cat":"Pose","text":"rearing up, full scale revealed"},{"id":309,"builtin":true,"type":"action","cat":"Pose","text":"static display pose, wings spread wide"},{"id":401,"builtin":true,"type":"material","cat":"Metal","text":"kraken-ink blackened titanium alloy"},{"id":402,"builtin":true,"type":"material","cat":"Metal","text":"liquid-metal adaptive plating"},{"id":403,"builtin":true,"type":"material","cat":"Metal","text":"oxidised iron and carbon-nanotube weave"},{"id":404,"builtin":true,"type":"material","cat":"Organic","text":"living chitin-steel hybrid"},{"id":405,"builtin":true,"type":"material","cat":"Organic","text":"bone-fused carbon fibre composite"},{"id":406,"builtin":true,"type":"material","cat":"Organic","text":"grown bio-ceramic exoskeleton"},{"id":407,"builtin":true,"type":"material","cat":"Composite","text":"obsidian-ceramic bioweapon shell"},{"id":408,"builtin":true,"type":"material","cat":"Composite","text":"crystal-lattice energy-reactive armour"},{"id":409,"builtin":true,"type":"material","cat":"Composite","text":"woven nano-silk over tungsten skeleton"},{"id":501,"builtin":true,"type":"colour","cat":"Monochrome","text":"deep matte black and chalk white"},{"id":502,"builtin":true,"type":"colour","cat":"Monochrome","text":"oxidised silver and gun-metal grey"},{"id":503,"builtin":true,"type":"colour","cat":"Vivid","text":"volcanic red and soot black"},{"id":504,"builtin":true,"type":"colour","cat":"Vivid","text":"bioluminescent teal and deep ocean blue"},{"id":505,"builtin":true,"type":"colour","cat":"Vivid","text":"ghost white and ultraviolet purple"},{"id":506,"builtin":true,"type":"colour","cat":"Natural","text":"bark brown and jungle green"},{"id":507,"builtin":true,"type":"colour","cat":"Natural","text":"sand ochre and bone ivory"},{"id":508,"builtin":true,"type":"colour","cat":"Natural","text":"blood crimson and rust orange"},{"id":601,"builtin":true,"type":"environment","cat":"Urban","text":"collapsed neon megalopolis ruins"},{"id":602,"builtin":true,"type":"environment","cat":"Urban","text":"rain-soaked brutalist city streets"},{"id":603,"builtin":true,"type":"environment","cat":"Natural","text":"subterranean crystal cave complex"},{"id":604,"builtin":true,"type":"environment","cat":"Natural","text":"volcanic wasteland under ash clouds"},{"id":605,"builtin":true,"type":"environment","cat":"Natural","text":"ancient overgrown jungle temple"},{"id":606,"builtin":true,"type":"environment","cat":"Alien","text":"toxic alien swampland at dusk"},{"id":607,"builtin":true,"type":"environment","cat":"Alien","text":"deep ocean floor trench, zero visibility"},{"id":608,"builtin":true,"type":"environment","cat":"Alien","text":"gas giant atmospheric platform"},{"id":701,"builtin":true,"type":"lighting","cat":"Natural","text":"dramatic single shaft of sunlight through smoke"},{"id":702,"builtin":true,"type":"lighting","cat":"Natural","text":"golden hour backlight, long shadows"},{"id":703,"builtin":true,"type":"lighting","cat":"Artificial","text":"harsh industrial floodlights from below"},{"id":704,"builtin":true,"type":"lighting","cat":"Artificial","text":"neon city reflections on wet surfaces"},{"id":705,"builtin":true,"type":"lighting","cat":"Artificial","text":"cold blue-white facility lighting"},{"id":706,"builtin":true,"type":"lighting","cat":"Atmospheric","text":"bioluminescent blue-green underglow"},{"id":707,"builtin":true,"type":"lighting","cat":"Atmospheric","text":"aurora borealis glow, shifting curtains"},{"id":708,"builtin":true,"type":"lighting","cat":"Atmospheric","text":"volcanic lava-glow from below"},{"id":801,"builtin":true,"type":"style","cat":"Realism","text":"hyper-detailed photorealistic concept art, 8K render"},{"id":802,"builtin":true,"type":"style","cat":"Realism","text":"documentary photography aesthetic, naturalistic"},{"id":803,"builtin":true,"type":"style","cat":"Painterly","text":"dark fantasy oil painting, brooding atmosphere"},{"id":804,"builtin":true,"type":"style","cat":"Painterly","text":"watercolour and ink, loose expressive marks"},{"id":805,"builtin":true,"type":"style","cat":"Painterly","text":"epic matte painting, cinematic scale"},{"id":806,"builtin":true,"type":"style","cat":"Digital","text":"cyberpunk aesthetic, greebled surfaces, HUD elements"},{"id":807,"builtin":true,"type":"style","cat":"Digital","text":"anime mecha key visual, speed lines, vivid colour"},{"id":808,"builtin":true,"type":"style","cat":"Digital","text":"biomechanical Giger organic-industrial fusion"},{"id":901,"builtin":true,"type":"reference","cat":"Anime·Manga","text":"inspired by Neon Genesis Evangelion Unit-01"},{"id":902,"builtin":true,"type":"reference","cat":"Anime·Manga","text":"aesthetic of Armored Core VI"},{"id":903,"builtin":true,"type":"reference","cat":"Anime·Manga","text":"Studio Ghibli mechanical creature design"},{"id":904,"builtin":true,"type":"reference","cat":"Film·Game","text":"visual language of Pacific Rim Jaegers"},{"id":905,"builtin":true,"type":"reference","cat":"Film·Game","text":"inspired by Zerg from StarCraft 2"},{"id":906,"builtin":true,"type":"reference","cat":"Film·Game","text":"Xenomorph biomechanical aesthetic"},{"id":907,"builtin":true,"type":"reference","cat":"Artist","text":"in the style of H.R. Giger"},{"id":908,"builtin":true,"type":"reference","cat":"Artist","text":"concept art by Yoji Shinkawa"},{"id":909,"builtin":true,"type":"reference","cat":"Artist","text":"creature design by Neville Page"},{"id":1001,"builtin":true,"type":"technical","cat":"Camera","text":"cinematic composition, shallow depth of field"},{"id":1002,"builtin":true,"type":"technical","cat":"Camera","text":"low angle hero shot, extreme foreshortening"},{"id":1003,"builtin":true,"type":"technical","cat":"Camera","text":"bird's eye overhead view, dramatic scale"},{"id":1004,"builtin":true,"type":"technical","cat":"Format","text":"16:9 widescreen, rule of thirds framing"},{"id":1005,"builtin":true,"type":"technical","cat":"Format","text":"square 1:1 portrait, centred composition"},{"id":1006,"builtin":true,"type":"technical","cat":"Format","text":"ultra-wide panoramic, sprawling environment"},{"id":1007,"builtin":true,"type":"technical","cat":"Render","text":"octane render, ray-traced lighting, 16K"},{"id":1008,"builtin":true,"type":"technical","cat":"Render","text":"unreal engine 5, photorealistic global illumination"},{"id":1009,"builtin":true,"type":"technical","cat":"Render","text":"macro close-up, extreme surface micro-detail"},{"id":1101,"builtin":true,"type":"connector","cat":"Origin","text":"inspired by"},{"id":1102,"builtin":true,"type":"connector","cat":"Origin","text":"evolved from"},{"id":1103,"builtin":true,"type":"connector","cat":"Origin","text":"based on the anatomy of"},{"id":1104,"builtin":true,"type":"connector","cat":"Origin","text":"fusing the design of"},{"id":1105,"builtin":true,"type":"connector","cat":"Origin","text":"derived from"},{"id":1106,"builtin":true,"type":"connector","cat":"Origin","text":"a biomechanical reimagining of"},{"id":1107,"builtin":true,"type":"connector","cat":"Origin","text":"in the tradition of"},{"id":1111,"builtin":true,"type":"connector","cat":"Composition","text":"constructed from"},{"id":1112,"builtin":true,"type":"connector","cat":"Composition","text":"armoured with"},{"id":1113,"builtin":true,"type":"connector","cat":"Composition","text":"bristling with"},{"id":1114,"builtin":true,"type":"connector","cat":"Composition","text":"fused with"},{"id":1115,"builtin":true,"type":"connector","cat":"Composition","text":"encased in"},{"id":1116,"builtin":true,"type":"connector","cat":"Composition","text":"wrapped in"},{"id":1117,"builtin":true,"type":"connector","cat":"Composition","text":"layered with"},{"id":1118,"builtin":true,"type":"connector","cat":"Composition","text":"wielding"},{"id":1119,"builtin":true,"type":"connector","cat":"Composition","text":"bearing"},{"id":1121,"builtin":true,"type":"connector","cat":"Setting","text":"deployed in"},{"id":1122,"builtin":true,"type":"connector","cat":"Setting","text":"emerging from"},{"id":1123,"builtin":true,"type":"connector","cat":"Setting","text":"towering over"},{"id":1124,"builtin":true,"type":"connector","cat":"Setting","text":"against a backdrop of"},{"id":1125,"builtin":true,"type":"connector","cat":"Setting","text":"lurking within"},{"id":1126,"builtin":true,"type":"connector","cat":"Setting","text":"ascending from"},{"id":1127,"builtin":true,"type":"connector","cat":"Setting","text":"silhouetted against"},{"id":1128,"builtin":true,"type":"connector","cat":"Setting","text":"embedded in the landscape of"},{"id":1131,"builtin":true,"type":"connector","cat":"Motion","text":"with the movement of"},{"id":1132,"builtin":true,"type":"connector","cat":"Motion","text":"moving like"},{"id":1133,"builtin":true,"type":"connector","cat":"Motion","text":"stalking through"},{"id":1134,"builtin":true,"type":"connector","cat":"Motion","text":"charging across"},{"id":1135,"builtin":true,"type":"connector","cat":"Motion","text":"hovering above"},{"id":1136,"builtin":true,"type":"connector","cat":"Motion","text":"coiled and ready to strike in"},{"id":1137,"builtin":true,"type":"connector","cat":"Motion","text":"scuttling through"},{"id":1141,"builtin":true,"type":"connector","cat":"Style","text":"rendered in the style of"},{"id":1142,"builtin":true,"type":"connector","cat":"Style","text":"painted in the manner of"},{"id":1143,"builtin":true,"type":"connector","cat":"Style","text":"photographed as if by"},{"id":1144,"builtin":true,"type":"connector","cat":"Style","text":"drawn in the aesthetic of"},{"id":1145,"builtin":true,"type":"connector","cat":"Style","text":"lit as in the films of"},{"id":1146,"builtin":true,"type":"connector","cat":"Style","text":"with the colour palette of"},{"id":1147,"builtin":true,"type":"connector","cat":"Style","text":"with the texture quality of"}],"PB_INSECT_CATS":{"Rhinoceros Beetle":"Beetles","Hercules Beetle":"Beetles","Goliath Beetle":"Beetles","Stag Beetle":"Beetles","Ironclad Beetle":"Beetles","Bombardier Beetle":"Beetles","Trilobite Beetle":"Beetles","Tiger Beetle":"Beetles","Diving Beetle":"Beetles","Longhorn Beetle":"Beetles","Jewel Beetle":"Beetles","Whirligig Beetle":"Beetles","Firefly":"Beetles","Titan Beetle":"Beetles","Click Beetle":"Beetles","Violin Beetle":"Exotic","Dung Beetle":"Beetles","Ground Beetle":"Beetles","Bark Beetle":"Beetles","Blister Beetle":"Beetles","Rove Beetle":"Beetles","Hister Beetle":"Beetles","Soldier Beetle":"Beetles","Atlas Beetle":"Beetles","Elephant Beetle":"Beetles","Palo Verde Root Borer":"Beetles","Wallace's Giant Bee":"Beetles","Dragonfly":"Flies","Emperor Dragonfly":"Flies","Glasstail Dragonfly":"Flies","Damselfly":"Flies","Stalk-Eyed Fly":"Flies","Tsetse Fly":"Flies","Horse Fly":"Flies","Robber Fly":"Flies","Hoverfly":"Flies","Crane Fly":"Flies","Botfly":"Flies","Mayfly":"Flies","Blow Fly":"Flies","Scorpion Fly":"Flies","Gnat":"Flies","Mosquito":"Flies","Black Fly":"Flies","Sand Fly":"Flies","Fungus Gnat":"Flies","March Fly":"Flies","Midge":"Flies","Bumblebee":"Wasps & Bees","Yellowjacket Wasp":"Wasps & Bees","Hornet":"Wasps & Bees","Japanese Giant Hornet":"Wasps & Bees","Tarantula Hawk":"Wasps & Bees","Paper Wasp":"Wasps & Bees","Mud Dauber":"Wasps & Bees","Cicada Killer":"Wasps & Bees","Orchid Bee":"Wasps & Bees","Velvet Ant":"Wasps & Bees","Cuckoo Wasp":"Wasps & Bees","Wood Wasp":"Wasps & Bees","Giant Ichneumon Wasp":"Wasps & Bees","Warrior Wasp":"Wasps & Bees","Fire Ant":"Ants","Bullet Ant":"Ants","Army Ant":"Ants","Driver Ant":"Ants","Carpenter Ant":"Ants","Leafcutter Ant":"Ants","Trap-Jaw Ant":"Ants","Weaver Ant":"Ants","Praying Mantis":"Mantids","Orchid Mantis":"Mantids","Dead Leaf Mantis":"Mantids","Ghost Mantis":"Mantids","Spiny Flower Mantis":"Mantids","Budwing Mantis":"Mantids","Mantis Fly":"Mantids","Assassin Bug":"Mantids","Treehopper":"Mantids","Cicada":"Mantids","Leafhopper":"Mantids","Planthopper":"Mantids","Water Strider":"Mantids","Cockroach":"Mantids","Giant Water Bug":"Mantids","Backswimmer":"Mantids","Shield Bug":"Mantids","Bed Bug":"Mantids","Aphid":"Mantids","Water Scorpion":"Mantids","Peanut Head Bug":"Mantids","Monarch Butterfly":"Moths & Butterflies","Blue Morpho Butterfly":"Moths & Butterflies","Glasswing Butterfly":"Moths & Butterflies","Swallowtail Butterfly":"Moths & Butterflies","Queen Alexandra Birdwing":"Moths & Butterflies","Atlas Moth":"Moths & Butterflies","Luna Moth":"Moths & Butterflies","Death's Head Hawk-Moth":"Moths & Butterflies","Hawk Moth":"Moths & Butterflies","Hummingbird Hawk-Moth":"Moths & Butterflies","Peppered Moth":"Moths & Butterflies","Silkworm Moth":"Moths & Butterflies","Io Moth":"Moths & Butterflies","Comet Moth":"Moths & Butterflies","Hercules Moth":"Moths & Butterflies","Armyworm Moth":"Moths & Butterflies","Grasshopper":"Moths & Butterflies","Cricket":"Moths & Butterflies","Locust":"Moths & Butterflies","Katydid":"Moths & Butterflies","Mole Cricket":"Moths & Butterflies","Cave Cricket":"Moths & Butterflies","Weta":"Moths & Butterflies","Giant Weta":"Moths & Butterflies","Jerusalem Cricket":"Moths & Butterflies","Stick Insect":"Stick Insects","Leaf Insect":"Stick Insects","Thorny Stick Insect":"Stick Insects","Chan's Megastick":"Stick Insects","Peacock Spider":"Arachnids","Whip Spider":"Arachnids","Scorpion":"Arachnids","Emperor Scorpion":"Arachnids","Deathstalker Scorpion":"Arachnids","Fat-Tail Scorpion":"Arachnids","Centipede":"Arachnids","Giant Desert Centipede":"Arachnids","Vietnamese Centipede":"Arachnids","Amazonian Giant Centipede":"Arachnids","Millipede":"Arachnids","Giant African Millipede":"Arachnids","Harvestman":"Arachnids","Vinegaroon":"Arachnids","Giant Vinegaroon":"Arachnids","Sun Spider":"Arachnids","Camel Spider":"Arachnids","Pseudoscorpion":"Arachnids","Tailless Whip Scorpion":"Arachnids","Goliath Bird-Eater":"Arachnids","Black Widow Spider":"Arachnids","Funnel Web Spider":"Arachnids","Trapdoor Spider":"Arachnids","Brazilian Wandering Spider":"Arachnids","Huntsman Spider":"Arachnids","Tarantula":"Arachnids","Termite":"Social Insects","Termite Soldier":"Social Insects","Earwig":"Primitive","Silverfish":"Primitive","Firebrat":"Primitive","Springtail":"Primitive","Bristletail":"Primitive","Flea":"Primitive","Body Louse":"Primitive","Webspinner":"Primitive","Rock Crawler":"Primitive","Grylloblattid":"Primitive","Mantophasmatodea":"Primitive","Lacewing":"Lacewings","Antlion":"Lacewings","Owlfly":"Lacewings","Giant Lacewing":"Lacewings","Water Boatman":"Water Insects","Dobsonfly":"Water Insects","Giant Waterbug":"Water Insects","Raft Spider":"Water Insects","Diving Bell Spider":"Water Insects","Velvet Worm":"Exotic","Giraffe Weevil":"Exotic","Twisted-Wing Parasite":"Exotic","Zorapteran":"Exotic","Barklouse":"Exotic","Angel Insect":"Exotic","Thrips":"Exotic","Scale Insect":"Exotic","Mealybug":"Exotic","Emerald Ash Borer":"Beetles","Japanese Beetle":"Beetles","Ladybug":"Beetles","Weevil":"Beetles","Cockchafer":"Beetles","Leafcutter Bee":"Beetles","Solifuge":"Arachnids","Whip Scorpion":"Arachnids","Glowworm":"Flies","Firefly Larva":"Flies","Sphinx Moth":"Moths & Butterflies","Garden Tiger Moth":"Moths & Butterflies","Cinnabar Moth":"Moths & Butterflies"},"PB_BEAST_CATS":{"Dragon":"Reptilian","Komodo Dragon":"Reptilian","Cobra":"Reptilian","Crocodile":"Reptilian","Gecko":"Reptilian","Frog":"Reptilian","Salamander":"Reptilian","Wolf":"Predators","Lion":"Predators","Tiger":"Predators","Bear":"Predators","Gorilla":"Predators","Panther":"Predators","Hyena":"Predators","Rhino":"Predators","Bull":"Predators","Falcon":"Avian","Owl":"Avian","Raven":"Avian","Eagle":"Avian","Vulture":"Avian","Phoenix":"Avian","Bat":"Avian","Shark":"Aquatic","Octopus":"Aquatic","Squid":"Aquatic","Anglerfish":"Aquatic","Stingray":"Aquatic","Dolphin":"Aquatic","Lobster":"Aquatic","Man O'War":"Aquatic","Jellyfish":"Aquatic","Giant Isopod":"Aquatic","Kraken":"Aquatic","Leviathan":"Aquatic","Xenomorph":"Mythic","Predator (Yautja)":"Mythic","Kaiju":"Mythic","Chimera":"Mythic","Hydra":"Mythic","Basilisk":"Mythic","Cerberus":"Mythic","Manticore":"Mythic","Behemoth":"Mythic","Mecha Godzilla":"Mythic","Godzilla":"Mythic","King Ghidorah":"Mythic","Mothra":"Mythic","Biollante":"Mythic","Jorōgumo":"Mythic","Cthulhu":"Mythic","Griffin":"Mythic","Minotaur":"Mythic","Pegasus":"Mythic","Gargoyle":"Mythic","Golem":"Mythic","Oni":"Mythic","Wendigo":"Mythic","Werewolf":"Mythic","Vampire":"Mythic","Demon":"Mythic","Reaper":"Mythic","Pangolin":"Armoured","Armadillo":"Armoured","Tortoise":"Armoured","Horseshoe Crab":"Armoured","Porcupine":"Armoured","Hedgehog":"Armoured","Echidna":"Armoured","Sea Urchin":"Armoured","Nautilus":"Armoured","Boxfish":"Armoured","Hippopotamus":"Armoured","Elephant":"Armoured","Rhinoceros (Beast)":"Armoured","Gnome":"Other","Tarantula (Mech)":"Other","Spider Queen":"Other"}}
 </script>
 <script>
@@ -5685,9 +5763,47 @@ function promptHistoryAdd(promptText, fullText) {
   let history = []
   try { history = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) {}
   history.unshift({ text: promptText, full: fullText, savedAt: Date.now() })
-  if (history.length > 10) history = history.slice(0, 10)
+  if (history.length > PROMPT_HISTORY_MAX) history = history.slice(0, PROMPT_HISTORY_MAX)
   localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(history))
   promptHistoryRender()
+  // Debounced cloud save
+  clearTimeout(window._historyCloudTimer)
+  window._historyCloudTimer = setTimeout(promptHistoryCloudSave, 4000)
+}
+
+async function promptHistoryCloudSave() {
+  if (!cloudIsConnected()) return
+  try {
+    let history = []
+    try { history = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) {}
+    const body = JSON.stringify({ history, savedAt: new Date().toISOString() })
+    if (driveHistoryId) {
+      await cloudPatchFile(driveHistoryId, body)
+    } else {
+      driveHistoryId = await cloudCreateFile(PROMPT_HISTORY_FILE, body)
+    }
+  } catch(e) {}
+}
+
+async function promptHistoryCloudLoad() {
+  if (!cloudIsConnected()) return
+  try {
+    const files = await cloudListFiles("name='" + PROMPT_HISTORY_FILE + "'")
+    if (!files.length) return
+    driveHistoryId = files[0].id
+    const data = await cloudReadFile(driveHistoryId)
+    if (!data?.history?.length) return
+    // Merge: cloud + local, deduplicate by savedAt, keep newest 25
+    let local = []
+    try { local = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) {}
+    const seen = new Set()
+    const merged = [...data.history, ...local]
+      .filter(e => { if (seen.has(e.savedAt)) return false; seen.add(e.savedAt); return true })
+      .sort((a, b) => b.savedAt - a.savedAt)
+      .slice(0, PROMPT_HISTORY_MAX)
+    localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(merged))
+    promptHistoryRender()
+  } catch(e) {}
 }
 
 function promptHistoryRender() {
@@ -5721,6 +5837,7 @@ function promptHistoryRender() {
         document.execCommand('copy'); document.body.removeChild(ta)
         const orig = copyBtn.textContent; copyBtn.textContent = '✓ COPIED'
         setTimeout(() => copyBtn.textContent = orig, 1500)
+        pbPasteToast('Prompt copied to clipboard')
       } catch(e) {}
     }
     const saveBtn = document.createElement('button')
@@ -5915,7 +6032,6 @@ function deleteFav(id){
 function copyFav(id){
   const f = favourites.find(x => x.id === id)
   if(!f) return
-  // Copy only the prompt text — strip everything from ---SETTINGS--- onwards
   const text = f.promptOnly || (f.text.includes('---SETTINGS---')
     ? f.text.slice(0, f.text.indexOf('---SETTINGS---')).trim()
     : f.text)
@@ -5927,6 +6043,7 @@ function copyFav(id){
     ta.select()
     document.execCommand('copy')
     document.body.removeChild(ta)
+    pbPasteToast('Prompt copied to clipboard')
   } catch(e) {}
 }
 
@@ -5966,6 +6083,7 @@ function copyPromptOnly(){
     document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
     const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(()=> btn.textContent = orig, 1500)
+    pbPasteToast('Prompt copied to clipboard')
   } catch(e) { btn.textContent = '✗ FAILED'; setTimeout(()=> btn.textContent = '⎘ COPY PROMPT', 1500) }
 }
 
@@ -5982,6 +6100,7 @@ function copyOutput(){
     document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
     const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(()=> btn.textContent = orig, 1500)
+    pbPasteToast('Copied to clipboard')
   } catch(e) { btn.textContent = '✗ FAILED'; setTimeout(()=> btn.textContent = '⎘ COPY', 1500) }
 }
 
@@ -6357,6 +6476,8 @@ const DRIVE_PHOTO_SCOPES    = 'https://www.googleapis.com/auth/drive.appdata htt
 const CURRENT_SETTINGS_FILE = 'beast-mode-current-settings.json'
 const PROMPT_FILE_PREFIX    = 'beast-mode-prompt-'
 const SETTINGS_DELIMITER    = '\n\n---SETTINGS---\n'
+const PROMPT_HISTORY_FILE   = 'beast-mode-prompt-history.json'
+const PROMPT_HISTORY_MAX    = 25
 
 let driveToken       = null
 let drivePhotoToken  = null   // separate token with drive.readonly for photo browsing
@@ -6365,6 +6486,7 @@ let driveCurrentId   = null
 let driveCurrentTimer = null
 let drivePromptIds   = {}
 let driveTokenClient = null   // pre-created, reused for silent refresh
+let driveHistoryId   = null   // cloud file id for prompt history
 
 // ── AUTH
 function initDrive() {
@@ -6482,6 +6604,8 @@ async function driveOnSignedIn() {
   await libFoldersLoad()
   await pbFavParticlesLoad()
   await pcDriveLoad()
+  await promptHistoryCloudLoad()
+  await pbFormulaPresetsLoad()
   // Save merged cloud data to localStorage
   lsSaveAll()
   // Full UI refresh
@@ -6532,7 +6656,7 @@ function driveSignOut() {
   if (driveToken) {
     google.accounts.oauth2.revoke(driveToken, () => {})
   }
-  driveToken = null; driveCurrentId = null; drivePromptIds = {}
+  driveToken = null; driveCurrentId = null; drivePromptIds = {}; driveHistoryId = null
   localStorage.removeItem('bm_drive_session')
   google.accounts.id.disableAutoSelect()
   // Update generator panel
@@ -8218,6 +8342,7 @@ function iterCopyVariant(btn) {
     document.execCommand('copy'); document.body.removeChild(ta)
     const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(() => btn.textContent = orig, 1500)
+    pbPasteToast('Variant copied to clipboard')
   } catch(e) {}
 }
 
@@ -8256,6 +8381,7 @@ function iterCopyAll() {
     const btn = document.querySelector('#iterResultsModal .btn-ghost')
     const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(() => btn.textContent = orig, 1500)
+    pbPasteToast('All variants copied to clipboard')
   } catch(e) {}
 }
 
@@ -8511,8 +8637,80 @@ function openLightbox(src) {
 function closeLightbox() {
   document.getElementById('libLightbox').classList.remove('open')
 }
+
+// ── GLOBAL KEYBOARD SHORTCUTS ─────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeLightbox()
+  const tag = document.activeElement?.tagName
+  const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable
+
+  // ── Escape: close any open modal / overlay / lightbox ──
+  if (e.key === 'Escape') {
+    closeLightbox()
+    // Formula presets modal
+    const fpm = document.getElementById('pbFormulaPresetsModal')
+    if (fpm && fpm.style.display !== 'none') { pbCloseFormulaPresets(); return }
+    // Import modal
+    const imp = document.getElementById('pbImportModal')
+    if (imp && imp.style.display !== 'none') { pbCloseImport(); return }
+    // Wizard overlay
+    const wiz = document.getElementById('pbWizardOverlay')
+    if (wiz && wiz.style.display !== 'none') { pbCloseWizard(); return }
+    // Style editor
+    const se = document.getElementById('styleEditorOverlay')
+    if (se && se.style.display !== 'none') { closeStyleEditor(); return }
+    // Replace mode in Lab
+    if (pbReplaceMode) { pbEndReplace(); return }
+    return
+  }
+
+  // ── Ctrl/Cmd combos ──
+  const mod = e.ctrlKey || e.metaKey
+
+  if (mod && e.key === 'z' && !e.shiftKey) {
+    // Ctrl+Z — undo (Lab only, don't fight browser undo in inputs)
+    if (currentView === 'builder' && !inInput) {
+      e.preventDefault(); pbUndo(); return
+    }
+  }
+
+  if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    // Ctrl+Y / Ctrl+Shift+Z — redo
+    if (currentView === 'builder' && !inInput) {
+      e.preventDefault(); pbRedo(); return
+    }
+  }
+
+  if (mod && e.key === 'Enter') {
+    // Ctrl+Enter — copy current prompt
+    e.preventDefault()
+    if (currentView === 'builder') pbCopyOutput()
+    else if (currentView === 'generator') copyOutput()
+    return
+  }
+
+  if (mod && e.shiftKey && e.key === 'R') {
+    // Ctrl+Shift+R — randomise
+    e.preventDefault()
+    if (currentView === 'builder') pbRandomiseAll()
+    else if (currentView === 'generator') randomiseAll()
+    return
+  }
+
+  if (mod && e.shiftKey && e.key === 'S') {
+    // Ctrl+Shift+S — save to library
+    e.preventDefault()
+    if (currentView === 'builder') pbSaveToLibrary()
+    else if (currentView === 'generator') saveFav()
+    return
+  }
+
+  // ── Number keys 1-4: tab switch (only when NOT typing) ──
+  if (!inInput && !mod && !e.shiftKey && !e.altKey) {
+    if (e.key === '1') { e.preventDefault(); switchView('generator'); return }
+    if (e.key === '2') { e.preventDefault(); switchView('builder');   return }
+    if (e.key === '3') { e.preventDefault(); switchView('library');   return }
+    if (e.key === '4') { e.preventDefault(); switchView('settings');  return }
+  }
 })
 
 // ═══════════════════════════════════════════════════════════════════
@@ -8551,6 +8749,7 @@ Browser: ${navigator.userAgent}
 function renderSettingsView() {
   renderThemePicker()
   renderSettingsViewGenOnly()
+  pbRenderUsageStats()
   // Sync the provider selector buttons
   document.getElementById('providerBtnGdrive')?.classList.toggle('active', cloudProvider === 'gdrive')
   document.getElementById('providerBtnDropbox')?.classList.toggle('active', cloudProvider === 'dropbox')
@@ -8949,6 +9148,7 @@ function genOnlyCopy(btn, text) {
     document.execCommand('copy'); document.body.removeChild(ta)
     const orig = btn.textContent; btn.textContent = '✓ COPIED'
     setTimeout(() => btn.textContent = orig, 1500)
+    pbPasteToast('Prompt copied to clipboard')
   } catch(e) {}
 }
 
@@ -9034,6 +9234,7 @@ function lsSaveAll() {
   lsSave(LS.FOLDERS, libFolders)
   lsSave(LS.PB_LIBS, pbLibraries)
   lsSave(LS.PB_FAVS, pbFavParticles)
+  lsSave(PB_FORMULA_PRESETS_KEY, pbFormulaPresets)
 }
 
 // Restore entire app state from localStorage
@@ -9063,6 +9264,9 @@ function lsRestoreAll() {
 
   const savedPbFavs = lsLoad(LS.PB_FAVS)
   if (savedPbFavs && typeof savedPbFavs === 'object') pbFavParticles = savedPbFavs
+
+  const savedFPresets = lsLoad(PB_FORMULA_PRESETS_KEY)
+  if (Array.isArray(savedFPresets)) pbFormulaPresets = savedFPresets
 
   const savedSettings = lsLoad(LS.SETTINGS)
   if (savedSettings) {
@@ -9436,6 +9640,115 @@ let pbNextUid    = 1
 let pbShowBuiltin = true  // toggle built-in particles visibility
 let pbActiveLib   = 0     // 0-4
 
+// ── PINNED PARTICLES ───────────────────────────────────────────────
+// Set of particleIds whose slots are locked from randomise
+let pbPinned = new Set()
+
+function pbTogglePin(uid, particleId) {
+  const chipEls = document.querySelectorAll(`[data-uid="${uid}"]`)
+  if (pbPinned.has(particleId)) {
+    pbPinned.delete(particleId)
+    chipEls.forEach(c => c.classList.remove('pfc-pinned'))
+  } else {
+    pbPinned.add(particleId)
+    chipEls.forEach(c => c.classList.add('pfc-pinned'))
+  }
+}
+
+// ── PARTICLE USAGE STATS ───────────────────────────────────────────
+const PB_USAGE_KEY = 'bm_particle_usage'
+// usage: { [particleId]: { count, lastUsed, text, type } }
+let pbUsageStats = {}
+
+function pbUsageLoad() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PB_USAGE_KEY) || '{}')
+    if (saved && typeof saved === 'object') pbUsageStats = saved
+  } catch(e) {}
+}
+
+function pbTrackUsage(particle) {
+  if (!particle?.id) return
+  const existing = pbUsageStats[particle.id] || { count: 0 }
+  pbUsageStats[particle.id] = {
+    count:    existing.count + 1,
+    lastUsed: Date.now(),
+    text:     particle.text,
+    type:     particle.type,
+    cat:      particle.cat
+  }
+  try { localStorage.setItem(PB_USAGE_KEY, JSON.stringify(pbUsageStats)) } catch(e) {}
+}
+
+function pbUsageTopN(n = 20) {
+  return Object.values(pbUsageStats)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, n)
+}
+
+function pbRenderUsageStats() {
+  const el = document.getElementById('pbUsageStatsPanel')
+  if (!el) return
+  const top = pbUsageTopN(20)
+  if (!top.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);letter-spacing:.5px;padding:4px 0;">No usage data yet — start building prompts in the Lab.</div>'
+    return
+  }
+  const maxCount = top[0].count
+  el.innerHTML = top.map(entry => {
+    const t = PB_TYPES.find(x => x.key === entry.type)
+    const color = t?.color || 'var(--accent)'
+    const pct = Math.round((entry.count / maxCount) * 100)
+    return `<div style="margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;gap:8px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pbEsc(entry.text)}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <span style="font-size:9px;letter-spacing:1px;color:${color};background:color-mix(in srgb,${color} 12%,transparent);border-radius:2px;padding:1px 5px;">${entry.type?.toUpperCase()}</span>
+          <span style="font-size:11px;font-weight:700;color:var(--muted);">${entry.count}×</span>
+        </div>
+      </div>
+      <div style="height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${color};border-radius:2px;transition:width .3s;"></div>
+      </div>
+    </div>`
+  }).join('')
+}
+
+// ── UNDO / REDO ────────────────────────────────────────────────────
+let pbUndoStack  = []   // array of formula snapshots (JSON strings)
+let pbRedoStack  = []
+const PB_UNDO_MAX = 50
+
+function pbSnapshotPush() {
+  pbUndoStack.push(JSON.stringify(pbFormula))
+  if (pbUndoStack.length > PB_UNDO_MAX) pbUndoStack.shift()
+  pbRedoStack = []
+  pbUndoUpdateUI()
+}
+
+function pbUndo() {
+  if (!pbUndoStack.length) return
+  pbRedoStack.push(JSON.stringify(pbFormula))
+  pbFormula = JSON.parse(pbUndoStack.pop())
+  pbRenderFormula(); pbUpdateBottomBar()
+  pbUndoUpdateUI()
+}
+
+function pbRedo() {
+  if (!pbRedoStack.length) return
+  pbUndoStack.push(JSON.stringify(pbFormula))
+  pbFormula = JSON.parse(pbRedoStack.pop())
+  pbRenderFormula(); pbUpdateBottomBar()
+  pbUndoUpdateUI()
+}
+
+function pbUndoUpdateUI() {
+  const uBtn = document.getElementById('pbUndoBtn')
+  const rBtn = document.getElementById('pbRedoBtn')
+  if (uBtn) uBtn.disabled = !pbUndoStack.length
+  if (rBtn) rBtn.disabled = !pbRedoStack.length
+}
+
 // 5 named user libraries
 const PB_LIB_DEFAULTS = ['My Library','Projects','Experiments','Shared','Archive']
 let pbLibraries = PB_LIB_DEFAULTS.map((name,i) => ({ id:i, name, particles:[] }))
@@ -9445,6 +9758,12 @@ let pbLibraries = PB_LIB_DEFAULTS.map((name,i) => ({ id:i, name, particles:[] })
 // Drive file for libraries
 const PB_LIBRARIES_FILE    = 'beast-mode-particle-libraries.json'
 const PB_FAV_PARTICLES_FILE = 'beast-mode-fav-particles.json'
+const PB_FORMULA_PRESETS_FILE = 'beast-mode-formula-presets.json'
+const PB_FORMULA_PRESETS_KEY  = 'bm_formula_presets'
+
+// Formula presets: array of { id, name, formula: [{particleId},...], savedAt }
+let pbFormulaPresets = []
+let pbFormulaPresetsDriveId = null
 let pbLibDriveId     = null
 let pbFavDriveId     = null
 // pbFavParticles: { typeKey → Set of particle ids (stored as arrays) }
@@ -9453,6 +9772,7 @@ let pbFavParticles   = {}  // e.g. { subject: [101, 202], form: [305] }
 // ── INIT ───────────────────────────────────────────────────────────
 function pbInit() {
   PB_TYPES.forEach(t => { pbActiveCats[t.key] = t.cats[0] })
+  pbUsageLoad()
   pbRenderLibBar()
   pbRenderLegend()
   pbRenderLibrary()
@@ -10531,6 +10851,8 @@ function pbAddToFormula(particle) {
     return
   }
   // Default: append to end of active surface
+  pbSnapshotPush()
+  pbTrackUsage(particle)
   activeFormula.querySelector('.pb-formula-ph,.pb-bottom-bar-ph')?.remove()
   const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: particle.id }, particle)
 
@@ -10548,6 +10870,7 @@ function pbAddToFormula(particle) {
 }
 
 function pbRemoveFromFormula(uid) {
+  pbSnapshotPush()
   const mainBar = El.pbFormula || document.getElementById('pbFormula')
   const bf      = document.getElementById('pbBottomFormula')
 
@@ -11500,11 +11823,23 @@ function pbMakeChipEl(entry, particle) {
   chip.dataset.particleId = particle.id
   if (t) chip.style.setProperty('--tc', t.color)
   chip.title = `${t?.label || particle.type} · ${particle.cat || ''}\nClick to replace`
+  if (pbPinned.has(particle.id)) chip.classList.add('pfc-pinned')
 
   const textSpan = document.createElement('span')
   textSpan.className = 'pfc-text'
   textSpan.textContent = particle.text
   chip.appendChild(textSpan)
+
+  // Pin button
+  const pin = document.createElement('span')
+  pin.className = 'pfc-pin'
+  pin.contentEditable = 'false'
+  pin.textContent = '📌'
+  pin.title = 'Pin — lock from randomise'
+  const doPin = e => { e.stopPropagation(); e.preventDefault(); pbTogglePin(entry.uid, particle.id) }
+  pin.addEventListener('click', doPin)
+  pin.addEventListener('touchend', doPin, { passive: false })
+  chip.appendChild(pin)
 
   const rm = document.createElement('span')
   rm.className = 'pfc-rm'
@@ -11516,9 +11851,9 @@ function pbMakeChipEl(entry, particle) {
   rm.addEventListener('touchend', doRemove, { passive: false })
   chip.appendChild(rm)
 
-  // Tap chip body (not ×) = enter replace mode
+  // Tap chip body (not × or pin) = enter replace mode
   chip.addEventListener('click', e => {
-    if (e.target === rm) return
+    if (e.target === rm || e.target === pin) return
     e.preventDefault()
     pbStartReplace(entry.uid, particle.type)
   })
@@ -11528,6 +11863,8 @@ function pbMakeChipEl(entry, particle) {
 
 // Insert a chip span at a saved range position
 function pbInsertParticleAtRange(particle, range) {
+  pbSnapshotPush()
+  pbTrackUsage(particle)
   const uid = pbNextUid++
   const chip = pbMakeChipEl({ uid, particleId: particle.id }, particle)
   range.deleteContents()
@@ -11595,6 +11932,8 @@ function pbEndReplace() {
 }
 
 function pbDoReplace(particle) {
+  pbSnapshotPush()
+  pbTrackUsage(particle)
   const { uid } = pbReplaceMode
   pbEndReplace()
   // Find chip in either formula surface
@@ -11933,6 +12272,8 @@ function pbAcOpenAddForm(text) {
 
 function pbAcCommit(particle) {
   if (!pbAcWordRange) { pbAcHide(); return }
+  pbSnapshotPush()
+  pbTrackUsage(particle)
   // Delete the typed word and insert the chip
   const bar = El.pbFormula || document.getElementById('pbFormula')
   pbAcWordRange.deleteContents()
@@ -12404,23 +12745,39 @@ function pbCopyOutput() {
     document.execCommand('copy'); document.body.removeChild(ta)
     const bar = document.getElementById('pbFormula')
     if (bar) { const orig = bar.style.borderLeftColor; bar.style.borderLeftColor = 'var(--accent)'; setTimeout(() => bar.style.borderLeftColor = orig, 800) }
+    pbPasteToast('Prompt copied to clipboard')
   } catch(e) {}
 }
 
 // ── FORMULA CONTROLS ───────────────────────────────────────────────
 function pbRandomiseAll() {
+  pbSnapshotPush()
   pbEndReplace()
-  pbFormula = []
+  // Build new formula, preserving pinned entries
+  const newFormula = []
   PB_TYPES.forEach(t => {
-    const pool = pbGetParticles().filter(p => p.type === t.key)
-    if (pool.length) pbFormula.push({ uid: pbNextUid++, particleId: pool[Math.floor(Math.random()*pool.length)].id })
+    // Find existing pinned entry for this type (if any)
+    const pinnedEntry = pbFormula.find(e => {
+      if (!e.particleId) return false
+      const p = pbGetParticles().find(x => x.id === e.particleId)
+      return p && p.type === t.key && pbPinned.has(p.id)
+    })
+    if (pinnedEntry) {
+      newFormula.push(pinnedEntry)
+    } else {
+      const pool = pbGetParticles().filter(p => p.type === t.key && !pbPinned.has(p.id))
+      if (pool.length) newFormula.push({ uid: pbNextUid++, particleId: pool[Math.floor(Math.random()*pool.length)].id })
+    }
   })
+  pbFormula = newFormula
   pbRenderFormula(); pbUpdateBottomBar()
 }
 
 function pbClearFormula() {
+  pbSnapshotPush()
   pbEndReplace()
   pbFormula = []
+  pbPinned.clear()
   pbRenderFormula(); pbUpdateBottomBar()
 }
 
@@ -12794,6 +13151,128 @@ async function pbParticlesLoad() {
     }
     pbRenderLibBar()
     pbRenderLibrary()
+  } catch(e) {}
+}
+
+// ── FORMULA PRESETS ────────────────────────────────────────────────
+function pbOpenFormulaPresets() {
+  pbRenderFormulaPresets()
+  const m = document.getElementById('pbFormulaPresetsModal')
+  if (m) m.style.display = 'flex'
+  const inp = document.getElementById('pbPresetNameInput')
+  if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 80) }
+}
+
+function pbCloseFormulaPresets() {
+  const m = document.getElementById('pbFormulaPresetsModal')
+  if (m) m.style.display = 'none'
+}
+
+function pbSaveFormulaPreset() {
+  const inp = document.getElementById('pbPresetNameInput')
+  const name = inp?.value.trim()
+  if (!name) { if (inp) { inp.style.borderColor='var(--accent)'; setTimeout(()=>inp.style.borderColor='',1000) }; return }
+  // Snapshot current formula (particle IDs only — text entries excluded)
+  pbSyncFormulaFromDOM()
+  const snapshot = pbFormula
+    .filter(e => e.particleId)
+    .map(e => ({ particleId: e.particleId }))
+  if (!snapshot.length) return
+  const preset = { id: Date.now(), name, formula: snapshot, savedAt: Date.now() }
+  pbFormulaPresets.unshift(preset)
+  lsSave(PB_FORMULA_PRESETS_KEY, pbFormulaPresets)
+  pbFormulaPresetsDriveSync()
+  pbRenderFormulaPresets()
+  if (inp) inp.value = ''
+}
+
+function pbDeleteFormulaPreset(id) {
+  pbFormulaPresets = pbFormulaPresets.filter(p => p.id !== id)
+  lsSave(PB_FORMULA_PRESETS_KEY, pbFormulaPresets)
+  pbFormulaPresetsDriveSync()
+  pbRenderFormulaPresets()
+}
+
+function pbLoadFormulaPreset(id) {
+  const preset = pbFormulaPresets.find(p => p.id === id)
+  if (!preset) return
+  pbSnapshotPush()
+  pbFormula = preset.formula
+    .map(e => {
+      const p = pbGetParticles().find(x => x.id === e.particleId)
+      return p ? { uid: pbNextUid++, particleId: p.id } : null
+    })
+    .filter(Boolean)
+  pbPinned.clear()
+  pbRenderFormula()
+  pbUpdateBottomBar()
+  pbCloseFormulaPresets()
+}
+
+function pbRenderFormulaPresets() {
+  const list = document.getElementById('pbFormulaPresetList')
+  if (!list) return
+  if (!pbFormulaPresets.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--muted);letter-spacing:1px;">No presets saved yet.<br>Build a formula and save it above.</div>'
+    return
+  }
+  list.innerHTML = ''
+  pbFormulaPresets.forEach(preset => {
+    const row = document.createElement('div')
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);'
+    // Preview chips
+    const preview = document.createElement('div')
+    preview.style.cssText = 'flex:1;overflow:hidden;'
+    const previewText = preset.formula.slice(0, 5).map(e => {
+      const p = pbGetParticles().find(x => x.id === e.particleId)
+      return p ? `<span style="font-size:10px;background:var(--surface2);border-radius:3px;padding:1px 5px;margin-right:3px;color:var(--muted);">${pbTrunc(p.text, 18)}</span>` : ''
+    }).join('')
+    preview.innerHTML = `<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text);margin-bottom:4px;">${pbEsc(preset.name)}</div><div style="white-space:nowrap;overflow:hidden;">${previewText}${preset.formula.length > 5 ? `<span style="font-size:10px;color:var(--muted);">+${preset.formula.length-5}</span>` : ''}</div>`
+    // Buttons
+    const loadBtn = document.createElement('button')
+    loadBtn.className = 'btn btn-ghost'
+    loadBtn.style.cssText = 'font-size:11px;padding:4px 10px;white-space:nowrap;flex-shrink:0;'
+    loadBtn.textContent = '↩ LOAD'
+    loadBtn.onclick = () => pbLoadFormulaPreset(preset.id)
+    const delBtn = document.createElement('button')
+    delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:2px 4px;flex-shrink:0;transition:color .1s;'
+    delBtn.textContent = '×'
+    delBtn.title = 'Delete preset'
+    delBtn.onmouseover = () => delBtn.style.color = '#ff4444'
+    delBtn.onmouseout  = () => delBtn.style.color = 'var(--muted)'
+    delBtn.onclick = () => pbDeleteFormulaPreset(preset.id)
+    row.appendChild(preview)
+    row.appendChild(loadBtn)
+    row.appendChild(delBtn)
+    list.appendChild(row)
+  })
+}
+
+async function pbFormulaPresetsDriveSync() {
+  if (!cloudIsConnected()) return
+  try {
+    const body = JSON.stringify({ presets: pbFormulaPresets, savedAt: new Date().toISOString() })
+    if (pbFormulaPresetsDriveId) {
+      await cloudPatchFile(pbFormulaPresetsDriveId, body)
+    } else {
+      pbFormulaPresetsDriveId = await cloudCreateFile(PB_FORMULA_PRESETS_FILE, body)
+    }
+  } catch(e) {}
+}
+
+async function pbFormulaPresetsLoad() {
+  if (!cloudIsConnected()) return
+  try {
+    const files = await cloudListFiles(`name='${PB_FORMULA_PRESETS_FILE}'`)
+    if (!files.length) return
+    pbFormulaPresetsDriveId = files[0].id
+    const data = await cloudReadFile(pbFormulaPresetsDriveId)
+    if (!Array.isArray(data?.presets)) return
+    // Merge: cloud wins for same id, keep local-only
+    const cloudIds = new Set(data.presets.map(p => p.id))
+    const localOnly = pbFormulaPresets.filter(p => !cloudIds.has(p.id))
+    pbFormulaPresets = [...data.presets, ...localOnly].sort((a,b) => b.savedAt - a.savedAt)
+    lsSave(PB_FORMULA_PRESETS_KEY, pbFormulaPresets)
   } catch(e) {}
 }
 
@@ -15570,11 +16049,4 @@ document.addEventListener('viewSwitched', e => {
     <div class="tour-title" id="tourTitle"></div>
     <div class="tour-body" id="tourBody"></div>
     <div class="tour-actions">
-      <button class="btn btn-ghost" onclick="tourSkip()" style="font-size:11px;">SKIP TOUR</button>
-      <button class="btn btn-primary" onclick="tourNext()" id="tourNextBtn" style="font-size:11px;">NEXT →</button>
-    </div>
-  </div>
-</div>
-
-</body>
-</html>
+      <button class="btn b
