@@ -1040,6 +1040,22 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .pb-formula-chip.pfc-pinned .pfc-pin { opacity:1; }
 /* Undo/redo disabled state */
 #pbUndoBtn:disabled, #pbRedoBtn:disabled { opacity:.3;cursor:not-allowed; }
+/* Pending/placeholder chips — unknown segments awaiting classification */
+.pb-formula-chip.pfc-pending {
+  border-style:dashed;
+  opacity:.6;
+  cursor:default;
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  border-color: color-mix(in srgb, var(--muted) 35%, transparent);
+  color: var(--muted);
+  animation: pfc-pending-pulse 1.8s ease-in-out infinite alternate;
+}
+@keyframes pfc-pending-pulse {
+  from { opacity:.45; }
+  to   { opacity:.75; }
+}
+.pb-formula-chip.pfc-pending .pfc-pin { display:none; }
+.pb-formula-chip.pfc-pending .pfc-rm  { display:none; }
 /* Replace / dim mode on particle grid */
 .pb-type-block.pb-replace-active { outline:2px solid var(--tc, var(--accent));outline-offset:2px; }
 .pb-type-block.pb-replace-dimmed { opacity:.18;pointer-events:none; }
@@ -9878,27 +9894,81 @@ function pbInit() {
     bar.addEventListener('keyup',     pbFormulaSaveRange)
     bar.addEventListener('touchend',  pbFormulaSaveRange)
     bar.addEventListener('input', () => {
-      if (window._pbPasting) return   // suppress during paste handling
-      pbSyncFormulaFromDOM()
-      pbFormulaAutocomplete(bar)
-      pbShowPlaceholderIfEmpty(bar)
-      pbSetupTrackTyped()
+      if (window._pbPasting) return   // suppress during our own paste handling
+      // ── Android WebView fallback: browser pasted text we couldn't intercept ──
+      // Detect if what landed in the bar looks like a multi-word paste (not a keypress)
+      // by checking if the plain-text content of the bar is substantially longer than
+      // what pbFormula would produce — i.e. raw text was inserted.
+      if (window._pbCheckAfterInput) {
+        clearTimeout(window._pbCheckAfterInput)
+      }
+      window._pbCheckAfterInput = setTimeout(() => {
+        window._pbCheckAfterInput = null
+        // Get whatever raw text is now in the bar
+        const rawContent = bar.innerText || bar.textContent || ''
+        // Rebuild expected text from pbFormula
+        const expectedText = pbFormula.map(e => {
+          if (e.isText) return e.text
+          const p = pbGetParticles().find(x => x.id === e.particleId)
+          return p ? p.text : ''
+        }).join('')
+        // If there's significantly more text in the bar than pbFormula accounts for,
+        // something was pasted via browser default — extract and handle it
+        const inserted = rawContent.slice(expectedText.length).trim()
+        if (inserted.split(/\s+/).length >= 3) {
+          window._pbPasting = true
+          // Rebuild bar cleanly from pbFormula (strip the leaked text)
+          bar.innerHTML = ''
+          pbFormula.forEach(entry => {
+            if (entry.isText) {
+              bar.appendChild(document.createTextNode(entry.text))
+            } else {
+              const p = pbGetParticles().find(x => x.id === entry.particleId)
+              if (p) bar.appendChild(pbMakeChipEl(entry, p))
+            }
+          })
+          pbSavedRange = null
+          pbHandleFormulaPaste(inserted, bar)
+          requestAnimationFrame(() => { window._pbPasting = false })
+          return
+        }
+        // Normal single-keystroke input — run normal sync
+        pbSyncFormulaFromDOM()
+        pbFormulaAutocomplete(bar)
+        pbShowPlaceholderIfEmpty(bar)
+        pbSetupTrackTyped()
+      }, 0)
     })
     bar.addEventListener('paste', e => {
+      // Try to read clipboard text from the event
+      let text = ''
+      try {
+        text = (e.clipboardData || window.clipboardData)?.getData('text/plain')?.trim() || ''
+      } catch(err) {}
+
+      if (!text) {
+        // Clipboard read failed (Android content:// WebView restriction).
+        // Let the browser paste normally — the input handler fallback will catch it.
+        window._pbPasting = false
+        return
+      }
+
+      // We have the text — take full control
       e.preventDefault()
-      const text = (e.clipboardData || window.clipboardData).getData('text/plain').trim()
-      if (!text) return
-      // Set flag to suppress the rogue input event that fires after paste on mobile
       window._pbPasting = true
-      // Re-render from clean pbFormula state to clear any leaked text
-      pbRenderFormula()
-      // pbSavedRange is now stale (bar was re-rendered) — clear it so we always append
+      // Rebuild bar from clean pbFormula state (clears any already-leaked text)
+      bar.innerHTML = ''
+      pbFormula.forEach(entry => {
+        if (entry.isText) {
+          bar.appendChild(document.createTextNode(entry.text))
+        } else {
+          const p = pbGetParticles().find(x => x.id === entry.particleId)
+          if (p) bar.appendChild(pbMakeChipEl(entry, p))
+        }
+      })
       pbSavedRange = null
       pbHandleFormulaPaste(text, bar)
-      // Clear flag after the rogue input event has fired
-      requestAnimationFrame(() => {
-        window._pbPasting = false
-      })
+      requestAnimationFrame(() => { window._pbPasting = false })
     })
   }
   // selectionchange fires even after focus moves away — captures text selections
@@ -12450,23 +12520,17 @@ function pbHandleFormulaPaste(text, bar) {
     // Fall through to review for 2-3 word unknown phrases
   }
 
-  // ── Multi-word paste: split into known chips + unknown segments ──
-  const { chips, unknowns } = pbParsePaste(text)
+  // ── Multi-word paste: split into real chips + placeholder chips + text nodes ──
+  const { nodes, unknowns } = pbParsePaste(text)
 
-  // Insert known chips immediately
-  if (chips.length || unknowns.length === 0) {
-    pbSnapshotPush()
-    const frag = document.createDocumentFragment()
-    chips.forEach(({ type, node }) => {
-      if (type === 'chip') { pbTrackUsage(pbGetParticles().find(p => p.id === parseInt(node.dataset.particleId))); frag.appendChild(node) }
-      else frag.appendChild(node)
-    })
-    if (insertAt) { insertAt.deleteContents(); insertAt.insertNode(frag) }
-    else chips.forEach(({ node }) => bar.appendChild(node))
-    pbSyncFormulaFromDOM(); pbUpdateBottomBar()
-    const chipCount = chips.filter(c => c.type === 'chip').length
-    if (chipCount > 0 && !unknowns.length) pbPasteToast(`${chipCount} particle${chipCount > 1 ? 's' : ''} matched`)
-  }
+  // Insert all nodes in-order (real chips, placeholders, text nodes all go in sequence)
+  pbSnapshotPush()
+  const bar2 = El.pbFormula || document.getElementById('pbFormula')
+  nodes.forEach(n => bar2.appendChild(n))
+  pbSyncFormulaFromDOM(); pbUpdateBottomBar()
+
+  const chipCount = nodes.filter(n => n.classList?.contains('pb-formula-chip') && !n.classList?.contains('pfc-pending')).length
+  if (chipCount > 0 && !unknowns.length) pbPasteToast(`${chipCount} particle${chipCount > 1 ? 's' : ''} matched`)
 
   // Show review panel for unknown segments
   if (unknowns.length) {
@@ -12474,15 +12538,52 @@ function pbHandleFormulaPaste(text, bar) {
   }
 }
 
-// Split paste text → { chips: [{type,node}], unknowns: [{text}] }
+// Split paste text → array of DOM nodes (real chips, text nodes, placeholder chips)
+// Unknowns become placeholder chips with data-placeholder-id so confirm/dismiss can swap in-place
 function pbParsePaste(text) {
   const all = pbGetParticles()
   const sorted = [...all].sort((a, b) => b.text.length - a.text.length)
-  const chips = []
-  const unknownTexts = []
+
+  const nodes = []       // final DOM node list in order
+  const unknowns = []    // { placeholderId, text } for review panel
 
   let remaining = text
   let accUnknown = ''
+  let placeholderCounter = 0
+
+  const flushUnknown = () => {
+    const t = accUnknown.trim()
+    accUnknown = ''
+    if (!t) return
+    const wordCount = t.split(/\s+/).length
+
+    // Split on punctuation boundaries first
+    const parts = t.split(/[,;—]|\s{2,}/).map(s => s.trim()).filter(Boolean)
+
+    parts.forEach(part => {
+      if (part.split(/\s+/).length < 2) {
+        // Single unknown word — plain text node
+        nodes.push(document.createTextNode(' ' + part + ' '))
+      } else {
+        // Multi-word unknown → placeholder chip
+        const pid = 'ph_' + (placeholderCounter++)
+        const ph = document.createElement('span')
+        ph.className = 'pb-formula-chip pfc-pending'
+        ph.contentEditable = 'false'
+        ph.dataset.placeholderId = pid
+        ph.dataset.uid = pbNextUid++
+        const span = document.createElement('span')
+        span.className = 'pfc-text'
+        span.textContent = part
+        ph.appendChild(span)
+        // Pin and rm are hidden via CSS for pending chips
+        const pin = document.createElement('span'); pin.className = 'pfc-pin'; ph.appendChild(pin)
+        const rm  = document.createElement('span'); rm.className  = 'pfc-rm';  ph.appendChild(rm)
+        nodes.push(ph)
+        unknowns.push({ id: pid, text: part })
+      }
+    })
+  }
 
   while (remaining.length > 0) {
     const leadingSpace = remaining.match(/^(\s+)/)?.[1] || ''
@@ -12492,18 +12593,10 @@ function pbParsePaste(text) {
     for (const p of sorted) {
       if (p.text.length < 4) continue
       if (toSearch.toLowerCase().startsWith(p.text.toLowerCase())) {
-        // Flush accumulated unknown text first
-        if (accUnknown.trim().split(/\s+/).length >= 2) {
-          unknownTexts.push(accUnknown.trim()); accUnknown = ''
-        } else if (accUnknown.trim()) {
-          // Single unknown word: just keep as text chip
-          if (leadingSpace) chips.push({ type:'text', node: document.createTextNode(leadingSpace) })
-          chips.push({ type:'text', node: document.createTextNode(accUnknown) })
-          accUnknown = ''
-        }
-        if (leadingSpace) chips.push({ type:'text', node: document.createTextNode(leadingSpace) })
+        flushUnknown()
+        if (leadingSpace) nodes.push(document.createTextNode(leadingSpace))
         const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
-        chips.push({ type:'chip', node: chip })
+        nodes.push(chip)
         remaining = remaining.slice(leadingSpace.length + p.text.length)
         matched = true
         break
@@ -12516,51 +12609,64 @@ function pbParsePaste(text) {
     }
   }
 
-  // Flush any trailing unknown text
-  const trimmed = accUnknown.trim()
-  if (trimmed) {
-    const words = trimmed.split(/\s+/)
-    if (words.length >= 2) {
-      unknownTexts.push(trimmed)
-    } else {
-      chips.push({ type:'text', node: document.createTextNode(accUnknown) })
-    }
-  }
+  flushUnknown()
 
-  // Split long unknown spans on punctuation or comma boundaries into sub-segments
-  const unknowns = []
-  unknownTexts.forEach(t => {
-    // Split on commas, semicolons, em-dash, or very long runs (>8 words = likely multiple concepts)
-    const parts = t.split(/[,;—]|\s{2,}/).map(p => p.trim()).filter(p => p.split(/\s+/).length >= 2)
-    if (parts.length > 1) unknowns.push(...parts)
-    else if (t.trim()) unknowns.push(t.trim())
-  })
-
-  return { chips, unknowns }
+  return { nodes, unknowns }
 }
 
 // ── PASTE REVIEW PANEL ────────────────────────────────────────────
 
-// State: array of { id, text, type, cat, similar }
+// State: array of { id, text, type, cat, similar, dismissed }
+// id matches data-placeholder-id on the pending chip in the formula bar
 let pbPasteReviewItems = []
 
-function pbPasteReviewShow(segments) {
-  pbPasteReviewItems = segments.map((text, i) => {
+function pbPasteReviewShow(unknowns) {
+  pbPasteReviewItems = unknowns.map(({ id, text }) => {
     const classified = pbClassifyText(text) || { type: PB_TYPES[0].key, cat: PB_TYPES[0].cats[0] }
     const similar = pbAcFindSimilar(text, 0.65)
-    return { id: i, text, type: classified.type, cat: classified.cat, similar, dismissed: false }
+    return { id, text, type: classified.type, cat: classified.cat, similar, dismissed: false }
   })
   pbPasteReviewRender()
-  document.getElementById('pbPasteReview').style.display = ''
-  document.getElementById('pbPasteReview').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  const panel = document.getElementById('pbPasteReview')
+  if (panel) {
+    panel.style.display = 'block'
+    // Scroll after a tick so the panel is painted before scrollIntoView fires
+    setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
+  }
+}
+
+// Swap placeholder chip in formula bar for a real chip
+function pbPasteReviewSwapPlaceholder(placeholderId, realChip) {
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  const ph = bar?.querySelector(`[data-placeholder-id="${placeholderId}"]`)
+  if (ph) {
+    ph.replaceWith(realChip)
+  } else {
+    // Fallback: placeholder already gone, append
+    bar?.appendChild(realChip)
+  }
+  pbSyncFormulaFromDOM()
+  pbUpdateBottomBar()
+}
+
+// Remove placeholder from formula bar (dismiss without replacing)
+function pbPasteReviewRemovePlaceholder(placeholderId) {
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  const ph = bar?.querySelector(`[data-placeholder-id="${placeholderId}"]`)
+  if (ph) ph.remove()
+  pbSyncFormulaFromDOM()
+  pbUpdateBottomBar()
 }
 
 function pbPasteReviewRender() {
   const list = document.getElementById('pbPasteReviewList')
   if (!list) return
   list.innerHTML = ''
-  pbPasteReviewItems.forEach(item => {
-    if (item.dismissed) return
+
+  const active = pbPasteReviewItems.filter(i => !i.dismissed)
+  if (!active.length) { pbPasteReviewDismiss(); return }
+
+  active.forEach(item => {
     const card = document.createElement('div')
     card.className = 'pbpr-card'
     card.id = 'pbpr-card-' + item.id
@@ -12576,14 +12682,20 @@ function pbPasteReviewRender() {
     textInp.type = 'text'
     textInp.value = item.text
     textInp.placeholder = 'Particle text…'
-    textInp.oninput = () => { item.text = textInp.value.trim(); pbPasteReviewUpdateSimilar(item, card) }
+    textInp.oninput = () => {
+      item.text = textInp.value.trim()
+      // Update the placeholder chip label live
+      const bar = El.pbFormula || document.getElementById('pbFormula')
+      const ph = bar?.querySelector(`[data-placeholder-id="${item.id}"]`)
+      if (ph) { const s = ph.querySelector('.pfc-text'); if (s) s.textContent = item.text }
+      pbPasteReviewUpdateSimilar(item, card)
+    }
     textRow.appendChild(textInp)
     left.appendChild(textRow)
 
     // Type + category selects
     const selects = document.createElement('div')
     selects.className = 'pbpr-selects'
-
     const dot = document.createElement('span')
     dot.className = 'pbpr-type-dot'
     const currentType = PB_TYPES.find(t => t.key === item.type)
@@ -12601,10 +12713,9 @@ function pbPasteReviewRender() {
       item.type = typeSelect.value
       const t = PB_TYPES.find(x => x.key === item.type)
       dot.style.background = t?.color || 'var(--accent)'
-      // Rebuild category select
       catSelect.innerHTML = ''
-      const cats = [...new Set(pbGetParticles().filter(p=>p.type===item.type).map(p=>p.cat).concat(t?.cats||[]))]
-      cats.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; catSelect.appendChild(o) })
+      const cats = [...new Set(pbGetParticles().filter(p => p.type === item.type).map(p => p.cat).concat(t?.cats || []))]
+      cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; catSelect.appendChild(o) })
       item.cat = cats[0] || ''
       catSelect.value = item.cat
     }
@@ -12612,7 +12723,7 @@ function pbPasteReviewRender() {
     const catSelect = document.createElement('select')
     catSelect.className = 'pbpr-select'
     const t = PB_TYPES.find(x => x.key === item.type)
-    const cats = [...new Set(pbGetParticles().filter(p=>p.type===item.type).map(p=>p.cat).concat(t?.cats||[]))]
+    const cats = [...new Set(pbGetParticles().filter(p => p.type === item.type).map(p => p.cat).concat(t?.cats || []))]
     cats.forEach(c => {
       const opt = document.createElement('option'); opt.value = c; opt.textContent = c
       if (c === item.cat) opt.selected = true
@@ -12620,12 +12731,10 @@ function pbPasteReviewRender() {
     })
     catSelect.onchange = () => { item.cat = catSelect.value }
 
-    selects.appendChild(dot)
-    selects.appendChild(typeSelect)
-    selects.appendChild(catSelect)
+    selects.appendChild(dot); selects.appendChild(typeSelect); selects.appendChild(catSelect)
     left.appendChild(selects)
 
-    // Similar particles row
+    // Similar row
     const similarRow = document.createElement('div')
     similarRow.className = 'pbpr-similar-row'
     similarRow.id = 'pbpr-similar-' + item.id
@@ -12634,32 +12743,24 @@ function pbPasteReviewRender() {
 
     card.appendChild(left)
 
-    // Confirm + dismiss buttons
+    // Action buttons
     const btnRow = document.createElement('div')
     btnRow.className = 'pbpr-btn-row'
-
     const confirmBtn = document.createElement('button')
     confirmBtn.className = 'pbpr-confirm'
     confirmBtn.textContent = '✓ ADD'
-    confirmBtn.title = 'Save as new particle and add to formula'
+    confirmBtn.title = 'Save as new particle and replace placeholder'
     confirmBtn.onclick = () => pbPasteReviewConfirmItem(item)
-
     const dismissBtn = document.createElement('button')
     dismissBtn.className = 'pbpr-dismiss'
     dismissBtn.textContent = '×'
-    dismissBtn.title = 'Discard this segment'
+    dismissBtn.title = 'Remove this segment'
     dismissBtn.onclick = () => pbPasteReviewDismissItem(item)
-
-    btnRow.appendChild(confirmBtn)
-    btnRow.appendChild(dismissBtn)
+    btnRow.appendChild(confirmBtn); btnRow.appendChild(dismissBtn)
     card.appendChild(btnRow)
 
     list.appendChild(card)
   })
-
-  // Hide panel if everything dismissed
-  const anyLeft = pbPasteReviewItems.some(i => !i.dismissed)
-  if (!anyLeft) pbPasteReviewDismiss()
 }
 
 function pbPasteReviewRenderSimilar(item, el) {
@@ -12693,12 +12794,9 @@ function pbPasteReviewConfirmItem(item) {
   pbParticlesDriveSync()
   pbSnapshotPush()
   pbTrackUsage(p)
-  // Append chip to formula bar
-  const bar = El.pbFormula || document.getElementById('pbFormula')
-  const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
-  bar.appendChild(chip)
-  pbSyncFormulaFromDOM()
-  pbUpdateBottomBar()
+  // Swap placeholder for real chip in-place
+  const realChip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
+  pbPasteReviewSwapPlaceholder(item.id, realChip)
   pbRenderLibrary()
   item.dismissed = true
   pbPasteReviewRender()
@@ -12706,35 +12804,32 @@ function pbPasteReviewConfirmItem(item) {
 
 function pbPasteReviewUseExisting(item, particle) {
   pbSnapshotPush(); pbTrackUsage(particle)
-  const bar = El.pbFormula || document.getElementById('pbFormula')
-  const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: particle.id }, particle)
-  bar.appendChild(chip)
-  pbSyncFormulaFromDOM(); pbUpdateBottomBar()
+  const realChip = pbMakeChipEl({ uid: pbNextUid++, particleId: particle.id }, particle)
+  pbPasteReviewSwapPlaceholder(item.id, realChip)
   item.dismissed = true
   pbPasteReviewRender()
 }
 
 function pbPasteReviewDismissItem(item) {
+  pbPasteReviewRemovePlaceholder(item.id)
   item.dismissed = true
   pbPasteReviewRender()
 }
 
 function pbPasteReviewConfirmAll() {
-  // Confirm all non-dismissed items in sequence
   const pending = pbPasteReviewItems.filter(i => !i.dismissed)
+  pbSnapshotPush()
   pending.forEach(item => {
     const text = item.text?.trim()
     if (!text) return
     const p = { id: Date.now() + Math.random(), type: item.type, cat: item.cat, text }
     pbLibraries[pbActiveLib].particles.push(p)
     pbTrackUsage(p)
-    const bar = El.pbFormula || document.getElementById('pbFormula')
-    const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
-    bar.appendChild(chip)
+    const realChip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
+    pbPasteReviewSwapPlaceholder(item.id, realChip)
     item.dismissed = true
   })
   if (pending.length) {
-    pbSnapshotPush()
     lsSave(LS.PB_LIBS, pbLibraries)
     pbParticlesDriveSync()
     pbSyncFormulaFromDOM(); pbUpdateBottomBar()
@@ -12744,6 +12839,8 @@ function pbPasteReviewConfirmAll() {
 }
 
 function pbPasteReviewDismiss() {
+  // Remove any remaining placeholders from formula bar
+  pbPasteReviewItems.filter(i => !i.dismissed).forEach(i => pbPasteReviewRemovePlaceholder(i.id))
   pbPasteReviewItems = []
   const panel = document.getElementById('pbPasteReview')
   if (panel) panel.style.display = 'none'
