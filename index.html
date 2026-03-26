@@ -1070,7 +1070,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   to   { box-shadow:0 0 14px color-mix(in srgb, var(--tc, var(--accent)) 60%, transparent); }
 }
 .pb-formula-chip .pfc-text {
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
+  white-space:normal;word-break:break-word;flex:1;
 }
 .pb-formula-chip .pfc-rm {
   flex-shrink:0;font-size:17px;line-height:1;
@@ -1700,11 +1700,11 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* Mobile */
 @media(max-width:640px){
   .pb-particle { font-size:14px;padding:4px 8px; }
-  .pb-formula-chip { font-size:14px;max-width:180px; }
+  .pb-formula-chip { font-size:14px; }
 }
 @media(max-width:640px){
   .pb-particle { font-size:14px;padding:4px 8px; }
-  .pb-formula-chip { font-size:14px;max-width:180px; }
+  .pb-formula-chip { font-size:14px; }
 }
 /* ── Paste-to-particles review panel ─────────────────────────────── */
 #pbPasteReview {
@@ -1758,6 +1758,53 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .1s;
 }
 .pbpr-use-existing:hover { border-color:var(--accent);color:var(--accent); }
+/* Split button and word-split UI */
+.pbpr-split-btn {
+  background:none;border:1px solid var(--border);border-radius:3px;
+  padding:2px 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .1s;white-space:nowrap;
+}
+.pbpr-split-btn:hover { border-color:var(--accent);color:var(--accent); }
+.pbpr-split-row {
+  margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:4px;
+  border:1px solid var(--border);display:flex;flex-direction:column;gap:8px;
+}
+.pbpr-split-hint {
+  font-size:10px;color:var(--muted);letter-spacing:1px;
+}
+.pbpr-split-words {
+  display:flex;flex-wrap:wrap;align-items:center;gap:2px;line-height:2;
+}
+.pbpr-split-word {
+  font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;
+  color:var(--text);padding:2px 6px;border-radius:3px;
+  background:var(--surface);border:1px solid var(--border);
+}
+.pbpr-split-gap {
+  width:12px;height:22px;display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;border-radius:2px;transition:background .1s;flex-shrink:0;
+}
+.pbpr-split-gap:hover { background:color-mix(in srgb,var(--accent) 20%,transparent); }
+.pbpr-split-gap.active {
+  background:color-mix(in srgb,var(--accent) 30%,transparent);
+  position:relative;
+}
+.pbpr-split-gap.active::after {
+  content:'';position:absolute;top:2px;bottom:2px;left:50%;transform:translateX(-50%);
+  width:2px;background:var(--accent);border-radius:1px;
+}
+.pbpr-split-actions { display:flex;gap:6px; }
+.pbpr-split-confirm {
+  background:color-mix(in srgb,var(--accent) 15%,transparent);
+  border:1px solid var(--accent);border-radius:3px;
+  padding:4px 12px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;color:var(--accent);
+}
+.pbpr-split-cancel {
+  background:none;border:1px solid var(--border);border-radius:3px;
+  padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;color:var(--muted);
+}
 .pbpr-btn-row { display:flex;gap:6px;align-self:start;padding-top:2px; }
 .pbpr-confirm {
   background:color-mix(in srgb,var(--accent) 15%,transparent);
@@ -12829,6 +12876,13 @@ function pbPasteReviewRender() {
     pbPasteReviewRenderSimilar(item, similarRow)
     left.appendChild(similarRow)
 
+    // Split UI row — shown/hidden by toggle
+    const splitRow = document.createElement('div')
+    splitRow.className = 'pbpr-split-row'
+    splitRow.style.display = 'none'
+    splitRow.id = 'pbpr-split-' + item.id
+    left.appendChild(splitRow)
+
     card.appendChild(left)
 
     // Action buttons
@@ -12839,12 +12893,26 @@ function pbPasteReviewRender() {
     confirmBtn.textContent = '✓ ADD'
     confirmBtn.title = 'Save as new particle and replace placeholder'
     confirmBtn.onclick = () => pbPasteReviewConfirmItem(item)
+
+    // Split button — only shown for 4+ word items
+    if (item.text.trim().split(/\s+/).length >= 4) {
+      const splitBtn = document.createElement('button')
+      splitBtn.className = 'pbpr-split-btn'
+      splitBtn.textContent = '⋯ SPLIT'
+      splitBtn.title = 'Split into smaller particles'
+      splitBtn.onclick = () => pbPasteReviewToggleSplit(item, splitRow, splitBtn, textInp)
+      btnRow.appendChild(confirmBtn)
+      btnRow.appendChild(splitBtn)
+    } else {
+      btnRow.appendChild(confirmBtn)
+    }
+
     const dismissBtn = document.createElement('button')
     dismissBtn.className = 'pbpr-dismiss'
     dismissBtn.textContent = '×'
     dismissBtn.title = 'Remove this segment'
     dismissBtn.onclick = () => pbPasteReviewDismissItem(item)
-    btnRow.appendChild(confirmBtn); btnRow.appendChild(dismissBtn)
+    btnRow.appendChild(dismissBtn)
     card.appendChild(btnRow)
 
     list.appendChild(card)
@@ -12871,6 +12939,180 @@ function pbPasteReviewUpdateSimilar(item, card) {
   item.similar = pbAcFindSimilar(item.text, 0.65)
   const similarEl = card.querySelector('#pbpr-similar-' + item.id)
   if (similarEl) pbPasteReviewRenderSimilar(item, similarEl)
+}
+
+// ── SPLIT UI ──────────────────────────────────────────────────────
+
+// Track active split points per item: { [itemId]: Set of gap indices }
+// Gap index N = after word N (0-based), so words [0..N] | [N+1..end]
+const _pbSplitPoints = {}
+
+function pbPasteReviewToggleSplit(item, splitRow, splitBtn, textInp) {
+  const isOpen = splitRow.style.display !== 'none'
+  if (isOpen) {
+    splitRow.style.display = 'none'
+    splitBtn.textContent = '⋯ SPLIT'
+    delete _pbSplitPoints[item.id]
+    return
+  }
+  splitBtn.textContent = '▲ SPLIT'
+  _pbSplitPoints[item.id] = new Set()
+  pbPasteReviewRenderSplitRow(item, splitRow, textInp)
+  splitRow.style.display = 'flex'
+  splitRow.style.flexDirection = 'column'
+  splitRow.style.gap = '8px'
+}
+
+function pbPasteReviewRenderSplitRow(item, splitRow, textInp) {
+  splitRow.innerHTML = ''
+  const words = item.text.trim().split(/\s+/)
+  const splits = _pbSplitPoints[item.id] || new Set()
+
+  const hint = document.createElement('div')
+  hint.className = 'pbpr-split-hint'
+  hint.textContent = 'TAP BETWEEN WORDS TO PLACE A SPLIT — MAX 2 SPLITS'
+  splitRow.appendChild(hint)
+
+  // Word + gap tokens
+  const wordsRow = document.createElement('div')
+  wordsRow.className = 'pbpr-split-words'
+
+  words.forEach((word, i) => {
+    const wordEl = document.createElement('span')
+    wordEl.className = 'pbpr-split-word'
+    wordEl.textContent = word
+    wordsRow.appendChild(wordEl)
+
+    // Gap after this word (not after last word)
+    if (i < words.length - 1) {
+      const gap = document.createElement('span')
+      gap.className = 'pbpr-split-gap' + (splits.has(i) ? ' active' : '')
+      gap.title = splits.has(i) ? 'Remove split' : 'Split here'
+      gap.innerHTML = splits.has(i) ? '' : '<span style="color:var(--border);font-size:9px;">│</span>'
+      gap.onclick = () => {
+        if (splits.has(i)) {
+          splits.delete(i)
+        } else if (splits.size < 2) {
+          splits.add(i)
+        }
+        pbPasteReviewRenderSplitRow(item, splitRow, textInp)
+      }
+      wordsRow.appendChild(gap)
+    }
+  })
+  splitRow.appendChild(wordsRow)
+
+  // Preview of resulting segments
+  if (splits.size > 0) {
+    const sortedSplits = [...splits].sort((a, b) => a - b)
+    const segments = []
+    let start = 0
+    sortedSplits.forEach(s => {
+      segments.push(words.slice(start, s + 1).join(' '))
+      start = s + 1
+    })
+    segments.push(words.slice(start).join(' '))
+
+    const preview = document.createElement('div')
+    preview.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;'
+    segments.forEach((seg, i) => {
+      const chip = document.createElement('span')
+      chip.style.cssText = 'font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:2px 7px;color:var(--muted);'
+      chip.textContent = (i + 1) + '. ' + seg
+      preview.appendChild(chip)
+    })
+    splitRow.appendChild(preview)
+  }
+
+  // Confirm / cancel actions
+  const actions = document.createElement('div')
+  actions.className = 'pbpr-split-actions'
+
+  const confirmSplit = document.createElement('button')
+  confirmSplit.className = 'pbpr-split-confirm'
+  confirmSplit.textContent = splits.size > 0 ? `✓ APPLY ${splits.size + 1} SPLITS` : '✓ APPLY'
+  confirmSplit.disabled = splits.size === 0
+  confirmSplit.style.opacity = splits.size === 0 ? '.4' : '1'
+  confirmSplit.onclick = () => pbPasteReviewApplySplit(item, words, splits)
+
+  const cancelSplit = document.createElement('button')
+  cancelSplit.className = 'pbpr-split-cancel'
+  cancelSplit.textContent = 'CANCEL'
+  cancelSplit.onclick = () => {
+    splitRow.style.display = 'none'
+    delete _pbSplitPoints[item.id]
+    // Reset split btn label
+    const card = document.getElementById('pbpr-card-' + item.id)
+    const sb = card?.querySelector('.pbpr-split-btn')
+    if (sb) sb.textContent = '⋯ SPLIT'
+  }
+
+  actions.appendChild(confirmSplit)
+  actions.appendChild(cancelSplit)
+  splitRow.appendChild(actions)
+}
+
+function pbPasteReviewApplySplit(item, words, splits) {
+  if (!splits.size) return
+  const sortedSplits = [...splits].sort((a, b) => a - b)
+
+  // Build segment texts
+  const segments = []
+  let start = 0
+  sortedSplits.forEach(s => { segments.push(words.slice(start, s + 1).join(' ')); start = s + 1 })
+  segments.push(words.slice(start).join(' '))
+
+  // Find the placeholder in the formula bar
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  const ph = bar?.querySelector(`[data-placeholder-id="${item.id}"]`)
+
+  // Build new placeholder elements for each segment and insert in-place
+  const newItems = segments.map(seg => {
+    const pid = 'ph_split_' + Date.now() + '_' + Math.random().toString(36).slice(2)
+    const classified = pbClassifyText(seg) || { type: PB_TYPES[0].key, cat: PB_TYPES[0].cats[0] }
+    const similar = pbAcFindSimilar(seg, 0.65)
+
+    // Create placeholder chip
+    const newPh = document.createElement('span')
+    newPh.className = 'pb-formula-chip pfc-pending'
+    newPh.contentEditable = 'false'
+    newPh.dataset.placeholderId = pid
+    newPh.dataset.uid = pbNextUid++
+    const span = document.createElement('span'); span.className = 'pfc-text'; span.textContent = seg
+    newPh.appendChild(span)
+    const pin = document.createElement('span'); pin.className = 'pfc-pin'; newPh.appendChild(pin)
+    const rm  = document.createElement('span'); rm.className  = 'pfc-rm';  newPh.appendChild(rm)
+
+    return {
+      id: pid, text: seg,
+      type: classified.type, cat: classified.cat,
+      similar, dismissed: false,
+      _domEl: newPh
+    }
+  })
+
+  // Replace original placeholder with the new sequence
+  if (ph) {
+    const frag = document.createDocumentFragment()
+    newItems.forEach(ni => frag.appendChild(ni._domEl))
+    ph.replaceWith(frag)
+  }
+
+  // Remove _domEl before inserting into state
+  newItems.forEach(ni => { delete ni._domEl })
+
+  // Splice into pbPasteReviewItems: replace old item with new items
+  const idx = pbPasteReviewItems.findIndex(i => i.id === item.id)
+  if (idx !== -1) {
+    pbPasteReviewItems.splice(idx, 1, ...newItems)
+  } else {
+    pbPasteReviewItems.push(...newItems)
+  }
+
+  delete _pbSplitPoints[item.id]
+  pbSyncFormulaFromDOM()
+  pbUpdateBottomBar()
+  pbPasteReviewRender()
 }
 
 function pbPasteReviewConfirmItem(item) {
