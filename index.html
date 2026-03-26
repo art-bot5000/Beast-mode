@@ -14,10 +14,61 @@
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {})
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Detect when a new SW has been found and is waiting
+      const checkWaiting = () => {
+        if (reg.waiting) showUpdateBanner(reg.waiting)
+      }
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(newWorker)
+          }
+        })
+      })
+      // Check immediately in case SW was already waiting before this page loaded
+      checkWaiting()
+    }).catch(() => {})
+
+    // When the SW activates a new version and tells us to reload
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'SW_ACTIVATED') window.location.reload()
+    })
   })
 }
+
+function showUpdateBanner(waitingWorker) {
+  if (document.getElementById('bmUpdateBanner')) return  // already shown
+  const banner = document.createElement('div')
+  banner.id = 'bmUpdateBanner'
+  banner.style.cssText = [
+    'position:fixed','bottom:72px','left:50%','transform:translateX(-50%)',
+    'z-index:99999','display:flex','align-items:center','gap:12px',
+    'background:#0d0d0d','border:1px solid var(--accent,#00ffb0)',
+    'border-radius:6px','padding:10px 16px','box-shadow:0 4px 20px rgba(0,0,0,.6)',
+    'font-family:\'Rajdhani\',sans-serif','max-width:calc(100vw - 32px)',
+    'animation:bmBannerIn .3s ease'
+  ].join(';')
+  banner.innerHTML = `
+    <span style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--accent,#00ffb0);white-space:nowrap;">⊛ UPDATE READY</span>
+    <span style="font-size:11px;color:#aaa;letter-spacing:.5px;flex:1;">A new version of Beast Mode is available.</span>
+    <button id="bmUpdateBtn" style="background:var(--accent,#00ffb0);border:none;border-radius:3px;padding:6px 14px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;color:#000;white-space:nowrap;flex-shrink:0;">UPDATE NOW</button>
+    <button id="bmUpdateDismiss" style="background:none;border:none;cursor:pointer;color:#666;font-size:18px;padding:0 2px;flex-shrink:0;line-height:1;">×</button>
+  `
+  document.body.appendChild(banner)
+  document.getElementById('bmUpdateBtn').onclick = () => {
+    waitingWorker.postMessage({ type: 'SKIP_WAITING' })
+  }
+  document.getElementById('bmUpdateDismiss').onclick = () => banner.remove()
+}
 </script>
+<style>
+@keyframes bmBannerIn {
+  from { opacity:0; transform:translateX(-50%) translateY(12px); }
+  to   { opacity:1; transform:translateX(-50%) translateY(0); }
+}
+</style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -12555,34 +12606,71 @@ function pbParsePaste(text) {
     const t = accUnknown.trim()
     accUnknown = ''
     if (!t) return
-    const wordCount = t.split(/\s+/).length
 
-    // Split on punctuation boundaries first
-    const parts = t.split(/[,;—]|\s{2,}/).map(s => s.trim()).filter(Boolean)
+    // 1. Split on hard punctuation first
+    const hardParts = t.split(/[,;—]/).map(s => s.trim()).filter(Boolean)
 
-    parts.forEach(part => {
-      if (part.split(/\s+/).length < 2) {
-        // Single unknown word — plain text node
-        nodes.push(document.createTextNode(' ' + part + ' '))
-      } else {
-        // Multi-word unknown → placeholder chip
-        const pid = 'ph_' + (placeholderCounter++)
-        const ph = document.createElement('span')
-        ph.className = 'pb-formula-chip pfc-pending'
-        ph.contentEditable = 'false'
-        ph.dataset.placeholderId = pid
-        ph.dataset.uid = pbNextUid++
-        const span = document.createElement('span')
-        span.className = 'pfc-text'
-        span.textContent = part
-        ph.appendChild(span)
-        // Pin and rm are hidden via CSS for pending chips
-        const pin = document.createElement('span'); pin.className = 'pfc-pin'; ph.appendChild(pin)
-        const rm  = document.createElement('span'); rm.className  = 'pfc-rm';  ph.appendChild(rm)
-        nodes.push(ph)
-        unknowns.push({ id: pid, text: part })
+    hardParts.forEach(part => {
+      // 2. Within each hard-split part, split further on natural semantic boundaries:
+      //    'with', ' and ' (when not at start), ' on ', ' in ', ' of '
+      //    but only if the part is more than 5 words (avoid splitting short phrases)
+      const words = part.split(/\s+/)
+      if (words.length <= 5) {
+        emitSegment(part)
+        return
       }
+
+      // Find split points: 'with', 'and', 'on', 'in' preceded by 2+ words and followed by 2+ words
+      const splitWords = ['with','and','on','in','of','for','under','over','across','along']
+      const splitPoints = []
+      words.forEach((w, i) => {
+        if (i >= 2 && i <= words.length - 3 && splitWords.includes(w.toLowerCase())) {
+          splitPoints.push(i)
+        }
+      })
+
+      if (!splitPoints.length) {
+        // No natural splits — enforce max 6-word chunks
+        for (let i = 0; i < words.length; i += 6) {
+          emitSegment(words.slice(i, i + 6).join(' '))
+        }
+        return
+      }
+
+      // Split at first natural boundary, recurse remainder
+      const splitAt = splitPoints[0]
+      emitSegment(words.slice(0, splitAt).join(' '))
+      // Include the conjunction in the next segment
+      const rest = words.slice(splitAt).join(' ')
+      // Recurse by re-flushing the rest
+      const savedAcc = accUnknown
+      accUnknown = rest
+      flushUnknown()
+      accUnknown = savedAcc
     })
+  }
+
+  const emitSegment = (seg) => {
+    seg = seg.trim()
+    if (!seg) return
+    if (seg.split(/\s+/).length < 2) {
+      nodes.push(document.createTextNode(' ' + seg + ' '))
+      return
+    }
+    const pid = 'ph_' + (placeholderCounter++)
+    const ph = document.createElement('span')
+    ph.className = 'pb-formula-chip pfc-pending'
+    ph.contentEditable = 'false'
+    ph.dataset.placeholderId = pid
+    ph.dataset.uid = pbNextUid++
+    const span = document.createElement('span')
+    span.className = 'pfc-text'
+    span.textContent = seg
+    ph.appendChild(span)
+    const pin = document.createElement('span'); pin.className = 'pfc-pin'; ph.appendChild(pin)
+    const rm  = document.createElement('span'); rm.className  = 'pfc-rm';  ph.appendChild(rm)
+    nodes.push(ph)
+    unknowns.push({ id: pid, text: seg })
   }
 
   while (remaining.length > 0) {
@@ -13268,11 +13356,14 @@ const PB_TYPE_KEYWORDS = {
     keywords: ['titanium','steel','iron','carbon','fiber','alloy','ceramic','obsidian',
       'chitin','bone','organic','bio','living','crystal','nano','plasma','chrome',
       'composite','graphene','tungsten','silicon','polymer','resin','metal',
-      'natural','industrial','exotic','void','shadow','ghost','bioluminescent','keratin'],
+      'natural','industrial','exotic','void','shadow','ghost','bioluminescent','keratin',
+      'iridescent','nano-composite','reinforced','hydraulic','circuitry','veins',
+      'plating','panels','joints','surfaces','construction','alloy','damaged','worn',
+      'battle-worn','corroded','oxidised','polished','etched','carved'],
     cats: {
-      'Metal':    ['titanium','steel','iron','chrome','graphene','tungsten','alloy','metal','ferrofluid'],
-      'Organic':  ['chitin','bone','organic','bio','living','keratin','silk','venom','coral','bark'],
-      'Composite':['composite','ceramic','crystal','nano','polymer','resin','carbon','fiber','obsidian'],
+      'Metal':    ['titanium','steel','iron','chrome','graphene','tungsten','alloy','metal','ferrofluid','nano-composite','reinforced','polished','oxidised'],
+      'Organic':  ['chitin','bone','organic','bio','living','keratin','silk','venom','coral','bark','hydraulic','veins','circuitry'],
+      'Composite':['composite','ceramic','crystal','nano','polymer','resin','carbon','fiber','obsidian','panels','plating','exotic','construction'],
     }
   },
   colour: {
@@ -13300,27 +13391,31 @@ const PB_TYPE_KEYWORDS = {
     }
   },
   lighting: {
-    weight: 1.2,
+    weight: 1.3,
     keywords: ['light','lighting','glow','shadow','dark','bright','spotlight','backlight',
       'silhouette','sunset','sunrise','moonlight','bioluminescent','neon','floodlight',
       'aurora','lava','volcanic','fog','haze','diffused','dramatic','cinematic',
-      'golden hour','UV','fluorescence','eclipse','lightning','firelight','beam'],
+      'golden hour','UV','fluorescence','eclipse','lightning','firelight','beam',
+      'studio','rim','key light','fill','ambient','glowing','illuminated',
+      'iridescent','luminescent','radiant','shimmering','gleaming'],
     cats: {
-      'Natural':     ['sunset','sunrise','moonlight','golden hour','eclipse','lightning'],
-      'Artificial':  ['floodlight','neon','spotlight','beam','UV','fluorescence'],
-      'Atmospheric': ['bioluminescent','aurora','lava','volcanic','fog','haze','diffused','firelight'],
+      'Natural':     ['sunset','sunrise','moonlight','golden hour','eclipse','lightning','ambient'],
+      'Artificial':  ['floodlight','neon','spotlight','beam','UV','fluorescence','studio','rim','key light','fill'],
+      'Atmospheric': ['bioluminescent','aurora','lava','volcanic','fog','haze','diffused','firelight','glow','glowing','luminescent','radiant'],
     }
   },
   style: {
-    weight: 1,
+    weight: 1.2,
     keywords: ['photorealistic','cinematic','painting','oil','watercolour','digital',
       'concept art','render','anime','manga','mecha','giger','biomechanical',
       'documentary','illustration','sketch','dark fantasy','epic','matte painting',
-      'cyberpunk','greebled','key visual','speed lines','aesthetic','style'],
+      'cyberpunk','greebled','key visual','speed lines','aesthetic','style',
+      'studio','dramatic','ultra-detailed','detailed','hyper-detailed','realistic',
+      'stylised','abstract','surreal','impressionist','expressionist'],
     cats: {
-      'Realism':   ['photorealistic','documentary','naturalistic','render','8k','16k'],
-      'Painterly': ['painting','oil','watercolour','dark fantasy','matte painting','epic','illustration'],
-      'Digital':   ['concept art','digital','cyberpunk','anime','manga','mecha','giger','biomechanical','greebled','key visual'],
+      'Realism':   ['photorealistic','documentary','naturalistic','render','8k','16k','ultra-detailed','hyper-detailed','realistic'],
+      'Painterly': ['painting','oil','watercolour','dark fantasy','matte painting','epic','illustration','impressionist'],
+      'Digital':   ['concept art','digital','cyberpunk','anime','manga','mecha','giger','biomechanical','greebled','key visual','studio','cinematic'],
     }
   },
   reference: {
@@ -13335,15 +13430,18 @@ const PB_TYPE_KEYWORDS = {
     }
   },
   technical: {
-    weight: 1,
+    weight: 1.2,
     keywords: ['composition','angle','shot','focal','depth of field','wide','close-up',
       'macro','bird\'s eye','overhead','low angle','hero shot','rule of thirds',
       'octane','unreal','render','ray-traced','global illumination','16:9','1:1',
-      'panoramic','widescreen','portrait','format','camera','lens'],
+      'panoramic','widescreen','portrait','format','camera','lens',
+      'ultra-detailed','8k','16k','4k','high resolution','sharp focus',
+      'studio lighting','dramatic lighting','cinematic lighting','soft light',
+      'rim light','key light','fill light','three-point'],
     cats: {
-      'Camera': ['composition','angle','shot','focal','depth of field','bird\'s eye','low angle','hero shot','overhead','macro','close-up'],
-      'Format': ['16:9','1:1','panoramic','widescreen','portrait','format','rule of thirds'],
-      'Render': ['octane','unreal','render','ray-traced','global illumination','8k','16k','photorealistic'],
+      'Camera': ['composition','angle','shot','focal','depth of field','bird\'s eye','low angle','hero shot','overhead','macro','close-up','wide'],
+      'Format': ['16:9','1:1','panoramic','widescreen','portrait','format','rule of thirds','4k','8k','16k','high resolution'],
+      'Render': ['octane','unreal','render','ray-traced','global illumination','photorealistic','ultra-detailed','sharp focus','studio lighting','dramatic lighting','cinematic lighting'],
     }
   },
   connector: {
