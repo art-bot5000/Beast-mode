@@ -3223,7 +3223,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
           </div>
           <div class="pbpr-actions">
             <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="pbPasteReviewConfirmAll()">✓ CONFIRM ALL</button>
-            <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="pbPasteReviewDismiss()">✕ CLEAR</button>
+            <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="pbPasteReviewDismiss()" title="Close classifier — unconfirmed segments stay as plain text in the prompt">✕ CLOSE</button>
           </div>
         </div>
         <div class="pbpr-list" id="pbPasteReviewList"></div>
@@ -9836,6 +9836,9 @@ let pbActiveCats = {}   // typeKey → category name
 let pbCollapsed  = {}   // typeKey → bool
 let pbDragIdx    = null
 let pbNextUid    = 1
+let pbNextParticleId = Date.now()  // integer-only particle IDs, incremented each use
+
+function pbGenParticleId() { return ++pbNextParticleId }
 let pbShowBuiltin = true  // toggle built-in particles visibility
 let pbActiveLib   = 0     // 0-4
 
@@ -11169,7 +11172,8 @@ function pbSyncFormulaFromDOM() {
       if (t) newFormula.push({ uid: pbNextUid++, isText: true, text: t })
     } else if (node.nodeType === Node.ELEMENT_NODE && node.dataset.uid) {
       const uid = parseInt(node.dataset.uid)
-      const pid = parseInt(node.dataset.particleId)
+      // Use parseFloat so decimal IDs (e.g. Date.now() + Math.random()) aren't truncated
+      const pid = parseFloat(node.dataset.particleId)
       if (!isNaN(pid)) newFormula.push({ uid, particleId: pid })
     }
   })
@@ -11786,7 +11790,7 @@ function pbPaletteShowResults(colours) {
 function pbPaletteAddColour(c) {
   const text = `${c.name} (${c.hex})`
   // Add as a particle to the user's library
-  const p = { id: Date.now() + Math.random(), text, type: 'colour', cat: 'Custom', source: 'palette' }
+  const p = { id: pbGenParticleId(), text, type: 'colour', cat: 'Custom', source: 'palette' }
   pbLibraries[pbActiveLib].particles.push(p)
   pbParticlesDriveSync()
   pbAddToFormula(p)
@@ -12728,6 +12732,10 @@ function pbParsePaste(text) {
     for (const p of sorted) {
       if (p.text.length < 4) continue
       if (toSearch.toLowerCase().startsWith(p.text.toLowerCase())) {
+        // Enforce word boundary — the char after the match must not be a letter/digit
+        // This prevents "Hydra" matching the start of "Hydraulic"
+        const charAfter = toSearch[p.text.length]
+        if (charAfter !== undefined && /[\w]/.test(charAfter)) continue
         flushUnknown()
         if (leadingSpace) nodes.push(document.createTextNode(leadingSpace))
         const chip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
@@ -12789,6 +12797,18 @@ function pbPasteReviewRemovePlaceholder(placeholderId) {
   const bar = El.pbFormula || document.getElementById('pbFormula')
   const ph = bar?.querySelector(`[data-placeholder-id="${placeholderId}"]`)
   if (ph) ph.remove()
+  pbSyncFormulaFromDOM()
+  pbUpdateBottomBar()
+}
+
+// Convert a pending placeholder chip to plain text in-place, preserving the text in the prompt
+function pbPasteReviewFlattenPlaceholder(placeholderId, text) {
+  const bar = El.pbFormula || document.getElementById('pbFormula')
+  const ph = bar?.querySelector(`[data-placeholder-id="${placeholderId}"]`)
+  if (ph) {
+    const textNode = document.createTextNode(text)
+    ph.replaceWith(textNode)
+  }
   pbSyncFormulaFromDOM()
   pbUpdateBottomBar()
 }
@@ -12910,7 +12930,7 @@ function pbPasteReviewRender() {
     const dismissBtn = document.createElement('button')
     dismissBtn.className = 'pbpr-dismiss'
     dismissBtn.textContent = '×'
-    dismissBtn.title = 'Remove this segment'
+    dismissBtn.title = 'Dismiss from classifier — text stays in prompt'
     dismissBtn.onclick = () => pbPasteReviewDismissItem(item)
     btnRow.appendChild(dismissBtn)
     card.appendChild(btnRow)
@@ -13118,7 +13138,7 @@ function pbPasteReviewApplySplit(item, words, splits) {
 function pbPasteReviewConfirmItem(item) {
   const text = item.text?.trim()
   if (!text) return
-  const p = { id: Date.now() + Math.random(), type: item.type, cat: item.cat, text }
+  const p = { id: pbGenParticleId(), type: item.type, cat: item.cat, text }
   pbLibraries[pbActiveLib].particles.push(p)
   lsSave(LS.PB_LIBS, pbLibraries)
   pbParticlesDriveSync()
@@ -13141,7 +13161,8 @@ function pbPasteReviewUseExisting(item, particle) {
 }
 
 function pbPasteReviewDismissItem(item) {
-  pbPasteReviewRemovePlaceholder(item.id)
+  // Keep the text in the formula bar — just convert the pending chip to plain text
+  pbPasteReviewFlattenPlaceholder(item.id, item.text)
   item.dismissed = true
   pbPasteReviewRender()
 }
@@ -13152,7 +13173,7 @@ function pbPasteReviewConfirmAll() {
   pending.forEach(item => {
     const text = item.text?.trim()
     if (!text) return
-    const p = { id: Date.now() + Math.random(), type: item.type, cat: item.cat, text }
+    const p = { id: pbGenParticleId(), type: item.type, cat: item.cat, text }
     pbLibraries[pbActiveLib].particles.push(p)
     pbTrackUsage(p)
     const realChip = pbMakeChipEl({ uid: pbNextUid++, particleId: p.id }, p)
@@ -13169,8 +13190,8 @@ function pbPasteReviewConfirmAll() {
 }
 
 function pbPasteReviewDismiss() {
-  // Remove any remaining placeholders from formula bar
-  pbPasteReviewItems.filter(i => !i.dismissed).forEach(i => pbPasteReviewRemovePlaceholder(i.id))
+  // Flatten any remaining unconfirmed placeholders to plain text — keeps the prompt complete
+  pbPasteReviewItems.filter(i => !i.dismissed).forEach(i => pbPasteReviewFlattenPlaceholder(i.id, i.text))
   pbPasteReviewItems = []
   const panel = document.getElementById('pbPasteReview')
   if (panel) panel.style.display = 'none'
@@ -13461,7 +13482,7 @@ function pbSyncFormulaFromBottomBar() {
       if (t) newFormula.push({ uid: pbNextUid++, isText: true, text: t })
     } else if (node.nodeType === Node.ELEMENT_NODE && node.dataset.uid) {
       const uid = parseInt(node.dataset.uid)
-      const pid = parseInt(node.dataset.particleId)
+      const pid = parseFloat(node.dataset.particleId)
       if (!isNaN(pid)) newFormula.push({ uid, particleId: pid })
     }
   })
