@@ -69,6 +69,24 @@ function showUpdateBanner(waitingWorker) {
   to   { opacity:1; transform:translateX(-50%) translateY(0); }
 }
 </style>
+<!-- ── PWA Share Target handler ───────────────────────────────────── -->
+<script>
+// Called after app is fully initialised — checks for incoming shared text
+function handleShareTarget() {
+  const params = new URLSearchParams(window.location.search)
+  if (!params.has('share')) return
+  const text = [params.get('text'), params.get('title'), params.get('url')]
+    .filter(Boolean).join('\n').trim()
+  if (!text) return
+  // Clean the URL so a refresh doesn't re-trigger
+  window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+  // Route to Lab and open the bulk import modal with the shared text pre-filled
+  switchView('builder')
+  setTimeout(() => {
+    openBulkImport(text)
+  }, 400)
+}
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -1819,6 +1837,70 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   cursor:pointer;color:var(--muted);transition:color .1s;line-height:1;
 }
 .pbpr-dismiss:hover { color:#ff4444; }
+/* ── Bulk Prompt Import modal ─────────────────────────────────────── */
+#bulkImportModal {
+  position:fixed;top:0;right:0;bottom:0;left:0;
+  z-index:10005;background:rgba(0,0,0,.88);
+  display:none;align-items:flex-start;justify-content:center;
+  padding:16px;overflow-y:auto;
+}
+.bki-card {
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  width:100%;max-width:540px;margin:0 auto;overflow:hidden;
+}
+.bki-header {
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:16px 20px;border-bottom:1px solid var(--border);gap:10px;
+}
+.bki-title { font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent); }
+.bki-sub   { font-size:10px;color:var(--muted);letter-spacing:1.5px;margin-top:2px; }
+.bki-close {
+  background:none;border:1px solid var(--border);border-radius:3px;
+  padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;color:var(--muted);flex-shrink:0;
+}
+.bki-section { padding:16px 20px;border-bottom:1px solid var(--border); }
+.bki-label  { font-size:10px;color:var(--muted);letter-spacing:1.5px;margin-bottom:8px; }
+.bki-textarea {
+  width:100%;min-height:160px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:4px;
+  padding:10px 12px;font-family:'Rajdhani',sans-serif;font-size:13px;
+  font-weight:500;color:var(--text);outline:none;resize:vertical;
+  box-sizing:border-box;line-height:1.6;
+}
+.bki-textarea:focus { border-color:var(--accent); }
+.bki-sep-row {
+  display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;
+}
+.bki-sep-label { font-size:11px;color:var(--muted);letter-spacing:.5px;flex-shrink:0; }
+.bki-sep-btn {
+  background:var(--surface2);border:1px solid var(--border);border-radius:3px;
+  padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .1s;
+}
+.bki-sep-btn.active, .bki-sep-btn:hover { border-color:var(--accent);color:var(--accent); }
+.bki-preview {
+  padding:12px 20px;border-bottom:1px solid var(--border);
+  min-height:40px;display:none;
+}
+.bki-preview-count { font-size:11px;color:var(--accent);letter-spacing:1px;font-weight:700;margin-bottom:8px; }
+.bki-preview-list {
+  display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto;
+}
+.bki-preview-item {
+  font-size:11px;color:var(--muted);letter-spacing:.3px;
+  padding:4px 8px;background:var(--surface2);border-radius:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.bki-footer {
+  padding:14px 20px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+}
+.bki-dest-label { font-size:11px;color:var(--muted);letter-spacing:.5px; }
+.bki-dest-select {
+  background:var(--surface2);border:1px solid var(--border);border-radius:4px;
+  padding:5px 8px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;
+  color:var(--text);cursor:pointer;outline:none;flex:1;min-width:0;
+}
 .pb-import-card {
   background:var(--surface);border:1px solid var(--border);border-radius:6px;
   width:100%;max-width:700px;display:flex;flex-direction:column;
@@ -3273,6 +3355,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
       <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-outline" style="font-size:12px;padding:5px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:5px 12px;" onclick="openBulkImport()" title="Bulk import — paste multiple prompts at once">⬆⬆ BULK IMPORT</button>
       </div>
     </div>
 
@@ -3429,6 +3512,49 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
 
 
+
+<!-- ═══════════════════════════════ BULK IMPORT MODAL ══════════════ -->
+<div id="bulkImportModal" onclick="if(event.target===this)closeBulkImport()">
+  <div class="bki-card">
+    <div class="bki-header">
+      <div>
+        <div class="bki-title">// BULK IMPORT</div>
+        <div class="bki-sub">Paste prompts from Midjourney, Leonardo, Civitai or any source</div>
+      </div>
+      <button class="bki-close" onclick="closeBulkImport()">✕</button>
+    </div>
+
+    <div class="bki-section">
+      <div class="bki-label">PASTE YOUR PROMPTS</div>
+      <textarea class="bki-textarea" id="bkiTextarea"
+        placeholder="Paste one or more prompts here.&#10;&#10;Separate multiple prompts with a blank line, ---, or paste from Midjourney job history…"
+        oninput="bkiOnInput()"></textarea>
+      <div class="bki-sep-row">
+        <span class="bki-sep-label">SPLIT ON:</span>
+        <button class="bki-sep-btn active" id="bkiSepBlank"   onclick="bkiSetSep('blank')">Blank line</button>
+        <button class="bki-sep-btn"        id="bkiSepDash"    onclick="bkiSetSep('dash')">---</button>
+        <button class="bki-sep-btn"        id="bkiSepNewline" onclick="bkiSetSep('newline')">Each line</button>
+        <button class="bki-sep-btn"        id="bkiSepMj"      onclick="bkiSetSep('mj')">Midjourney /imagine</button>
+      </div>
+    </div>
+
+    <div class="bki-preview" id="bkiPreview">
+      <div class="bki-preview-count" id="bkiPreviewCount"></div>
+      <div class="bki-preview-list" id="bkiPreviewList"></div>
+    </div>
+
+    <div class="bki-footer">
+      <div style="flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="bki-dest-label">SAVE TO:</span>
+        <select class="bki-dest-select" id="bkiDestFolder">
+          <option value="__library__">Library (new folder)</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="bkiImportToLab()">⊛ SEND TO LAB</button>
+      <button class="btn btn-primary" style="font-size:12px;" id="bkiImportBtn" onclick="bkiImportAll()" disabled>⬆ IMPORT ALL</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════ FORMULA PRESETS MODAL ══════════ -->
 <div id="pbFormulaPresetsModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10004;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
@@ -8848,6 +8974,9 @@ document.addEventListener('keydown', e => {
     // Formula presets modal
     const fpm = document.getElementById('pbFormulaPresetsModal')
     if (fpm && fpm.style.display !== 'none') { pbCloseFormulaPresets(); return }
+    // Bulk import modal
+    const bki = document.getElementById('bulkImportModal')
+    if (bki && bki.style.display !== 'none') { closeBulkImport(); return }
     // Import modal
     const imp = document.getElementById('pbImportModal')
     if (imp && imp.style.display !== 'none') { pbCloseImport(); return }
@@ -9201,6 +9330,9 @@ window.addEventListener('load', () => {
 
   // 3. Show sync gate if no cloud and no local data
   setTimeout(syncGateCheck, 1200)
+
+  // 4. Handle incoming PWA share target (runs after UI is ready)
+  setTimeout(handleShareTarget, 600)
 })
 
 // ═══════════════════════════════════════════════════════════════════
@@ -13199,6 +13331,207 @@ function pbPasteReviewDismiss() {
   if (list) list.innerHTML = ''
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// BULK IMPORT
+// ═══════════════════════════════════════════════════════════════════
+
+let bkiSeparator = 'blank'   // 'blank' | 'dash' | 'newline' | 'mj'
+
+function openBulkImport(prefillText) {
+  bkiPopulateDestFolder()
+  const modal = document.getElementById('bulkImportModal')
+  if (modal) modal.style.display = 'flex'
+  const ta = document.getElementById('bkiTextarea')
+  if (ta) {
+    ta.value = prefillText || ''
+    if (prefillText) bkiOnInput()
+    setTimeout(() => ta.focus(), 80)
+  }
+}
+
+function closeBulkImport() {
+  const modal = document.getElementById('bulkImportModal')
+  if (modal) modal.style.display = 'none'
+  const ta = document.getElementById('bkiTextarea')
+  if (ta) ta.value = ''
+  const preview = document.getElementById('bkiPreview')
+  if (preview) preview.style.display = 'none'
+  const btn = document.getElementById('bkiImportBtn')
+  if (btn) btn.disabled = true
+}
+
+function bkiSetSep(sep) {
+  bkiSeparator = sep
+  ;['blank','dash','newline','mj'].forEach(s => {
+    document.getElementById('bkiSep' + s.charAt(0).toUpperCase() + s.slice(1))
+      ?.classList.toggle('active', s === sep)
+  })
+  bkiOnInput()
+}
+
+function bkiParsePrompts(raw) {
+  if (!raw.trim()) return []
+  let parts = []
+
+  if (bkiSeparator === 'mj') {
+    // Extract /imagine prompt ... blocks, strip --ar, --v, etc suffixes
+    const matches = [...raw.matchAll(/\/imagine\s+prompt\s+([\s\S]+?)(?=\/imagine\s+prompt|$)/gi)]
+    if (matches.length) {
+      parts = matches.map(m => m[1].trim())
+    } else {
+      // Fallback: treat as blank-line separated
+      parts = raw.split(/\n\s*\n/).map(s => s.trim())
+    }
+    // Strip Midjourney parameter suffixes: --ar 16:9 --v 6 --style raw etc
+    parts = parts.map(p => p.replace(/\s+--\w[\w-]*(\s+\S+)*/g, '').trim())
+  } else if (bkiSeparator === 'blank') {
+    parts = raw.split(/\n\s*\n+/).map(s => s.trim())
+  } else if (bkiSeparator === 'dash') {
+    parts = raw.split(/\n?---+\n?/).map(s => s.trim())
+  } else if (bkiSeparator === 'newline') {
+    parts = raw.split(/\n/).map(s => s.trim())
+  }
+
+  return parts.filter(p => p.length > 3)
+}
+
+function bkiOnInput() {
+  const raw = document.getElementById('bkiTextarea')?.value || ''
+  const prompts = bkiParsePrompts(raw)
+  const preview = document.getElementById('bkiPreview')
+  const countEl = document.getElementById('bkiPreviewCount')
+  const listEl  = document.getElementById('bkiPreviewList')
+  const btn     = document.getElementById('bkiImportBtn')
+
+  if (!prompts.length) {
+    if (preview) preview.style.display = 'none'
+    if (btn) btn.disabled = true
+    return
+  }
+
+  if (preview) preview.style.display = 'block'
+  if (countEl) countEl.textContent = `${prompts.length} PROMPT${prompts.length !== 1 ? 'S' : ''} DETECTED`
+  if (listEl) {
+    listEl.innerHTML = ''
+    prompts.slice(0, 8).forEach(p => {
+      const item = document.createElement('div')
+      item.className = 'bki-preview-item'
+      item.textContent = p
+      listEl.appendChild(item)
+    })
+    if (prompts.length > 8) {
+      const more = document.createElement('div')
+      more.className = 'bki-preview-item'
+      more.style.color = 'var(--accent)'
+      more.textContent = `+ ${prompts.length - 8} more…`
+      listEl.appendChild(more)
+    }
+  }
+  if (btn) btn.disabled = false
+}
+
+function bkiPopulateDestFolder() {
+  const sel = document.getElementById('bkiDestFolder')
+  if (!sel) return
+  sel.innerHTML = ''
+  // Option: create a new folder
+  const newOpt = document.createElement('option')
+  newOpt.value = '__new__'
+  newOpt.textContent = '+ Create new folder for this import'
+  sel.appendChild(newOpt)
+  // Existing folders
+  libFolders.forEach(f => {
+    const opt = document.createElement('option')
+    opt.value = f.id
+    opt.textContent = f.name
+    sel.appendChild(opt)
+  })
+  // No folder option
+  const noneOpt = document.createElement('option')
+  noneOpt.value = '__none__'
+  noneOpt.textContent = 'No folder (All Prompts)'
+  sel.appendChild(noneOpt)
+}
+
+function bkiImportAll() {
+  const raw = document.getElementById('bkiTextarea')?.value || ''
+  const prompts = bkiParsePrompts(raw)
+  if (!prompts.length) return
+
+  const destVal = document.getElementById('bkiDestFolder')?.value || '__new__'
+  let folderId = null
+
+  if (destVal === '__new__') {
+    // Create a dated folder for this import
+    const now = new Date()
+    const label = `Import ${now.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })}`
+    const color = FOLDER_COLORS[_folderColorIdx++ % FOLDER_COLORS.length]
+    const folder = { id: 'f_' + Date.now(), name: label, color }
+    libFolders.push(folder)
+    libFoldersSync()
+    renderFolderSidebar()
+    folderId = folder.id
+  } else if (destVal !== '__none__') {
+    folderId = destVal
+  }
+
+  const now = Date.now()
+  prompts.forEach((promptText, i) => {
+    const fav = {
+      text: promptText,
+      promptOnly: promptText,
+      mode: 'fusion',
+      preset: 'default',
+      id: now + i,
+      title: '',
+      model: '',
+      rating: 0,
+      starred: false,
+      folderId,
+      versions: [{ text: promptText, savedAt: now + i, label: 'Imported' }],
+      imageData: null,
+      particles: null,
+      createdAt: now + i,
+      updatedAt: now + i,
+    }
+    favourites.unshift(fav)
+    driveSavePrompt(fav)
+  })
+
+  lsSave(LS.FAVS, favourites)
+  updateLibBadge()
+  renderFavs()
+  renderLibrary()
+  closeBulkImport()
+  switchView('library')
+  if (folderId) {
+    libActiveFolderId = folderId
+    renderLibrary()
+  }
+  pbPasteToast(`${prompts.length} prompt${prompts.length !== 1 ? 's' : ''} imported`)
+}
+
+function bkiImportToLab() {
+  // Send first detected prompt straight to the Prompt Lab paste-review flow
+  const raw = document.getElementById('bkiTextarea')?.value || ''
+  const prompts = bkiParsePrompts(raw)
+  if (!prompts.length) return
+  closeBulkImport()
+  switchView('builder')
+  setTimeout(() => {
+    if (!pbInitDone) { pbInitDone = true; pbInit() }
+    const bar = El.pbFormula || document.getElementById('pbFormula')
+    if (bar) {
+      bar.innerHTML = ''
+      pbFormula = []
+      pbHandleFormulaPaste(prompts[0], bar)
+    }
+    if (prompts.length > 1) {
+      pbPasteToast(`Sent prompt 1 of ${prompts.length} to Lab`)
+    }
+  }, 300)
+}
+
 function pbPasteToast(msg) {
   let toast = document.getElementById('pbPasteToast')
   if (!toast) {
@@ -13340,7 +13673,7 @@ function pbGetPlainText() {
   return pbFormula.map(entry => {
     if (entry.isText) return entry.text
     return pbGetParticles().find(x => x.id === entry.particleId)?.text || ''
-  }).join('').trim()
+  }).join(' ').replace(/\s{2,}/g, ' ').trim()
 }
 
 function pbUpdateBottomBar() {
