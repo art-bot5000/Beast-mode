@@ -73,38 +73,59 @@ function showUpdateBanner(waitingWorker) {
 <script>
 // Called after app is fully initialised — checks for incoming shared text
 function handleShareTarget() {
-  const params = new URLSearchParams(window.location.search)
-  // Android sends ?share&text=...&title=... — check for the share key
-  if (!params.has('share')) return
+  // DIAGNOSTIC: always record the full launch URL
+  try {
+    localStorage.setItem('bm_last_launch_url', window.location.href)
+    localStorage.setItem('bm_last_launch_search', window.location.search || '(none)')
+  } catch(e) {}
 
-  // Android share system: text carries the prompt, title may carry app name,
-  // url is often empty on Android. Prefer text, fall back to title then url.
-  const text = (params.get('text') || params.get('title') || params.get('url') || '').trim()
-  if (!text) return
+  const params = new URLSearchParams(window.location.search)
+  const fullSearch = window.location.search
+
+  // Accept share if ?share key present OR if text/title/url params are present
+  // (Android sometimes strips the bare ?share key and just sends the params)
+  const hasShareKey = params.has('share')
+  const sharedText  = params.get('text')  || ''
+  const sharedTitle = params.get('title') || ''
+  const sharedUrl   = params.get('url')   || ''
+
+  if (!hasShareKey && !sharedText && !sharedTitle && !sharedUrl) return
+
+  const text = (sharedText || sharedTitle || sharedUrl).trim()
+
+  // Store raw search string too — for debugging via toast
+  window._pendingShareSearch = fullSearch
+  window._pendingShareText = text || '__debug__'
 
   // Clean the URL immediately so a refresh doesn't re-trigger
   window.history.replaceState({}, '', window.location.pathname)
-
-  // Store the shared text so we can use it after the app finishes initialising
-  window._pendingShareText = text
 }
 
 // Called after the full app init sequence completes
 function processShareTargetIfPending() {
-  const text = window._pendingShareText
-  if (!text) return
+  const raw = window._pendingShareText
+  if (!raw) return
   window._pendingShareText = null
+  const search = window._pendingShareSearch || ''
+  window._pendingShareSearch = null
 
-  // Ensure Lab view is active and fully initialised
+  // Debug: always show what was received so we can diagnose
+  if (raw === '__debug__' || !raw.trim()) {
+    // Received share trigger but no text — show the raw params
+    switchView('builder')
+    requestAnimationFrame(() => setTimeout(() => {
+      if (typeof pbPasteToast === 'function') {
+        pbPasteToast('Share received — no text. Params: ' + (search || '(empty)'))
+      }
+    }, 400))
+    return
+  }
+
+  // Normal path — got text
   switchView('builder')
-
-  // Wait for pbInit to complete (it runs synchronously inside switchView,
-  // but DOM rendering needs a frame), then open bulk import pre-filled
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      openBulkImport(text)
-    }, 200)
-  })
+  requestAnimationFrame(() => setTimeout(() => {
+    openBulkImport(raw)
+  }, 200))
 }
 // Capture share params immediately on script parse — before app init fires
 handleShareTarget()
@@ -3264,6 +3285,18 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
           <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Escape</span><span style="color:var(--muted);">Close any open modal or panel</span>
           <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">1 / 2 / 3 / 4</span><span style="color:var(--muted);">Switch tabs (Generator / Lab / Library / Settings)</span>
         </div>
+      </div>
+
+      <!-- Share target diagnostic -->
+      <div class="settings-section" style="grid-column:1/-1;" id="shareTargetDiag">
+        <div class="settings-section-title">Share Target Diagnostic</div>
+        <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-bottom:10px;">Shows the URL the app was last launched with — use after testing the share target.</div>
+        <div id="shareDiagOutput" style="font-family:monospace;font-size:11px;color:var(--accent);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 12px;word-break:break-all;line-height:1.8;"></div>
+        <button onclick="
+          const url = localStorage.getItem('bm_last_launch_url') || 'nothing recorded yet';
+          const search = localStorage.getItem('bm_last_launch_search') || '(none)';
+          document.getElementById('shareDiagOutput').textContent = 'URL: ' + url + '\nSearch: ' + search;
+        " class="btn btn-ghost" style="font-size:11px;margin-top:8px;">⟳ READ LAST LAUNCH URL</button>
       </div>
 
       <!-- Feedback -->
