@@ -74,18 +74,40 @@ function showUpdateBanner(waitingWorker) {
 // Called after app is fully initialised — checks for incoming shared text
 function handleShareTarget() {
   const params = new URLSearchParams(window.location.search)
+  // Android sends ?share&text=...&title=... — check for the share key
   if (!params.has('share')) return
-  const text = [params.get('text'), params.get('title'), params.get('url')]
-    .filter(Boolean).join('\n').trim()
+
+  // Android share system: text carries the prompt, title may carry app name,
+  // url is often empty on Android. Prefer text, fall back to title then url.
+  const text = (params.get('text') || params.get('title') || params.get('url') || '').trim()
   if (!text) return
-  // Clean the URL so a refresh doesn't re-trigger
-  window.history.replaceState({}, '', window.location.pathname + window.location.hash)
-  // Route to Lab and open the bulk import modal with the shared text pre-filled
-  switchView('builder')
-  setTimeout(() => {
-    openBulkImport(text)
-  }, 400)
+
+  // Clean the URL immediately so a refresh doesn't re-trigger
+  window.history.replaceState({}, '', window.location.pathname)
+
+  // Store the shared text so we can use it after the app finishes initialising
+  window._pendingShareText = text
 }
+
+// Called after the full app init sequence completes
+function processShareTargetIfPending() {
+  const text = window._pendingShareText
+  if (!text) return
+  window._pendingShareText = null
+
+  // Ensure Lab view is active and fully initialised
+  switchView('builder')
+
+  // Wait for pbInit to complete (it runs synchronously inside switchView,
+  // but DOM rendering needs a frame), then open bulk import pre-filled
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      openBulkImport(text)
+    }, 200)
+  })
+}
+// Capture share params immediately on script parse — before app init fires
+handleShareTarget()
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -9332,7 +9354,7 @@ window.addEventListener('load', () => {
   setTimeout(syncGateCheck, 1200)
 
   // 4. Handle incoming PWA share target (runs after UI is ready)
-  setTimeout(handleShareTarget, 600)
+  setTimeout(processShareTargetIfPending, 600)
 })
 
 // ═══════════════════════════════════════════════════════════════════
