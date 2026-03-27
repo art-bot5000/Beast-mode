@@ -2,7 +2,7 @@
   "name": "Prompt Lab // Generator // Library",
   "short_name": "Prompt Lab",
   "description": "AI image prompt management \u2014 biomechanical creature-mech aesthetics",
-  "start_url": "./",
+  "start_url": "https://art-bot5000.github.io/Beast-mode/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0d0d0d",
@@ -27,7 +27,7 @@
   ],
   "lang": "en",
   "share_target": {
-    "action": "./?share",
+    "action": "https://art-bot5000.github.io/Beast-mode/?share",
     "method": "GET",
     "enctype": "application/x-www-form-urlencoded",
     "params": {
@@ -35,5 +35,6 @@
       "text": "text",
       "url": "url"
     }
-  }
+  },
+  "scope": "https://art-bot5000.github.io/Beast-mode/"
 }
