@@ -109,9 +109,7 @@ function processShareTargetIfPending() {
   const search = window._pendingShareSearch || ''
   window._pendingShareSearch = null
 
-  // Debug: always show what was received so we can diagnose
   if (raw === '__debug__' || !raw.trim()) {
-    // Received share trigger but no text — show the raw params
     switchView('builder')
     requestAnimationFrame(() => setTimeout(() => {
       if (typeof pbPasteToast === 'function') {
@@ -121,11 +119,28 @@ function processShareTargetIfPending() {
     return
   }
 
-  // Normal path — got text
-  switchView('builder')
-  requestAnimationFrame(() => setTimeout(() => {
-    openBulkImport(raw)
-  }, 200))
+  // Detect single vs multiple prompts (split on blank lines)
+  const prompts = raw.split(/\n\s*\n+/).map(s => s.trim()).filter(p => p.length > 3)
+
+  if (prompts.length <= 1) {
+    // Single prompt — go straight to Lab and run through paste-review
+    switchView('builder')
+    requestAnimationFrame(() => setTimeout(() => {
+      if (!pbInitDone) { pbInitDone = true; pbInit() }
+      const bar = El.pbFormula || document.getElementById('pbFormula')
+      if (bar) {
+        bar.innerHTML = ''
+        pbFormula = []
+        pbHandleFormulaPaste(raw.trim(), bar)
+      }
+    }, 300))
+  } else {
+    // Multiple prompts — open bulk import modal pre-filled
+    switchView('builder')
+    requestAnimationFrame(() => setTimeout(() => {
+      openBulkImport(raw)
+    }, 300))
+  }
 }
 // Capture share params immediately on script parse — before app init fires
 handleShareTarget()
@@ -895,6 +910,43 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .lib-tag.mode-beast  { background:color-mix(in srgb,#ff6a00 12%,transparent);color:#ff6a00; }
 .lib-tag.mode-fusion { background:color-mix(in srgb,#c800ff 12%,transparent);color:#c800ff; }
 .lib-tag.tag-model   { background:var(--surface2);color:var(--muted);border:1px solid var(--border); }
+.lib-tag.tag-needs-processing {
+  background:color-mix(in srgb,#ff9900 15%,transparent);
+  color:#ff9900;border:1px solid color-mix(in srgb,#ff9900 40%,transparent);
+  animation:needs-proc-pulse 2s ease-in-out infinite alternate;
+}
+@keyframes needs-proc-pulse {
+  from { opacity:.7; } to { opacity:1; }
+}
+/* Convert banner */
+#libConvertBanner {
+  display:none;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 14px;margin-bottom:12px;border-radius:5px;flex-wrap:wrap;
+  background:color-mix(in srgb,#ff9900 10%,transparent);
+  border:1px solid color-mix(in srgb,#ff9900 35%,transparent);
+}
+#libConvertBanner .bann-label {
+  font-size:12px;font-weight:700;letter-spacing:1px;color:#ff9900;
+}
+#libConvertBanner .bann-count {
+  font-size:11px;color:var(--muted);letter-spacing:.5px;
+}
+/* Convert progress overlay */
+#convertProgressOverlay {
+  display:none;position:fixed;top:0;right:0;bottom:0;left:0;
+  z-index:10010;background:rgba(0,0,0,.88);
+  align-items:center;justify-content:center;padding:20px;
+}
+.cpo-card {
+  background:var(--surface);border:1px solid var(--accent);border-radius:8px;
+  width:100%;max-width:480px;padding:20px;
+}
+.cpo-title { font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);margin-bottom:4px; }
+.cpo-sub   { font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:16px; }
+.cpo-progress-track { height:4px;background:var(--surface2);border-radius:2px;margin-bottom:14px; }
+.cpo-progress-fill  { height:100%;background:var(--accent);border-radius:2px;transition:width .4s; }
+.cpo-prompt { font-size:12px;color:var(--text);background:var(--surface2);border-radius:4px;padding:10px 12px;margin-bottom:14px;line-height:1.6;max-height:80px;overflow:hidden;text-overflow:ellipsis; }
+.cpo-actions { display:flex;gap:8px;flex-wrap:wrap; }
 .lib-tag.tag-style   { background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--accent);opacity:.7; }
 
 /* Prompt text */
@@ -2787,6 +2839,14 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
           <div class="lib-filter-row" id="libFilters" style="margin-bottom:0;"></div>
           <div class="lib-count" id="libCount"></div>
         </div>
+        <!-- Convert to particles banner — shown when needsProcessing prompts exist -->
+        <div id="libConvertBanner">
+          <div>
+            <div class="bann-label">⊛ UNPROCESSED PROMPTS</div>
+            <div class="bann-count" id="libConvertCount"></div>
+          </div>
+          <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;" onclick="convertToParticlesStart()">⊛ CONVERT TO PARTICLES</button>
+        </div>
         <div class="lib-grid" id="libGrid"></div>
       </div>
 
@@ -3567,6 +3627,23 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
 
 
+
+<!-- ═══════════════════════════════ CONVERT PROGRESS OVERLAY ══════ -->
+<div id="convertProgressOverlay" onclick="if(event.target===this)convertToParticlesCancel()">
+  <div class="cpo-card">
+    <div class="cpo-title">// CONVERT TO PARTICLES</div>
+    <div class="cpo-sub" id="cpoSub">Processing prompts one by one…</div>
+    <div class="cpo-progress-track">
+      <div class="cpo-progress-fill" id="cpoProgressFill" style="width:0%"></div>
+    </div>
+    <div class="cpo-prompt" id="cpoCurrentPrompt"></div>
+    <div class="cpo-actions">
+      <button class="btn btn-primary" style="font-size:12px;" onclick="convertToParticlesNext()">✓ DONE — NEXT ›</button>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="convertToParticlesSkip()">SKIP</button>
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="convertToParticlesCancel()">✕ STOP</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════ BULK IMPORT MODAL ══════════════ -->
 <div id="bulkImportModal" onclick="if(event.target===this)closeBulkImport()">
@@ -7807,6 +7884,13 @@ function renderLibrary() {
   const sort  = document.getElementById('libSort')?.value || 'newest'
   if (!grid) return
 
+  // Update convert banner
+  const needsCount = favourites.filter(f => f.needsProcessing).length
+  const banner = document.getElementById('libConvertBanner')
+  const bannerCount = document.getElementById('libConvertCount')
+  if (banner) banner.style.display = needsCount > 0 ? 'flex' : 'none'
+  if (bannerCount) bannerCount.textContent = `${needsCount} prompt${needsCount !== 1 ? 's' : ''} waiting to be converted`
+
   let items = [...favourites]
 
   // Folder filter
@@ -8043,6 +8127,7 @@ function buildLibCard(f) {
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${f.model}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
+    ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
   `
   body.appendChild(tags)
 
@@ -9032,6 +9117,9 @@ document.addEventListener('keydown', e => {
     // Bulk import modal
     const bki = document.getElementById('bulkImportModal')
     if (bki && bki.style.display !== 'none') { closeBulkImport(); return }
+    // Convert progress overlay — Escape stops the session
+    const cpo = document.getElementById('convertProgressOverlay')
+    if (cpo && cpo.style.display !== 'none') { convertToParticlesCancel(); return }
     // Import modal
     const imp = document.getElementById('pbImportModal')
     if (imp && imp.style.display !== 'none') { pbCloseImport(); return }
@@ -13404,6 +13492,102 @@ function openBulkImport(prefillText) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// CONVERT TO PARTICLES WORKFLOW
+// ═══════════════════════════════════════════════════════════════════
+
+let _convertQueue   = []   // array of fav IDs still needing processing
+let _convertTotal   = 0    // total count at start
+let _convertCurrent = null // fav ID currently in the Lab
+
+function convertToParticlesStart() {
+  _convertQueue = favourites
+    .filter(f => f.needsProcessing)
+    .map(f => f.id)
+  _convertTotal = _convertQueue.length
+  if (!_convertTotal) return
+  _convertToParticlesLoadNext()
+}
+
+function _convertToParticlesLoadNext() {
+  if (!_convertQueue.length) {
+    convertToParticlesCancel()
+    pbPasteToast('All prompts converted!')
+    renderLibrary()
+    return
+  }
+
+  _convertCurrent = _convertQueue[0]
+  const fav = favourites.find(f => f.id === _convertCurrent)
+  if (!fav) { _convertQueue.shift(); _convertToParticlesLoadNext(); return }
+
+  const done    = _convertTotal - _convertQueue.length
+  const pct     = Math.round((done / _convertTotal) * 100)
+  const promptText = fav.promptOnly || fav.text || ''
+
+  // Update overlay UI
+  const overlay = document.getElementById('convertProgressOverlay')
+  if (overlay) overlay.style.display = 'flex'
+  const sub = document.getElementById('cpoSub')
+  if (sub) sub.textContent = `Prompt ${done + 1} of ${_convertTotal}`
+  const fill = document.getElementById('cpoProgressFill')
+  if (fill) fill.style.width = pct + '%'
+  const curr = document.getElementById('cpoCurrentPrompt')
+  if (curr) curr.textContent = promptText.slice(0, 200) + (promptText.length > 200 ? '…' : '')
+
+  // Load into Lab
+  switchView('builder')
+  setTimeout(() => {
+    if (!pbInitDone) { pbInitDone = true; pbInit() }
+    const bar = El.pbFormula || document.getElementById('pbFormula')
+    if (bar) {
+      bar.innerHTML = ''
+      pbFormula = []
+      pbHandleFormulaPaste(promptText, bar)
+    }
+  }, 300)
+}
+
+function convertToParticlesNext() {
+  // Mark current as processed (whether or not user saved to Library)
+  if (_convertCurrent) {
+    const fav = favourites.find(f => f.id === _convertCurrent)
+    if (fav) {
+      fav.needsProcessing = false
+      fav.updatedAt = Date.now()
+      lsSave(LS.FAVS, favourites)
+      driveSavePrompt(fav)
+    }
+  }
+  _convertQueue.shift()
+  _convertCurrent = null
+
+  // Clear Lab formula for next prompt
+  if (typeof pbClearFormula === 'function') {
+    pbFormula = []
+    if (typeof pbPasteReviewDismiss === 'function') pbPasteReviewDismiss()
+    if (typeof pbRenderFormula === 'function') pbRenderFormula()
+    if (typeof pbUpdateBottomBar === 'function') pbUpdateBottomBar()
+  }
+
+  _convertToParticlesLoadNext()
+}
+
+function convertToParticlesSkip() {
+  // Skip without marking as done — stays needsProcessing for later
+  _convertQueue.shift()
+  _convertCurrent = null
+  _convertToParticlesLoadNext()
+}
+
+function convertToParticlesCancel() {
+  _convertQueue = []
+  _convertCurrent = null
+  const overlay = document.getElementById('convertProgressOverlay')
+  if (overlay) overlay.style.display = 'none'
+  renderLibrary()
+}
+
 function closeBulkImport() {
   const modal = document.getElementById('bulkImportModal')
   if (modal) modal.style.display = 'none'
@@ -13546,6 +13730,7 @@ function bkiImportAll() {
       versions: [{ text: promptText, savedAt: now + i, label: 'Imported' }],
       imageData: null,
       particles: null,
+      needsProcessing: true,
       createdAt: now + i,
       updatedAt: now + i,
     }
@@ -16862,6 +17047,31 @@ function pbSaveToLibrary() {
     .map(e => pbGetParticles().find(x => x.id === e.particleId))
     .filter(Boolean)
     .map(p => ({ id: p.id, type: p.type, cat: p.cat, text: p.text }))
+
+  // If a convert session is active, saving counts as "done" for the current prompt
+  if (_convertCurrent) {
+    const orig = favourites.find(f => f.id === _convertCurrent)
+    if (orig) {
+      orig.needsProcessing = false
+      orig.promptOnly = text
+      orig.text = text
+      orig.particles = particles.length ? particles : orig.particles
+      orig.updatedAt = Date.now()
+      if (!orig.versions?.length) pbAddVersion(orig, orig.text, 'Original', null)
+      pbAddVersion(orig, text, 'Converted to particles', particles.length ? particles : null)
+      lsSave(LS.FAVS, favourites)
+      driveSavePrompt(orig)
+      // Advance to next prompt automatically
+      _convertQueue.shift()
+      _convertCurrent = null
+      pbFormula = []
+      if (typeof pbPasteReviewDismiss === 'function') pbPasteReviewDismiss()
+      if (typeof pbRenderFormula === 'function') pbRenderFormula()
+      if (typeof pbUpdateBottomBar === 'function') pbUpdateBottomBar()
+      _convertToParticlesLoadNext()
+      return
+    }
+  }
 
   if (window._pbEditingFavId) {
     // EDIT MODE — append a new version to the original prompt
