@@ -29,6 +29,12 @@ for (const [k, v] of Object.entries(Deno.env.toObject())) {
 const REQUIRED_SECRETS = ["RUNWARE_API_KEY"];
 // Add as features land: "ADMIN_SECRET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "RESEND_API_KEY"
 const missing = REQUIRED_SECRETS.filter((k) => !process.env[k]);
+// Soft requirement: Google OAuth works only with the client secret set. Warn
+// loudly rather than hard-fail so a missing secret degrades (Drive connect
+// returns 503) instead of bricking the whole deploy.
+if (!Deno.env.get("GOOGLE_CLIENT_SECRET")) {
+  console.warn("WARN: GOOGLE_CLIENT_SECRET not set — Google Drive connect will be unavailable.");
+}
 if (missing.length) {
   console.error(`FATAL: missing required secret(s): ${missing.join(", ")}`);
   console.error("Set them with: fly secrets set KEY=value --app beast-mode");
@@ -41,6 +47,7 @@ import { generate, searchModels, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { rehostToR2, r2Enabled, trimR2ToNewest } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
+import { handleOAuth } from "./oauth.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
 
@@ -203,6 +210,10 @@ async function handler(req: Request): Promise<Response> {
       return json({ error: "Internal error" }, 500);
     }
   }
+
+  // ── Google OAuth (server-side code flow — durable Drive connection). ─────────
+  const oauthResponse = await handleOAuth(req, url);
+  if (oauthResponse) return oauthResponse;
 
   // ── Account / auth / email / recovery: handled by auth.ts (Pass 1). ──────────
   const authResponse = await handleAuth(req, url);

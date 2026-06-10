@@ -8079,7 +8079,11 @@ function buildLibCard(f) {
     img.src = f.imageData
     img.alt = f.title || buildAutoTitle(f)
     img.loading = 'lazy'
-    img.onclick = e => { e.stopPropagation(); openLightbox(f.imageData) }
+    // If the hosted copy is gone (R2 keeps only the newest 5), fall back to the
+    // local cache, then to the user's Drive copy.
+    img.dataset.favId = f.id
+    img.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(img, f) }
+    img.onclick = e => { e.stopPropagation(); openLightbox(img.src) }
     card.appendChild(img)
   } else {
     const ph = document.createElement('div')
@@ -9284,15 +9288,7 @@ function renderSettingsView() {
         btn.className = 'btn btn-primary'
         btn.style.fontSize = '12px'
         btn.textContent = '▲ CONNECT GOOGLE DRIVE'
-        btn.onclick = () => {
-          if (typeof google !== 'undefined') {
-            driveTokenClient?.requestAccessToken({ prompt: 'select_account' })
-          } else {
-            // Re-init Drive which will load the SDK and prompt sign-in
-            initDrive()
-            setTimeout(() => renderSettingsView(), 1500)
-          }
-        }
+        btn.onclick = () => { driveConnect() }
         container.appendChild(btn)
       }
     }
@@ -9699,16 +9695,9 @@ function renderSettingsViewGenOnly() {
 function syncGateChooseGdrive() {
   closeSyncGate()
   cloudSetProvider('gdrive')
-  // Request the token DIRECTLY — same proven path as the settings Connect
-  // button. (The old code simulated a click on the GIS-rendered button after a
-  // 400ms wait; if the button hadn't rendered yet the click silently no-oped,
-  // which is why this modal "did nothing".)
-  if (typeof google !== 'undefined' && driveTokenClient) {
-    driveTokenClient.requestAccessToken({ prompt: 'select_account' })
-  } else {
-    initDrive()
-    setTimeout(() => { driveTokenClient?.requestAccessToken({ prompt: 'select_account' }) }, 1200)
-  }
+  // Server-side OAuth: one consent, then the backend keeps Drive connected
+  // via a refresh token tied to the app account (no hourly token death).
+  driveConnect()
 }
 
 function syncGateChooseDropbox() {
@@ -17637,6 +17626,18 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model) {
       if (typeof updateLibBadge === 'function') updateLibBadge();
       if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
       if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+      // Durable copies: upload the image itself to the visible "Beast Mode"
+      // Drive folder (R2 only keeps the newest 5), and cache locally.
+      if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, imageUrl);
+      if (typeof driveUploadImage === 'function') {
+        driveUploadImage(imageUrl, 'beast-mode-' + fav.id + '.jpg').then((driveId) => {
+          if (driveId) {
+            fav.driveImageId = driveId;
+            if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+            if (typeof driveSavePrompt === 'function') driveSavePrompt(fav); // re-sync with the id
+          }
+        });
+      }
     }
   } catch (e) {
     console.warn('auto-save of generated image failed (image still shown):', e);
@@ -17928,14 +17929,31 @@ async function doRecover() {
 
 // ── session ─────────────────────────────────────────────────────────────────────
 function setSession({ emailHash, email, dataKey, sessionToken }) {
-  // In-memory only for Pass 1. (Pass 2 adds trusted-device / session-token caching.)
   window.bmSession = { emailHash, email, dataKey, sessionToken };
+  // Persist the SESSION TOKEN (opaque, 24h) so reloads stay signed in for API
+  // calls (generation, Drive token minting). The DATA KEY is NEVER persisted —
+  // it stays in memory only; encrypted-settings features re-prompt for the
+  // passphrase when they need it.
+  try {
+    localStorage.setItem('bm_app_session', JSON.stringify({ emailHash, email, sessionToken }));
+  } catch (e) {}
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email } }));
 }
 window.bmSignOut = () => {
   window.bmSession = null;
+  try { localStorage.removeItem('bm_app_session'); } catch (e) {}
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: false } }));
 };
+
+// Restore a persisted session on load (token only — no dataKey until the user
+// next enters their passphrase; nothing currently requires it at startup).
+try {
+  const saved = JSON.parse(localStorage.getItem('bm_app_session') || 'null');
+  if (saved && saved.sessionToken) {
+    window.bmSession = { ...saved, dataKey: null };
+    window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email: saved.email } }));
+  }
+} catch (e) {}
 window.bmIsSignedIn = () => !!window.bmSession;
 
 // ── nav button: open modal, or show signed-in state ──────────────────────────
@@ -17962,6 +17980,192 @@ function bmUpdateAccountBtn() {
 window.addEventListener('bm-auth-changed', bmUpdateAccountBtn);
 bmUpdateAccountBtn();
 
+</script>
+
+
+<!-- ===== DRIVE: server-side OAuth + image sync + local cache ===== -->
+<script>
+// ════════════════════════════════════════════════════════════════════
+// DURABLE DRIVE CONNECTION (server-side OAuth)
+// The backend holds a refresh token tied to the app account; we just ask it
+// for a fresh access token whenever we need one. No more hourly silent death.
+// ════════════════════════════════════════════════════════════════════
+let bmDriveTokenTimer = null
+
+async function driveConnect() {
+  if (!window.bmSession?.sessionToken) {
+    if (typeof openAuthModal === 'function') openAuthModal('login')
+    return
+  }
+  try {
+    const res = await fetch('/oauth/google/start', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + window.bmSession.sessionToken },
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      alert(data.code === 'not_configured'
+        ? 'Google Drive connect is not configured on the server yet.'
+        : (data.error || 'Could not start Google sign-in.'))
+      return
+    }
+    window.location.href = data.url   // full-page redirect to Google consent
+  } catch (e) {
+    alert('Could not reach the server to start Google sign-in.')
+  }
+}
+
+// Ask the backend for a fresh Drive access token. Sets the global driveToken
+// the existing sync code already uses, schedules the next refresh, and kicks
+// the normal on-signed-in sync.
+async function driveServerTokenBootstrap() {
+  if (!window.bmSession?.sessionToken) return
+  try {
+    const res = await fetch('/oauth/google/token', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + window.bmSession.sessionToken },
+    })
+    if (res.status === 404) return          // not connected — nothing to do
+    if (!res.ok) return                      // transient — next reload retries
+    const data = await res.json()
+    driveToken = data.accessToken
+    try { cloudSetProvider('gdrive') } catch (e) {}
+    if (typeof setDriveStatus === 'function') setDriveStatus('✓ CONNECTED', 'ok')
+    if (typeof updateLocalWarning === 'function') updateLocalWarning()
+    // Refresh 2 minutes before expiry, via the backend (not Google directly).
+    clearTimeout(bmDriveTokenTimer)
+    bmDriveTokenTimer = setTimeout(driveServerTokenBootstrap,
+      Math.max(60, (data.expiresIn - 120)) * 1000)
+    if (typeof driveOnSignedIn === 'function') driveOnSignedIn()
+  } catch (e) { /* network blip — retried on next load/sign-in */ }
+}
+
+// Run on load (restored session) and whenever the user signs in.
+window.addEventListener('bm-auth-changed', (e) => {
+  if (e.detail?.signedIn) driveServerTokenBootstrap()
+  else { clearTimeout(bmDriveTokenTimer); }
+})
+if (window.bmSession?.sessionToken) driveServerTokenBootstrap()
+
+// Returning from Google consent: show the result, clean the URL.
+(function () {
+  const flag = new URLSearchParams(window.location.search).get('drive')
+  if (!flag) return
+  history.replaceState(null, '', window.location.pathname)
+  if (flag === 'connected') {
+    driveServerTokenBootstrap()
+  } else if (flag === 'denied') {
+    alert('Google Drive connection was cancelled.')
+  } else {
+    alert('Google Drive connection failed — please try again.')
+  }
+})()
+
+// ════════════════════════════════════════════════════════════════════
+// IMAGE SYNC TO A VISIBLE "Beast Mode" DRIVE FOLDER (drive.file scope)
+// ════════════════════════════════════════════════════════════════════
+async function driveEnsureBeastFolder() {
+  let id = localStorage.getItem('bm_drive_folder_id')
+  if (id) return id
+  const q = encodeURIComponent("name='Beast Mode' and mimeType='application/vnd.google-apps.folder' and trashed=false")
+  const r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id)', {
+    headers: { 'Authorization': 'Bearer ' + driveToken },
+  })
+  const j = await r.json()
+  if (j.files && j.files.length) {
+    id = j.files[0].id
+  } else {
+    const c = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + driveToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Beast Mode', mimeType: 'application/vnd.google-apps.folder' }),
+    })
+    id = (await c.json()).id
+  }
+  if (id) localStorage.setItem('bm_drive_folder_id', id)
+  return id
+}
+
+// Upload an image (by URL) into the Beast Mode folder. Returns the Drive file id.
+async function driveUploadImage(imageUrl, filename) {
+  if (!driveToken) return null
+  try {
+    const blob = await (await fetch(imageUrl)).blob()
+    const folderId = await driveEnsureBeastFolder()
+    if (!folderId) return null
+    const form = new FormData()
+    form.append('metadata', new Blob(
+      [JSON.stringify({ name: filename, parents: [folderId] })],
+      { type: 'application/json' }))
+    form.append('file', blob)
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + driveToken },
+      body: form,
+    })
+    if (!res.ok) return null
+    return (await res.json()).id
+  } catch (e) { return null }
+}
+
+// Fetch an image back from Drive as a blob URL (auth required — drive.file).
+async function driveFetchImageBlob(fileId) {
+  if (!driveToken || !fileId) return null
+  try {
+    const res = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', {
+      headers: { 'Authorization': 'Bearer ' + driveToken },
+    })
+    if (!res.ok) return null
+    return URL.createObjectURL(await res.blob())
+  } catch (e) { return null }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// LOCAL IMAGE CACHE (IndexedDB) — survives reloads, subject to browser wipes
+// ════════════════════════════════════════════════════════════════════
+function bmIdb() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('bm-images', 1)
+    req.onupgradeneeded = e => e.target.result.createObjectStore('images')
+    req.onsuccess = e => res(e.target.result)
+    req.onerror = e => rej(e.target.error)
+  })
+}
+async function bmCacheImage(favId, imageUrl) {
+  try {
+    const blob = await (await fetch(imageUrl)).blob()
+    const db = await bmIdb()
+    await new Promise((res, rej) => {
+      const tx = db.transaction('images', 'readwrite')
+      tx.objectStore('images').put(blob, String(favId))
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error)
+    })
+  } catch (e) { /* cache is best-effort */ }
+}
+async function bmGetCachedImage(favId) {
+  try {
+    const db = await bmIdb()
+    return await new Promise((res) => {
+      const rq = db.transaction('images').objectStore('images').get(String(favId))
+      rq.onsuccess = () => res(rq.result ? URL.createObjectURL(rq.result) : null)
+      rq.onerror = () => res(null)
+    })
+  } catch (e) { return null }
+}
+
+// Fallback chain when a hosted image 404s (older than R2 last-5):
+// local cache -> the user's Drive copy -> placeholder style.
+async function bmImageFallback(imgEl, fav) {
+  imgEl.onerror = null  // prevent loops
+  const cached = await bmGetCachedImage(fav.id)
+  if (cached) { imgEl.src = cached; return }
+  if (fav.driveImageId) {
+    const fromDrive = await driveFetchImageBlob(fav.driveImageId)
+    if (fromDrive) { imgEl.src = fromDrive; return }
+  }
+  imgEl.style.opacity = '0.25'
+  imgEl.title = 'Image no longer available — connect Google Drive to keep all images'
+}
 </script>
 
 </body>

@@ -23,6 +23,11 @@
         reverse_proxy localhost:8000
     }
 
+    # ── Google OAuth (server-side flow): start/callback/token/disconnect ──
+    handle /oauth/* {
+        reverse_proxy localhost:8000
+    }
+
     # ── Account / auth / crypto (lifted from stckrm's model) ──────────────
     handle /user/* {
         reverse_proxy localhost:8000
