@@ -1,7 +1,7 @@
-# fly.staging.toml — Prompt Lab (STAGING)
+# fly.staging.toml — Beast Mode (STAGING)
 # Separate app + separate volume so staging NEVER touches production user data
 # or production billing. Deploy target for the `staging` branch.
-app = 'prompt-lab-staging'
+app = 'beast-mode-staging'
 primary_region = 'lhr'
 
 [build]
@@ -11,10 +11,10 @@ primary_region = 'lhr'
   strategy = 'rolling'
 
 [env]
-  DENO_KV_PATH = '/data/promptlab.db'
+  DENO_KV_PATH = '/data/beastmode.db'
 
 [[mounts]]
-  source = 'promptlab_staging_data'
+  source = 'beastmode_staging_data'
   destination = '/data'
   initial_size = '1gb'
   snapshot_retention = 5

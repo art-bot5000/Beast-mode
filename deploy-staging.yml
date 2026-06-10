@@ -58,6 +58,6 @@ jobs:
         if: always()
         run: |
           sleep 5
-          flyctl status --app prompt-lab-staging
+          flyctl status --app beast-mode-staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
