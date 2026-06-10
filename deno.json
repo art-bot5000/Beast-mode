@@ -1,0 +1,12 @@
+{
+  "tasks": {
+    "dev": "deno run --unstable-kv --unstable-cron --allow-net --allow-env --allow-read=. --allow-write=. main.ts"
+  },
+  "imports": {
+    "@std/http": "jsr:@std/http@^1.0.0"
+  },
+  "nodeModulesDir": "none",
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.unstable"]
+  }
+}
