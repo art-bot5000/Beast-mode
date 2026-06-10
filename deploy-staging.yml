@@ -35,9 +35,9 @@ jobs:
       - name: Check backend JS/TS syntax
         run: |
           # Provider modules are plain ES modules — node --check validates syntax.
-          node --check providers/index.js   && echo "✅ providers/index.js OK"
-          node --check providers/runware.js  && echo "✅ providers/runware.js OK"
-          node --check providers/catalog.js  && echo "✅ providers/catalog.js OK"
+          node --check index.js   && echo "✅ index.js OK"
+          node --check runware.js  && echo "✅ runware.js OK"
+          node --check catalog.js  && echo "✅ catalog.js OK"
 
   deploy:
     name: Deploy to staging
