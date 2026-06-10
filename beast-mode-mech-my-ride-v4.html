@@ -3085,6 +3085,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
     <div style="display:flex;gap:6px;">
       <button class="btn btn-ghost" id="copyPromptBtn" onclick="copyPromptOnly()" style="padding:4px 12px;font-size:12px;">⎘ COPY PROMPT</button>
       <button class="btn btn-ghost" id="copyOutBtn" onclick="copyOutput()" style="padding:4px 12px;font-size:12px;">⎘ COPY ALL</button>
+      <button class="btn btn-primary" id="genImageBtn" onclick="generateImage()" style="padding:4px 12px;font-size:12px;">✦ GENERATE IMAGE</button>
     </div>
   </div>
   <div class="output-box" id="output">// Select a configuration and generate your mech prompt...</div>
@@ -17428,4 +17429,121 @@ document.addEventListener('viewSwitched', e => {
 <!-- ══════════════════ PROMPT LAB WALKTHROUGH ══════════════════ -->
 <div id="tourOverlay" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:30000;pointer-events:none;">
   <div id="tourSpotlight" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,.72);border-radius:8px;transition:all .35s ease;pointer-events:none;"></div>
-  <div id="tourCard" class="tour-card" style="position:absolute;pointe
+  <div id="tourCard" class="tour-card" style="position:absolute;pointer-events:auto;"></div>
+</div>
+
+<!-- ══════════════════ IMAGE GENERATION (Runware via backend) ══════════════════ -->
+<div id="genImageResult" style="display:none;margin:12px 16px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);">
+  <div id="genImageStatus" style="font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:1px;color:var(--accent);margin-bottom:8px;"></div>
+  <img id="genImageImg" src="" alt="" style="display:none;max-width:100%;border-radius:4px;">
+  <div id="genImageMeta" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
+</div>
+
+<script>
+// ── Image generation: calls the BACKEND (/api/generate), never Runware directly,
+//    so the API key stays server-side. Generated images auto-save to library + cloud.
+let GEN_IMAGE_MODEL = 'runware:runware:100@1'; // FLUX.1 Schnell (fast, cheap default)
+
+async function generateImage() {
+  const out = document.getElementById('output');
+  const visible = out ? out.textContent : '';
+  if (!visible || visible.startsWith('//')) {
+    alert('Generate a prompt first, then generate an image from it.');
+    return;
+  }
+  const promptOnly = (out.dataset.full && out.dataset.full.includes('---SETTINGS---'))
+    ? out.dataset.full.slice(0, out.dataset.full.indexOf('---SETTINGS---')).trim()
+    : visible;
+  const prompt = promptOnly.replace(/^\[[^\]]*\]\s*/, '').trim();
+
+  const btn = document.getElementById('genImageBtn');
+  const result = document.getElementById('genImageResult');
+  const status = document.getElementById('genImageStatus');
+  const img = document.getElementById('genImageImg');
+  const meta = document.getElementById('genImageMeta');
+
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  result.style.display = 'block';
+  img.style.display = 'none';
+  meta.textContent = '';
+  status.textContent = '\u25CC GENERATING IMAGE\u2026';
+  status.style.color = 'var(--accent)';
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, model: GEN_IMAGE_MODEL }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.code === 'rate_limit'
+        ? 'Rate limit reached \u2014 wait a moment and try again.'
+        : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
+      status.textContent = '\u2717 ' + msg;
+      status.style.color = 'var(--err, #f85149)';
+      return;
+    }
+    const image = data.images && data.images[0];
+    if (!image || !image.url) {
+      status.textContent = '\u2717 No image returned.';
+      status.style.color = 'var(--err, #f85149)';
+      return;
+    }
+    img.src = image.url;
+    img.style.display = 'block';
+    status.textContent = '\u2713 IMAGE GENERATED';
+    status.style.color = 'var(--accent)';
+    const costStr = typeof data.costUsd === 'number' ? (' \u00B7 $' + data.costUsd.toFixed(4)) : '';
+    meta.textContent = 'Model: ' + data.model + costStr + ' \u00B7 auto-saved to library';
+    autoSaveGeneratedImage(prompt, out.dataset.full || visible, image.url, data.model);
+  } catch (e) {
+    status.textContent = '\u2717 Network error: ' + e.message;
+    status.style.color = 'var(--err, #f85149)';
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+}
+
+// Builds a library entry in the SAME shape as doSaveFav(); stores the generated
+// image URL in imageData (rendered directly as <img src>); saves to localStorage
+// + cloud via the existing driveSavePrompt().
+function autoSaveGeneratedImage(prompt, fullText, imageUrl, model) {
+  try {
+    let full = fullText;
+    const DELIM = (typeof SETTINGS_DELIMITER !== 'undefined') ? SETTINGS_DELIMITER : '---SETTINGS---';
+    if (!full || !full.includes('---SETTINGS---')) {
+      full = prompt + DELIM + JSON.stringify(typeof captureSettings === 'function' ? captureSettings() : {});
+    }
+    const fav = {
+      text: full,
+      promptOnly: prompt,
+      mode: typeof currentMode !== 'undefined' ? currentMode : '',
+      preset: typeof currentPreset !== 'undefined' ? currentPreset : '',
+      id: Date.now(),
+      title: '',
+      model: model || GEN_IMAGE_MODEL,
+      rating: 0,
+      starred: false,
+      folderId: null,
+      versions: [{ text: full, savedAt: Date.now(), label: 'Original' }],
+      imageData: imageUrl,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      particles: null,
+    };
+    if (typeof favourites !== 'undefined') {
+      favourites.unshift(fav);
+      if (typeof renderFavs === 'function') renderFavs();
+      if (typeof updateLibBadge === 'function') updateLibBadge();
+      if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+      if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+    }
+  } catch (e) {
+    console.warn('auto-save of generated image failed (image still shown):', e);
+  }
+}
+</script>
+
+</body>
+</html>

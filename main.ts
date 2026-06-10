@@ -39,6 +39,7 @@ if (missing.length) {
 // them directly. generate() picks the provider from the model-id prefix.
 import { generate, searchModels, ProviderError } from "./providers/index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./providers/catalog.js";
+import { rehostToR2, r2Enabled } from "./providers/r2.js";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
 
@@ -115,6 +116,25 @@ async function handler(req: Request): Promise<Response> {
         count: body.count as number | undefined,
         seed: body.seed as number | undefined,
       });
+
+      // ── Re-host to R2 so saved images don't break when Runware URLs expire.
+      // Graceful: if R2 isn't configured or an upload fails, keep the original
+      // URL so generation still succeeds.
+      if (r2Enabled()) {
+        await Promise.all(
+          result.images.map(async (img: { url: string }) => {
+            if (!img.url) return;
+            try {
+              const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
+              const key = `gen/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+              img.url = await rehostToR2(img.url, key);
+            } catch (e) {
+              console.warn("R2 rehost failed, keeping original URL:", (e as Error).message);
+            }
+          }),
+        );
+      }
+
       return json({
         model: result.model,
         provider: result.provider,

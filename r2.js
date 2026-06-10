@@ -1,0 +1,135 @@
+// providers/r2.js
+//
+// Re-hosts generated images to Cloudflare R2 so saved library entries don't
+// break when Runware's temporary image URLs expire.
+//
+// Flow: backend fetches the bytes from Runware's URL, PUTs them to R2 with a
+// hand-rolled AWS SigV4 signature (same approach stckrm uses for its R2
+// backups), and returns a durable public URL.
+//
+// Required env (Fly secrets):
+//   R2_ACCOUNT_ID        - Cloudflare account id (part of the endpoint host)
+//   R2_ACCESS_KEY_ID     - R2 access key
+//   R2_SECRET_ACCESS_KEY - R2 secret key
+//   R2_BUCKET            - bucket name
+//   R2_PUBLIC_BASE       - public URL base for the bucket (custom domain or
+//                          r2.dev URL), e.g. https://img.yourdomain.com
+//                          The returned image URL is `${R2_PUBLIC_BASE}/${key}`.
+//
+// If R2 is not configured, rehosting is SKIPPED and the original Runware URL is
+// used (graceful fallback — generation still works, images just aren't durable).
+
+const enc = new TextEncoder();
+
+function r2Config() {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKey = process.env.R2_ACCESS_KEY_ID;
+  const secretKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET;
+  const publicBase = process.env.R2_PUBLIC_BASE;
+  if (!accountId || !accessKey || !secretKey || !bucket || !publicBase) return null;
+  return { accountId, accessKey, secretKey, bucket, publicBase };
+}
+
+/** True if R2 rehosting is available. */
+export function r2Enabled() {
+  return r2Config() !== null;
+}
+
+// ── SigV4 helpers ─────────────────────────────────────────────────────────────
+async function sha256Hex(data) {
+  const buf = await crypto.subtle.digest('SHA-256', typeof data === 'string' ? enc.encode(data) : data);
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hmac(key, data) {
+  const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(data)));
+}
+
+async function signingKey(secret, date, region, service) {
+  let k = await hmac(enc.encode('AWS4' + secret), date);
+  k = await hmac(k, region);
+  k = await hmac(k, service);
+  k = await hmac(k, 'aws4_request');
+  return k;
+}
+
+function hex(bytes) {
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Fetch an image from a (Runware) URL and store it in R2.
+ * @param {string} sourceUrl  The image URL returned by the provider.
+ * @param {string} key        Object key in the bucket, e.g. "gen/2026/abc.jpg".
+ * @returns {Promise<string>} The durable public URL.
+ */
+export async function rehostToR2(sourceUrl, key) {
+  const cfg = r2Config();
+  if (!cfg) throw new Error('R2 not configured');
+
+  // 1) Fetch the bytes.
+  const srcRes = await fetch(sourceUrl);
+  if (!srcRes.ok) throw new Error(`Failed to fetch source image: HTTP ${srcRes.status}`);
+  const bytes = new Uint8Array(await srcRes.arrayBuffer());
+  const contentType = srcRes.headers.get('content-type') || 'image/jpeg';
+
+  // 2) Build a signed PUT to R2's S3 API.
+  const region = 'auto';
+  const service = 's3';
+  const host = `${cfg.accountId}.r2.cloudflarestorage.com`;
+  const endpoint = `https://${host}/${cfg.bucket}/${key}`;
+
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, ''); // YYYYMMDDTHHMMSSZ
+  const dateStamp = amzDate.slice(0, 8);
+
+  const payloadHash = await sha256Hex(bytes);
+  const canonicalHeaders =
+    `host:${host}\n` +
+    `x-amz-content-sha256:${payloadHash}\n` +
+    `x-amz-date:${amzDate}\n`;
+  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [
+    'PUT',
+    `/${cfg.bucket}/${key}`,
+    '',
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join('\n');
+
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    scope,
+    await sha256Hex(canonicalRequest),
+  ].join('\n');
+
+  const key1 = await signingKey(cfg.secretKey, dateStamp, region, service);
+  const signature = hex(await hmac(key1, stringToSign));
+  const authorization =
+    `AWS4-HMAC-SHA256 Credential=${cfg.accessKey}/${scope}, ` +
+    `SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  // 3) Upload.
+  const putRes = await fetch(endpoint, {
+    method: 'PUT',
+    headers: {
+      'Authorization': authorization,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+      'Content-Type': contentType,
+    },
+    body: bytes,
+  });
+  if (!putRes.ok) {
+    const txt = await putRes.text().catch(() => '');
+    throw new Error(`R2 PUT failed: HTTP ${putRes.status} ${txt.slice(0, 120)}`);
+  }
+
+  // 4) Return the durable public URL.
+  return `${cfg.publicBase.replace(/\/$/, '')}/${key}`;
+}
