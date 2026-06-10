@@ -40,6 +40,7 @@ if (missing.length) {
 import { generate, searchModels, ProviderError } from "./providers/index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./providers/catalog.js";
 import { rehostToR2, r2Enabled } from "./providers/r2.js";
+import { handleAuth } from "./auth.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
 
@@ -176,13 +177,16 @@ async function handler(req: Request): Promise<Response> {
     }
   }
 
-  // ── Account / auth / settings: NOT BUILT YET. ───────────────────────────────
-  // These prefixes are routed by Caddy; returning 501 (not 404) makes it explicit
-  // they're planned-but-unimplemented rather than missing/misrouted.
+  // ── Account / auth / email / recovery: handled by auth.ts (Pass 1). ──────────
+  const authResponse = await handleAuth(req, url);
+  if (authResponse) return authResponse;
+
+  // ── Still-unbuilt routes (Pass 2+): passkeys, MFA, settings sync, admin,
+  // webhooks. Routed by Caddy; 501 makes "planned but unimplemented" explicit.
   if (
-    path.startsWith("/user/") || path.startsWith("/key/") || path.startsWith("/device/") ||
-    path.startsWith("/passkey/") || path.startsWith("/mfa/") || path.startsWith("/recovery/") ||
-    path.startsWith("/email/") || path.startsWith("/admin/") || path.startsWith("/settings/") ||
+    path.startsWith("/key/") || path.startsWith("/device/") ||
+    path.startsWith("/passkey/") || path.startsWith("/mfa/") ||
+    path.startsWith("/admin/") || path.startsWith("/settings/") ||
     path.startsWith("/webhook/")
   ) {
     return json({ error: "Not implemented yet", code: "not_implemented" }, 501);
