@@ -37,9 +37,9 @@ if (missing.length) {
 
 // Provider abstraction (the modules we built). Note: import as .js — Deno runs
 // them directly. generate() picks the provider from the model-id prefix.
-import { generate, searchModels, ProviderError } from "./providers/index.js";
-import { catalogByFamily, findInCatalog, defaultsFor } from "./providers/catalog.js";
-import { rehostToR2, r2Enabled } from "./providers/r2.js";
+import { generate, searchModels, ProviderError } from "./index.js";
+import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
+import { rehostToR2, r2Enabled } from "./r2.js";
 import { handleAuth } from "./auth.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
