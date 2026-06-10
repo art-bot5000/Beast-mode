@@ -7,6 +7,26 @@ app = 'beast-mode'
 primary_region = 'lhr'
 
 [build]
+# fly.toml — Prompt Lab (production)
+# Adapted from the stckrm deployment. Same proven shape:
+# Deno backend on :8000, Caddy front on :8080, KV on a mounted volume.
+app = 'prompt-lab'
+primary_region = 'lhr'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[deploy]
+  strategy = 'rolling'
+
+[env]
+  DENO_KV_PATH = '/data/promptlab.db'
+
+[[mounts]]
+  source = 'promptlab_data'
+  destination = '/data'
+  initial_size = '1gb'
+  snapshot_retention = 5
 
 [http_service]
   internal_port = 8080
@@ -21,3 +41,19 @@ primary_region = 'lhr'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
+  # Keep one machine alive: the R2 snapshot cron and any presence/SSE
+  # endpoints need a running instance, exactly as stckrm relies on.
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 200
+    soft_limit = 150
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  # 256mb is enough for static-serve + auth. Bump to 512mb if/when the backend
+  # starts STREAMING Runware images through itself to save to Drive/Dropbox
+  # (proxying image bytes is the memory-hungry path).
+  memory = '256mb'
