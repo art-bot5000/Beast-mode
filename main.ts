@@ -63,6 +63,15 @@ function rateLimited(ip: string): boolean {
   hits.set(ip, arr);
   return false;
 }
+
+// Deploy marker — bump this string on each test push to confirm
+  // GitHub Actions actually shipped the latest code.
+  if (path === "/version") {
+    return new Response(JSON.stringify({
+      version: "deploy-test-1",
+      builtFrom: "github-actions",
+    }), { headers: { "content-type": "application/json" } });
+  }
 // Periodic cleanup so the map doesn't grow unbounded.
 setInterval(() => {
   const now = Date.now();

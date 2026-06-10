@@ -17,6 +17,10 @@
     handle /ping {
         reverse_proxy localhost:8000
     }
+	
+	handle /version {
+        reverse_proxy localhost:8000
+    }
 
     # ── Image generation + model discovery (the pieces we built) ──────────
     handle /api/* {
