@@ -1,3 +1,12 @@
+# fly.toml app configuration file generated for beast-mode on 2026-06-10T08:19:38Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'beast-mode'
+primary_region = 'lhr'
+
+[build]
 # fly.toml — Prompt Lab (production)
 # Adapted from the stckrm deployment. Same proven shape:
 # Deno backend on :8000, Caddy front on :8080, KV on a mounted volume.
@@ -24,6 +33,14 @@ primary_region = 'lhr'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
   # Keep one machine alive: the R2 snapshot cron and any presence/SSE
   # endpoints need a running instance, exactly as stckrm relies on.
   min_machines_running = 1
