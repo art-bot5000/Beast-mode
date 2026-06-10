@@ -1,0 +1,9 @@
+{
+  "name": "beast-mode",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build-time dependencies for minifying the Beast Mode frontend.",
+  "devDependencies": {
+    "html-minifier-terser": "^7.2.0"
+  }
+}
