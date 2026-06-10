@@ -1,9 +1,10 @@
-name: Deploy to Fly.io (Staging)
+name: Deploy to Fly.io (Production)
 
-# Pushes to `staging`, or manual run. Production (deploy.yml, main branch) is separate.
+# Deploys the `main` branch to the production app (beast-mode).
+# Staging (deploy-staging.yml, `staging` branch -> beast-mode-staging) is separate.
 on:
   push:
-    branches: [staging]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -20,7 +21,9 @@ jobs:
             sw.js manifest.json
             icon192.png icon512.png
             main.ts auth.ts deno.json start.sh Caddyfile
-            fly.staging.toml
+            Dockerfile package.json fly.toml
+            providers/index.js providers/runware.js
+            providers/catalog.js providers/r2.js
           )
           MISSING=()
           for f in "${REQUIRED[@]}"; do
@@ -32,25 +35,32 @@ jobs:
           fi
           echo "✅ All required files present"
 
-      - name: Check backend JS/TS syntax
+      - name: Check backend JS syntax
         run: |
           # Provider modules are plain ES modules — node --check validates syntax.
+          # (main.ts/auth.ts are TypeScript; Deno type-checks them at build/run.)
           node --check providers/index.js   && echo "✅ providers/index.js OK"
           node --check providers/runware.js  && echo "✅ providers/runware.js OK"
           node --check providers/catalog.js  && echo "✅ providers/catalog.js OK"
+          node --check providers/r2.js       && echo "✅ providers/r2.js OK"
 
   deploy:
-    name: Deploy to staging
+    name: Deploy to production
     needs: preflight
     runs-on: ubuntu-latest
+    # Concurrency guard: if two pushes land close together, cancel the older
+    # in-progress deploy so they don't race to deploy different commits.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy to Fly.io (staging)
-        # --no-cache: same scar as stckrm — the remote builder will otherwise
-        # reuse cached minify output and silently ship a stale frontend.
-        run: flyctl deploy --config fly.staging.toml --remote-only --strategy rolling --ha=false --no-cache
+      - name: Deploy to Fly.io (production)
+        # --no-cache: avoids the remote builder reusing cached minify output,
+        # which silently ships a stale frontend (the scar inherited from stckrm).
+        run: flyctl deploy --config fly.toml --remote-only --strategy rolling --no-cache
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -58,6 +68,6 @@ jobs:
         if: always()
         run: |
           sleep 5
-          flyctl status --app beast-mode-staging
+          flyctl status --app beast-mode
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
