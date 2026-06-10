@@ -154,14 +154,38 @@ async function login(body: Record<string, unknown>): Promise<Response> {
     return json({ error: "Email not verified", code: "unverified" }, 403);
   }
 
-  // Success: return the envelopes + salt so the BROWSER can unwrap the DATA KEY
-  // locally. The server never participates in decryption.
+  // Success: issue a session token (server-side gating for paid endpoints like
+  // /api/generate) AND return the envelopes + salt so the BROWSER can unwrap the
+  // DATA KEY locally. The server never participates in decryption.
+  const token = await issueSession(emailHash as string);
   return json({
     ok: true,
+    sessionToken: token,
     kdfSalt: rec.value.kdfSalt,
     passphraseEnvelope: rec.value.passphraseEnvelope,
     recoveryCount: rec.value.recoveryEnvelopes.length,
   });
+}
+
+// ── Session tokens ────────────────────────────────────────────────────────────
+// A logged-in browser gets an opaque token to present on protected endpoints,
+// so the backend can verify "this is a real, verified user" before spending on
+// Runware — without the browser ever resending the verifier. 24h expiry, stored
+// in KV with automatic expiry. Mirrors stckrm's 24h session-token approach.
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function issueSession(emailHash: string): Promise<string> {
+  const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  await kv.set(["session", token], { emailHash, issued: Date.now() }, { expireIn: SESSION_TTL_MS });
+  return token;
+}
+
+// Returns the emailHash for a valid token, or null. Exported so main.ts can gate
+// /api/generate. Accepts the token from an Authorization: Bearer header.
+export async function verifySessionToken(token: string | null): Promise<string | null> {
+  if (!token) return null;
+  const rec = await kv.get<{ emailHash: string }>(["session", token]);
+  return rec.value?.emailHash ?? null;
 }
 
 // Anti-enumeration verified-check: an unauthenticated probe cannot distinguish a
@@ -202,7 +226,10 @@ async function otpConfirm(body: Record<string, unknown>): Promise<Response> {
   const updated: UserRecord = { ...rec.value, emailVerified: true };
   await kv.set(["user", emailHash as string], updated);
   await kv.delete(["otp", emailHash as string]);
-  return json({ ok: true, emailVerified: true });
+  // Issue a session token: verifying email completes registration, so the user
+  // is now signed in (they authenticated by creating the account moments ago).
+  const token = await issueSession(emailHash as string);
+  return json({ ok: true, emailVerified: true, sessionToken: token });
 }
 
 // Recovery: the browser asks for the recovery envelopes so it can try unwrapping
@@ -243,7 +270,8 @@ async function recoveryReset(body: Record<string, unknown>): Promise<Response> {
     recoveryEnvelopes: recoveryEnvelopes as Envelope[],
   };
   await kv.set(["user", emailHash as string], updated);
-  return json({ ok: true });
+  const token = await issueSession(emailHash as string);
+  return json({ ok: true, sessionToken: token });
 }
 
 // ── Router: returns a Response if it handled the path, else null ──────────────

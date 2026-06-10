@@ -17468,6 +17468,13 @@ async function generateImage() {
     alert('Generate a prompt first, then generate an image from it.');
     return;
   }
+  // Require sign-in. The server enforces this too (the real gate), but checking
+  // here gives a clean prompt-to-login instead of a 401 error flash.
+  if (!window.bmSession || !window.bmSession.sessionToken) {
+    if (typeof openAuthModal === 'function') openAuthModal('login');
+    else alert('Please sign in to generate images.');
+    return;
+  }
   const promptOnly = (out.dataset.full && out.dataset.full.includes('---SETTINGS---'))
     ? out.dataset.full.slice(0, out.dataset.full.indexOf('---SETTINGS---')).trim()
     : visible;
@@ -17489,11 +17496,23 @@ async function generateImage() {
   try {
     const res = await fetch('/api/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + window.bmSession.sessionToken,
+      },
       body: JSON.stringify({ prompt, model: GEN_IMAGE_MODEL }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (data.code === 'auth_required') {
+        // Token expired or missing — sign out and prompt re-login.
+        if (typeof window.bmSignOut === 'function') window.bmSignOut();
+        if (typeof openAuthModal === 'function') openAuthModal('login');
+        status.textContent = '\u2717 Session expired — please sign in again.';
+        status.style.color = 'var(--err, #f85149)';
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        return;
+      }
       const msg = data.code === 'rate_limit'
         ? 'Rate limit reached \u2014 wait a moment and try again.'
         : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
@@ -17693,7 +17712,7 @@ async function doLogin() {
     }
     // Unlock the DATA KEY locally with the returned envelope.
     const dataKey = await unlockWithPassphrase(pass, emailHash, data.kdfSalt, data.passphraseEnvelope);
-    setSession({ emailHash, email, dataKey });
+    setSession({ emailHash, email, dataKey, sessionToken: data.sessionToken });
     msg.className = 'bm-auth-msg ok'; msg.textContent = '✓ Signed in.';
     setTimeout(closeAuthModal, 600);
   } catch (e) {
@@ -17791,7 +17810,7 @@ async function doVerify(email, emailHash) {
   msg.className='bm-auth-msg ok'; msg.textContent='✓ Email verified.';
   // If this followed registration, we already hold the dataKey — sign in directly.
   if (pending && pending.emailHash === emailHash) {
-    setSession({ emailHash, email: pending.email, dataKey: pending.dataKey });
+    setSession({ emailHash, email: pending.email, dataKey: pending.dataKey, sessionToken: data.sessionToken });
     pending = null;
     setTimeout(closeAuthModal, 700);
   } else {
@@ -17836,7 +17855,7 @@ async function doRecover() {
     const reset = await buildPassphraseReset(email, newPass, dataKey, null);
     const r2 = await api('/recovery/reset', reset.serverPayload);
     if (r2.status !== 200) { msg.className='bm-auth-msg err'; msg.textContent='Reset failed.'; btn.disabled=false; return; }
-    setSession({ emailHash, email, dataKey });
+    setSession({ emailHash, email, dataKey, sessionToken: r2.data.sessionToken });
     renderPanel('codes', { codes: reset.recoveryCodes }); // show the NEW codes
   } catch (e) {
     msg.className='bm-auth-msg err'; msg.textContent='Recovery code did not match. Check and retry.';
@@ -17845,9 +17864,9 @@ async function doRecover() {
 }
 
 // ── session ─────────────────────────────────────────────────────────────────────
-function setSession({ emailHash, email, dataKey }) {
+function setSession({ emailHash, email, dataKey, sessionToken }) {
   // In-memory only for Pass 1. (Pass 2 adds trusted-device / session-token caching.)
-  window.bmSession = { emailHash, email, dataKey };
+  window.bmSession = { emailHash, email, dataKey, sessionToken };
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email } }));
 }
 window.bmSignOut = () => {

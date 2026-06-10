@@ -40,7 +40,7 @@ if (missing.length) {
 import { generate, searchModels, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { rehostToR2, r2Enabled } from "./r2.js";
-import { handleAuth } from "./auth.ts";
+import { handleAuth, verifySessionToken } from "./auth.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
 
@@ -105,6 +105,16 @@ async function handler(req: Request): Promise<Response> {
 
   // ── Generation proxy: the key is attached HERE, server-side, never sent down.
   if (path === "/api/generate" && req.method === "POST") {
+    // ── GATE: require a valid session token. This is what actually protects the
+    // Runware spend — only signed-in, verified users can reach generation.
+    // The browser sends it as `Authorization: Bearer <token>`.
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) {
+      return json({ error: "Sign in to generate images.", code: "auth_required" }, 401);
+    }
+
     const ip = clientIp(req);
     if (rateLimited(ip)) {
       return json({ error: "Rate limit exceeded. Try again shortly.", code: "rate_limit" }, 429);
