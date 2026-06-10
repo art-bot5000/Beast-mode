@@ -22,8 +22,8 @@ jobs:
             icon192.png icon512.png
             main.ts auth.ts deno.json start.sh Caddyfile
             Dockerfile package.json fly.toml
-            providers/index.js providers/runware.js
-            providers/catalog.js providers/r2.js
+            index.js runware.js
+            catalog.js r2.js
           )
           MISSING=()
           for f in "${REQUIRED[@]}"; do
@@ -39,10 +39,10 @@ jobs:
         run: |
           # Provider modules are plain ES modules — node --check validates syntax.
           # (main.ts/auth.ts are TypeScript; Deno type-checks them at build/run.)
-          node --check providers/index.js   && echo "✅ providers/index.js OK"
-          node --check providers/runware.js  && echo "✅ providers/runware.js OK"
-          node --check providers/catalog.js  && echo "✅ providers/catalog.js OK"
-          node --check providers/r2.js       && echo "✅ providers/r2.js OK"
+          node --check index.js   && echo "✅ index.js OK"
+          node --check runware.js  && echo "✅ runware.js OK"
+          node --check catalog.js  && echo "✅ catalog.js OK"
+          node --check r2.js       && echo "✅ r2.js OK"
 
   deploy:
     name: Deploy to production
