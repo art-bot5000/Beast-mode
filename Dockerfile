@@ -35,9 +35,13 @@ COPY --from=builder /build/public/ ./public/
 # Backend: the Deno entrypoint plus the provider modules we built.
 # (main.ts imports the auth/account logic mirrored from stckrm + the
 #  generate/models routes that call into providers/.)
-COPY main.ts auth.ts deno.json ./
+COPY main.ts auth.ts oauth.ts deno.json ./
 COPY index.js runware.js catalog.js r2.js ./
-RUN deno cache --unstable-kv --unstable-cron main.ts
+# check (not just cache): resolves EVERY import and type-checks, so a missing
+# module like oauth.ts fails the BUILD with a clear error instead of
+# crash-looping at runtime on Fly.
+RUN deno check --unstable-kv --unstable-cron main.ts && \
+    deno cache --unstable-kv --unstable-cron main.ts
 
 COPY start.sh /app/start.sh
 COPY Caddyfile /app/Caddyfile
