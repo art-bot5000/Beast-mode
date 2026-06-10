@@ -2794,6 +2794,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
     </button>
   </div>
   <div class="nav-actions">
+    <button id="bmAccountBtn" onclick="bmAccountClick()" title="Account" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);transition:all .2s;">⊙ ACCOUNT</button>
     <button id="lightToggle" onclick="toggleLightMode()" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:var(--muted);transition:all .2s;">☀</button>
     <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
     <a href="https://buymeacoffee.com/artbot5000" target="_blank" rel="noopener" title="Buy me a coffee" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);line-height:1;text-decoration:none;transition:color .15s;display:flex;align-items:center;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;"><path d="M2 4h9v5.5A3.5 3.5 0 017.5 13h-2A3.5 3.5 0 012 9.5V4z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M11 5.5h1.5a1.5 1.5 0 010 3H11" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M4 13.5h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 2.5c0-.5.8-1 .8-1.5M7.5 2.5c0-.5.8-1 .8-1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></a>
@@ -17559,6 +17560,326 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model) {
     console.warn('auto-save of generated image failed (image still shown):', e);
   }
 }
+</script>
+
+
+<!-- ===== AUTH UI (Pass 1) ===== -->
+<style>
+.bm-auth-overlay {
+  display:none; position:fixed; inset:0; z-index:25000;
+  background:rgba(0,0,0,.88); align-items:center; justify-content:center; padding:20px;
+}
+.bm-auth-overlay.open { display:flex; }
+.bm-auth-card {
+  background:var(--surface,#141414); border:1px solid var(--accent,#00ffb0);
+  border-radius:6px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+  font-family:'Rajdhani',sans-serif;
+}
+.bm-auth-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 18px; border-bottom:1px solid var(--border,#2a2a2a); background:var(--surface2,#1c1c1c);
+}
+.bm-auth-title { font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:3px; color:var(--accent,#00ffb0); }
+.bm-auth-x { background:none; border:1px solid var(--border,#2a2a2a); color:var(--muted,#888); border-radius:3px; padding:3px 9px; cursor:pointer; font-size:16px; }
+.bm-auth-body { padding:18px; display:flex; flex-direction:column; gap:12px; }
+.bm-auth-label { font-size:11px; letter-spacing:1.5px; color:var(--muted,#888); text-transform:uppercase; margin-bottom:-6px; }
+.bm-auth-input {
+  background:var(--bg,#0d0d0d); border:1px solid var(--border,#2a2a2a); color:var(--text,#eee);
+  border-radius:4px; padding:10px 12px; font-size:14px; font-family:'Rajdhani',sans-serif; width:100%;
+}
+.bm-auth-input:focus { outline:none; border-color:var(--accent,#00ffb0); }
+.bm-auth-btn {
+  background:var(--accent,#00ffb0); color:#000; border:none; border-radius:4px;
+  padding:11px; font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700; letter-spacing:1.5px;
+  cursor:pointer; text-transform:uppercase;
+}
+.bm-auth-btn:disabled { opacity:.5; cursor:default; }
+.bm-auth-btn-ghost { background:none; border:1px solid var(--border,#2a2a2a); color:var(--text,#eee); }
+.bm-auth-msg { font-size:12px; letter-spacing:.5px; min-height:16px; }
+.bm-auth-msg.err { color:#f85149; }
+.bm-auth-msg.ok { color:var(--accent,#00ffb0); }
+.bm-auth-switch { font-size:12px; color:var(--muted,#888); text-align:center; }
+.bm-auth-switch a { color:var(--accent,#00ffb0); cursor:pointer; text-decoration:underline; }
+.bm-codes { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:6px 0; }
+.bm-code { background:var(--bg,#0d0d0d); border:1px solid var(--border,#2a2a2a); border-radius:3px; padding:7px; font-family:monospace; font-size:13px; text-align:center; letter-spacing:1px; color:var(--text,#eee); }
+.bm-warn { font-size:12px; color:#e3b341; line-height:1.5; }
+</style>
+
+<div class="bm-auth-overlay" id="bmAuthOverlay">
+  <div class="bm-auth-card">
+    <div class="bm-auth-head">
+      <div class="bm-auth-title" id="bmAuthTitle">// ACCOUNT</div>
+      <button class="bm-auth-x" onclick="closeAuthModal()">×</button>
+    </div>
+    <div class="bm-auth-body" id="bmAuthBody"><!-- panels injected here --></div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  computeEmailHash, computeVerifier, buildRegistration,
+  unlockWithPassphrase, unlockWithRecoveryCode, buildPassphraseReset
+} from './bm-auth-crypto.js';
+
+const body = () => document.getElementById('bmAuthBody');
+const titleEl = () => document.getElementById('bmAuthTitle');
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// In-flight registration state (codes/dataKey kept until verification done).
+let pending = null;
+
+async function api(path, payload) {
+  const res = await fetch(path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { status: res.status, data };
+}
+
+window.openAuthModal = (panel = 'login') => {
+  document.getElementById('bmAuthOverlay').classList.add('open');
+  renderPanel(panel);
+};
+window.closeAuthModal = () => {
+  document.getElementById('bmAuthOverlay').classList.remove('open');
+};
+
+function renderPanel(panel, ctx = {}) {
+  if (panel === 'login') return renderLogin(ctx);
+  if (panel === 'register') return renderRegister(ctx);
+  if (panel === 'verify') return renderVerify(ctx);
+  if (panel === 'codes') return renderCodes(ctx);
+  if (panel === 'recover') return renderRecover(ctx);
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function renderLogin() {
+  titleEl().textContent = '// SIGN IN';
+  body().innerHTML = `
+    <div class="bm-auth-label">Email</div>
+    <input class="bm-auth-input" id="bmLEmail" type="email" autocomplete="email">
+    <div class="bm-auth-label">Passphrase</div>
+    <input class="bm-auth-input" id="bmLPass" type="password" autocomplete="current-password">
+    <button class="bm-auth-btn" id="bmLBtn">Sign In</button>
+    <div class="bm-auth-msg" id="bmLMsg"></div>
+    <div class="bm-auth-switch">No account? <a id="bmToReg">Create one</a></div>
+    <div class="bm-auth-switch"><a id="bmToRecover">Forgot passphrase? Recover</a></div>
+  `;
+  document.getElementById('bmToReg').onclick = () => renderPanel('register');
+  document.getElementById('bmToRecover').onclick = () => renderPanel('recover');
+  document.getElementById('bmLBtn').onclick = doLogin;
+}
+
+async function doLogin() {
+  const email = document.getElementById('bmLEmail').value.trim();
+  const pass = document.getElementById('bmLPass').value;
+  const msg = document.getElementById('bmLMsg');
+  const btn = document.getElementById('bmLBtn');
+  if (!email || !pass) { msg.className = 'bm-auth-msg err'; msg.textContent = 'Enter email and passphrase.'; return; }
+  btn.disabled = true; msg.className = 'bm-auth-msg'; msg.textContent = 'Signing in…';
+  try {
+    const emailHash = await computeEmailHash(email);
+    const verifier = await computeVerifier(pass, emailHash);
+    const { status, data } = await api('/user/login', { emailHash, verifier });
+    if (status === 403 && data.code === 'unverified') {
+      msg.className = 'bm-auth-msg err'; msg.textContent = 'Email not verified.';
+      renderPanel('verify', { email, emailHash }); return;
+    }
+    if (status !== 200) {
+      msg.className = 'bm-auth-msg err';
+      msg.textContent = data.code === 'rate_limit' ? 'Too many attempts. Wait 15 min.' : 'Invalid email or passphrase.';
+      btn.disabled = false; return;
+    }
+    // Unlock the DATA KEY locally with the returned envelope.
+    const dataKey = await unlockWithPassphrase(pass, emailHash, data.kdfSalt, data.passphraseEnvelope);
+    setSession({ emailHash, email, dataKey });
+    msg.className = 'bm-auth-msg ok'; msg.textContent = '✓ Signed in.';
+    setTimeout(closeAuthModal, 600);
+  } catch (e) {
+    msg.className = 'bm-auth-msg err'; msg.textContent = 'Could not unlock — wrong passphrase?';
+    btn.disabled = false;
+  }
+}
+
+// ── REGISTER ────────────────────────────────────────────────────────────────────
+function renderRegister() {
+  titleEl().textContent = '// CREATE ACCOUNT';
+  body().innerHTML = `
+    <div class="bm-auth-label">Email</div>
+    <input class="bm-auth-input" id="bmREmail" type="email" autocomplete="email">
+    <div class="bm-auth-label">Passphrase</div>
+    <input class="bm-auth-input" id="bmRPass" type="password" autocomplete="new-password">
+    <div class="bm-auth-label">Confirm passphrase</div>
+    <input class="bm-auth-input" id="bmRPass2" type="password" autocomplete="new-password">
+    <div class="bm-warn">⚠ Your passphrase encrypts your data and is never sent to the server. If you lose it, only your recovery codes can restore access — we cannot reset it for you.</div>
+    <button class="bm-auth-btn" id="bmRBtn">Create Account</button>
+    <div class="bm-auth-msg" id="bmRMsg"></div>
+    <div class="bm-auth-switch">Have an account? <a id="bmToLogin">Sign in</a></div>
+  `;
+  document.getElementById('bmToLogin').onclick = () => renderPanel('login');
+  document.getElementById('bmRBtn').onclick = doRegister;
+}
+
+async function doRegister() {
+  const email = document.getElementById('bmREmail').value.trim();
+  const pass = document.getElementById('bmRPass').value;
+  const pass2 = document.getElementById('bmRPass2').value;
+  const msg = document.getElementById('bmRMsg');
+  const btn = document.getElementById('bmRBtn');
+  if (!email.includes('@')) { msg.className='bm-auth-msg err'; msg.textContent='Enter a valid email.'; return; }
+  if (pass.length < 10) { msg.className='bm-auth-msg err'; msg.textContent='Passphrase must be at least 10 characters.'; return; }
+  if (pass !== pass2) { msg.className='bm-auth-msg err'; msg.textContent='Passphrases do not match.'; return; }
+  btn.disabled = true; msg.className='bm-auth-msg'; msg.textContent='Generating keys…';
+  try {
+    const reg = await buildRegistration(email, pass);
+    const { status, data } = await api('/user/register', reg.serverPayload);
+    if (status === 409) { msg.className='bm-auth-msg err'; msg.textContent='An account with this email exists.'; btn.disabled=false; return; }
+    if (status !== 200) { msg.className='bm-auth-msg err'; msg.textContent=data.error || 'Registration failed.'; btn.disabled=false; return; }
+    // Hold codes + dataKey until the user has saved codes and verified email.
+    pending = { email, emailHash: reg.serverPayload.emailHash, dataKey: reg.dataKey };
+    renderPanel('codes', { codes: reg.recoveryCodes });
+  } catch (e) {
+    msg.className='bm-auth-msg err'; msg.textContent='Error: ' + e.message; btn.disabled=false;
+  }
+}
+
+// ── RECOVERY CODES (shown once) ─────────────────────────────────────────────────
+function renderCodes({ codes }) {
+  titleEl().textContent = '// SAVE RECOVERY CODES';
+  body().innerHTML = `
+    <div class="bm-warn">These 10 codes are the ONLY way to recover your account if you forget your passphrase. Save them somewhere safe. They are shown once and never again.</div>
+    <div class="bm-codes">${codes.map(c => `<div class="bm-code">${esc(c)}</div>`).join('')}</div>
+    <button class="bm-auth-btn bm-auth-btn-ghost" id="bmCopyCodes">⎘ Copy all codes</button>
+    <label style="font-size:12px;color:var(--muted,#888);display:flex;gap:8px;align-items:center;">
+      <input type="checkbox" id="bmCodesSaved"> I have saved these codes
+    </label>
+    <button class="bm-auth-btn" id="bmCodesNext" disabled>Continue</button>
+  `;
+  document.getElementById('bmCopyCodes').onclick = () => navigator.clipboard?.writeText(codes.join('\n'));
+  document.getElementById('bmCodesSaved').onchange = (e) => { document.getElementById('bmCodesNext').disabled = !e.target.checked; };
+  document.getElementById('bmCodesNext').onclick = () => renderPanel('verify', { email: pending.email, emailHash: pending.emailHash });
+}
+
+// ── EMAIL VERIFICATION ──────────────────────────────────────────────────────────
+function renderVerify({ email, emailHash }) {
+  titleEl().textContent = '// VERIFY EMAIL';
+  body().innerHTML = `
+    <div style="font-size:13px;color:var(--text,#eee);">We've sent a 6-digit code to <b>${esc(email)}</b>. Enter it below.</div>
+    <div class="bm-warn">During testing, the code is printed to the server logs (email isn't wired up yet).</div>
+    <div class="bm-auth-label">Verification code</div>
+    <input class="bm-auth-input" id="bmVCode" inputmode="numeric" maxlength="6" style="letter-spacing:4px;text-align:center;font-size:18px;">
+    <button class="bm-auth-btn" id="bmVBtn">Verify</button>
+    <div class="bm-auth-msg" id="bmVMsg"></div>
+    <div class="bm-auth-switch"><a id="bmVResend">Resend code</a></div>
+  `;
+  document.getElementById('bmVBtn').onclick = () => doVerify(email, emailHash);
+  document.getElementById('bmVResend').onclick = async () => {
+    await api('/email/verify/send', { emailHash });
+    const m = document.getElementById('bmVMsg'); m.className='bm-auth-msg ok'; m.textContent='Code resent (check server logs).';
+  };
+}
+
+async function doVerify(email, emailHash) {
+  const code = document.getElementById('bmVCode').value.trim();
+  const msg = document.getElementById('bmVMsg');
+  const btn = document.getElementById('bmVBtn');
+  if (!/^\d{6}$/.test(code)) { msg.className='bm-auth-msg err'; msg.textContent='Enter the 6-digit code.'; return; }
+  btn.disabled = true; msg.className='bm-auth-msg'; msg.textContent='Verifying…';
+  const { status, data } = await api('/email/verify/confirm', { emailHash, code });
+  if (status !== 200) { msg.className='bm-auth-msg err'; msg.textContent='Invalid or expired code.'; btn.disabled=false; return; }
+  msg.className='bm-auth-msg ok'; msg.textContent='✓ Email verified.';
+  // If this followed registration, we already hold the dataKey — sign in directly.
+  if (pending && pending.emailHash === emailHash) {
+    setSession({ emailHash, email: pending.email, dataKey: pending.dataKey });
+    pending = null;
+    setTimeout(closeAuthModal, 700);
+  } else {
+    setTimeout(() => renderPanel('login'), 700);
+  }
+}
+
+// ── RECOVERY ────────────────────────────────────────────────────────────────────
+function renderRecover() {
+  titleEl().textContent = '// RECOVER ACCOUNT';
+  body().innerHTML = `
+    <div class="bm-warn">Enter your email and one of your recovery codes, then set a new passphrase. This issues fresh recovery codes and invalidates the old ones.</div>
+    <div class="bm-auth-label">Email</div>
+    <input class="bm-auth-input" id="bmRcEmail" type="email">
+    <div class="bm-auth-label">Recovery code</div>
+    <input class="bm-auth-input" id="bmRcCode" placeholder="BMxx-xxxx-xxxx" style="font-family:monospace;">
+    <div class="bm-auth-label">New passphrase</div>
+    <input class="bm-auth-input" id="bmRcPass" type="password" autocomplete="new-password">
+    <button class="bm-auth-btn" id="bmRcBtn">Recover &amp; Reset</button>
+    <div class="bm-auth-msg" id="bmRcMsg"></div>
+    <div class="bm-auth-switch"><a id="bmRcToLogin">Back to sign in</a></div>
+  `;
+  document.getElementById('bmRcToLogin').onclick = () => renderPanel('login');
+  document.getElementById('bmRcBtn').onclick = doRecover;
+}
+
+async function doRecover() {
+  const email = document.getElementById('bmRcEmail').value.trim();
+  const code = document.getElementById('bmRcCode').value.trim();
+  const newPass = document.getElementById('bmRcPass').value;
+  const msg = document.getElementById('bmRcMsg');
+  const btn = document.getElementById('bmRcBtn');
+  if (!email || !code || newPass.length < 10) { msg.className='bm-auth-msg err'; msg.textContent='Fill all fields (passphrase ≥ 10 chars).'; return; }
+  btn.disabled = true; msg.className='bm-auth-msg'; msg.textContent='Recovering…';
+  try {
+    const emailHash = await computeEmailHash(email);
+    const { status, data } = await api('/recovery/consume', { emailHash });
+    if (status !== 200) { msg.className='bm-auth-msg err'; msg.textContent='Recovery failed.'; btn.disabled=false; return; }
+    // Unlock the DATA KEY with the recovery code locally.
+    const dataKey = await unlockWithRecoveryCode(code, emailHash, data.recoveryEnvelopes);
+    // Build a new passphrase + fresh recovery codes, send the reset.
+    const reset = await buildPassphraseReset(email, newPass, dataKey, null);
+    const r2 = await api('/recovery/reset', reset.serverPayload);
+    if (r2.status !== 200) { msg.className='bm-auth-msg err'; msg.textContent='Reset failed.'; btn.disabled=false; return; }
+    setSession({ emailHash, email, dataKey });
+    renderPanel('codes', { codes: reset.recoveryCodes }); // show the NEW codes
+  } catch (e) {
+    msg.className='bm-auth-msg err'; msg.textContent='Recovery code did not match. Check and retry.';
+    btn.disabled = false;
+  }
+}
+
+// ── session ─────────────────────────────────────────────────────────────────────
+function setSession({ emailHash, email, dataKey }) {
+  // In-memory only for Pass 1. (Pass 2 adds trusted-device / session-token caching.)
+  window.bmSession = { emailHash, email, dataKey };
+  window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email } }));
+}
+window.bmSignOut = () => {
+  window.bmSession = null;
+  window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: false } }));
+};
+window.bmIsSignedIn = () => !!window.bmSession;
+
+// ── nav button: open modal, or show signed-in state ──────────────────────────
+window.bmAccountClick = () => {
+  if (window.bmSession) {
+    if (confirm(`Signed in as ${window.bmSession.email}.\n\nSign out?`)) window.bmSignOut();
+  } else {
+    window.openAuthModal('login');
+  }
+};
+function bmUpdateAccountBtn() {
+  const btn = document.getElementById('bmAccountBtn');
+  if (!btn) return;
+  if (window.bmSession) {
+    btn.textContent = '⊙ ' + (window.bmSession.email.split('@')[0].slice(0, 12));
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+  } else {
+    btn.textContent = '⊙ ACCOUNT';
+    btn.style.color = 'var(--muted)';
+    btn.style.borderColor = 'var(--border)';
+  }
+}
+window.addEventListener('bm-auth-changed', bmUpdateAccountBtn);
+bmUpdateAccountBtn();
+
 </script>
 
 </body>
