@@ -1,0 +1,63 @@
+name: Deploy to Fly.io (Staging)
+
+# Pushes to `staging`, or manual run. Production (deploy.yml, main branch) is separate.
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+jobs:
+  preflight:
+    name: Pre-flight checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required files exist
+        run: |
+          REQUIRED=(
+            beast-mode-mech-my-ride-v4.html
+            sw.js manifest.json
+            icon192.png icon512.png
+            main.ts deno.json start.sh Caddyfile
+            fly.staging.toml
+          )
+          MISSING=()
+          for f in "${REQUIRED[@]}"; do
+            if [ ! -f "$f" ]; then MISSING+=("$f"); fi
+          done
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "❌ Missing required files: ${MISSING[*]}"
+            exit 1
+          fi
+          echo "✅ All required files present"
+
+      - name: Check backend JS/TS syntax
+        run: |
+          # Provider modules are plain ES modules — node --check validates syntax.
+          node --check providers/index.js   && echo "✅ providers/index.js OK"
+          node --check providers/runware.js  && echo "✅ providers/runware.js OK"
+          node --check providers/catalog.js  && echo "✅ providers/catalog.js OK"
+
+  deploy:
+    name: Deploy to staging
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io (staging)
+        # --no-cache: same scar as stckrm — the remote builder will otherwise
+        # reuse cached minify output and silently ship a stale frontend.
+        run: flyctl deploy --config fly.staging.toml --remote-only --strategy rolling --ha=false --no-cache
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deployment health
+        if: always()
+        run: |
+          sleep 5
+          flyctl status --app prompt-lab-staging
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

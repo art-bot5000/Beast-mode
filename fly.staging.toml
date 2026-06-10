@@ -1,0 +1,39 @@
+# fly.staging.toml — Prompt Lab (STAGING)
+# Separate app + separate volume so staging NEVER touches production user data
+# or production billing. Deploy target for the `staging` branch.
+app = 'prompt-lab-staging'
+primary_region = 'lhr'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[deploy]
+  strategy = 'rolling'
+
+[env]
+  DENO_KV_PATH = '/data/promptlab.db'
+
+[[mounts]]
+  source = 'promptlab_staging_data'
+  destination = '/data'
+  initial_size = '1gb'
+  snapshot_retention = 5
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  # Staging can scale to zero between tests to save money — no always-on cron
+  # needed here unless you're specifically testing the snapshot job.
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 200
+    soft_limit = 150
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

@@ -1,0 +1,120 @@
+:8080 {
+    encode {
+        zstd
+        br
+        gzip
+        minimum_length 256
+    }
+
+    # ════════════════════════════════════════════════════════════════════
+    # BACKEND ROUTE PREFIXES (reverse-proxied to Deno on :8000)
+    #
+    # ⚠ Same rule as stckrm: every top-level route prefix in main.ts MUST be
+    # listed here, or Caddy's catch-all file_server returns 404 for it and the
+    # endpoint dies SILENTLY. When you add a route to main.ts, add it here too.
+    # ════════════════════════════════════════════════════════════════════
+
+    handle /ping {
+        reverse_proxy localhost:8000
+    }
+
+    # ── Image generation + model discovery (the pieces we built) ──────────
+    handle /api/* {
+        reverse_proxy localhost:8000
+    }
+
+    # ── Account / auth / crypto (lifted from stckrm's model) ──────────────
+    handle /user/* {
+        reverse_proxy localhost:8000
+    }
+    handle /key/* {
+        reverse_proxy localhost:8000
+    }
+    handle /device/* {
+        reverse_proxy localhost:8000
+    }
+    handle /passkey/* {
+        reverse_proxy localhost:8000
+    }
+    handle /mfa/* {
+        reverse_proxy localhost:8000
+    }
+    handle /recovery/* {
+        reverse_proxy localhost:8000
+    }
+    handle /email/* {
+        reverse_proxy localhost:8000
+    }
+    handle /admin/* {
+        reverse_proxy localhost:8000
+    }
+
+    # ── Settings sync (the zero-knowledge blob lives server-side) ─────────
+    handle /settings/* {
+        reverse_proxy localhost:8000
+    }
+
+    # ── Webhooks / cron triggers (R2 snapshots, Runware async if used) ────
+    handle /webhook/* {
+        reverse_proxy localhost:8000
+    }
+
+    # robots.txt — keep the app shell and admin out of crawlers.
+    handle /robots.txt {
+        header Content-Type "text/plain; charset=utf-8"
+        header Cache-Control "public, max-age=86400"
+        respond "User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /admin
+"
+    }
+
+    # ════════════════════════════════════════════════════════════════════
+    # STATIC FILE SERVING + SECURITY HEADERS
+    # ════════════════════════════════════════════════════════════════════
+    handle {
+        root * /app/public
+        file_server
+
+        @html path *.html
+        header @html Cache-Control "no-cache, no-store, must-revalidate"
+
+        @sw path /sw.js
+        header @sw Cache-Control "no-cache, no-store, must-revalidate"
+
+        @manifest path /manifest.json
+        header @manifest Cache-Control "public, max-age=3600"
+
+        @assets path *.js *.css
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+
+        header {
+            X-Content-Type-Options "nosniff"
+            X-Frame-Options "DENY"
+            Cross-Origin-Opener-Policy "same-origin-allow-popups"
+            # ────────────────────────────────────────────────────────────
+            # CSP — REPORT-ONLY first (stckrm's methodology). Exercise EVERY
+            # flow (Google sign-in, Dropbox connect, a Runware generation,
+            # image display, reference-image search) with this in report-only,
+            # drive violations to zero, THEN rename the header to
+            # `Content-Security-Policy` to enforce.
+            #
+            # Origins, and why each is here:
+            #   script-src   accounts.google.com/gsi/client  → Google Identity Services
+            #                cdnjs.cloudflare.com             → any CDN libs the app uses
+            #   connect-src  api.runware.ai                   → generation + modelSearch
+            #                *.googleapis.com, accounts.google.com → Drive API + OAuth/token
+            #                api.dropboxapi.com, content.dropboxapi.com → Dropbox API
+            #                api.inaturalist.org, *.wikimedia.org → reference-image search
+            #   img-src      im.runware.ai                    → generated image CDN
+            #                (https: kept broad for Drive/Dropbox/iNat thumbnails)
+            #   frame-src    accounts.google.com, *.dropbox.com → OAuth popups/iframes
+            # ────────────────────────────────────────────────────────────
+            Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.runware.ai https://im.runware.ai https://*.googleapis.com https://accounts.google.com https://api.dropboxapi.com https://content.dropboxapi.com https://api.inaturalist.org https://*.wikimedia.org; frame-src https://accounts.google.com https://*.dropbox.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+            Referrer-Policy "strict-origin-when-cross-origin"
+            Permissions-Policy "camera=(), microphone=()"
+            -Server
+        }
+    }
+}
