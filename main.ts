@@ -39,7 +39,7 @@ if (missing.length) {
 // them directly. generate() picks the provider from the model-id prefix.
 import { generate, searchModels, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
-import { rehostToR2, r2Enabled } from "./r2.js";
+import { rehostToR2, r2Enabled, trimR2ToNewest } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
@@ -147,12 +147,19 @@ async function handler(req: Request): Promise<Response> {
             if (!img.url) return;
             try {
               const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
-              const key = `gen/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+              // Per-user prefix so retention is per user, not global.
+              const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
               img.url = await rehostToR2(img.url, key);
             } catch (e) {
               console.warn("R2 rehost failed, keeping original URL:", (e as Error).message);
             }
           }),
+        );
+        // FIFO retention: keep only this user's newest 5 images on R2. Their
+        // durable copies belong in their own Drive/Dropbox; R2 is a hot cache.
+        // Fire-and-forget — a trim failure must never break generation.
+        trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
+          console.warn("R2 trim failed (non-fatal):", (e as Error).message)
         );
       }
 

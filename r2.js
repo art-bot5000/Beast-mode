@@ -133,3 +133,92 @@ export async function rehostToR2(sourceUrl, key) {
   // 4) Return the durable public URL.
   return `${cfg.publicBase.replace(/\/$/, '')}/${key}`;
 }
+
+// ── List / delete / trim (FIFO retention) ────────────────────────────────────
+// Signs a request with an optional canonical query string (needed for
+// ListObjectsV2). Query keys+values must be URL-encoded and sorted by key.
+
+async function signedR2Fetch(method, pathAfterHost, queryPairs, bodyBytes) {
+  const cfg = r2Config();
+  if (!cfg) throw new Error('R2 not configured');
+  const host = `${cfg.accountId}.r2.cloudflarestorage.com`;
+
+  const sortedQuery = (queryPairs || [])
+    .map(([k, v]) => [encodeURIComponent(k), encodeURIComponent(v)])
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&');
+
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = await sha256Hex(bodyBytes || '');
+
+  const canonicalHeaders =
+    `host:${host}\n` +
+    `x-amz-content-sha256:${payloadHash}\n` +
+    `x-amz-date:${amzDate}\n`;
+  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [method, pathAfterHost, sortedQuery, canonicalHeaders, signedHeaders, payloadHash].join('\n');
+
+  const region = 'auto', service = 's3';
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, await sha256Hex(canonicalRequest)].join('\n');
+  const sk = await signingKey(cfg.secretKey, dateStamp, region, service);
+  const signature = hex(await hmac(sk, stringToSign));
+
+  const url = `https://${host}${pathAfterHost}${sortedQuery ? '?' + sortedQuery : ''}`;
+  return fetch(url, {
+    method,
+    headers: {
+      'Authorization': `AWS4-HMAC-SHA256 Credential=${cfg.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    },
+    body: bodyBytes,
+  });
+}
+
+/** List object keys under a prefix, with last-modified timestamps. */
+export async function listR2(prefix) {
+  const cfg = r2Config();
+  if (!cfg) throw new Error('R2 not configured');
+  const res = await signedR2Fetch('GET', `/${cfg.bucket}`, [
+    ['list-type', '2'],
+    ['prefix', prefix],
+  ]);
+  if (!res.ok) throw new Error(`R2 list failed: HTTP ${res.status}`);
+  const xml = await res.text();
+  // Parse <Contents><Key>..</Key><LastModified>..</LastModified>...</Contents>
+  const out = [];
+  const re = /<Contents>[\s\S]*?<Key>([^<]+)<\/Key>[\s\S]*?<LastModified>([^<]+)<\/LastModified>[\s\S]*?<\/Contents>/g;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    out.push({ key: m[1], lastModified: new Date(m[2]).getTime() });
+  }
+  return out;
+}
+
+/** Delete a single object. */
+export async function deleteFromR2(key) {
+  const cfg = r2Config();
+  if (!cfg) throw new Error('R2 not configured');
+  const res = await signedR2Fetch('DELETE', `/${cfg.bucket}/${key}`);
+  // 204 = deleted; 404 = already gone (fine either way)
+  if (!res.ok && res.status !== 404) throw new Error(`R2 delete failed: HTTP ${res.status}`);
+}
+
+/**
+ * FIFO retention: keep only the newest `keep` objects under a prefix, delete
+ * the rest (oldest first). Designed to be fire-and-forget after each upload.
+ */
+export async function trimR2ToNewest(prefix, keep) {
+  const items = await listR2(prefix);
+  if (items.length <= keep) return 0;
+  items.sort((a, b) => b.lastModified - a.lastModified); // newest first
+  const toDelete = items.slice(keep);
+  for (const item of toDelete) {
+    try { await deleteFromR2(item.key); } catch { /* best-effort */ }
+  }
+  return toDelete.length;
+}

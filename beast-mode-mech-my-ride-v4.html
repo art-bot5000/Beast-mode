@@ -3328,7 +3328,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
         <div class="settings-section-title">Data &amp; Export</div>
         <!-- Local storage warning when not synced -->
         <div id="localStorageWarning" style="display:none;background:color-mix(in srgb,#ff9900 12%,transparent);border:1px solid #ff9900;border-radius:4px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#ff9900;letter-spacing:.5px;line-height:1.7;">
-          ⚠ <strong>No cloud sync active.</strong> Data is stored in your browser only and may be lost if browser storage is cleared. We strongly recommend connecting Google Drive or Dropbox in the Cloud Sync section above.
+          ⚠ <strong>No cloud sync active.</strong> Prompts are stored in this browser only, and <strong>only your last 5 generated images are kept online</strong> — older images are removed and browser storage can be wiped at any time. Connect Google Drive or Dropbox in the Cloud Sync section above to keep all your prompts and images safe.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
           <button class="btn btn-primary" onclick="exportZip()" style="font-size:12px;">📦 DOWNLOAD FULL BACKUP (.ZIP)</button>
@@ -9511,16 +9511,45 @@ window.addEventListener('load', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 function syncGateCheck() {
-  // Skip if already connected to cloud
+  // ── Stage 1: APP ACCOUNT first. The account is now the primary identity
+  // (generation requires it); cloud sync is the secondary step.
+  if (!window.bmSession) {
+    if (getCookie('bm_sync_dismissed')) { updateLocalWarning(); return }
+    showSyncGate('account')
+    return
+  }
+  // ── Stage 2: cloud sync (Drive/Dropbox) for data durability.
   if (cloudIsConnected()) { updateLocalWarning(); return }
-  // Skip if user previously dismissed
   if (getCookie('bm_sync_dismissed')) { updateLocalWarning(); return }
-  // Skip if local data exists (they have data, just no cloud yet)
   const hasLocalData = lsLoad(LS.FAVS)?.length > 0 ||
     lsLoad(LS.PB_LIBS)?.[0]?.particles?.length > 0
   if (hasLocalData) { updateLocalWarning(); return }
-  // No cloud, no data — show gate
+  showSyncGate('cloud')
+}
+
+// Show the gate in one of two stages: 'account' (sign in to the app) or
+// 'cloud' (connect Drive/Dropbox). The modal markup contains both sections;
+// we toggle which is visible.
+function showSyncGate(stage) {
+  const acct = document.getElementById('syncGateAccountSection')
+  const cloud = document.getElementById('syncGateCloudSection')
+  if (acct) acct.style.display = stage === 'account' ? 'flex' : 'none'
+  if (cloud) cloud.style.display = stage === 'cloud' ? 'flex' : 'none'
   document.getElementById('syncGateModal').style.display = 'flex'
+}
+
+// When the user signs in to the app, advance the gate to the cloud stage
+// (or close it if cloud is already connected).
+window.addEventListener('bm-auth-changed', (e) => {
+  if (e.detail?.signedIn) {
+    const modal = document.getElementById('syncGateModal')
+    if (modal && modal.style.display === 'flex') syncGateCheck()
+  }
+})
+
+function syncGateOpenAccount() {
+  closeSyncGate()
+  if (typeof openAuthModal === 'function') openAuthModal('login')
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -9670,12 +9699,16 @@ function renderSettingsViewGenOnly() {
 function syncGateChooseGdrive() {
   closeSyncGate()
   cloudSetProvider('gdrive')
-  switchView('settings')
-  // Trigger Google sign-in
-  setTimeout(() => {
-    const btn = document.getElementById('settingsSignInBtn')?.querySelector('button,div[role=button]')
-    if (btn) btn.click()
-  }, 400)
+  // Request the token DIRECTLY — same proven path as the settings Connect
+  // button. (The old code simulated a click on the GIS-rendered button after a
+  // 400ms wait; if the button hadn't rendered yet the click silently no-oped,
+  // which is why this modal "did nothing".)
+  if (typeof google !== 'undefined' && driveTokenClient) {
+    driveTokenClient.requestAccessToken({ prompt: 'select_account' })
+  } else {
+    initDrive()
+    setTimeout(() => { driveTokenClient?.requestAccessToken({ prompt: 'select_account' }) }, 1200)
+  }
 }
 
 function syncGateChooseDropbox() {
@@ -17327,6 +17360,25 @@ document.addEventListener('viewSwitched', e => {
       <div style="font-size:10px;letter-spacing:2px;color:var(--muted);">YOUR STYLE, YOUR EXPERTISE, YOUR PROMPT.</div>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+
+      <!-- ═══ STAGE 1: APP ACCOUNT (primary identity) ═══ -->
+      <div id="syncGateAccountSection" style="display:none;flex-direction:column;gap:12px;">
+        <button class="sync-gate-btn" onclick="syncGateOpenAccount()" style="border-color:color-mix(in srgb,var(--accent) 40%,transparent);">
+          <span class="sync-gate-icon" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);">⊙</span>
+          <div style="flex:1;">
+            <div style="font-weight:700;letter-spacing:.5px;color:var(--accent);">Sign in / Create account</div>
+            <div style="font-size:10px;opacity:.7;margin-top:2px;">Your Beast Mode account — required for image generation</div>
+          </div>
+        </button>
+        <div style="background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:5px;padding:10px 14px;">
+          <div style="font-size:11px;color:var(--muted);line-height:1.7;letter-spacing:.3px;">
+            An account unlocks <strong style="color:var(--text);">image generation</strong> and saves your settings. After signing in you can connect Google Drive or Dropbox to keep your prompts and images safe.
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ STAGE 2: CLOUD SYNC (data durability) ═══ -->
+      <div id="syncGateCloudSection" style="display:none;flex-direction:column;gap:12px;">
       <!-- Google Drive -->
       <button class="sync-gate-btn" onclick="syncGateChooseGdrive()" id="syncGateGdriveBtn">
         <span class="sync-gate-icon" style="background:color-mix(in srgb,#4285F4 20%,transparent);color:#4285F4;">▲</span>
@@ -17355,10 +17407,11 @@ document.addEventListener('viewSwitched', e => {
       </button>
       <!-- Recommendation notice -->
       <div style="background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:5px;padding:10px 14px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:5px;">⊛ RECOMMENDED FOR FULL ACCESS</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:5px;">⚠ KEEP YOUR IMAGES SAFE</div>
         <div style="font-size:11px;color:var(--muted);line-height:1.7;letter-spacing:.3px;">
-          Connecting a cloud service unlocks the full app — <strong style="color:var(--text);">Generator</strong>, <strong style="color:var(--text);">Prompt Lab</strong> and <strong style="color:var(--text);">Prompt Library</strong> — with all your prompts, particles and settings saved and synced across devices. Without it, data is stored in your browser only and can be lost if storage is cleared.
+          Without cloud sync, your prompts live in this browser only and <strong style="color:var(--text);">only your last 5 generated images</strong> are kept online — older ones are removed. Connect <strong style="color:var(--text);">Google Drive</strong> or <strong style="color:var(--text);">Dropbox</strong> to keep everything saved and synced across devices.
         </div>
+      </div>
       </div>
       <!-- Divider -->
       <div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
