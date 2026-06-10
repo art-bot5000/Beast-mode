@@ -6964,9 +6964,19 @@ let driveTokenClient = null   // pre-created, reused for silent refresh
 let driveHistoryId   = null   // cloud file id for prompt history
 
 // ── AUTH
+let driveGisInited = false   // guard: GIS setup must run only ONCE (calling
+                             // google.accounts.id.initialize twice causes the
+                             // "called multiple times" warning + flaky sign-in)
 function initDrive() {
   if (typeof google === 'undefined') { setTimeout(initDrive, 600); return }
 
+  // If GIS is already set up, don't re-initialize. A repeat call just means
+  // "make sure we're connected" — re-run the silent token request instead.
+  if (driveGisInited) {
+    try { driveTokenClient?.requestAccessToken({ prompt: '' }) } catch (e) {}
+    return
+  }
+  driveGisInited = true
   // Pre-create token client once — reused for all token requests incl. refresh
   driveTokenClient = google.accounts.oauth2.initTokenClient({
     client_id: DRIVE_CLIENT_ID,
