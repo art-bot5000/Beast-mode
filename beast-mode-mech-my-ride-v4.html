@@ -9274,23 +9274,20 @@ function renderSettingsView() {
     const sl = document.getElementById('settingsStatusLine')
     if (sl) sl.textContent = '✓ Connected to Google Drive'
   } else {
-    // Re-render the Google sign-in button each time so it always appears
+    // Always render OUR connect button. (Previously this branch rendered
+    // Google's GIS sign-in button whenever the SDK was loaded — the old flow.
+    // The server-side OAuth connection doesn't use GIS at all, so that button
+    // was a dead end and often rendered invisibly. driveConnect() is the one
+    // true path now.)
     const container = document.getElementById('settingsSignInBtn')
     if (container) {
       container.innerHTML = ''
-      if (typeof google !== 'undefined') {
-        google.accounts.id.renderButton(container, {
-          theme: 'outline', size: 'medium', text: 'signin_with', shape: 'rectangular'
-        })
-      } else {
-        // SDK not yet loaded — show a plain button that triggers the auth flow
-        const btn = document.createElement('button')
-        btn.className = 'btn btn-primary'
-        btn.style.fontSize = '12px'
-        btn.textContent = '▲ CONNECT GOOGLE DRIVE'
-        btn.onclick = () => { driveConnect() }
-        container.appendChild(btn)
-      }
+      const btn = document.createElement('button')
+      btn.className = 'btn btn-primary'
+      btn.style.fontSize = '12px'
+      btn.textContent = '▲ CONNECT GOOGLE DRIVE'
+      btn.onclick = () => { driveConnect() }
+      container.appendChild(btn)
     }
   }
 
@@ -18029,6 +18026,13 @@ async function driveServerTokenBootstrap() {
     if (!res.ok) return                      // transient — next reload retries
     const data = await res.json()
     driveToken = data.accessToken
+    // Stash the connected account email so the settings panel can display it
+    // (the old GIS flow populated this from the id-token; we get it from the
+    // backend's token response instead).
+    try {
+      const sess = JSON.parse(localStorage.getItem('bm_drive_session') || '{}')
+      localStorage.setItem('bm_drive_session', JSON.stringify({ ...sess, name: data.email || 'Connected' }))
+    } catch (e) {}
     try { cloudSetProvider('gdrive') } catch (e) {}
     if (typeof setDriveStatus === 'function') setDriveStatus('✓ CONNECTED', 'ok')
     if (typeof updateLocalWarning === 'function') updateLocalWarning()
