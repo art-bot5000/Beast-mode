@@ -20,7 +20,7 @@ jobs:
             beast-mode-mech-my-ride-v4.html
             sw.js manifest.json
             icon192.png icon512.png
-            main.ts auth.ts deno.json start.sh Caddyfile
+            main.ts auth.ts oauth.ts bm-auth-crypto.js deno.json start.sh Caddyfile
             Dockerfile package.json fly.toml
             index.js runware.js
             catalog.js r2.js
