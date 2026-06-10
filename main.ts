@@ -63,15 +63,6 @@ function rateLimited(ip: string): boolean {
   hits.set(ip, arr);
   return false;
 }
-
-// Deploy marker — bump this string on each test push to confirm
-  // GitHub Actions actually shipped the latest code.
-  if (path === "/version") {
-    return new Response(JSON.stringify({
-      version: "deploy-test-1",
-      builtFrom: "github-actions",
-    }), { headers: { "content-type": "application/json" } });
-  }
 // Periodic cleanup so the map doesn't grow unbounded.
 setInterval(() => {
   const now = Date.now();
@@ -101,6 +92,16 @@ async function handler(req: Request): Promise<Response> {
 
   // Readiness probe — start.sh waits for this before launching Caddy.
   if (path === "/ping") return new Response("ok");
+
+  // Deploy marker — bump this string on each test push to confirm GitHub
+  // Actions actually shipped the latest code. (Lives INSIDE handler() so the
+  // return is legal — a top-level return crashes Deno with "Illegal return".)
+  if (path === "/version") {
+    return new Response(
+      JSON.stringify({ version: "deploy-test-1", builtFrom: "github-actions" }),
+      { headers: { "content-type": "application/json" } },
+    );
+  }
 
   // ── Generation proxy: the key is attached HERE, server-side, never sent down.
   if (path === "/api/generate" && req.method === "POST") {
