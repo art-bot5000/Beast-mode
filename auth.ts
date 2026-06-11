@@ -24,6 +24,8 @@
 //   envelopes = DATA KEY wrapped by: passphrase-derived AES-KW key (PBKDF2 600k),
 //               + up to 10 recovery-code-derived keys. Only wrapped blobs are sent.
 
+import { sendEmail, otpEmail, emailEnabled } from "./email.ts";
+
 const kv = await Deno.openKv(Deno.env.get("DENO_KV_PATH") || undefined);
 
 // ── KV key layout ─────────────────────────────────────────────────────────────
@@ -78,14 +80,34 @@ function isEnvelope(e: unknown): e is Envelope {
   return !!e && typeof (e as Envelope).wrapped === "string";
 }
 
-// Six-digit OTP. Stubbed delivery: logged to server console (see sendOtpStub).
+// Six-digit OTP. Delivery via Resend (email.ts) with console-log fallback.
 function makeOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
-function sendOtpStub(email: string, code: string) {
-  // EMAIL STUB — replace with Resend later. For now the OTP is logged so you can
-  // complete the verification flow during testing. Visible in `fly logs`.
-  console.log(`[EMAIL STUB] OTP for ${email}: ${code}`);
+async function sendOtp(email: string, code: string): Promise<void> {
+  // Real delivery via Resend when configured; otherwise the original stub
+  // behaviour (logged to console, visible in `fly logs`) so dev/staging work
+  // with no secrets set.
+  if (!emailEnabled()) {
+    console.log(`[EMAIL STUB] OTP for ${email}: ${code}`);
+    return;
+  }
+  const ok = await sendEmail({ to: email, ...otpEmail(code) });
+  // Failures are logged only — responses stay generic so a delivery problem
+  // can never become an account-enumeration signal. The user's recourse is
+  // the resend button (/email/verify/send), gated by the cooldown below.
+  if (!ok) console.error(`OTP email delivery failed for account ${email}`);
+}
+
+// One send per address per minute. Checked on the RAW emailHash before any
+// account lookup, so the 429 is uniform for existing and non-existing
+// accounts (no enumeration signal) and the endpoint can't be used to
+// mail-bomb an arbitrary address now that emails are real.
+const OTP_COOLDOWN_MS = 60_000;
+async function otpCooldownHit(emailHash: string): Promise<boolean> {
+  if ((await kv.get(["otpcool", emailHash])).value) return true;
+  await kv.set(["otpcool", emailHash], 1, { expireIn: OTP_COOLDOWN_MS });
+  return false;
 }
 
 // ── Endpoint handlers ─────────────────────────────────────────────────────────
@@ -124,10 +146,12 @@ async function register(body: Record<string, unknown>): Promise<Response> {
     .commit();
   if (!res.ok) return json({ error: "Account already exists", code: "exists" }, 409);
 
-  // Issue the first verification OTP immediately.
+  // Issue the first verification OTP immediately (and arm the resend
+  // cooldown so register + instant resend can't double-send).
   const code = makeOtp();
   await kv.set(["otp", record.emailHash], { code, expires: Date.now() + 15 * 60_000 }, { expireIn: 15 * 60_000 });
-  sendOtpStub(record.email, code);
+  await otpCooldownHit(record.emailHash);
+  await sendOtp(record.email, code);
 
   return json({ ok: true, emailVerified: false });
 }
@@ -201,12 +225,17 @@ async function verifiedCheck(emailHash: string): Promise<Response> {
 async function otpSend(body: Record<string, unknown>): Promise<Response> {
   const { emailHash } = body;
   if (!isHex(emailHash, 32)) return json({ error: "Invalid emailHash", code: "bad_request" }, 400);
+  // Cooldown BEFORE the account lookup: the 429 is identical whether or not
+  // the account exists, so it leaks nothing and still stops mail-bombing.
+  if (await otpCooldownHit(emailHash as string)) {
+    return json({ error: "Please wait a minute before requesting another code.", code: "rate_limit" }, 429);
+  }
   const rec = await kv.get<UserRecord>(["user", emailHash as string]);
   // Anti-enumeration: always return ok, even if the account doesn't exist.
   if (rec.value && !rec.value.emailVerified) {
     const code = makeOtp();
     await kv.set(["otp", emailHash as string], { code, expires: Date.now() + 15 * 60_000 }, { expireIn: 15 * 60_000 });
-    sendOtpStub(rec.value.email, code);
+    await sendOtp(rec.value.email, code);
   }
   return json({ ok: true });
 }

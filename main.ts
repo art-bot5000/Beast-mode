@@ -41,6 +41,13 @@ if (!Deno.env.get("GOOGLE_CLIENT_SECRET")) {
 if (!Deno.env.get("GEMINI_API_KEY")) {
   console.warn("WARN: GEMINI_API_KEY not set — direct Gemini (Nano Banana) models will be unavailable.");
 }
+// Soft requirement: verification emails need both. Without them, OTPs fall
+// back to console logging (visible in `fly logs`) — fine for dev/staging,
+// NOT fine for prod with real users. Set with:
+//   fly secrets set RESEND_API_KEY=re_... MAIL_FROM='Beast Mode <verify@DOMAIN>' --app beast-mode
+if (!Deno.env.get("RESEND_API_KEY") || !Deno.env.get("MAIL_FROM")) {
+  console.warn("WARN: RESEND_API_KEY / MAIL_FROM not set — verification emails fall back to console logging.");
+}
 if (missing.length) {
   console.error(`FATAL: missing required secret(s): ${missing.join(", ")}`);
   console.error("Set them with: fly secrets set KEY=value --app beast-mode");
