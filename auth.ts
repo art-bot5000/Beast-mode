@@ -40,6 +40,13 @@ interface Envelope {
   salt?: string;        // KDF salt (passphrase envelope)
 }
 
+interface PasskeyCredential {
+  credentialId: string;          // base64 rawId
+  passkeyEnvelope: Envelope;     // DATA KEY wrapped by the PRF-derived AES-KW key
+  createdAt: number;
+  label?: string;                // optional user-facing name ("MacBook Touch ID")
+}
+
 interface UserRecord {
   emailHash: string;
   email: string;                 // for operational mail only
@@ -50,7 +57,12 @@ interface UserRecord {
   emailVerified: boolean;
   createdAt: number;
   deletedAt?: number;           // soft-delete stamp (admin); blocks sign-in + sessions
-  // Token ledger (Pass 3) and passkey fields (Pass 2) get added later.
+  // Passkeys (Pass 2): PRF-only. One shared prfSalt per account; the PRF output is
+  // credential-bound so a single salt is safe and lets one assertion derive the key
+  // for whichever passkey responds. Each passkey wraps the SAME DATA KEY.
+  passkeys?: PasskeyCredential[];
+  prfSalt?: string;             // base64, account-wide, set when first passkey enrols
+  // Token ledger (Pass 3) gets added later.
 }
 
 const json = (data: unknown, status = 200) =>
@@ -315,6 +327,109 @@ async function recoveryReset(body: Record<string, unknown>): Promise<Response> {
   return json({ ok: true, sessionToken: token });
 }
 
+// ── Passkeys (Pass 2, PRF-only) ───────────────────────────────────────────────
+// Enrolment requires a live session: you must already be unlocked (DATA KEY in
+// the browser) to wrap it under a new passkey. The server stores only the
+// credentialId, the account-wide prfSalt, and the wrapped envelope — never the
+// PRF output, never the DATA KEY. Trust boundary is identical to recovery codes.
+const MAX_PASSKEYS = 10;
+
+function isPasskeyCred(c: unknown): c is { credentialId: string; passkeyEnvelope: Envelope } {
+  return !!c && typeof (c as { credentialId: unknown }).credentialId === "string" &&
+    isEnvelope((c as { passkeyEnvelope: unknown }).passkeyEnvelope);
+}
+
+async function passkeyEnroll(req: Request, body: Record<string, unknown>): Promise<Response> {
+  // Gate on a valid session — the emailHash comes from the TOKEN, not the body,
+  // so one account can never enrol a passkey envelope onto another.
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const emailHash = await verifySessionToken(token);
+  if (!emailHash) return json({ error: "Not authenticated", code: "auth" }, 401);
+
+  const { credentialId, prfSalt, passkeyEnvelope, label } = body;
+  if (typeof credentialId !== "string" || !credentialId) {
+    return json({ error: "Invalid credentialId", code: "bad_request" }, 400);
+  }
+  if (typeof prfSalt !== "string" || !prfSalt) {
+    return json({ error: "Invalid prfSalt", code: "bad_request" }, 400);
+  }
+  if (!isEnvelope(passkeyEnvelope)) {
+    return json({ error: "Invalid passkey envelope", code: "bad_request" }, 400);
+  }
+
+  const rec = await kv.get<UserRecord>(["user", emailHash]);
+  if (!rec.value || rec.value.deletedAt) {
+    return json({ error: "Account not found", code: "not_found" }, 404);
+  }
+  const existing = rec.value.passkeys ?? [];
+  if (existing.length >= MAX_PASSKEYS) {
+    return json({ error: "Too many passkeys", code: "limit" }, 409);
+  }
+  // First passkey fixes the account-wide salt; later ones MUST reuse it (the
+  // browser is told the existing salt, so a mismatch means a client bug).
+  if (rec.value.prfSalt && rec.value.prfSalt !== prfSalt) {
+    return json({ error: "prfSalt mismatch", code: "bad_request" }, 400);
+  }
+  // Reject duplicate credentialId (idempotency / re-enrol guard).
+  if (existing.some((p) => p.credentialId === credentialId)) {
+    return json({ error: "Passkey already enrolled", code: "exists" }, 409);
+  }
+
+  const newCred: PasskeyCredential = {
+    credentialId,
+    passkeyEnvelope: passkeyEnvelope as Envelope,
+    createdAt: Date.now(),
+    ...(typeof label === "string" && label ? { label } : {}),
+  };
+  const updated: UserRecord = {
+    ...rec.value,
+    prfSalt: rec.value.prfSalt ?? (prfSalt as string),
+    passkeys: [...existing, newCred],
+  };
+  await kv.set(["user", emailHash], updated);
+  return json({ ok: true, passkeyCount: updated.passkeys!.length });
+}
+
+// Pre-login: the browser needs the credentialIds + the account prfSalt to run the
+// WebAuthn assertion. Anti-enumeration: a missing/passkey-less account returns the
+// SAME shape (empty list, null salt) as a real one — no existence signal. The
+// browser simply finds no credentials to offer.
+async function passkeyChallenge(body: Record<string, unknown>): Promise<Response> {
+  const { emailHash } = body;
+  if (!isHex(emailHash, 32)) return json({ passkeys: [], prfSalt: null });
+  const rec = await kv.get<UserRecord>(["user", emailHash as string]);
+  if (!rec.value || rec.value.deletedAt || !rec.value.emailVerified || !rec.value.prfSalt) {
+    return json({ passkeys: [], prfSalt: null });
+  }
+  const passkeys = (rec.value.passkeys ?? []).map((p) => ({
+    credentialId: p.credentialId,
+    passkeyEnvelope: p.passkeyEnvelope,
+  }));
+  return json({ passkeys, prfSalt: rec.value.prfSalt });
+}
+
+// Passkey login: the browser has already unwrapped the DATA KEY locally via the
+// PRF assertion; this endpoint just verifies the account is sign-in-eligible and
+// issues a session token (the server-side gate for paid endpoints). It does NOT
+// see the assertion — the unwrap is the proof of possession, mirroring how
+// /user/login trusts the verifier. Rate-limited like password login.
+async function passkeyLogin(body: Record<string, unknown>): Promise<Response> {
+  const { emailHash } = body;
+  if (!isHex(emailHash, 32)) return json({ error: "Invalid request", code: "bad_request" }, 400);
+  if (await loginRateLimited(emailHash as string)) {
+    return json({ error: "Too many attempts. Try again in 15 minutes.", code: "rate_limit" }, 429);
+  }
+  const rec = await kv.get<UserRecord>(["user", emailHash as string]);
+  if (!rec.value || rec.value.deletedAt || !rec.value.emailVerified ||
+      !(rec.value.passkeys && rec.value.passkeys.length)) {
+    // Generic failure — no signal about which condition failed.
+    return json({ error: "Passkey sign-in unavailable", code: "auth" }, 401);
+  }
+  const token = await issueSession(emailHash as string);
+  return json({ ok: true, sessionToken: token });
+}
+
 // ── Router: returns a Response if it handled the path, else null ──────────────
 export async function handleAuth(req: Request, url: URL): Promise<Response | null> {
   const path = url.pathname;
@@ -331,6 +446,9 @@ export async function handleAuth(req: Request, url: URL): Promise<Response | nul
   if (path === "/email/verify/confirm" && method === "POST") return otpConfirm(await readBody());
   if (path === "/recovery/consume" && method === "POST") return recoveryConsume(await readBody());
   if (path === "/recovery/reset" && method === "POST") return recoveryReset(await readBody());
+  if (path === "/passkey/enroll" && method === "POST") return passkeyEnroll(req, await readBody());
+  if (path === "/passkey/challenge" && method === "POST") return passkeyChallenge(await readBody());
+  if (path === "/passkey/login" && method === "POST") return passkeyLogin(await readBody());
 
   return null; // not an auth route
 }

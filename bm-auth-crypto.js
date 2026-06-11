@@ -184,3 +184,124 @@ export async function buildPassphraseReset(email, newPassphrase, dataKey, recove
     recoveryCodes: newCodes,
   };
 }
+
+// ── Passkeys (WebAuthn PRF) ───────────────────────────────────────────────────
+// PRF-only design (no device fallback): a passkey is a FOURTH way to unwrap the
+// SAME DATA KEY, exactly like a recovery code. The authenticator's PRF extension
+// returns 32 bytes of high-entropy secret bound to (credential, prfSalt). We
+// HKDF that into an AES-KW key and wrap the DATA KEY with it. The server stores
+// only { credentialId, prfSalt, wrapped } — never the PRF output, never the key.
+// If the authenticator doesn't support PRF, enrolment is refused (see HTML).
+//
+// rpId is the registrable domain; we use location.hostname so staging/prod each
+// scope their own credentials. The PRF salt is per-credential random, stored
+// server-side and replayed at assertion time so the SAME secret re-derives.
+
+const PRF_INFO = te.encode("bm-passkey-prf-v1");
+
+// HKDF-SHA256(prfOutput) -> AES-KW key. prfOutput is already uniform 32 bytes,
+// so HKDF (not PBKDF2) is correct: no stretching needed, just domain separation.
+async function derivePrfWrapKey(prfOutput, emailHash) {
+  const base = await crypto.subtle.importKey("raw", prfOutput, "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: te.encode("bm-passkey:" + emailHash), info: PRF_INFO },
+    base,
+    { name: "AES-KW", length: 256 },
+    false,
+    ["wrapKey", "unwrapKey"],
+  );
+}
+
+// Feature-detect: PRF requires WebAuthn + a platform that surfaces the extension.
+// We can't fully know until enrolment returns results.prf, but we can gate on the
+// API existing at all so the UI hides the button on unsupported browsers.
+export function passkeySupported() {
+  return typeof PublicKeyCredential !== "undefined" &&
+    typeof navigator !== "undefined" && !!navigator.credentials;
+}
+
+// ── public API: enrol a passkey (called when already unlocked, dataKey in hand) ─
+// Creates a credential WITH the prf extension, evaluates it against the account's
+// salt (shared across the account's passkeys — caller passes the existing salt,
+// or null to mint one for the first passkey), derives the wrap key, and wraps the
+// in-memory DATA KEY. Returns the envelope + credential metadata + the salt for
+// the server. THROWS code "PRF_UNSUPPORTED" if the authenticator didn't honour
+// the extension — caller surfaces a clear message.
+export async function enrollPasskey(email, emailHash, dataKey, existingPrfSalt) {
+  const prfSaltBuf = existingPrfSalt
+    ? b64ToBuf(existingPrfSalt)
+    : crypto.getRandomValues(new Uint8Array(32));
+  const userId = hexToBuf(emailHash); // 16 bytes, stable per account
+
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      rp: { id: location.hostname, name: "Beast Mode" },
+      user: { id: userId, name: email, displayName: email },
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 },   // ES256
+        { type: "public-key", alg: -257 }, // RS256
+      ],
+      authenticatorSelection: { residentKey: "required", userVerification: "required" },
+      extensions: { prf: { eval: { first: prfSaltBuf } } },
+    },
+  });
+  if (!cred) throw new Error("Passkey creation cancelled");
+
+  const ext = cred.getClientExtensionResults();
+  const prf = ext && ext.prf && ext.prf.results && ext.prf.results.first;
+  if (!prf) {
+    const e = new Error("Authenticator does not support PRF");
+    e.code = "PRF_UNSUPPORTED";
+    throw e;
+  }
+
+  const wrapKey = await derivePrfWrapKey(new Uint8Array(prf), emailHash);
+  const wrapped = await wrapDataKey(dataKey, wrapKey);
+
+  return {
+    credentialId: bufToB64(cred.rawId),
+    prfSalt: bufToB64(prfSaltBuf),
+    passkeyEnvelope: { wrapped },
+  };
+}
+
+// ── public API: unlock the DATA KEY via passkey (login) ───────────────────────
+// Given the credentialId + prfSalt + envelope the server returned for this
+// account, run an assertion, re-derive the PRF secret, and unwrap the DATA KEY.
+// allowCredentials may be empty for a discoverable-credential (usernameless)
+// flow, but we pass the known id so the right passkey is selected directly.
+export async function unlockWithPasskey(emailHash, prfSalt, passkeyCreds) {
+  // prfSalt: per-account base64 salt (same for all of this account's passkeys —
+  //   the PRF output is already credential-bound, so one salt is safe and lets a
+  //   single assertion derive the right key regardless of which passkey responds).
+  // passkeyCreds: [{ credentialId, passkeyEnvelope:{wrapped} }]
+  const allow = passkeyCreds.map((c) => ({ type: "public-key", id: b64ToBuf(c.credentialId) }));
+  const saltBuf = b64ToBuf(prfSalt);
+
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      rpId: location.hostname,
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: allow,
+      userVerification: "required",
+      extensions: { prf: { eval: { first: saltBuf } } },
+    },
+  });
+  if (!assertion) throw new Error("Passkey assertion cancelled");
+
+  const ext = assertion.getClientExtensionResults();
+  const prf = ext && ext.prf && ext.prf.results && ext.prf.results.first;
+  if (!prf) {
+    const e = new Error("Authenticator did not return PRF output");
+    e.code = "PRF_UNSUPPORTED";
+    throw e;
+  }
+
+  // Identify which enrolled credential responded, so we unwrap its envelope.
+  const usedId = bufToB64(assertion.rawId);
+  const match = passkeyCreds.find((c) => c.credentialId === usedId) || passkeyCreds[0];
+
+  const wrapKey = await derivePrfWrapKey(new Uint8Array(prf), emailHash);
+  return unwrapDataKey(match.passkeyEnvelope.wrapped, wrapKey);
+}

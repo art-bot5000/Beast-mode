@@ -18627,7 +18627,8 @@ try {
 <script type="module">
 import {
   computeEmailHash, computeVerifier, buildRegistration,
-  unlockWithPassphrase, unlockWithRecoveryCode, buildPassphraseReset
+  unlockWithPassphrase, unlockWithRecoveryCode, buildPassphraseReset,
+  passkeySupported, enrollPasskey, unlockWithPasskey
 } from './bm-auth-crypto.js';
 
 const body = () => document.getElementById('bmAuthBody');
@@ -18674,10 +18675,50 @@ function renderLogin() {
     <div class="bm-auth-msg" id="bmLMsg"></div>
     <div class="bm-auth-switch">No account? <a id="bmToReg">Create one</a></div>
     <div class="bm-auth-switch"><a id="bmToRecover">Forgot passphrase? Recover</a></div>
+    ${passkeySupported() ? '<div class="bm-auth-switch"><a id="bmToPasskey">Use a passkey instead</a></div>' : ''}
   `;
   document.getElementById('bmToReg').onclick = () => renderPanel('register');
   document.getElementById('bmToRecover').onclick = () => renderPanel('recover');
   document.getElementById('bmLBtn').onclick = doLogin;
+  const pkLink = document.getElementById('bmToPasskey');
+  if (pkLink) pkLink.onclick = doPasskeyLogin;
+}
+
+// ── PASSKEY LOGIN ────────────────────────────────────────────────────────────
+// Email -> /passkey/challenge (credIds + account prfSalt) -> WebAuthn assertion
+// unwraps the DATA KEY locally -> /passkey/login issues the session token. The
+// server never sees the PRF output; the successful unwrap IS the proof.
+async function doPasskeyLogin() {
+  const email = document.getElementById('bmLEmail').value.trim();
+  const msg = document.getElementById('bmLMsg');
+  if (!email) { msg.className = 'bm-auth-msg err'; msg.textContent = 'Enter your email first.'; return; }
+  msg.className = 'bm-auth-msg'; msg.textContent = 'Waiting for passkey…';
+  try {
+    const emailHash = await computeEmailHash(email);
+    const { status, data } = await api('/passkey/challenge', { emailHash });
+    if (status !== 200 || !data.prfSalt || !(data.passkeys && data.passkeys.length)) {
+      msg.className = 'bm-auth-msg err';
+      msg.textContent = 'No passkey found for this account.';
+      return;
+    }
+    // Runs the assertion + unwraps the DATA KEY (throws on cancel/wrong device).
+    const dataKey = await unlockWithPasskey(emailHash, data.prfSalt, data.passkeys);
+    // Mint the server session (gate for paid endpoints). DATA KEY stays local.
+    const login = await api('/passkey/login', { emailHash });
+    if (login.status !== 200) {
+      msg.className = 'bm-auth-msg err';
+      msg.textContent = login.data.code === 'rate_limit' ? 'Too many attempts. Wait 15 min.' : 'Passkey sign-in unavailable.';
+      return;
+    }
+    setSession({ emailHash, email, dataKey, sessionToken: login.data.sessionToken });
+    msg.className = 'bm-auth-msg ok'; msg.textContent = '✓ Signed in with passkey.';
+    setTimeout(closeAuthModal, 600);
+  } catch (e) {
+    msg.className = 'bm-auth-msg err';
+    msg.textContent = (e && e.code === 'PRF_UNSUPPORTED')
+      ? 'This device can\u2019t use passkeys here.'
+      : 'Passkey sign-in cancelled or failed.';
+  }
 }
 
 async function doLogin() {
@@ -18952,10 +18993,55 @@ try {
 } catch (e) {}
 window.bmIsSignedIn = () => !!window.bmSession;
 
+// ── PASSKEY ENROLMENT ────────────────────────────────────────────────────────
+// Requires the DATA KEY in memory (you must be unlocked to wrap it). Reuses the
+// account-wide prfSalt if one exists (from /passkey/challenge), else mints one.
+async function doEnrollPasskey() {
+  const s = window.bmSession;
+  if (!s || !s.dataKey) {
+    alert('Sign in with your passphrase first, then add a passkey in the same session.');
+    return;
+  }
+  try {
+    // Fetch the existing account salt (null if this is the first passkey).
+    const ch = await api('/passkey/challenge', { emailHash: s.emailHash });
+    const existingSalt = (ch.status === 200 && ch.data.prfSalt) ? ch.data.prfSalt : null;
+    const enrolled = await enrollPasskey(s.email, s.emailHash, s.dataKey, existingSalt);
+    const { status, data } = await api('/passkey/enroll', {
+      credentialId: enrolled.credentialId,
+      prfSalt: enrolled.prfSalt,
+      passkeyEnvelope: enrolled.passkeyEnvelope,
+    });
+    if (status !== 200) {
+      alert(data.code === 'exists' ? 'That passkey is already enrolled.'
+        : data.code === 'limit' ? 'You have reached the passkey limit (10).'
+        : 'Could not save the passkey. Please try again.');
+      return;
+    }
+    alert('Passkey added. You can now sign in with it on this device.');
+  } catch (e) {
+    if (e && e.code === 'PRF_UNSUPPORTED') {
+      alert('This device or browser can\u2019t use passkeys with Beast Mode (no PRF support). Your passphrase still works everywhere.');
+    } else {
+      alert('Passkey setup was cancelled or failed.');
+    }
+  }
+}
+window.bmEnrollPasskey = doEnrollPasskey;
+
 // ── nav button: open modal, or show signed-in state ──────────────────────────
 window.bmAccountClick = () => {
   if (window.bmSession) {
-    if (confirm(`Signed in as ${window.bmSession.email}.\n\nSign out?`)) window.bmSignOut();
+    // Offer passkey enrolment only when we can actually do it: supported browser
+    // AND the DATA KEY is in memory (true right after a passphrase sign-in).
+    const canEnroll = passkeySupported() && !!window.bmSession.dataKey;
+    if (canEnroll) {
+      const choice = confirm(`Signed in as ${window.bmSession.email}.\n\nOK = Add a passkey to this device\nCancel = Sign out`);
+      if (choice) { doEnrollPasskey(); return; }
+      window.bmSignOut();
+    } else {
+      if (confirm(`Signed in as ${window.bmSession.email}.\n\nSign out?`)) window.bmSignOut();
+    }
   } else {
     window.openAuthModal('login');
   }
