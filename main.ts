@@ -260,12 +260,15 @@ async function handler(req: Request): Promise<Response> {
         actualCostUsd,
       });
 
+      // NOTE: result.costUsd (raw provider cost) is deliberately NOT returned —
+      // users pay the token table price; provider cost is margin-private and
+      // lives only in the ledger. `ref` lets the client stamp saved library
+      // items so the settings activity view can link a charge to its image.
       return json({
         model: result.model,
         provider: result.provider,
         images: result.images,
-        costUsd: result.costUsd,
-        tokens: { charged, perImage: q.perImage, balance: settled.balance },
+        tokens: { charged, perImage: q.perImage, balance: settled.balance, ref: hold.ref },
       });
     } catch (e) {
       // ── REFUND: the provider call failed — return the entire hold. Never
@@ -291,7 +294,13 @@ async function handler(req: Request): Promise<Response> {
       return json({ ok: true, balance: await getBalance(userHash) });
     }
     const limit = Number(url.searchParams.get("limit")) || 50;
-    return json({ ok: true, entries: await listLedger(userHash, limit) });
+    // Strip actualCostUsd: that's the PROVIDER cost (our margin), recorded for
+    // internal observability only. Users see token amounts, never margin.
+    const entries = (await listLedger(userHash, limit)).map((e) => {
+      const { actualCostUsd: _private, ...pub } = e;
+      return pub;
+    });
+    return json({ ok: true, entries });
   }
 
   // ── Curated model list for the dropdown (instant, no upstream call).

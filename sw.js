@@ -1,7 +1,7 @@
 // Beast Mode // Service Worker
 // v4.3 — backend-prefix bypass (admin + live /api responses)
 
-const CACHE_NAME = 'beast-mode-v4.5'
+const CACHE_NAME = 'beast-mode-v4.6'
 const CACHE_URLS = [
   './',
   './index.html',

@@ -3515,6 +3515,20 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
         <button class="btn btn-outline" onclick="bmTutorialsReplay()" style="font-size:12px;">↻ REPLAY TUTORIALS</button>
       </div>
 
+      <!-- Tokens -->
+      <div class="settings-section" style="grid-column:1/-1;" id="settingsTokensSection">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
+          <div class="settings-section-title" style="margin-bottom:0;">Tokens</div>
+          <button onclick="bmTokensSettingsRender(true)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
+        </div>
+        <div id="bmTokSignedOut" style="display:none;font-size:12px;color:var(--muted);letter-spacing:.5px;">Sign in to see your token balance and activity.</div>
+        <div id="bmTokSignedIn" style="display:none;">
+          <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens (1 token = $0.01)</span></div>
+          <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:10px;">Every charge, refund, and grant on your account. Charges link to the saved image in your library.</div>
+          <div id="bmTokActivity" style="max-height:420px;overflow-y:auto;border-top:1px solid var(--border);"></div>
+        </div>
+      </div>
+
       <!-- Particle Usage Stats -->
       <div class="settings-section" style="grid-column:1/-1;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
@@ -7663,7 +7677,10 @@ function switchView(view, pushState = true) {
   document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   document.getElementById('nav' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   if (view === 'library') renderLibrary()
-  if (view === 'settings') renderSettingsView()
+  if (view === 'settings') {
+    renderSettingsView()
+    if (typeof bmTokensSettingsRender === 'function') bmTokensSettingsRender()
+  }
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
   if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
@@ -9865,7 +9882,7 @@ function initGenerateOnlyMode() {
 function renderSettingsViewGenOnly() {
   // In generate-only mode, hide cloud sync and data export sections in settings
   if (!genOnlyMode) return
-  ;['settingsSyncSection','settingsDataSection','settingsModelsSection','settingsTutorialsSection'].forEach(id => {
+  ;['settingsSyncSection','settingsDataSection','settingsModelsSection','settingsTutorialsSection','settingsTokensSection'].forEach(id => {
     const el = document.getElementById(id)
     if (el) el.style.display = 'none'
   })
@@ -17803,13 +17820,16 @@ async function generateImage() {
         if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
         return;
       }
-      const msg = data.code === 'rate_limit'
-        ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
-        : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
+      const msg = data.code === 'insufficient_tokens'
+        ? ('Not enough tokens \u2014 needs ' + data.needed + ', you have ' + data.balance + '.')
+        : data.code === 'rate_limit'
+          ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
+          : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
       status.textContent = '\u2717 ' + msg;
       status.style.color = 'var(--err, #f85149)';
       return;
     }
+    if (data.tokens && typeof data.tokens.balance === 'number') bmTokenBalanceSet(data.tokens.balance);
     const image = data.images && data.images[0];
     if (!image || !image.url) {
       status.textContent = '\u2717 No image returned.';
@@ -17820,9 +17840,9 @@ async function generateImage() {
     img.style.display = 'block';
     status.textContent = '\u2713 IMAGE GENERATED';
     status.style.color = 'var(--accent)';
-    const costStr = typeof data.costUsd === 'number' ? (' \u00B7 $' + data.costUsd.toFixed(4)) : '';
+    const costStr = (data.tokens && typeof data.tokens.charged === 'number') ? (' \u00B7 ' + data.tokens.charged + ' TOKEN' + (data.tokens.charged === 1 ? '' : 'S')) : '';
     meta.textContent = 'Model: ' + data.model + costStr + ' \u00B7 auto-saved to library';
-    autoSaveGeneratedImage(prompt, out.dataset.full || visible, image.url, data.model);
+    autoSaveGeneratedImage(prompt, out.dataset.full || visible, image.url, data.model, null, data.tokens && data.tokens.ref);
   } catch (e) {
     status.textContent = '\u2717 Network error: ' + e.message;
     status.style.color = 'var(--err, #f85149)';
@@ -17837,7 +17857,7 @@ async function generateImage() {
 // `pristine` (optional): a data: URI of the ORIGINAL image bytes (Gemini direct
 // models). When present, the Drive upload + local cache use it instead of
 // re-fetching the hosted URL — immune to R2 public-URL fetch problems.
-function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine) {
+function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tokenRef) {
   try {
     let full = fullText;
     const DELIM = (typeof SETTINGS_DELIMITER !== 'undefined') ? SETTINGS_DELIMITER : '---SETTINGS---';
@@ -17860,6 +17880,10 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine) {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       particles: null,
+      // Ledger correlation: the hold/settle ref from /api/generate. The
+      // settings Token Activity view uses it to link a charge to THIS image
+      // (the durable library copy, not the dying R2 URL).
+      tokenRef: tokenRef || null,
     };
     if (typeof favourites !== 'undefined') {
       favourites.unshift(fav);
@@ -17917,9 +17941,9 @@ const IG_OPEN_DIMS = { // multiples of 64 (community / open checkpoints)
 // no request-side seed; Ideogram 4.0 doesn't document one). autoAR adds the
 // "AUTO" aspect chip (resolution-only request, matches reference image AR).
 const IG_MODELS = [
-  { id:'google:gemini-3-pro-image', label:'Nano Banana Pro', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'Gemini API (free-tier eligible)', note:'Gemini 3 Pro Image via DIRECT Google API \u2014 1K/2K/4K, multi-image blending.' },
-  { id:'google:gemini-3.1-flash-image', label:'Nano Banana 2', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'Gemini API (free-tier eligible)', note:'Gemini 3.1 Flash Image via DIRECT Google API \u2014 fast, 4K-capable, great text.' },
-  { id:'google:gemini-2.5-flash-image', label:'Nano Banana (free tier)', family:'Google', dims:{ '1K': IG_GOOGLE_DIMS['1K'] }, gemini:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'Gemini API \u2014 most generous free quota', note:'Gemini 2.5 Flash Image \u2014 best free-tier limits, ideal for testing.' },
+  { id:'google:gemini-3-pro-image', label:'Nano Banana Pro', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 3 Pro Image via DIRECT Google API \u2014 1K/2K/4K, multi-image blending.' },
+  { id:'google:gemini-3.1-flash-image', label:'Nano Banana 2', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 3.1 Flash Image via DIRECT Google API \u2014 fast, 4K-capable, great text.' },
+  { id:'google:gemini-2.5-flash-image', label:'Nano Banana 2.5', family:'Google', dims:{ '1K': IG_GOOGLE_DIMS['1K'] }, gemini:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 2.5 Flash Image \u2014 lowest-cost Nano Banana, ideal for drafts.' },
   { id:'runware:openai:gpt-image@2', label:'GPT Image 2', family:'OpenAI', dims:IG_GPT_DIMS, i2i:true, maxRefs:6, seed:false, quality:true, cost:'$0.006\u20130.21 / image (by quality)', note:'Strong prompt fidelity, text & layout control. No seed support.' },
   { id:'runware:ideogram:4@0', label:'Ideogram 4.0', family:'Ideogram', dims:IG_OPEN_DIMS, i2i:false, seed:false, speed:true, cost:'$0.03\u20130.10 / image (by speed)', note:'Design & typography specialist. Text-to-image only.' },
   { id:'runware:bytedance:seedream@5.0-lite', label:'Seedream 5.0 Lite', family:'ByteDance', dims:IG_SEEDREAM_DIMS, i2i:true, maxRefs:1, seed:true, cost:'$0.035 / image', note:'2K/3K output, single reference image, very low cost.' },
@@ -17933,6 +17957,171 @@ const IG_MODELS = [
 ];
 
 const igState = { modelId: IG_MODELS[0].id, ar: '1:1', res: null, refs: [], quality: 'auto', speed: 'DEFAULT', busy: false, inited: false };
+
+// ── TOKEN PRICING (client mirror of the server's pricing.js) ────────────────
+// The table is fetched once; quotes are computed locally so every chip click
+// updates the cost hint with zero network chatter. The server re-quotes
+// authoritatively at hold time — this is display only.
+let bmPricing = null;       // { tokenUsd, defaultTokens, aliases, models }
+let bmTokenBalance = null;  // last known balance (number) or null
+
+async function bmFetchPricing() {
+  if (bmPricing) return bmPricing;
+  try {
+    const r = await fetch('/api/pricing');
+    if (r.ok) bmPricing = await r.json();
+  } catch (e) {}
+  return bmPricing;
+}
+
+async function bmFetchBalance() {
+  if (!window.bmSession || !window.bmSession.sessionToken) return null;
+  try {
+    const r = await fetch('/api/tokens/balance', {
+      headers: { 'Authorization': 'Bearer ' + window.bmSession.sessionToken },
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && typeof d.balance === 'number') bmTokenBalanceSet(d.balance);
+  } catch (e) {}
+  return bmTokenBalance;
+}
+
+function bmTokenBalanceSet(n) {
+  bmTokenBalance = n;
+  if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
+  const el = document.getElementById('bmTokSetBalance');
+  if (el) el.textContent = String(n);
+}
+
+// Mirrors tokensPerImage() in pricing.js, including the conservative rules:
+// unknown model -> defaultTokens; unknown variant / 'auto' quality -> MAX.
+function bmTokensPerImage(modelId, st) {
+  if (!bmPricing) return null;
+  const key = (bmPricing.aliases && bmPricing.aliases[modelId]) || modelId;
+  const row = bmPricing.models && bmPricing.models[key];
+  if (!row) return bmPricing.defaultTokens || 4;
+  const maxOf = o => Math.max.apply(null, Object.values(o));
+  if (row.kind === 'flat') return row.tokens;
+  if (row.kind === 'resolution') return (st.res && row.byRes[st.res]) || maxOf(row.byRes);
+  if (row.kind === 'quality') {
+    const q = String(st.quality || '').toLowerCase();
+    return row.byQuality[q] || maxOf(row.byQuality);
+  }
+  if (row.kind === 'speed') {
+    const s = String(st.speed || '').toUpperCase();
+    return row.bySpeed[s] || row.bySpeed.DEFAULT || maxOf(row.bySpeed);
+  }
+  return bmPricing.defaultTokens || 4;
+}
+
+// ── SETTINGS → TOKENS: balance + spend activity with image links ────────────
+// Raw ledger entries (hold/settle/refund/grant) are folded into user-facing
+// rows: a settled generation shows ONE row with the net charge; a refunded
+// (failed) generation shows one +refund row; holds without a settle/refund
+// yet show as pending. Settle rows link to the LIBRARY copy of the image via
+// fav.tokenRef — durable, unlike the R2 URL which dies after the newest-5 trim.
+async function bmTokensSettingsRender(force) {
+  const so = document.getElementById('bmTokSignedOut');
+  const si = document.getElementById('bmTokSignedIn');
+  if (!so || !si) return;
+  const signedIn = !!(window.bmSession && window.bmSession.sessionToken);
+  so.style.display = signedIn ? 'none' : 'block';
+  si.style.display = signedIn ? 'block' : 'none';
+  if (!signedIn) return;
+
+  bmFetchBalance();
+  const list = document.getElementById('bmTokActivity');
+  list.innerHTML = '<div style="padding:10px 4px;font-size:11px;color:var(--muted);">Loading\u2026</div>';
+  let entries = [];
+  try {
+    const r = await fetch('/api/tokens/ledger?limit=200', {
+      headers: { 'Authorization': 'Bearer ' + window.bmSession.sessionToken },
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    entries = d.entries || [];
+  } catch (e) {
+    list.innerHTML = '<div style="padding:10px 4px;font-size:11px;color:var(--err,#f85149);">Could not load activity: ' + e.message + '</div>';
+    return;
+  }
+
+  // Fold holds into their settle/refund outcome (entries are newest-first).
+  const outcomes = {};
+  entries.forEach(en => { if ((en.type === 'settle' || en.type === 'refund') && en.ref) outcomes[en.ref] = en.type; });
+  const modelLabel = id => { const m = (typeof IG_MODELS !== 'undefined') && IG_MODELS.find(x => x.id === id); return m ? m.label : (id || ''); };
+  const rows = [];
+  entries.forEach(en => {
+    const when = en.at ? new Date(en.at) : null;
+    const ts = when ? (when.toLocaleDateString() + ' ' + when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : '';
+    if (en.type === 'hold') {
+      if (outcomes[en.ref]) return; // resolved — its settle/refund row tells the story
+      rows.push({ ts, label: 'Generating\u2026 (pending)', delta: en.tokens, ref: en.ref, model: en.model });
+    } else if (en.type === 'settle') {
+      rows.push({ ts, label: 'Generated ' + (en.images || 0) + ' image' + (en.images === 1 ? '' : 's') + ' \u00B7 ' + modelLabel(en.model), delta: -(en.chargedTokens || 0), ref: en.ref, model: en.model, linkable: true });
+    } else if (en.type === 'refund') {
+      rows.push({ ts, label: 'Refunded \u2014 generation failed', delta: en.tokens, ref: en.ref });
+    } else if (en.type === 'grant') {
+      const note = en.note === 'signup' ? 'Welcome grant' : (en.note && en.note.indexOf('admin') === 0 ? 'Account credit' : (en.note || 'Credit'));
+      rows.push({ ts, label: note, delta: en.tokens });
+    }
+  });
+
+  list.innerHTML = '';
+  if (!rows.length) {
+    list.innerHTML = '<div style="padding:10px 4px;font-size:11px;color:var(--muted);">No activity yet \u2014 generate an image to see it here.</div>';
+    return;
+  }
+  rows.forEach(rw => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);font-size:12px;';
+    const t = document.createElement('span');
+    t.style.cssText = 'color:var(--muted);font-size:11px;white-space:nowrap;min-width:118px;';
+    t.textContent = rw.ts;
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    lbl.textContent = rw.label;
+    const amt = document.createElement('span');
+    amt.style.cssText = 'font-weight:700;white-space:nowrap;color:' + (rw.delta < 0 ? 'var(--err,#f85149)' : 'var(--accent)') + ';';
+    amt.textContent = (rw.delta > 0 ? '+' : '') + rw.delta;
+    div.appendChild(t); div.appendChild(lbl);
+
+    // Image link: find the library copies stamped with this ledger ref.
+    if (rw.linkable && rw.ref && typeof favourites !== 'undefined') {
+      const favs = favourites.filter(f => f.tokenRef === rw.ref);
+      if (favs.length) {
+        const thumb = document.createElement('img');
+        thumb.src = favs[0].imageData;
+        thumb.loading = 'lazy';
+        thumb.style.cssText = 'width:34px;height:34px;object-fit:cover;border-radius:3px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;';
+        thumb.title = 'Open image' + (favs.length > 1 ? ' (1 of ' + favs.length + ')' : '');
+        thumb.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(thumb, favs[0]); };
+        thumb.onclick = () => window.open(thumb.src, '_blank', 'noopener');
+        div.appendChild(thumb);
+      }
+    }
+    div.appendChild(amt);
+    list.appendChild(div);
+  });
+}
+
+function igUpdateCostHint() {
+  const hint = document.getElementById('igCostHint');
+  if (!hint) return;
+  const m = typeof igModel === 'function' ? igModel() : null;
+  if (!m) return;
+  const per = bmTokensPerImage(m.id, igState);
+  if (per === null) { hint.textContent = m.cost ? ('Est. cost: ' + m.cost) : ''; return; }
+  const count = parseInt((document.getElementById('igCount') || {}).value, 10) || 1;
+  const total = per * count;
+  let txt = 'THIS RUN: ' + total + ' TOKEN' + (total === 1 ? '' : 'S')
+    + (count > 1 ? ' (' + per + ' \u00D7 ' + count + ')' : '');
+  if (typeof bmTokenBalance === 'number') {
+    txt += ' \u00B7 BALANCE: ' + bmTokenBalance;
+    if (bmTokenBalance < total) txt += ' \u26A0 NOT ENOUGH';
+  }
+  hint.textContent = txt;
+  hint.style.color = (typeof bmTokenBalance === 'number' && bmTokenBalance < total) ? 'var(--err, #f85149)' : '';
+}
 
 function igModel() { return IG_MODELS.find(m => m.id === igState.modelId) || IG_MODELS[0]; }
 
@@ -17962,8 +18151,12 @@ function igInit() {
   document.getElementById('igMain').style.display = signedIn ? 'grid' : 'none';
   igUpdateCloudWarn(signedIn);
   if (!signedIn) return;
+  bmFetchPricing().then(() => igUpdateCostHint());
+  bmFetchBalance();
   if (igState.inited) { igRenderAll(); return; }
   igState.inited = true;
+  const cnt = document.getElementById('igCount');
+  if (cnt) cnt.addEventListener('change', igUpdateCostHint);
 
   // Model dropdown grouped by family.
   const sel = document.getElementById('igModel');
@@ -18016,7 +18209,7 @@ function igRenderAll() {
   if (!igState.res || !tiers.includes(igState.res)) igState.res = tiers[0];
 
   document.getElementById('igModelNote').textContent = m.note || '';
-  document.getElementById('igCostHint').textContent = m.cost ? ('Est. cost: ' + m.cost) : '';
+  igUpdateCostHint(); // live token quote (falls back to m.cost pre-pricing-load)
 
   // Conditional sections.
   document.getElementById('igNegativeWrap').style.display = m.negative ? 'block' : 'none';
@@ -18232,17 +18425,23 @@ async function igGenerate() {
         igInit();
         return;
       }
-      const msg = data.code === 'rate_limit'
-        ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
-        : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
+      const msg = data.code === 'insufficient_tokens'
+        ? ('Not enough tokens \u2014 this run needs ' + data.needed + ', you have ' + data.balance + '. Top-ups are coming soon.')
+        : data.code === 'rate_limit'
+          ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
+          : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
       igStatus('\u2717 ' + msg, true);
+      if (data.code === 'insufficient_tokens' && typeof data.balance === 'number') bmTokenBalanceSet(data.balance);
       return;
     }
+    if (data.tokens && typeof data.tokens.balance === 'number') bmTokenBalanceSet(data.tokens.balance);
     const images = Array.isArray(data.images) ? data.images.filter(im => im && im.url) : [];
     if (!images.length) { igStatus('\u2717 No image returned.', true); return; }
-    images.forEach(im => igAddResultCard(im, m, prompt, data.costUsd, images.length));
+    images.forEach(im => igAddResultCard(im, m, prompt, data.tokens, images.length));
     document.getElementById('igEmpty').style.display = 'none';
-    const costStr = typeof data.costUsd === 'number' ? (' \u00B7 $' + data.costUsd.toFixed(4)) : '';
+    const costStr = (data.tokens && typeof data.tokens.charged === 'number')
+      ? (' \u00B7 ' + data.tokens.charged + ' TOKEN' + (data.tokens.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + data.tokens.balance)
+      : '';
     const backupStr = igHasDurableStorage()
       ? ' \u00B7 saved to library + Drive'
       : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
@@ -18253,7 +18452,7 @@ async function igGenerate() {
     // depend on re-fetching the R2 public URL.
     images.forEach(im => {
       const pristine = im.pristine || (String(im.url).startsWith('data:') ? im.url : null);
-      if (typeof autoSaveGeneratedImage === 'function') autoSaveGeneratedImage(prompt, '', im.url, m.id, pristine);
+      if (typeof autoSaveGeneratedImage === 'function') autoSaveGeneratedImage(prompt, '', im.url, m.id, pristine, data.tokens && data.tokens.ref);
     });
   } catch (e) {
     igStatus('\u2717 Network error: ' + e.message, true);
@@ -18269,7 +18468,7 @@ function igStatus(msg, isError) {
   el.style.color = isError ? 'var(--err, #f85149)' : 'var(--accent)';
 }
 
-function igAddResultCard(image, model, prompt, costUsd, batchSize) {
+function igAddResultCard(image, model, prompt, tokens, batchSize) {
   const grid = document.getElementById('igResults');
   const card = document.createElement('div');
   card.className = 'ig-card';
@@ -18285,7 +18484,7 @@ function igAddResultCard(image, model, prompt, costUsd, batchSize) {
   const left = document.createElement('span');
   left.textContent = model.label + (Number.isFinite(image.seed) ? (' \u00B7 seed ' + image.seed) : '');
   const right = document.createElement('span');
-  if (typeof costUsd === 'number' && batchSize >= 1) right.textContent = '$' + (costUsd / batchSize).toFixed(4);
+  if (tokens && typeof tokens.perImage === 'number') right.textContent = tokens.perImage + ' TOK';
   meta.appendChild(left); meta.appendChild(right);
 
   const actions = document.createElement('div');
