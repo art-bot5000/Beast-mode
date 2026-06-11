@@ -18655,6 +18655,60 @@ async function doRecover() {
 }
 
 // ── session ─────────────────────────────────────────────────────────────────────
+// ── PER-USER STORAGE SWITCH (stckrm pattern, adapted) ────────────────────────
+// 'bm_last_user' records which account last OWNED this browser's working copy
+// (it survives sign-out, so sign-out → different sign-in is still detected).
+// On a genuine identity CHANGE we sweep every bm_-prefixed localStorage key —
+// the working-copy library, prompt history, prefs, AND the Drive/Dropbox
+// OAuth sessions (user B must never inherit user A's connected cloud) —
+// keeping only the freshly written bm_app_session and the bm_last_user
+// marker, then reload. The reload IS the in-memory reset: in an 18k-line app,
+// a clear-every-variable checklist is the thing that rots; a reload cannot
+// miss one. Same-user re-login (token expiry) wipes nothing.
+const _bmBC = ('BroadcastChannel' in window) ? new BroadcastChannel('bm-auth') : null
+function _bmBcPost(msg) { try { _bmBC && _bmBC.postMessage(msg) } catch (e) {} }
+if (_bmBC) {
+  _bmBC.onmessage = (event) => {
+    if (!event.data || event.data.type !== 'USER_CHANGED') return
+    // Echo guard: two tabs signed in as the SAME user must not reload-loop.
+    const incoming = event.data.emailHash || null
+    const current = (window.bmSession && window.bmSession.emailHash) || null
+    if (incoming && incoming === current) return
+    if (!incoming && !current) return
+    location.reload()
+  }
+}
+
+function _bmWipeWorkingCopy() {
+  const keep = new Set(['bm_app_session', 'bm_last_user'])
+  let keys = []
+  try { keys = Object.keys(localStorage) } catch (e) {}
+  keys.forEach(k => {
+    if (k.startsWith('bm_') && !keep.has(k)) {
+      try { localStorage.removeItem(k) } catch (e) {}
+    }
+  })
+}
+
+// Returns true when a cross-account reload has been scheduled (caller stops).
+function bmIdentitySwitch(emailHash) {
+  let lastUser = null
+  try { lastUser = localStorage.getItem('bm_last_user') } catch (e) {}
+  if (lastUser && emailHash && lastUser !== emailHash) {
+    // DIFFERENT account on this browser: seal the old user's storage.
+    try { localStorage.setItem('bm_last_user', emailHash) } catch (e) {}
+    _bmWipeWorkingCopy()
+    if (typeof bmSetImgDbForUser === 'function') bmSetImgDbForUser(emailHash)
+    _bmBcPost({ type: 'USER_CHANGED', emailHash })
+    location.reload()
+    return true
+  }
+  try { localStorage.setItem('bm_last_user', emailHash) } catch (e) {}
+  if (typeof bmSetImgDbForUser === 'function') bmSetImgDbForUser(emailHash)
+  _bmBcPost({ type: 'USER_CHANGED', emailHash })
+  return false
+}
+
 function setSession({ emailHash, email, dataKey, sessionToken }) {
   window.bmSession = { emailHash, email, dataKey, sessionToken };
   // Persist the SESSION TOKEN (opaque, 24h) so reloads stay signed in for API
@@ -18664,11 +18718,21 @@ function setSession({ emailHash, email, dataKey, sessionToken }) {
   try {
     localStorage.setItem('bm_app_session', JSON.stringify({ emailHash, email, sessionToken }));
   } catch (e) {}
+  // Identity switch AFTER persisting: if this is a different account, the
+  // wipe + reload below restores cleanly into the NEW session.
+  if (bmIdentitySwitch(emailHash)) return;
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email } }));
 }
 window.bmSignOut = () => {
   window.bmSession = null;
   try { localStorage.removeItem('bm_app_session'); } catch (e) {}
+  // Flip the image cache back to the unauth DB. The localStorage working copy
+  // and cloud connection deliberately stay: in this product the library
+  // belongs to the Drive/Dropbox connection, not the account — the account
+  // gates generation spend. bm_last_user survives, so a DIFFERENT account
+  // signing in later is still detected and swept by bmIdentitySwitch.
+  if (typeof bmSetImgDbSignedOut === 'function') bmSetImgDbSignedOut();
+  _bmBcPost({ type: 'USER_CHANGED', emailHash: null });
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: false } }));
 };
 
@@ -18677,6 +18741,12 @@ window.bmSignOut = () => {
 try {
   const saved = JSON.parse(localStorage.getItem('bm_app_session') || 'null');
   if (saved && saved.sessionToken) {
+    // Boot peek (stckrm rule: flip BEFORE the first read). Restore is not a
+    // cross-account event by construction — a different account signing in
+    // goes through setSession, which wipes + reloads before this can persist
+    // a mismatched session — so flip directly without the sweep.
+    if (saved.emailHash && typeof bmSetImgDbForUser === 'function') bmSetImgDbForUser(saved.emailHash);
+    try { if (saved.emailHash) localStorage.setItem('bm_last_user', saved.emailHash); } catch (e) {}
     window.bmSession = { ...saved, dataKey: null };
     window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email: saved.email } }));
   }
@@ -18877,12 +18947,61 @@ async function driveFetchImageBlob(fileId) {
 
 // ════════════════════════════════════════════════════════════════════
 // LOCAL IMAGE CACHE (IndexedDB) — survives reloads, subject to browser wipes
+//
+// PER-USER DB SEPARATION (stckrm pattern): each signed-in account gets its
+// own physically separate database, `bm-images_u_<first16(emailHash)>`.
+// Isolation comes from NAMING, not cleanup — switching users is a name flip
+// and the previous user's blobs stay sealed in a DB the new user's code
+// never opens. Divergences from stckrm, deliberate:
+//   - The unauth DB keeps the legacy name 'bm-images': anonymous use is a
+//     first-class mode here (not a bootstrap state), so the dominant case
+//     needs no migration. Pre-existing signed-in users' old cached images
+//     stay in the unauth DB; the fallback chain (miss → Drive copy →
+//     re-cache) self-heals into their user DB.
+//   - No demo DB: Beast Mode has no demo mode that seeds storage.
 // ════════════════════════════════════════════════════════════════════
+let _bmImgDbName = 'bm-images'   // mutable ACTIVE name — helpers read it per call
+let _bmImgDb = null              // cached handle for the active name
+
+function _bmResetImgDbHandle() {
+  if (_bmImgDb) { try { _bmImgDb.close() } catch (e) {} }
+  _bmImgDb = null
+}
+
+window.bmSetImgDbForUser = function (emailHash) {
+  if (!emailHash || typeof emailHash !== 'string') return
+  const next = 'bm-images_u_' + emailHash.slice(0, 16)
+  if (_bmImgDbName === next) return
+  _bmImgDbName = next
+  _bmResetImgDbHandle()
+}
+window.bmSetImgDbSignedOut = function () {
+  if (_bmImgDbName === 'bm-images') return
+  _bmImgDbName = 'bm-images'
+  _bmResetImgDbHandle()
+}
+
 function bmIdb() {
+  if (_bmImgDb) return Promise.resolve(_bmImgDb)
+  const requestedName = _bmImgDbName   // capture at call-start (race guard)
   return new Promise((res, rej) => {
-    const req = indexedDB.open('bm-images', 1)
+    const req = indexedDB.open(requestedName, 1)
     req.onupgradeneeded = e => e.target.result.createObjectStore('images')
-    req.onsuccess = e => res(e.target.result)
+    req.onsuccess = e => {
+      const opened = e.target.result
+      if (_bmImgDbName !== requestedName) {
+        // Name flipped while open() was in flight — this handle is for the
+        // OLD user's DB. Discard and re-enter under the new name.
+        try { opened.close() } catch (err) {}
+        _bmImgDb = null
+        res(bmIdb())
+        return
+      }
+      _bmImgDb = opened
+      // Another tab upgraded the schema: drop the handle, re-open lazily.
+      _bmImgDb.onversionchange = () => { try { _bmImgDb.close() } catch (err) {} _bmImgDb = null }
+      res(_bmImgDb)
+    }
     req.onerror = e => rej(e.target.error)
   })
 }
