@@ -99,7 +99,7 @@ td { padding:8px; border-bottom:1px solid var(--border); vertical-align:middle; 
         <table>
           <thead><tr>
             <th>EMAIL</th><th class="hide-sm">HASH</th><th class="hide-sm">CREATED</th>
-            <th>STATUS</th><th>ACTIONS</th>
+            <th>TOKENS</th><th>STATUS</th><th>ACTIONS</th>
           </tr></thead>
           <tbody id="acctRows"></tbody>
         </table>
@@ -261,11 +261,15 @@ function renderAccounts() {
       : (a.emailVerified ? '<span class="badge b-ok">VERIFIED</span>' : '<span class="badge b-warn">UNVERIFIED</span>');
     const actions = a.deletedAt
       ? '<button class="btn-ok" data-act="restore">RESTORE</button> <button class="btn-danger" data-act="purge">PURGE</button>'
-      : '<button class="btn-danger" data-act="delete">DELETE</button>';
+      : '<button data-act="grant">GRANT</button> <button class="btn-danger" data-act="delete">DELETE</button>';
+    const bal = a.tokenBalance === null || a.tokenBalance === undefined
+      ? '<span style="color:var(--muted);">—</span>'
+      : '<span style="color:' + (a.tokenBalance < 0 ? 'var(--err)' : 'var(--accent)') + ';font-weight:700;">' + a.tokenBalance + '</span>';
     tr.innerHTML =
       '<td>' + esc(a.email) + '</td>' +
       '<td class="hide-sm"><span class="hash">' + esc(a.emailHash.slice(0, 12)) + '…</span></td>' +
       '<td class="hide-sm" style="font-size:11px;color:var(--muted);">' + new Date(a.createdAt).toLocaleDateString() + '</td>' +
+      '<td>' + bal + '</td>' +
       '<td>' + status + '</td>' +
       '<td>' + actions + '</td>';
     tr.querySelectorAll('button').forEach(b => {
@@ -277,7 +281,15 @@ function renderAccounts() {
 
 async function accountAction(act, a) {
   try {
-    if (act === 'delete') {
+    if (act === 'grant') {
+      const amt = prompt('Tokens to grant ' + a.email + '\n(negative = deduct/correction; 1 token = $0.01):', '50');
+      if (amt === null) return;
+      const tokens = parseInt(amt, 10);
+      if (!Number.isInteger(tokens) || tokens === 0) { setMsg('acctMsg', 'Enter a non-zero integer.', 'warn'); return; }
+      const note = prompt('Note for the ledger (optional):') || '';
+      const r = await post('/admin/tokens/grant', _auth.sessionBody({ emailHash: a.emailHash, tokens, note }));
+      setMsg('acctMsg', 'Granted ' + tokens + ' — balance now ' + r.balance + '.', 'ok');
+    } else if (act === 'delete') {
       if (!confirm('Soft-delete ' + a.email + '?\n\nSign-in blocked, sessions invalidated. Reversible via RESTORE.')) return;
       await post('/admin/delete-account', _auth.sessionBody({ emailHash: a.emailHash }));
     } else if (act === 'restore') {

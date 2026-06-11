@@ -27,6 +27,7 @@
 
 import { kv, type UserRecord } from "./auth.ts";
 import { emailEnabled, sendEmail } from "./email.ts";
+import { grantTokens, peekBalance } from "./tokens.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -171,6 +172,9 @@ async function listAccounts(): Promise<Response> {
       createdAt: u.createdAt,
       deletedAt: u.deletedAt ?? null,
       recoveryEnvelopes: u.recoveryEnvelopes?.length ?? 0,
+      // peekBalance, NOT getBalance: listing accounts must not trigger lazy
+      // signup grants. null = user has never touched tokens.
+      tokenBalance: await peekBalance(u.emailHash),
     });
   }
   accounts.sort((a, b) => (b.createdAt as number) - (a.createdAt as number));
@@ -267,6 +271,21 @@ export async function handleAdmin(req: Request, path: string): Promise<Response>
       return restoreAccount(body, ip);
     case "/admin/purge-account":
       return purgeAccount(body, ip);
+    case "/admin/tokens/grant": {
+      const emailHash = body.emailHash;
+      const tokens = Number(body.tokens);
+      const note = typeof body.note === "string" ? body.note.slice(0, 200) : "";
+      if (typeof emailHash !== "string") return json({ error: "emailHash required", code: "bad_request" }, 400);
+      if (!Number.isInteger(tokens) || tokens === 0 || Math.abs(tokens) > 1_000_000) {
+        return json({ error: "tokens must be a non-zero integer (|n| <= 1,000,000)", code: "bad_request" }, 400);
+      }
+      const user = await kv.get<UserRecord>(["user", emailHash]);
+      if (!user.value) return json({ error: "Account not found", code: "not_found" }, 404);
+      const r = await grantTokens(emailHash, tokens, note ? `admin: ${note}` : "admin grant");
+      if (!r.ok) return json({ error: "Grant failed (contention) — retry", code: "conflict" }, 409);
+      await audit("tokens.grant", emailHash, ip, `${tokens > 0 ? "+" : ""}${tokens}${note ? " · " + note : ""}`);
+      return json({ ok: true, balance: r.balance });
+    }
     case "/admin/audit-log":
       return auditLog(body);
     case "/admin/sign-out": {

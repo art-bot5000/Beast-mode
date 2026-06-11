@@ -64,7 +64,8 @@ if (missing.length) {
 // them directly. generate() picks the provider from the model-id prefix.
 import { generate, searchModels, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
-import { pricingTable, quote } from "./pricing.js";
+import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd } from "./pricing.js";
+import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
 import { rehostToR2, r2Enabled, trimR2ToNewest } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
@@ -153,6 +154,30 @@ async function handler(req: Request): Promise<Response> {
     } catch {
       return json({ error: "Invalid JSON body", code: "bad_request" }, 400);
     }
+
+    // ── TOKEN QUOTE + HOLD (Pass 3 ledger). The price is the fixed table
+    // price from pricing.js — known before the provider call. We hold the full
+    // requested batch up front (atomic CAS: concurrent tabs cannot overdraft),
+    // settle for what actually comes back, refund the rest.
+    const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
+    const genOpts = {
+      resolution: body.resolution as string | undefined,
+      width: body.width as number | undefined,
+      height: body.height as number | undefined,
+      quality: body.quality as string | undefined,
+      renderingSpeed: body.renderingSpeed as string | undefined,
+    };
+    const q = quote(body.model as string, genOpts, genCount);
+    const hold = await holdTokens(userHash, q.totalTokens, { model: body.model as string });
+    if (!hold.ok) {
+      return json({
+        error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
+        code: "insufficient_tokens",
+        needed: q.totalTokens,
+        balance: Number.isFinite(hold.balance) ? hold.balance : 0,
+      }, 402);
+    }
+
     try {
       // Snap rule comes from the curated catalog: closed/preset models (snap:
       // false) need EXACT dims; unknown/community models default to /64 snap.
@@ -168,8 +193,9 @@ async function handler(req: Request): Promise<Response> {
         steps: body.steps as number | undefined,
         cfgScale: body.cfgScale as number | undefined,
         // Clamp count server-side: protects Runware spend even if the client
-        // is tampered with. UI offers 1–4.
-        count: Math.max(1, Math.min(4, Number(body.count) || 1)),
+        // is tampered with. UI offers 1–4. (Clamped above — the token hold and
+        // the provider request must always agree on the batch size.)
+        count: genCount,
         seed: body.seed as number | undefined,
         referenceImages: body.referenceImages as string[] | undefined,
         resolution: body.resolution as string | undefined,
@@ -214,17 +240,58 @@ async function handler(req: Request): Promise<Response> {
         );
       }
 
+      // ── SETTLE: charge for images actually delivered, refund the rest.
+      // Actual provider cost goes to the ledger for margin tracking only:
+      // Runware reports costUsd; direct Gemini is computed from usageMetadata;
+      // otherwise fall back to the table's estimate.
+      const delivered = result.images.length;
+      const charged = Math.min(q.totalTokens, q.perImage * delivered);
+      const rawUsage = (result.raw && typeof result.raw === "object")
+        ? (result.raw as Record<string, unknown>).usageMetadata
+        : undefined;
+      const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
+        ?? geminiUsageCostUsd(body.model as string, rawUsage)
+        ?? estimatedCostUsd(body.model as string, genOpts);
+      const settled = await settleHold(userHash, hold.ref, {
+        chargedTokens: charged,
+        refundTokens: q.totalTokens - charged,
+        model: body.model as string,
+        images: delivered,
+        actualCostUsd,
+      });
+
       return json({
         model: result.model,
         provider: result.provider,
         images: result.images,
         costUsd: result.costUsd,
+        tokens: { charged, perImage: q.perImage, balance: settled.balance },
       });
     } catch (e) {
+      // ── REFUND: the provider call failed — return the entire hold. Never
+      // let a refund failure mask the original error.
+      await refundHold(userHash, hold.ref, q.totalTokens,
+        e instanceof ProviderError ? `provider:${e.code}` : "internal_error",
+      ).catch((re) => console.error("CRITICAL: refund failed after generate error:", (re as Error).message));
       if (e instanceof ProviderError) return json({ error: e.message, code: e.code }, e.status);
       console.error("generate failed", e);
       return json({ error: "Internal error" }, 500);
     }
+  }
+
+  // ── Token balance + ledger (session-gated). Deliberately under /api/* so
+  // the existing Caddy proxy and service-worker bypass cover them — no
+  // routing changes, no frontend deploy.
+  if ((path === "/api/tokens/balance" || path === "/api/tokens/ledger") && req.method === "GET") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in required.", code: "auth_required" }, 401);
+    if (path === "/api/tokens/balance") {
+      return json({ ok: true, balance: await getBalance(userHash) });
+    }
+    const limit = Number(url.searchParams.get("limit")) || 50;
+    return json({ ok: true, entries: await listLedger(userHash, limit) });
   }
 
   // ── Curated model list for the dropdown (instant, no upstream call).
