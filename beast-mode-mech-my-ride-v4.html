@@ -3258,8 +3258,8 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   color:var(--muted); font-size:12px; letter-spacing:1px; transition:all .15s;
 }
 .ig-drop:hover, .ig-drop.drag { border-color:var(--accent); color:var(--accent); }
-.ig-results { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
-.ig-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.ig-results { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; position:relative; z-index:2; }
+.ig-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; position:relative; z-index:2; }
 .ig-card img { width:100%; display:block; cursor:zoom-in; }
 .ig-card-meta { padding:8px 10px; font-size:11px; color:var(--muted); display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:space-between; }
 .ig-card-actions { display:flex; gap:4px; padding:0 10px 10px; flex-wrap:wrap; }
@@ -18110,9 +18110,18 @@ function igUpdateCostHint() {
   const m = typeof igModel === 'function' ? igModel() : null;
   if (!m) return;
   const per = bmTokensPerImage(m.id, igState);
-  if (per === null) { hint.textContent = m.cost ? ('Est. cost: ' + m.cost) : ''; return; }
+  // Generate-button label: show the token cost of this run. Falls back to a
+  // plain label before pricing loads (per === null) or while generating, so
+  // the busy-state text in igGenerate is never clobbered.
+  const genBtn = document.getElementById('igGenerateBtn');
+  if (per === null) {
+    hint.textContent = m.cost ? ('Est. cost: ' + m.cost) : '';
+    if (genBtn && !(igState && igState.busy)) genBtn.textContent = '\u2726 GENERATE';
+    return;
+  }
   const count = parseInt((document.getElementById('igCount') || {}).value, 10) || 1;
   const total = per * count;
+  if (genBtn && !(igState && igState.busy)) genBtn.textContent = '\u2726 GENERATE ' + total;
   let txt = 'THIS RUN: ' + total + ' TOKEN' + (total === 1 ? '' : 'S')
     + (count > 1 ? ' (' + per + ' \u00D7 ' + count + ')' : '');
   if (typeof bmTokenBalance === 'number') {
@@ -18459,6 +18468,7 @@ async function igGenerate() {
   } finally {
     igState.busy = false;
     btn.disabled = false; btn.style.opacity = '1';
+    if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
   }
 }
 
