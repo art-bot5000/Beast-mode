@@ -3508,6 +3508,13 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
         </div>
       </div>
 
+      <!-- Tutorials -->
+      <div class="settings-section" style="grid-column:1/-1;" id="settingsTutorialsSection">
+        <div class="settings-section-title">Tutorials</div>
+        <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:12px;">Replay the Prompt Lab orientation and the first-run setup checklist. Completion is saved with your synced data, so dismissed tutorials stay dismissed across devices and cache clears.</div>
+        <button class="btn btn-outline" onclick="bmTutorialsReplay()" style="font-size:12px;">↻ REPLAY TUTORIALS</button>
+      </div>
+
       <!-- Particle Usage Stats -->
       <div class="settings-section" style="grid-column:1/-1;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
@@ -7362,7 +7369,7 @@ async function driveSaveCurrentSettings() {
   lsSave(LS.SETTINGS, captureSettings())
   if (!cloudIsConnected()) return
   try {
-    const body = JSON.stringify({ settings: captureSettings(), savedAt: new Date().toISOString() })
+    const body = JSON.stringify({ settings: captureSettings(), prefs: bmPrefs, savedAt: new Date().toISOString() })
     if (driveCurrentId) {
       await cloudPatchFile(driveCurrentId, body)
     } else {
@@ -7384,6 +7391,10 @@ async function driveLoadCurrentSettings() {
     if (!files.length) { setDriveStatus('✓ READY','ok'); return }
     driveCurrentId = files[0].id
     const data = await cloudReadFile(driveCurrentId)
+    // Prefs (tutorial-seen flags etc.) apply UNCONDITIONALLY — they are not
+    // part of the opt-in "restore session?" flow, and must land before
+    // pbCheckFirstRun fires at the end of driveOnSignedIn().
+    if (data?.prefs && typeof bmPrefsMergeRemote === 'function') bmPrefsMergeRemote(data.prefs)
     if (data?.settings) {
       // Store settings for deferred restore — only prompt when Generator is opened
       window._pendingCloudSettings = data.settings
@@ -7391,6 +7402,7 @@ async function driveLoadCurrentSettings() {
       setDriveStatus('✓ READY','ok')
     }
   } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
+  finally { window._bmPrefsLoaded = true } // release pbCheckFirstRun's deferral guard
 }
 
 // ── INDIVIDUAL PROMPT FILES
@@ -9853,7 +9865,7 @@ function initGenerateOnlyMode() {
 function renderSettingsViewGenOnly() {
   // In generate-only mode, hide cloud sync and data export sections in settings
   if (!genOnlyMode) return
-  ;['settingsSyncSection','settingsDataSection','settingsModelsSection'].forEach(id => {
+  ;['settingsSyncSection','settingsDataSection','settingsModelsSection','settingsTutorialsSection'].forEach(id => {
     const el = document.getElementById(id)
     if (el) el.style.display = 'none'
   })
@@ -11682,6 +11694,58 @@ function pbShowPlaceholderIfEmpty(bar) {
 // ORIENTATION GUIDE
 // ═══════════════════════════════════════════════════════════════════
 const ORIENT_KEY = 'bm_orient_done'
+
+// ── SYNCED TUTORIAL FLAGS ──────────────────────────────────────────
+// "Seen" flags live in bmPrefs (localStorage 'bm_prefs') AND ride inside the
+// cloud current-settings file (prefs field), so a cache clear or a different
+// device doesn't replay the orientation/setup tutorials. Legacy plain
+// localStorage flags are folded in lazily so existing users stay dismissed.
+// Settings → Tutorials → REPLAY clears both stores and relaunches.
+let bmPrefs = {}
+try { bmPrefs = JSON.parse(localStorage.getItem('bm_prefs') || '{}') || {} } catch(e) { bmPrefs = {} }
+
+function bmPrefsSave() {
+  try { localStorage.setItem('bm_prefs', JSON.stringify(bmPrefs)) } catch(e) {}
+  // Ride along in the cloud settings file (debounced; no-op when not connected)
+  if (typeof driveSaveCurrentDebounced === 'function') driveSaveCurrentDebounced()
+}
+
+// Merge prefs loaded from the cloud file. Seen-anywhere = seen-everywhere:
+// union of true flags, so finishing a tutorial on one device silences all.
+function bmPrefsMergeRemote(remote) {
+  if (!remote || typeof remote !== 'object') return
+  const seen = Object.assign({}, bmPrefs.tutorialsSeen || {})
+  const rSeen = remote.tutorialsSeen || {}
+  Object.keys(rSeen).forEach(k => { if (rSeen[k]) seen[k] = true })
+  bmPrefs = Object.assign({}, remote, bmPrefs, { tutorialsSeen: seen })
+  try { localStorage.setItem('bm_prefs', JSON.stringify(bmPrefs)) } catch(e) {}
+}
+
+function bmTutSeen(which) {
+  if (bmPrefs.tutorialsSeen && bmPrefs.tutorialsSeen[which]) return true
+  // Legacy migration: fold the old plain flag into synced prefs once.
+  const legacy = which === 'orient' ? ORIENT_KEY : SETUP_KEY
+  if (localStorage.getItem(legacy) === '1') { bmTutMark(which); return true }
+  return false
+}
+
+function bmTutMark(which) {
+  bmPrefs.tutorialsSeen = bmPrefs.tutorialsSeen || {}
+  if (bmPrefs.tutorialsSeen[which]) return
+  bmPrefs.tutorialsSeen[which] = true
+  bmPrefsSave()
+}
+
+function bmTutorialsReplay() {
+  if (typeof genOnlyMode !== 'undefined' && genOnlyMode) return
+  bmPrefs.tutorialsSeen = {}
+  try { localStorage.removeItem(ORIENT_KEY) } catch(e) {}
+  try { localStorage.removeItem(SETUP_KEY) } catch(e) {}
+  bmPrefsSave()
+  switchView('builder')
+  setTimeout(pbOrientShow, 250)
+}
+
 const ORIENT_STEPS = [
   {
     icon: '⊛',
@@ -11737,6 +11801,7 @@ function pbOrientNav(dir) {
     // Done — close guide, switch to Prompt Lab, show setup wizard
     document.getElementById('pbOrientModal').style.display = 'none'
     localStorage.setItem(ORIENT_KEY, '1')
+    bmTutMark('orient')
     switchView('builder')
     setTimeout(pbSetupInit, 300)
     return
@@ -11807,7 +11872,7 @@ const SETUP_STEPS = [
 
 function pbSetupInit() {
   if (genOnlyMode) return
-  if (localStorage.getItem(SETUP_KEY) === '1') return
+  if (bmTutSeen('setup')) return
   pbSetupRender()
   pbSetupPosition()
   document.getElementById('pbSetupPanel').style.display = 'block'
@@ -11889,12 +11954,14 @@ function pbSetupPosition() {
 
 function pbSetupFinish() {
   localStorage.setItem(SETUP_KEY, '1')
+  bmTutMark('setup')
   document.getElementById('pbSetupPanel').style.display = 'none'
   pbSpotlightOff()
 }
 
 function pbSetupSkip() {
   localStorage.setItem(SETUP_KEY, '1')
+  bmTutMark('setup')
   document.getElementById('pbSetupPanel').style.display = 'none'
   pbSpotlightOff()
 }
@@ -11967,8 +12034,12 @@ function pbSetupRefresh() {
 // Check if first-time setup should run (after cloud sync gate)
 function pbCheckFirstRun() {
   if (genOnlyMode) return
-  if (localStorage.getItem(SETUP_KEY) === '1') return
-  if (localStorage.getItem(ORIENT_KEY) !== '1') {
+  // RACE GUARD: dbxShowSignedIn() fires this before dbxSync() has loaded the
+  // cloud settings file. If connected but prefs haven't been read yet, defer —
+  // driveOnSignedIn() fires this again AFTER driveLoadCurrentSettings().
+  if (typeof cloudIsConnected === 'function' && cloudIsConnected() && !window._bmPrefsLoaded) return
+  if (bmTutSeen('setup')) return
+  if (!bmTutSeen('orient')) {
     // Show orientation guide first
     switchView('builder')
     setTimeout(pbOrientShow, 200)
