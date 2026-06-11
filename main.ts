@@ -35,6 +35,12 @@ const missing = REQUIRED_SECRETS.filter((k) => !process.env[k]);
 if (!Deno.env.get("GOOGLE_CLIENT_SECRET")) {
   console.warn("WARN: GOOGLE_CLIENT_SECRET not set — Google Drive connect will be unavailable.");
 }
+// Soft requirement: direct Gemini ("Nano Banana") models need this key. The
+// google.js adapter returns a clean 503 if it's missing, so generation via
+// Runware keeps working either way.
+if (!Deno.env.get("GEMINI_API_KEY")) {
+  console.warn("WARN: GEMINI_API_KEY not set — direct Gemini (Nano Banana) models will be unavailable.");
+}
 if (missing.length) {
   console.error(`FATAL: missing required secret(s): ${missing.join(", ")}`);
   console.error("Set them with: fly secrets set KEY=value --app beast-mode");
@@ -152,6 +158,7 @@ async function handler(req: Request): Promise<Response> {
         seed: body.seed as number | undefined,
         referenceImages: body.referenceImages as string[] | undefined,
         resolution: body.resolution as string | undefined,
+        aspectRatio: body.aspectRatio as string | undefined,
         quality: body.quality as string | undefined,
         renderingSpeed: body.renderingSpeed as string | undefined,
         snapDims,
@@ -165,7 +172,12 @@ async function handler(req: Request): Promise<Response> {
           result.images.map(async (img: { url: string }) => {
             if (!img.url) return;
             try {
-              const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
+              // Gemini direct models return data: URIs (base64) — Deno's fetch
+              // handles those, but the extension must come from the mime type.
+              const dataMime = /^data:image\/([a-z0-9+]+);base64,/i.exec(img.url);
+              const ext = dataMime
+                ? (dataMime[1] === 'jpeg' ? 'jpg' : dataMime[1].slice(0, 4))
+                : (img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg");
               // Per-user prefix so retention is per user, not global.
               const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
               img.url = await rehostToR2(img.url, key);

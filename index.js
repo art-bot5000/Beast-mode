@@ -34,6 +34,8 @@
  * @property {string[]} [referenceImages] Image-to-image references (URL or data URI). Max 10.
  * @property {string} [resolution]       Preset ("1K"|"2K"|"4K") for models that support it.
  *                                        Mutually exclusive with width/height.
+ * @property {string} [aspectRatio]      Aspect-ratio string ("16:9" etc.) — direct Gemini
+ *                                        models take AR + resolution instead of pixel dims.
  * @property {boolean} [snapDims=true]   Snap width/height to /64 (community models).
  *                                        Set false for closed models with exact dim tables.
  * @property {string} [quality]          GPT Image quality (auto|low|medium|high).
@@ -85,10 +87,12 @@ export class ProviderError extends Error {
 // + one line here; the router below picks it up automatically.
 
 import { runwareAdapter } from './runware.js';
+import { googleAdapter } from './google.js';
 
 /** @type {Record<string, {id: string, generate: (req: GenerateRequest) => Promise<GenerateResult>}>} */
 const REGISTRY = {
   [runwareAdapter.id]: runwareAdapter,
+  [googleAdapter.id]: googleAdapter,   // direct Gemini API (free-tier capable)
   // [bflAdapter.id]: bflAdapter,   // <- drop-in later, see providers/bfl.js stub
 };
 

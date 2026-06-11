@@ -35,24 +35,35 @@
 
 /** @type {CatalogModel[]} */
 export const CATALOG = [
-  // ── Google "Nano Banana" ───────────────────────────────────────────────────
+  // ── Google "Nano Banana" — DIRECT Gemini API (google.js adapter) ──────────
+  // Routed via the google: prefix, NOT Runware, so the Google AI Studio free
+  // tier can be used. Requires GEMINI_API_KEY (soft-degrades if unset).
   {
-    id: 'runware:google:4@2',
+    id: 'google:gemini-3-pro-image',
     label: 'Nano Banana Pro',
     family: 'Google',
-    architecture: 'preset',
+    architecture: 'gemini',
     snap: false,
     i2i: true,
     note: 'Gemini 3 Pro Image — 1K/2K/4K, multi-image blending, top quality.',
   },
   {
-    id: 'runware:google:4@3',
+    id: 'google:gemini-3.1-flash-image',
     label: 'Nano Banana 2',
     family: 'Google',
-    architecture: 'preset',
+    architecture: 'gemini',
     snap: false,
     i2i: true,
     note: 'Gemini 3.1 Flash Image — fast, 4K-capable, great text rendering.',
+  },
+  {
+    id: 'google:gemini-2.5-flash-image',
+    label: 'Nano Banana (free tier)',
+    family: 'Google',
+    architecture: 'gemini',
+    snap: false,
+    i2i: true,
+    note: 'Gemini 2.5 Flash Image — most generous free-tier quota. Ideal for testing.',
   },
 
   // ── OpenAI ─────────────────────────────────────────────────────────────────
@@ -179,6 +190,8 @@ export function defaultsFor(architecture) {
     case 'free16':
     case 'free32':
       return { width: 1024, height: 1024 }; // closed models: no steps/CFG
+    case 'gemini':
+      return { resolution: '1K' }; // direct Gemini: AR + size tier, no pixel dims
     default:
       return { steps: 30, cfgScale: 7.0, width: 1024, height: 1024 };
   }
