@@ -221,12 +221,17 @@ export function passkeySupported() {
 }
 
 // ── public API: enrol a passkey (called when already unlocked, dataKey in hand) ─
-// Creates a credential WITH the prf extension, evaluates it against the account's
-// salt (shared across the account's passkeys — caller passes the existing salt,
-// or null to mint one for the first passkey), derives the wrap key, and wraps the
-// in-memory DATA KEY. Returns the envelope + credential metadata + the salt for
-// the server. THROWS code "PRF_UNSUPPORTED" if the authenticator didn't honour
-// the extension — caller surfaces a clear message.
+// Creates a credential with the prf extension AND captures the EC P-256 public
+// key (for server-side assertion verification on the session-only path). A+C
+// model: enrolment ALWAYS succeeds on a P-256 authenticator. If the authenticator
+// honours PRF, we also wrap the DATA KEY (full passwordless unlock). If not, the
+// passkey is still enrolled as a SESSION-ONLY credential (one-tap sign-in; the
+// library is unlocked by entering the passphrase once). Returns prfSupported so
+// the caller can message accordingly.
+//
+// ES256 only: platform authenticators produce P-256, and pinning one algorithm
+// keeps the hand-rolled server verifier single-path. existingPrfSalt reuses the
+// account-wide salt (or null to mint one for the first passkey).
 export async function enrollPasskey(email, emailHash, dataKey, existingPrfSalt) {
   const prfSaltBuf = existingPrfSalt
     ? b64ToBuf(existingPrfSalt)
@@ -238,32 +243,85 @@ export async function enrollPasskey(email, emailHash, dataKey, existingPrfSalt) 
       rp: { id: location.hostname, name: "Beast Mode" },
       user: { id: userId, name: email, displayName: email },
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      pubKeyCredParams: [
-        { type: "public-key", alg: -7 },   // ES256
-        { type: "public-key", alg: -257 }, // RS256
-      ],
+      pubKeyCredParams: [{ type: "public-key", alg: -7 }], // ES256 (P-256) only
       authenticatorSelection: { residentKey: "required", userVerification: "required" },
       extensions: { prf: { eval: { first: prfSaltBuf } } },
     },
   });
   if (!cred) throw new Error("Passkey creation cancelled");
 
-  const ext = cred.getClientExtensionResults();
-  const prf = ext && ext.prf && ext.prf.results && ext.prf.results.first;
-  if (!prf) {
-    const e = new Error("Authenticator does not support PRF");
-    e.code = "PRF_UNSUPPORTED";
+  // Capture the public key for server-side verification. getPublicKey() returns
+  // SPKI DER; we hand the server the raw 65-byte uncompressed point (0x04|x|y)
+  // extracted from it, so the server imports via importKey("raw") with no ASN.1.
+  const resp = cred.response;
+  if (!resp.getPublicKey) {
+    throw new Error("Browser too old: getPublicKey() unavailable");
+  }
+  const alg = resp.getPublicKeyAlgorithm ? resp.getPublicKeyAlgorithm() : -7;
+  if (alg !== -7) {
+    const e = new Error("Authenticator did not produce an ES256 key");
+    e.code = "ALG_UNSUPPORTED";
     throw e;
   }
+  const spki = new Uint8Array(resp.getPublicKey());
+  const rawPoint = spkiP256ToRawPoint(spki); // 65 bytes, 0x04|x(32)|y(32)
 
-  const wrapKey = await derivePrfWrapKey(new Uint8Array(prf), emailHash);
-  const wrapped = await wrapDataKey(dataKey, wrapKey);
+  // PRF result (may be absent on non-PRF authenticators — that's allowed now).
+  const ext = cred.getClientExtensionResults();
+  const prf = ext && ext.prf && ext.prf.results && ext.prf.results.first;
 
-  return {
+  const out = {
     credentialId: bufToB64(cred.rawId),
-    prfSalt: bufToB64(prfSaltBuf),
-    passkeyEnvelope: { wrapped },
+    publicKey: bufToB64(rawPoint),
+    prfSupported: !!prf,
   };
+  if (prf) {
+    out.prfSalt = bufToB64(prfSaltBuf);
+    const wrapKey = await derivePrfWrapKey(new Uint8Array(prf), emailHash);
+    out.passkeyEnvelope = { wrapped: await wrapDataKey(dataKey, wrapKey) };
+  }
+  return out;
+}
+
+// Extract the raw uncompressed EC point (0x04|x|y, 65 bytes) from a P-256 SPKI
+// DER blob. P-256 SPKI is a fixed-shape structure ending in a BIT STRING whose
+// payload (after the unused-bits byte) is exactly the 65-byte point. We locate
+// it from the end rather than parsing ASN.1: the last 65 bytes ARE the point,
+// and we sanity-check the 0x04 prefix.
+function spkiP256ToRawPoint(spki) {
+  if (spki.length < 65) throw new Error("SPKI too short for P-256");
+  const point = spki.slice(spki.length - 65);
+  if (point[0] !== 0x04) throw new Error("Unexpected EC point format (not uncompressed)");
+  return point;
+}
+
+// ── public API: run a WebAuthn assertion for SESSION login (no PRF needed) ─────
+// Used by the session-only path. Returns the raw assertion parts the server needs
+// to verify the signature. The server issues `challenge` (base64url) first.
+export async function getPasskeyAssertion(challengeB64url, credentialIds) {
+  const challenge = b64urlToBuf(challengeB64url);
+  const allow = credentialIds.map((id) => ({ type: "public-key", id: b64ToBuf(id) }));
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      rpId: location.hostname,
+      challenge,
+      allowCredentials: allow,
+      userVerification: "required",
+    },
+  });
+  if (!assertion) throw new Error("Passkey assertion cancelled");
+  const r = assertion.response;
+  return {
+    credentialId: bufToB64(assertion.rawId),
+    authenticatorData: bufToB64(new Uint8Array(r.authenticatorData)),
+    clientDataJSON: bufToB64(new Uint8Array(r.clientDataJSON)),
+    signature: bufToB64(new Uint8Array(r.signature)),
+  };
+}
+
+function b64urlToBuf(b64url) {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b64url.length + 3) % 4);
+  return b64ToBuf(b64);
 }
 
 // ── public API: unlock the DATA KEY via passkey (login) ───────────────────────

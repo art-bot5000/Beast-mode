@@ -42,7 +42,10 @@ interface Envelope {
 
 interface PasskeyCredential {
   credentialId: string;          // base64 rawId
-  passkeyEnvelope: Envelope;     // DATA KEY wrapped by the PRF-derived AES-KW key
+  publicKey: string;             // base64 raw P-256 point (0x04|x|y) for assertion verify
+  signCount: number;             // last seen authenticator counter (cloning detection)
+  passkeyEnvelope?: Envelope;    // present only for PRF passkeys (full DATA KEY unwrap)
+  prfCapable: boolean;           // true if this passkey can unwrap the DATA KEY
   createdAt: number;
   label?: string;                // optional user-facing name ("MacBook Touch ID")
 }
@@ -327,35 +330,56 @@ async function recoveryReset(body: Record<string, unknown>): Promise<Response> {
   return json({ ok: true, sessionToken: token });
 }
 
-// ── Passkeys (Pass 2, PRF-only) ───────────────────────────────────────────────
-// Enrolment requires a live session: you must already be unlocked (DATA KEY in
-// the browser) to wrap it under a new passkey. The server stores only the
-// credentialId, the account-wide prfSalt, and the wrapped envelope — never the
-// PRF output, never the DATA KEY. Trust boundary is identical to recovery codes.
-const MAX_PASSKEYS = 10;
+// ── Passkeys (Pass 2) ─────────────────────────────────────────────────────────
+// Two credential kinds under one enrolment flow (the "A+C" model):
+//   • PRF passkey      — wraps the DATA KEY; full passwordless unlock.
+//   • session-only     — no envelope; proves identity via a verified WebAuthn
+//                        assertion, issues a session, library unlocked by the
+//                        passphrase once. For authenticators without PRF.
+// Enrolment requires a live session (you must be unlocked to wrap the key for the
+// PRF case; for session-only we still require a session so a passkey can't be
+// bound to an account you don't control). The server stores credentialId, the
+// P-256 public key, signCount, and — for PRF — the wrapped envelope. Never the
+// PRF output, never the DATA KEY.
+import { verifyAssertion, newChallenge } from "./webauthn-verify.ts";
 
-function isPasskeyCred(c: unknown): c is { credentialId: string; passkeyEnvelope: Envelope } {
-  return !!c && typeof (c as { credentialId: unknown }).credentialId === "string" &&
-    isEnvelope((c as { passkeyEnvelope: unknown }).passkeyEnvelope);
+// Expected origin/rpId for assertion verification. Soft-config: defaults to the
+// prod host; set APP_ORIGIN per environment (staging) via `fly secrets set`.
+// rpIdHash is enforced cryptographically inside the assertion, so this only needs
+// to match the deployment's own host — it is not a security-critical secret.
+const APP_ORIGIN = Deno.env.get("APP_ORIGIN") || "https://beast-mode.fly.dev";
+const APP_RPID = (() => { try { return new URL(APP_ORIGIN).hostname; } catch { return "beast-mode.fly.dev"; } })();
+
+const MAX_PASSKEYS = 10;
+const PASSKEY_CHALLENGE_TTL_MS = 5 * 60_000;
+
+function isB64(s: unknown): s is string {
+  return typeof s === "string" && s.length > 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(s);
 }
 
 async function passkeyEnroll(req: Request, body: Record<string, unknown>): Promise<Response> {
   // Gate on a valid session — the emailHash comes from the TOKEN, not the body,
-  // so one account can never enrol a passkey envelope onto another.
+  // so one account can never enrol a passkey onto another.
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const emailHash = await verifySessionToken(token);
   if (!emailHash) return json({ error: "Not authenticated", code: "auth" }, 401);
 
-  const { credentialId, prfSalt, passkeyEnvelope, label } = body;
-  if (typeof credentialId !== "string" || !credentialId) {
-    return json({ error: "Invalid credentialId", code: "bad_request" }, 400);
+  const { credentialId, publicKey, prfSalt, passkeyEnvelope, label } = body;
+  if (!isB64(credentialId)) return json({ error: "Invalid credentialId", code: "bad_request" }, 400);
+  if (!isB64(publicKey)) return json({ error: "Invalid publicKey", code: "bad_request" }, 400);
+
+  // PRF passkeys carry BOTH a salt and an envelope; session-only carry NEITHER.
+  // Reject the mixed/partial shapes outright.
+  const hasSalt = prfSalt !== undefined && prfSalt !== null;
+  const hasEnv = passkeyEnvelope !== undefined && passkeyEnvelope !== null;
+  if (hasSalt !== hasEnv) {
+    return json({ error: "Inconsistent PRF fields", code: "bad_request" }, 400);
   }
-  if (typeof prfSalt !== "string" || !prfSalt) {
-    return json({ error: "Invalid prfSalt", code: "bad_request" }, 400);
-  }
-  if (!isEnvelope(passkeyEnvelope)) {
-    return json({ error: "Invalid passkey envelope", code: "bad_request" }, 400);
+  const isPrf = hasSalt && hasEnv;
+  if (isPrf) {
+    if (typeof prfSalt !== "string" || !prfSalt) return json({ error: "Invalid prfSalt", code: "bad_request" }, 400);
+    if (!isEnvelope(passkeyEnvelope)) return json({ error: "Invalid passkey envelope", code: "bad_request" }, 400);
   }
 
   const rec = await kv.get<UserRecord>(["user", emailHash]);
@@ -366,35 +390,35 @@ async function passkeyEnroll(req: Request, body: Record<string, unknown>): Promi
   if (existing.length >= MAX_PASSKEYS) {
     return json({ error: "Too many passkeys", code: "limit" }, 409);
   }
-  // First passkey fixes the account-wide salt; later ones MUST reuse it (the
-  // browser is told the existing salt, so a mismatch means a client bug).
-  if (rec.value.prfSalt && rec.value.prfSalt !== prfSalt) {
+  // PRF passkeys share one account-wide salt; later ones MUST reuse it.
+  if (isPrf && rec.value.prfSalt && rec.value.prfSalt !== prfSalt) {
     return json({ error: "prfSalt mismatch", code: "bad_request" }, 400);
   }
-  // Reject duplicate credentialId (idempotency / re-enrol guard).
   if (existing.some((p) => p.credentialId === credentialId)) {
     return json({ error: "Passkey already enrolled", code: "exists" }, 409);
   }
 
   const newCred: PasskeyCredential = {
-    credentialId,
-    passkeyEnvelope: passkeyEnvelope as Envelope,
+    credentialId: credentialId as string,
+    publicKey: publicKey as string,
+    signCount: 0,
+    prfCapable: isPrf,
     createdAt: Date.now(),
+    ...(isPrf ? { passkeyEnvelope: passkeyEnvelope as Envelope } : {}),
     ...(typeof label === "string" && label ? { label } : {}),
   };
   const updated: UserRecord = {
     ...rec.value,
-    prfSalt: rec.value.prfSalt ?? (prfSalt as string),
+    ...(isPrf ? { prfSalt: rec.value.prfSalt ?? (prfSalt as string) } : {}),
     passkeys: [...existing, newCred],
   };
   await kv.set(["user", emailHash], updated);
-  return json({ ok: true, passkeyCount: updated.passkeys!.length });
+  return json({ ok: true, passkeyCount: updated.passkeys!.length, kind: isPrf ? "prf" : "session" });
 }
 
-// Pre-login: the browser needs the credentialIds + the account prfSalt to run the
-// WebAuthn assertion. Anti-enumeration: a missing/passkey-less account returns the
-// SAME shape (empty list, null salt) as a real one — no existence signal. The
-// browser simply finds no credentials to offer.
+// Pre-login (PRF path): the browser needs the credentialIds + account prfSalt to
+// run the assertion and unwrap locally. Anti-enumeration: a missing/passkey-less
+// account returns the SAME shape (empty list, null salt) — no existence signal.
 async function passkeyChallenge(body: Record<string, unknown>): Promise<Response> {
   const { emailHash } = body;
   if (!isHex(emailHash, 32)) return json({ passkeys: [], prfSalt: null });
@@ -402,18 +426,37 @@ async function passkeyChallenge(body: Record<string, unknown>): Promise<Response
   if (!rec.value || rec.value.deletedAt || !rec.value.emailVerified || !rec.value.prfSalt) {
     return json({ passkeys: [], prfSalt: null });
   }
-  const passkeys = (rec.value.passkeys ?? []).map((p) => ({
-    credentialId: p.credentialId,
-    passkeyEnvelope: p.passkeyEnvelope,
-  }));
+  // Only PRF-capable passkeys can unwrap, so only offer those here.
+  const passkeys = (rec.value.passkeys ?? [])
+    .filter((p) => p.prfCapable && p.passkeyEnvelope)
+    .map((p) => ({ credentialId: p.credentialId, passkeyEnvelope: p.passkeyEnvelope }));
   return json({ passkeys, prfSalt: rec.value.prfSalt });
 }
 
-// Passkey login: the browser has already unwrapped the DATA KEY locally via the
-// PRF assertion; this endpoint just verifies the account is sign-in-eligible and
-// issues a session token (the server-side gate for paid endpoints). It does NOT
-// see the assertion — the unwrap is the proof of possession, mirroring how
-// /user/login trusts the verifier. Rate-limited like password login.
+// Pre-login (session path): issue a random server challenge, store it bound to
+// the account (short TTL), and return it + the credentialIds the browser should
+// offer. The browser runs the assertion; the server verifies the signature on
+// the way back in passkeyVerifiedLogin. Same anti-enumeration shape on miss.
+async function passkeyAssertionChallenge(body: Record<string, unknown>): Promise<Response> {
+  const { emailHash } = body;
+  if (!isHex(emailHash, 32)) return json({ challenge: null, credentialIds: [] });
+  const rec = await kv.get<UserRecord>(["user", emailHash as string]);
+  if (!rec.value || rec.value.deletedAt || !rec.value.emailVerified ||
+      !(rec.value.passkeys && rec.value.passkeys.length)) {
+    return json({ challenge: null, credentialIds: [] });
+  }
+  const challenge = newChallenge();
+  await kv.set(["pkchallenge", emailHash as string], { challenge, issued: Date.now() },
+    { expireIn: PASSKEY_CHALLENGE_TTL_MS });
+  // Offer ALL credentials (PRF and session-only); any can authenticate a session.
+  const credentialIds = (rec.value.passkeys ?? []).map((p) => p.credentialId);
+  return json({ challenge, credentialIds });
+}
+
+// PRF login: the browser already unwrapped the DATA KEY via the PRF assertion, so
+// the unwrap itself is the proof of possession (forging it is infeasible without
+// the credential). This endpoint only confirms sign-in eligibility and issues the
+// session token. Mirrors how /user/login trusts the verifier. Rate-limited.
 async function passkeyLogin(body: Record<string, unknown>): Promise<Response> {
   const { emailHash } = body;
   if (!isHex(emailHash, 32)) return json({ error: "Invalid request", code: "bad_request" }, 400);
@@ -422,10 +465,69 @@ async function passkeyLogin(body: Record<string, unknown>): Promise<Response> {
   }
   const rec = await kv.get<UserRecord>(["user", emailHash as string]);
   if (!rec.value || rec.value.deletedAt || !rec.value.emailVerified ||
-      !(rec.value.passkeys && rec.value.passkeys.length)) {
-    // Generic failure — no signal about which condition failed.
+      !(rec.value.passkeys && rec.value.passkeys.some((p) => p.prfCapable))) {
     return json({ error: "Passkey sign-in unavailable", code: "auth" }, 401);
   }
+  const token = await issueSession(emailHash as string);
+  return json({ ok: true, sessionToken: token });
+}
+
+// Session login (no PRF): there is NO unwrap to act as proof, so the server MUST
+// verify the WebAuthn assertion signature against the stored public key before
+// issuing a session. Full verification: challenge match, origin, rpIdHash, UV/UP
+// flags, ECDSA signature, and signCount cloning detection.
+async function passkeyVerifiedLogin(body: Record<string, unknown>): Promise<Response> {
+  const { emailHash, credentialId, authenticatorData, clientDataJSON, signature } = body;
+  if (!isHex(emailHash, 32) || !isB64(credentialId) ||
+      !isB64(authenticatorData) || !isB64(clientDataJSON) || !isB64(signature)) {
+    return json({ error: "Invalid request", code: "bad_request" }, 400);
+  }
+  if (await loginRateLimited(emailHash as string)) {
+    return json({ error: "Too many attempts. Try again in 15 minutes.", code: "rate_limit" }, 429);
+  }
+
+  // Generic failure for every rejection below — no oracle about which check failed
+  // or whether the account exists.
+  const fail = () => json({ error: "Passkey sign-in failed", code: "auth" }, 401);
+
+  const rec = await kv.get<UserRecord>(["user", emailHash as string]);
+  if (!rec.value || rec.value.deletedAt || !rec.value.emailVerified) return fail();
+
+  const cred = (rec.value.passkeys ?? []).find((p) => p.credentialId === credentialId);
+  if (!cred) return fail();
+
+  // One-time challenge: must exist, match, and be consumed (delete before verify
+  // so it can't be replayed even on a verification error).
+  const chRec = await kv.get<{ challenge: string }>(["pkchallenge", emailHash as string]);
+  await kv.delete(["pkchallenge", emailHash as string]);
+  if (!chRec.value?.challenge) return fail();
+
+  const result = await verifyAssertion(
+    {
+      authenticatorData: authenticatorData as string,
+      clientDataJSON: clientDataJSON as string,
+      signature: signature as string,
+    },
+    {
+      expectedChallenge: chRec.value.challenge,
+      expectedOrigin: APP_ORIGIN,
+      expectedRpId: APP_RPID,
+      publicKey: cred.publicKey,
+      storedSignCount: cred.signCount,
+    },
+  );
+  if (!result.ok) return fail();
+
+  // Persist the advanced signCount. A clone warning (counter didn't advance) is
+  // logged but not fatal — many platform authenticators report a static 0.
+  if (result.clonedWarning) {
+    console.warn(`Passkey signCount did not advance for account ${emailHash} (possible clone)`);
+  }
+  const updatedPasskeys = (rec.value.passkeys ?? []).map((p) =>
+    p.credentialId === credentialId ? { ...p, signCount: result.newSignCount ?? p.signCount } : p
+  );
+  await kv.set(["user", emailHash as string], { ...rec.value, passkeys: updatedPasskeys });
+
   const token = await issueSession(emailHash as string);
   return json({ ok: true, sessionToken: token });
 }
@@ -449,6 +551,8 @@ export async function handleAuth(req: Request, url: URL): Promise<Response | nul
   if (path === "/passkey/enroll" && method === "POST") return passkeyEnroll(req, await readBody());
   if (path === "/passkey/challenge" && method === "POST") return passkeyChallenge(await readBody());
   if (path === "/passkey/login" && method === "POST") return passkeyLogin(await readBody());
+  if (path === "/passkey/assertion-challenge" && method === "POST") return passkeyAssertionChallenge(await readBody());
+  if (path === "/passkey/verified-login" && method === "POST") return passkeyVerifiedLogin(await readBody());
 
   return null; // not an auth route
 }

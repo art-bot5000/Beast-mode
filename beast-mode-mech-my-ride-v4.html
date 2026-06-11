@@ -18628,7 +18628,7 @@ try {
 import {
   computeEmailHash, computeVerifier, buildRegistration,
   unlockWithPassphrase, unlockWithRecoveryCode, buildPassphraseReset,
-  passkeySupported, enrollPasskey, unlockWithPasskey
+  passkeySupported, enrollPasskey, unlockWithPasskey, getPasskeyAssertion
 } from './bm-auth-crypto.js';
 
 const body = () => document.getElementById('bmAuthBody');
@@ -18685,9 +18685,12 @@ function renderLogin() {
 }
 
 // ── PASSKEY LOGIN ────────────────────────────────────────────────────────────
-// Email -> /passkey/challenge (credIds + account prfSalt) -> WebAuthn assertion
-// unwraps the DATA KEY locally -> /passkey/login issues the session token. The
-// server never sees the PRF output; the successful unwrap IS the proof.
+// Two paths (A+C). PRF first: /passkey/challenge returns PRF credentials + salt;
+// the assertion unwraps the DATA KEY locally and /passkey/login mints a session
+// (full passwordless). If there's no PRF passkey, fall back to the SESSION path:
+// /passkey/assertion-challenge issues a server challenge, the assertion is signed,
+// and /passkey/verified-login verifies the signature server-side and mints a
+// session WITHOUT a DATA KEY — the library unlocks when the passphrase is entered.
 async function doPasskeyLogin() {
   const email = document.getElementById('bmLEmail').value.trim();
   const msg = document.getElementById('bmLMsg');
@@ -18695,29 +18698,53 @@ async function doPasskeyLogin() {
   msg.className = 'bm-auth-msg'; msg.textContent = 'Waiting for passkey…';
   try {
     const emailHash = await computeEmailHash(email);
-    const { status, data } = await api('/passkey/challenge', { emailHash });
-    if (status !== 200 || !data.prfSalt || !(data.passkeys && data.passkeys.length)) {
+
+    // ── Path 1: PRF (full DATA KEY unlock) ──
+    const prfCh = await api('/passkey/challenge', { emailHash });
+    if (prfCh.status === 200 && prfCh.data.prfSalt && prfCh.data.passkeys && prfCh.data.passkeys.length) {
+      try {
+        const dataKey = await unlockWithPasskey(emailHash, prfCh.data.prfSalt, prfCh.data.passkeys);
+        const login = await api('/passkey/login', { emailHash });
+        if (login.status === 200) {
+          setSession({ emailHash, email, dataKey, sessionToken: login.data.sessionToken });
+          msg.className = 'bm-auth-msg ok'; msg.textContent = '✓ Signed in with passkey.';
+          setTimeout(closeAuthModal, 600);
+          return;
+        }
+        if (login.data.code === 'rate_limit') {
+          msg.className = 'bm-auth-msg err'; msg.textContent = 'Too many attempts. Wait 15 min.'; return;
+        }
+        // else fall through to session path
+      } catch (prfErr) {
+        if (prfErr && prfErr.name === 'NotAllowedError') {
+          msg.className = 'bm-auth-msg err'; msg.textContent = 'Passkey sign-in cancelled.'; return;
+        }
+        // PRF unwrap failed for some other reason — try the session path below.
+      }
+    }
+
+    // ── Path 2: session-only (server-verified assertion, no DATA KEY) ──
+    const sessCh = await api('/passkey/assertion-challenge', { emailHash });
+    if (sessCh.status !== 200 || !sessCh.data.challenge || !(sessCh.data.credentialIds && sessCh.data.credentialIds.length)) {
+      msg.className = 'bm-auth-msg err'; msg.textContent = 'No passkey found for this account.'; return;
+    }
+    const assertion = await getPasskeyAssertion(sessCh.data.challenge, sessCh.data.credentialIds);
+    const vl = await api('/passkey/verified-login', { emailHash, ...assertion });
+    if (vl.status !== 200) {
       msg.className = 'bm-auth-msg err';
-      msg.textContent = 'No passkey found for this account.';
+      msg.textContent = vl.data.code === 'rate_limit' ? 'Too many attempts. Wait 15 min.' : 'Passkey sign-in failed.';
       return;
     }
-    // Runs the assertion + unwraps the DATA KEY (throws on cancel/wrong device).
-    const dataKey = await unlockWithPasskey(emailHash, data.prfSalt, data.passkeys);
-    // Mint the server session (gate for paid endpoints). DATA KEY stays local.
-    const login = await api('/passkey/login', { emailHash });
-    if (login.status !== 200) {
-      msg.className = 'bm-auth-msg err';
-      msg.textContent = login.data.code === 'rate_limit' ? 'Too many attempts. Wait 15 min.' : 'Passkey sign-in unavailable.';
-      return;
-    }
-    setSession({ emailHash, email, dataKey, sessionToken: login.data.sessionToken });
-    msg.className = 'bm-auth-msg ok'; msg.textContent = '✓ Signed in with passkey.';
-    setTimeout(closeAuthModal, 600);
+    // Signed in, but no DATA KEY — encrypted features will prompt for passphrase.
+    setSession({ emailHash, email, dataKey: null, sessionToken: vl.data.sessionToken });
+    msg.className = 'bm-auth-msg ok';
+    msg.textContent = '✓ Signed in. Enter your passphrase when prompted to unlock saved data.';
+    setTimeout(closeAuthModal, 1200);
   } catch (e) {
     msg.className = 'bm-auth-msg err';
-    msg.textContent = (e && e.code === 'PRF_UNSUPPORTED')
-      ? 'This device can\u2019t use passkeys here.'
-      : 'Passkey sign-in cancelled or failed.';
+    msg.textContent = (e && e.name === 'NotAllowedError')
+      ? 'Passkey sign-in cancelled.'
+      : 'Passkey sign-in failed.';
   }
 }
 
@@ -19003,25 +19030,33 @@ async function doEnrollPasskey() {
     return;
   }
   try {
-    // Fetch the existing account salt (null if this is the first passkey).
+    // Fetch the existing account salt (null if this is the first PRF passkey).
     const ch = await api('/passkey/challenge', { emailHash: s.emailHash });
     const existingSalt = (ch.status === 200 && ch.data.prfSalt) ? ch.data.prfSalt : null;
     const enrolled = await enrollPasskey(s.email, s.emailHash, s.dataKey, existingSalt);
-    const { status, data } = await api('/passkey/enroll', {
-      credentialId: enrolled.credentialId,
-      prfSalt: enrolled.prfSalt,
-      passkeyEnvelope: enrolled.passkeyEnvelope,
-    });
+    // PRF passkeys send salt + envelope; session-only send neither (both omitted).
+    const payload = { credentialId: enrolled.credentialId, publicKey: enrolled.publicKey };
+    if (enrolled.prfSupported) {
+      payload.prfSalt = enrolled.prfSalt;
+      payload.passkeyEnvelope = enrolled.passkeyEnvelope;
+    }
+    const { status, data } = await api('/passkey/enroll', payload);
     if (status !== 200) {
       alert(data.code === 'exists' ? 'That passkey is already enrolled.'
         : data.code === 'limit' ? 'You have reached the passkey limit (10).'
         : 'Could not save the passkey. Please try again.');
       return;
     }
-    alert('Passkey added. You can now sign in with it on this device.');
+    if (enrolled.prfSupported) {
+      alert('Passkey added. You can now sign in with it on this device — no passphrase needed.');
+    } else {
+      alert('Passkey added for sign-in on this device. This device doesn\u2019t support passwordless unlock, so you\u2019ll still enter your passphrase once to open saved data.');
+    }
   } catch (e) {
-    if (e && e.code === 'PRF_UNSUPPORTED') {
-      alert('This device or browser can\u2019t use passkeys with Beast Mode (no PRF support). Your passphrase still works everywhere.');
+    if (e && (e.code === 'ALG_UNSUPPORTED')) {
+      alert('This device produced an unsupported key type. Your passphrase still works everywhere.');
+    } else if (e && e.name === 'NotAllowedError') {
+      alert('Passkey setup was cancelled.');
     } else {
       alert('Passkey setup was cancelled or failed.');
     }
