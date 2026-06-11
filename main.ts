@@ -180,7 +180,12 @@ async function handler(req: Request): Promise<Response> {
                 : (img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg");
               // Per-user prefix so retention is per user, not global.
               const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+              const original = img.url;
               img.url = await rehostToR2(img.url, key);
+              // Keep the PRISTINE bytes alongside the R2 URL: the browser uses
+              // them for the Drive/IndexedDB copies, so a flaky/blocked R2
+              // public URL can never corrupt the durable backups.
+              if (dataMime) (img as Record<string, unknown>).pristine = original;
             } catch (e) {
               console.warn("R2 rehost failed, keeping original URL:", (e as Error).message);
             }

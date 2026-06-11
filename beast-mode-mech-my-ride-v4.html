@@ -3285,6 +3285,19 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
       <button class="btn btn-primary" onclick="if(typeof openAuthModal==='function')openAuthModal('login')">⊙ SIGN IN / CREATE ACCOUNT</button>
     </div>
 
+    <!-- Durable-storage warning: R2 is a hot cache that keeps only each user's
+         NEWEST 5 generated images (FIFO trim server-side). Permanent copies are
+         uploaded to Google Drive by autoSaveGeneratedImage — but only when
+         Drive is connected. Shown whenever driveToken is absent. -->
+    <div id="igDriveWarn" class="ig-panel" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 8%,var(--surface));">
+      <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;white-space:nowrap;">⚠ NO PERMANENT IMAGE STORAGE</span>
+      <span style="font-size:12px;color:var(--muted);flex:1;min-width:220px;line-height:1.5;">
+        Generated images live in a temporary cloud cache that keeps only your <b style="color:var(--accent);">newest 5</b> —
+        each new image pushes the oldest out (FIFO). Connect <b>Google Drive</b> to save a permanent copy of every image automatically.<span id="igDriveWarnDbx" style="display:none;"> Note: your Dropbox sync covers prompts &amp; library data, not generated image files.</span>
+      </span>
+      <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ CONNECT GOOGLE DRIVE</button>
+    </div>
+
     <div id="igMain" class="ig-layout" style="display:none;">
       <!-- ── Controls column ─────────────────────────────────────────────── -->
       <div class="ig-panel">
@@ -17750,7 +17763,10 @@ async function generateImage() {
 // Builds a library entry in the SAME shape as doSaveFav(); stores the generated
 // image URL in imageData (rendered directly as <img src>); saves to localStorage
 // + cloud via the existing driveSavePrompt().
-function autoSaveGeneratedImage(prompt, fullText, imageUrl, model) {
+// `pristine` (optional): a data: URI of the ORIGINAL image bytes (Gemini direct
+// models). When present, the Drive upload + local cache use it instead of
+// re-fetching the hosted URL — immune to R2 public-URL fetch problems.
+function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine) {
   try {
     let full = fullText;
     const DELIM = (typeof SETTINGS_DELIMITER !== 'undefined') ? SETTINGS_DELIMITER : '---SETTINGS---';
@@ -17781,10 +17797,12 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model) {
       if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
       if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
       // Durable copies: upload the image itself to the visible "Beast Mode"
-      // Drive folder (R2 only keeps the newest 5), and cache locally.
-      if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, imageUrl);
+      // Drive folder (R2 only keeps the newest 5), and cache locally. Prefer
+      // the pristine bytes when the backend supplied them.
+      const uploadSrc = pristine || imageUrl;
+      if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, uploadSrc);
       if (typeof driveUploadImage === 'function') {
-        driveUploadImage(imageUrl, 'beast-mode-' + fav.id + '.jpg').then((driveId) => {
+        driveUploadImage(uploadSrc, 'beast-mode-' + fav.id + '.jpg').then((driveId) => {
           if (driveId) {
             fav.driveImageId = driveId;
             if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
@@ -17847,11 +17865,31 @@ const igState = { modelId: IG_MODELS[0].id, ar: '1:1', res: null, refs: [], qual
 
 function igModel() { return IG_MODELS.find(m => m.id === igState.modelId) || IG_MODELS[0]; }
 
+// Durable-storage check: images only get permanent copies via Google Drive
+// (driveUploadImage in autoSaveGeneratedImage). R2 trims each user to their
+// newest 5 server-side, so without Drive, image #6 evicts image #1.
+function igHasDurableStorage() {
+  return (typeof driveToken !== 'undefined') && !!driveToken;
+}
+
+function igUpdateCloudWarn(signedIn) {
+  const el = document.getElementById('igDriveWarn');
+  if (!el) return;
+  const show = (signedIn !== false) && !igHasDurableStorage();
+  el.style.display = show ? 'flex' : 'none';
+  // If they're synced via Dropbox, explain why the warning still applies.
+  const dbx = (typeof cloudProvider !== 'undefined' && cloudProvider === 'dropbox'
+    && typeof dbxToken !== 'undefined' && !!dbxToken);
+  const dbxNote = document.getElementById('igDriveWarnDbx');
+  if (dbxNote) dbxNote.style.display = (show && dbx) ? 'inline' : 'none';
+}
+
 function igInit() {
   // Auth gate — server enforces auth too; this is just clean UX.
   const signedIn = !!(window.bmSession && window.bmSession.sessionToken);
   document.getElementById('igAuthGate').style.display = signedIn ? 'none' : 'block';
   document.getElementById('igMain').style.display = signedIn ? 'grid' : 'none';
+  igUpdateCloudWarn(signedIn);
   if (!signedIn) return;
   if (igState.inited) { igRenderAll(); return; }
   igState.inited = true;
@@ -17902,6 +17940,7 @@ function igModelChanged() {
 
 function igRenderAll() {
   const m = igModel();
+  igUpdateCloudWarn();
   const tiers = Object.keys(m.dims);
   if (!igState.res || !tiers.includes(igState.res)) igState.res = tiers[0];
 
@@ -18133,10 +18172,17 @@ async function igGenerate() {
     images.forEach(im => igAddResultCard(im, m, prompt, data.costUsd, images.length));
     document.getElementById('igEmpty').style.display = 'none';
     const costStr = typeof data.costUsd === 'number' ? (' \u00B7 $' + data.costUsd.toFixed(4)) : '';
-    igStatus('\u2713 ' + images.length + ' IMAGE' + (images.length > 1 ? 'S' : '') + ' GENERATED' + costStr + ' \u00B7 auto-saved to library', false);
+    const backupStr = igHasDurableStorage()
+      ? ' \u00B7 saved to library + Drive'
+      : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
+    igStatus('\u2713 ' + images.length + ' IMAGE' + (images.length > 1 ? 'S' : '') + ' GENERATED' + costStr + backupStr, false);
+    igUpdateCloudWarn();
     // Auto-save each result to library + cloud via the existing pipeline.
+    // Pass the pristine bytes (Gemini direct) so Drive/cache copies never
+    // depend on re-fetching the R2 public URL.
     images.forEach(im => {
-      if (typeof autoSaveGeneratedImage === 'function') autoSaveGeneratedImage(prompt, '', im.url, m.id);
+      const pristine = im.pristine || (String(im.url).startsWith('data:') ? im.url : null);
+      if (typeof autoSaveGeneratedImage === 'function') autoSaveGeneratedImage(prompt, '', im.url, m.id, pristine);
     });
   } catch (e) {
     igStatus('\u2717 Network error: ' + e.message, true);
@@ -18225,6 +18271,33 @@ async function igDownload(url) {
     window.open(url, '_blank', 'noopener'); // CORS fallback: open in new tab
   }
 }
+
+// ── Auth-state sync ──────────────────────────────────────────────────────────
+// Sign-OUT: hard reload so it's unambiguous that generation is locked (any
+// in-flight results clear too). The typed prompt is stashed so an unexpected
+// session-expiry reload doesn't eat work. Sign-IN: re-run igInit immediately
+// so the "Sign in to generate" gate flips without a tab switch or reload.
+window.addEventListener('bm-auth-changed', (e) => {
+  const signedIn = !!(e.detail && e.detail.signedIn);
+  if (!signedIn) {
+    try {
+      const p = document.getElementById('igPrompt');
+      if (p && p.value) sessionStorage.setItem('ig_prompt_stash', p.value);
+    } catch (err) {}
+    location.reload();
+    return;
+  }
+  igInit();
+});
+// Restore a stashed prompt after a logout / session-expiry reload.
+try {
+  const igStash = sessionStorage.getItem('ig_prompt_stash');
+  if (igStash) {
+    const p = document.getElementById('igPrompt');
+    if (p) p.value = igStash;
+    sessionStorage.removeItem('ig_prompt_stash');
+  }
+} catch (e) {}
 
 </script>
 
@@ -18677,10 +18750,31 @@ async function driveEnsureBeastFolder() {
 }
 
 // Upload an image (by URL) into the Beast Mode folder. Returns the Drive file id.
+// Fetch image bytes with validation. fetch() does NOT throw on HTTP errors, so
+// without these checks an R2/CDN error or challenge page (HTML, a few KB) gets
+// blobbed and uploaded as a ".jpg" — Drive then shows "unsupported file format".
+// Returns a real image blob or null (never garbage). data: URIs pass through.
+async function bmFetchImageBlob(src) {
+  try {
+    const res = await fetch(src)
+    if (!res.ok) { console.warn('[bm] image fetch HTTP ' + res.status + ' for', String(src).slice(0, 100)); return null }
+    const blob = await res.blob()
+    if (!/^image\//.test(blob.type || '') || blob.size < 1024) {
+      console.warn('[bm] image fetch returned non-image (type=' + blob.type + ', size=' + blob.size + ') for', String(src).slice(0, 100))
+      return null
+    }
+    return blob
+  } catch (e) {
+    console.warn('[bm] image fetch failed:', e.message)
+    return null
+  }
+}
+
 async function driveUploadImage(imageUrl, filename) {
   if (!driveToken) return null
   try {
-    const blob = await (await fetch(imageUrl)).blob()
+    const blob = await bmFetchImageBlob(imageUrl)
+    if (!blob) return null // refuse to upload anything that isn't a real image
     const folderId = await driveEnsureBeastFolder()
     if (!folderId) return null
     const form = new FormData()
@@ -18723,7 +18817,8 @@ function bmIdb() {
 }
 async function bmCacheImage(favId, imageUrl) {
   try {
-    const blob = await (await fetch(imageUrl)).blob()
+    const blob = await bmFetchImageBlob(imageUrl)
+    if (!blob) return // never cache error pages as "images"
     const db = await bmIdb()
     await new Promise((res, rej) => {
       const tx = db.transaction('images', 'readwrite')
