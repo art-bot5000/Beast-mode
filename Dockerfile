@@ -35,7 +35,7 @@ COPY --from=builder /build/public/ ./public/
 # Backend: the Deno entrypoint plus the provider modules we built.
 # (main.ts imports the auth/account logic mirrored from stckrm + the
 #  generate/models routes that call into providers/.)
-COPY main.ts auth.ts deno.json ./
+COPY main.ts auth.ts oauth.ts deno.json ./
 COPY index.js runware.js google.js catalog.js r2.js ./
 RUN deno cache --unstable-kv --unstable-cron main.ts
 
