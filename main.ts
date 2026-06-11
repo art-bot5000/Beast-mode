@@ -51,6 +51,7 @@ if (missing.length) {
 // them directly. generate() picks the provider from the model-id prefix.
 import { generate, searchModels, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
+import { pricingTable, quote } from "./pricing.js";
 import { rehostToR2, r2Enabled, trimR2ToNewest } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleOAuth } from "./oauth.ts";
@@ -215,6 +216,28 @@ async function handler(req: Request): Promise<Response> {
   // ── Curated model list for the dropdown (instant, no upstream call).
   if (path === "/api/models" && req.method === "GET") {
     return json({ groups: catalogByFamily() });
+  }
+
+  // ── Token price table (Pass 3 pricing foundation). Read-only, public:
+  // the frontend labels the model dropdown and pre-flight quotes from this.
+  // Charging happens in the ledger (next step) — this endpoint never mutates.
+  if (path === "/api/pricing" && req.method === "GET") {
+    return json(pricingTable());
+  }
+
+  // ── Single-request quote: ?model=...&count=2&resolution=2K&quality=high
+  //    &renderingSpeed=TURBO — returns the exact integer tokens the ledger
+  //    would hold. Frontend shows this next to the Generate button.
+  if (path === "/api/pricing/quote" && req.method === "GET") {
+    const model = url.searchParams.get("model") ?? "";
+    if (!model) return json({ error: "model required", code: "bad_request" }, 400);
+    return json(quote(model, {
+      resolution: url.searchParams.get("resolution") ?? undefined,
+      width: Number(url.searchParams.get("width")) || undefined,
+      height: Number(url.searchParams.get("height")) || undefined,
+      quality: url.searchParams.get("quality") ?? undefined,
+      renderingSpeed: url.searchParams.get("renderingSpeed") ?? undefined,
+    }, Number(url.searchParams.get("count")) || 1));
   }
 
   // ── Per-model default params.
