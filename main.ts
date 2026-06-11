@@ -133,6 +133,11 @@ async function handler(req: Request): Promise<Response> {
       return json({ error: "Invalid JSON body", code: "bad_request" }, 400);
     }
     try {
+      // Snap rule comes from the curated catalog: closed/preset models (snap:
+      // false) need EXACT dims; unknown/community models default to /64 snap.
+      const entry = findInCatalog(body.model as string);
+      const snapDims = entry ? entry.snap !== false : true;
+
       const result = await generate({
         prompt: body.prompt as string,
         negativePrompt: body.negativePrompt as string | undefined,
@@ -141,8 +146,15 @@ async function handler(req: Request): Promise<Response> {
         height: body.height as number | undefined,
         steps: body.steps as number | undefined,
         cfgScale: body.cfgScale as number | undefined,
-        count: body.count as number | undefined,
+        // Clamp count server-side: protects Runware spend even if the client
+        // is tampered with. UI offers 1–4.
+        count: Math.max(1, Math.min(4, Number(body.count) || 1)),
         seed: body.seed as number | undefined,
+        referenceImages: body.referenceImages as string[] | undefined,
+        resolution: body.resolution as string | undefined,
+        quality: body.quality as string | undefined,
+        renderingSpeed: body.renderingSpeed as string | undefined,
+        snapDims,
       });
 
       // ── Re-host to R2 so saved images don't break when Runware URLs expire.

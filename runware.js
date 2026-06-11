@@ -56,17 +56,52 @@ export const runwareAdapter = {
       taskUUID,
       model: modelRef,
       positivePrompt: req.prompt,
-      width: snap64(req.width, 1024),
-      height: snap64(req.height, 1024),
       numberResults: Math.max(1, Math.min(20, req.count ?? 1)),
       outputType: 'URL',
       outputFormat: 'JPG',
       includeCost: true,
     };
+
+    // ── Dimensions ────────────────────────────────────────────────────────────
+    // Three mutually-aware modes (per Runware model docs):
+    //   1. resolution preset ("1K"|"2K"|"4K") — Google models; CANNOT combine
+    //      with width/height. With reference images it auto-matches input AR.
+    //   2. exact dims (snapDims === false) — closed models publish fixed dim
+    //      tables (e.g. Nano Banana 1376x768); snapping to /64 would 400.
+    //   3. snapped dims (default) — community SD/FLUX.1 checkpoints need /64.
+    if (req.resolution && !Number.isFinite(req.width)) {
+      task.resolution = String(req.resolution);
+    } else if (req.snapDims === false) {
+      if (Number.isFinite(req.width) && Number.isFinite(req.height)) {
+        task.width = Math.round(req.width);
+        task.height = Math.round(req.height);
+      }
+      // else: omit dims entirely (valid for i2i on preset models — the model
+      // matches the reference image's aspect ratio).
+    } else {
+      task.width = snap64(req.width, 1024);
+      task.height = snap64(req.height, 1024);
+    }
+
+    // ── Image-to-image: reference images (UUID, URL, data URI, or base64). ───
+    if (Array.isArray(req.referenceImages) && req.referenceImages.length) {
+      task.inputs = { referenceImages: req.referenceImages.slice(0, 10) };
+    }
+
     if (req.negativePrompt) task.negativePrompt = req.negativePrompt;
     if (Number.isFinite(req.steps)) task.steps = req.steps;
     if (Number.isFinite(req.cfgScale)) task.CFGScale = req.cfgScale;
-    if (Number.isFinite(req.seed)) task.seed = req.seed;
+    if (Number.isFinite(req.seed)) task.seed = Math.max(0, Math.round(req.seed));
+
+    // ── Model-specific tuning, validated to a small whitelist. ───────────────
+    // GPT Image 2: providerSettings.openai.quality (auto|low|medium|high).
+    if (req.quality && /^(auto|low|medium|high)$/.test(req.quality)) {
+      task.providerSettings = { ...(task.providerSettings || {}), openai: { quality: req.quality } };
+    }
+    // Ideogram 4.0: settings.renderingSpeed (TURBO|DEFAULT|QUALITY).
+    if (req.renderingSpeed && /^(TURBO|DEFAULT|QUALITY)$/.test(req.renderingSpeed)) {
+      task.settings = { ...(task.settings || {}), renderingSpeed: req.renderingSpeed };
+    }
 
     const key = apiKey(); // resolve before the try so a missing key is a clean auth error, not "upstream"
 

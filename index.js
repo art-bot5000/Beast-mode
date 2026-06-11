@@ -31,6 +31,13 @@
  * @property {number} [cfgScale]         Guidance scale.
  * @property {number} [count=1]          How many images.
  * @property {number} [seed]             Optional seed for reproducibility.
+ * @property {string[]} [referenceImages] Image-to-image references (URL or data URI). Max 10.
+ * @property {string} [resolution]       Preset ("1K"|"2K"|"4K") for models that support it.
+ *                                        Mutually exclusive with width/height.
+ * @property {boolean} [snapDims=true]   Snap width/height to /64 (community models).
+ *                                        Set false for closed models with exact dim tables.
+ * @property {string} [quality]          GPT Image quality (auto|low|medium|high).
+ * @property {string} [renderingSpeed]   Ideogram speed (TURBO|DEFAULT|QUALITY).
  * @property {AbortSignal} [signal]      Optional cancellation.
  */
 
@@ -123,13 +130,35 @@ export async function generate(req) {
     );
   }
 
-  // Apply shared defaults once, so individual adapters stay lean.
-  const normalized = {
-    width: 1024,
-    height: 1024,
-    count: 1,
-    ...req,
-  };
+  // Validate reference images (image-to-image) before they hit the adapter.
+  if (req.referenceImages !== undefined) {
+    if (!Array.isArray(req.referenceImages) || req.referenceImages.some((r) => typeof r !== 'string' || !r)) {
+      throw new ProviderError('"referenceImages" must be an array of non-empty strings', { code: 'bad_request', status: 400 });
+    }
+    if (req.referenceImages.length > 10) {
+      throw new ProviderError('A maximum of 10 reference images is supported', { code: 'bad_request', status: 400 });
+    }
+    // Each ref must be an https URL or a data URI (caps payload at ~15MB each).
+    for (const r of req.referenceImages) {
+      const isUrl = /^https?:\/\//i.test(r);
+      const isDataUri = /^data:image\/(png|jpe?g|webp);base64,/i.test(r);
+      if (!isUrl && !isDataUri) {
+        throw new ProviderError('Each reference image must be an http(s) URL or a base64 image data URI', { code: 'bad_request', status: 400 });
+      }
+      if (isDataUri && r.length > 15_000_000) {
+        throw new ProviderError('Reference image too large (max ~10MB per image)', { code: 'bad_request', status: 400 });
+      }
+    }
+  }
+
+  // Apply shared defaults once, so individual adapters stay lean. Width/height
+  // defaults only apply to snapped (community) models — preset/closed models
+  // either send exact dims, a resolution preset, or nothing (i2i AR-match).
+  const normalized = { count: 1, ...req };
+  if (normalized.snapDims !== false && normalized.resolution === undefined) {
+    if (!Number.isFinite(normalized.width)) normalized.width = 1024;
+    if (!Number.isFinite(normalized.height)) normalized.height = 1024;
+  }
 
   return adapter.generate(normalized);
 }
