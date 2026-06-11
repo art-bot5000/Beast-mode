@@ -17733,7 +17733,7 @@ async function generateImage() {
         return;
       }
       const msg = data.code === 'rate_limit'
-        ? 'Rate limit reached \u2014 wait a moment and try again.'
+        ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
         : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
       status.textContent = '\u2717 ' + msg;
       status.style.color = 'var(--err, #f85149)';
@@ -18162,7 +18162,7 @@ async function igGenerate() {
         return;
       }
       const msg = data.code === 'rate_limit'
-        ? 'Rate limit reached \u2014 wait a moment and try again.'
+        ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
         : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
       igStatus('\u2717 ' + msg, true);
       return;
