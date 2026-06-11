@@ -49,6 +49,7 @@ interface UserRecord {
   recoveryEnvelopes: Envelope[]; // up to 10, each wrapped by a recovery code
   emailVerified: boolean;
   createdAt: number;
+  deletedAt?: number;           // soft-delete stamp (admin); blocks sign-in + sessions
   // Token ledger (Pass 3) and passkey fields (Pass 2) get added later.
 }
 
@@ -173,6 +174,12 @@ async function login(body: Record<string, unknown>): Promise<Response> {
     return json({ error: "Invalid email or passphrase", code: "auth" }, 401);
   }
 
+  // Soft-deleted accounts (admin action) cannot sign in. Deliberately the SAME
+  // generic error as wrong credentials — deletion status is not revealed.
+  if (rec.value.deletedAt) {
+    return json({ error: "Invalid email or passphrase", code: "auth" }, 401);
+  }
+
   // Email-verification gate: unverified accounts can't sign in (routes to OTP).
   if (!rec.value.emailVerified) {
     return json({ error: "Email not verified", code: "unverified" }, 403);
@@ -209,7 +216,12 @@ async function issueSession(emailHash: string): Promise<string> {
 export async function verifySessionToken(token: string | null): Promise<string | null> {
   if (!token) return null;
   const rec = await kv.get<{ emailHash: string }>(["session", token]);
-  return rec.value?.emailHash ?? null;
+  if (!rec.value?.emailHash) return null;
+  // Enforce admin soft-delete/purge immediately: a live token is worthless the
+  // moment its account is deleted. Costs one extra KV read per gated request.
+  const user = await kv.get<UserRecord>(["user", rec.value.emailHash]);
+  if (!user.value || user.value.deletedAt) return null;
+  return rec.value.emailHash;
 }
 
 // Anti-enumeration verified-check: an unauthenticated probe cannot distinguish a

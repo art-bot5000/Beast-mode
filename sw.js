@@ -1,7 +1,7 @@
 // Beast Mode // Service Worker
-// v4.1 — message-based update flow
+// v4.3 — backend-prefix bypass (admin + live /api responses)
 
-const CACHE_NAME = 'beast-mode-v4.3'
+const CACHE_NAME = 'beast-mode-v4.4'
 const CACHE_URLS = [
   './',
   './index.html',
@@ -45,6 +45,17 @@ self.addEventListener('activate', e => {
 // ── Fetch: cache-first for app files, passthrough for APIs ────────
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url)
+
+  // Same-origin BACKEND routes must never be cache-first: admin/API responses
+  // would go stale (and admin data does not belong in the browser cache at
+  // all). Mirrors the Caddyfile's reverse-proxied prefix list.
+  const backendPrefixes = ['/api/', '/admin', '/user/', '/email/', '/oauth/',
+    '/recovery/', '/settings/', '/webhook/', '/key/', '/device/', '/passkey/',
+    '/mfa/', '/ping']
+  if (url.origin === self.location.origin &&
+      backendPrefixes.some(p => url.pathname.startsWith(p))) {
+    return
+  }
 
   const passthrough = [
     'accounts.google.com',

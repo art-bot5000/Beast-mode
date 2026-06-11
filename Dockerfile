@@ -7,7 +7,7 @@ RUN npm install
 # The app is a single large HTML file plus the service worker, manifest, icons,
 # and the model-dropdown helper. (Unlike stckrm there are no separate JS modules
 # to minify on the frontend — the app logic lives inside the HTML.)
-COPY beast-mode-mech-my-ride-v4.html sw.js manifest.json bm-auth-crypto.js ./
+COPY beast-mode-mech-my-ride-v4.html admin.html sw.js manifest.json bm-auth-crypto.js ./
 COPY icon192.png icon512.png ./
 
 RUN mkdir -p public && \
@@ -17,6 +17,7 @@ RUN mkdir -p public && \
       --remove-tag-whitespace --minify-css true --minify-js true \
       -o public/index.html && \
     cp sw.js public/sw.js && \
+    cp admin.html public/admin.html && \
     cp manifest.json public/manifest.json && \
     cp bm-auth-crypto.js public/bm-auth-crypto.js && \
     cp icon192.png public/icon192.png && \
@@ -35,7 +36,7 @@ COPY --from=builder /build/public/ ./public/
 # Backend: the Deno entrypoint plus the provider modules we built.
 # (main.ts imports the auth/account logic mirrored from stckrm + the
 #  generate/models routes that call into providers/.)
-COPY main.ts auth.ts oauth.ts email.ts deno.json ./
+COPY main.ts auth.ts oauth.ts email.ts admin.ts deno.json ./
 COPY index.js runware.js google.js catalog.js r2.js pricing.js ./
 RUN deno cache --unstable-kv --unstable-cron main.ts
 

@@ -48,6 +48,12 @@ if (!Deno.env.get("GEMINI_API_KEY")) {
 if (!Deno.env.get("RESEND_API_KEY") || !Deno.env.get("MAIL_FROM")) {
   console.warn("WARN: RESEND_API_KEY / MAIL_FROM not set — verification emails fall back to console logging.");
 }
+// Soft requirement: admin panel. Without ADMIN_SECRET every /admin endpoint
+// returns 503; without ADMIN_EMAIL the admin OTP is console-logged.
+//   fly secrets set ADMIN_SECRET=<long-random> ADMIN_EMAIL=you@example.com --app beast-mode
+if (!Deno.env.get("ADMIN_SECRET")) {
+  console.warn("WARN: ADMIN_SECRET not set — admin panel unavailable (503).");
+}
 if (missing.length) {
   console.error(`FATAL: missing required secret(s): ${missing.join(", ")}`);
   console.error("Set them with: fly secrets set KEY=value --app beast-mode");
@@ -61,6 +67,7 @@ import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote } from "./pricing.js";
 import { rehostToR2, r2Enabled, trimR2ToNewest } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
+import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
@@ -278,12 +285,15 @@ async function handler(req: Request): Promise<Response> {
   const authResponse = await handleAuth(req, url);
   if (authResponse) return authResponse;
 
-  // ── Still-unbuilt routes (Pass 2+): passkeys, MFA, settings sync, admin,
+  // ── Admin: handshake + account management (admin.ts). ──────────────────────
+  if (path.startsWith("/admin/")) return handleAdmin(req, path);
+
+  // ── Still-unbuilt routes (Pass 2+): passkeys, MFA, settings sync,
   // webhooks. Routed by Caddy; 501 makes "planned but unimplemented" explicit.
   if (
     path.startsWith("/key/") || path.startsWith("/device/") ||
     path.startsWith("/passkey/") || path.startsWith("/mfa/") ||
-    path.startsWith("/admin/") || path.startsWith("/settings/") ||
+    path.startsWith("/settings/") ||
     path.startsWith("/webhook/")
   ) {
     return json({ error: "Not implemented yet", code: "not_implemented" }, 501);
