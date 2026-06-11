@@ -18639,8 +18639,13 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>
 let pending = null;
 
 async function api(path, payload) {
+  const headers = { 'Content-Type': 'application/json' };
+  // Attach the session token when signed in, so session-gated endpoints (e.g.
+  // /passkey/enroll) authenticate. Unauthenticated endpoints ignore it.
+  const tok = window.bmSession && window.bmSession.sessionToken;
+  if (tok) headers['Authorization'] = 'Bearer ' + tok;
   const res = await fetch(path, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers,
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
