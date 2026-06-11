@@ -30,6 +30,22 @@ import { kv } from "./auth.ts";
 export const SIGNUP_GRANT = 50; // ≈ one Nano Banana Pro 4K + a pile of drafts
 const RETRIES = 5;
 
+// ── UNLIMITED TEST ACCOUNTS ──────────────────────────────────────────────
+// These emailHashes (SHA-256(lowercased email).slice(0,32)) bypass the token
+// ledger entirely: holds always succeed and debit nothing, settle/refund are
+// no-ops, and getBalance reports a sentinel so the UI never blocks. The
+// generation path in main.ts is untouched, so these accounts still hit
+// Runware / the Gemini API for real — they just aren't metered.
+//   pete@artbot5000.com   pasmith984@gmail.com
+//   test1@artbot5000.com  test2@artbot5000.com
+export const UNLIMITED_HASHES = new Set<string>([
+  "9e3b241ca0c59deb3215330953f3c8a9", // pete@artbot5000.com
+  "30efe663f9c51af805ab389a0b142d18", // pasmith984@gmail.com
+  "5792455ffee52ae98982f962f154e831", // test1@artbot5000.com
+  "8f5d614b01b73396c5cf34d6d52ed031", // test2@artbot5000.com
+]);
+const UNLIMITED_BALANCE = 999_999_999; // sentinel shown to unlimited accounts
+
 export interface BalanceRec {
   balance: number;
   updated: number;
@@ -117,6 +133,7 @@ async function adjust(
 
 /** Current balance (creates the record with the signup grant on first touch). */
 export async function getBalance(emailHash: string): Promise<number> {
+  if (UNLIMITED_HASHES.has(emailHash)) return UNLIMITED_BALANCE;
   return (await ensureBalance(emailHash)).balance;
 }
 
@@ -130,6 +147,9 @@ export async function holdTokens(
   meta: { model?: string } = {},
 ): Promise<{ ok: boolean; balance: number; ref: string }> {
   const ref = crypto.randomUUID();
+  if (UNLIMITED_HASHES.has(emailHash)) {
+    return { ok: true, balance: UNLIMITED_BALANCE, ref };
+  }
   if (!Number.isInteger(total) || total <= 0) return { ok: false, balance: NaN, ref };
   const r = await adjust(emailHash, -total);
   if (!r.ok) return { ok: false, balance: r.balance, ref };
@@ -159,6 +179,7 @@ export async function settleHold(
     actualCostUsd?: number | null;
   },
 ): Promise<{ balance: number }> {
+  if (UNLIMITED_HASHES.has(emailHash)) return { balance: UNLIMITED_BALANCE };
   let balance: number;
   if (args.refundTokens > 0) {
     const r = await adjust(emailHash, args.refundTokens, { allowNegative: true });
@@ -186,6 +207,7 @@ export async function refundHold(
   total: number,
   reason: string,
 ): Promise<{ balance: number }> {
+  if (UNLIMITED_HASHES.has(emailHash)) return { balance: UNLIMITED_BALANCE };
   const r = await adjust(emailHash, total, { allowNegative: true });
   const balance = r.ok ? r.balance : (await peekBalance(emailHash)) ?? NaN;
   await writeLedger(emailHash, {
