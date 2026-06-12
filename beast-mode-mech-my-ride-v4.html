@@ -7579,7 +7579,7 @@ function showDriveSignedIn(name, picture) {
   const nm = El.driveName || document.getElementById('driveName')
   if (nm) nm.textContent = name
   const av = El.driveAvatar || document.getElementById('driveAvatar')
-  if (av && picture) { av.src = picture; av.style.display = '' }
+  if (av && picture) { av.dataset.google = picture; av.src = picture; av.style.display = '' }
   collapseLoadPanel()
   document.getElementById('loadDriveBadge')?.classList.add('show')
 
@@ -7591,8 +7591,11 @@ function showDriveSignedIn(name, picture) {
   const sav = El.settingsAvatar || document.getElementById('settingsAvatar')
   const ssl = El.settingsStatusLine || document.getElementById('settingsStatusLine')
   if (snm) snm.textContent = name
-  if (sav && picture) sav.src = picture
+  if (sav && picture) { sav.dataset.google = picture; sav.src = picture }
   if (ssl) ssl.textContent = '✓ Connected to Google Drive'
+
+  // Let the chosen profile image override the Google picture if one is set.
+  if (typeof bmApplyProfileImage === 'function') bmApplyProfileImage()
 
   updateNavDriveDot()
   updateLocalWarning()
@@ -9768,7 +9771,8 @@ function renderSettingsView() {
     const nm = document.getElementById('settingsName')
     const av = document.getElementById('settingsAvatar')
     if (nm) nm.textContent = session.name || 'Connected'
-    if (av && session.picture) av.src = session.picture
+    if (av && session.picture) { av.dataset.google = session.picture; av.src = session.picture }
+    if (typeof bmApplyProfileImage === 'function') bmApplyProfileImage()
     const sl = document.getElementById('settingsStatusLine')
     if (sl) sl.textContent = '✓ Connected to Google Drive'
   } else {
@@ -18420,16 +18424,16 @@ const IG_MODELS = [
   { id:'google:gemini-3-pro-image', label:'Nano Banana Pro', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 3 Pro Image via DIRECT Google API \u2014 1K/2K/4K, multi-image blending.' },
   { id:'google:gemini-3.1-flash-image', label:'Nano Banana 2', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 3.1 Flash Image via DIRECT Google API \u2014 fast, 4K-capable, great text.' },
   { id:'google:gemini-2.5-flash-image', label:'Nano Banana 2.5', family:'Google', dims:{ '1K': IG_GOOGLE_DIMS['1K'] }, gemini:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 2.5 Flash Image \u2014 lowest-cost Nano Banana, ideal for drafts.' },
-  { id:'runware:openai:gpt-image@2', label:'GPT Image 2', family:'OpenAI', dims:IG_GPT_DIMS, i2i:true, maxRefs:6, seed:false, quality:true, cost:'$0.006\u20130.21 / image (by quality)', note:'Strong prompt fidelity, text & layout control. No seed support.' },
-  { id:'runware:ideogram:4@0', label:'Ideogram 4.0', family:'Ideogram', dims:IG_OPEN_DIMS, i2i:false, seed:false, speed:true, cost:'$0.03\u20130.10 / image (by speed)', note:'Design & typography specialist. Text-to-image only.' },
-  { id:'runware:bytedance:seedream@5.0-lite', label:'Seedream 5.0 Lite', family:'ByteDance', dims:IG_SEEDREAM_DIMS, i2i:true, maxRefs:1, seed:true, cost:'$0.035 / image', note:'2K/3K output, single reference image, very low cost.' },
-  { id:'runware:bfl:7@1', label:'FLUX.2 [max]', family:'FLUX.2', dims:IG_BFL_DIMS, i2i:true, maxRefs:10, seed:true, cost:'~$0.10 / image', note:'Maximum prompt adherence, multi-reference editing.' },
-  { id:'runware:bfl:5@1', label:'FLUX.2 [pro]', family:'FLUX.2', dims:IG_BFL_DIMS, i2i:true, maxRefs:10, seed:true, cost:'~$0.03 / image', note:'4MP output, multi-image references, robust edits.' },
-  { id:'runware:runware:400@1', label:'FLUX.2 [dev]', family:'FLUX.2', dims:IG_OPEN_DIMS, i2i:true, maxRefs:4, seed:true, sampler:{steps:28,cfg:3.5}, negative:true, cost:'~$0.01\u20130.03 / image', note:'Open weights \u2014 full steps/CFG/negative-prompt control.' },
-  { id:'runware:runware:400@3', label:'FLUX.2 [klein] 9B', family:'FLUX.2', dims:IG_OPEN_DIMS, i2i:true, maxRefs:4, seed:true, sampler:{steps:32,cfg:3.5}, negative:true, cost:'~$0.009\u20130.03 / image', note:'Compact + fast with full control. Great value.' },
-  { id:'runware:runware:100@1', label:'FLUX.1 Schnell', family:'FLUX.1', dims:IG_OPEN_DIMS, seed:true, sampler:{steps:4,cfg:1}, cost:'<$0.01 / image', note:'Fastest, cheapest drafts.' },
-  { id:'runware:runware:101@1', label:'FLUX.1 Dev', family:'FLUX.1', dims:IG_OPEN_DIMS, seed:true, sampler:{steps:28,cfg:3.5}, cost:'~$0.01 / image', note:'Higher quality than Schnell, slower.' },
-  { id:'runware:civitai:101055@128078', label:'SDXL 1.0 (base)', family:'SDXL', dims:IG_OPEN_DIMS, seed:true, sampler:{steps:30,cfg:7}, negative:true, cost:'<$0.01 / image', note:'Classic SDXL base. Negative prompt supported.' },
+  { id:'runware:openai:gpt-image@2', label:'GPT Image 2', family:'OpenAI', dims:IG_GPT_DIMS, i2i:true, maxRefs:6, seed:false, quality:true, cost:'1\u201321 tokens / image (by quality)', note:'Strong prompt fidelity, text & layout control. No seed support.' },
+  { id:'runware:ideogram:4@0', label:'Ideogram 4.0', family:'Ideogram', dims:IG_OPEN_DIMS, i2i:false, seed:false, speed:true, cost:'3\u201310 tokens / image (by speed)', note:'Design & typography specialist. Text-to-image only.' },
+  { id:'runware:bytedance:seedream@5.0-lite', label:'Seedream 5.0 Lite', family:'ByteDance', dims:IG_SEEDREAM_DIMS, i2i:true, maxRefs:1, seed:true, cost:'~4 tokens / image', note:'2K/3K output, single reference image, very low cost.' },
+  { id:'runware:bfl:7@1', label:'FLUX.2 [max]', family:'FLUX.2', dims:IG_BFL_DIMS, i2i:true, maxRefs:10, seed:true, cost:'~10 tokens / image', note:'Maximum prompt adherence, multi-reference editing.' },
+  { id:'runware:bfl:5@1', label:'FLUX.2 [pro]', family:'FLUX.2', dims:IG_BFL_DIMS, i2i:true, maxRefs:10, seed:true, cost:'~3 tokens / image', note:'4MP output, multi-image references, robust edits.' },
+  { id:'runware:runware:400@1', label:'FLUX.2 [dev]', family:'FLUX.2', dims:IG_OPEN_DIMS, i2i:true, maxRefs:4, seed:true, sampler:{steps:28,cfg:3.5}, negative:true, cost:'~1\u20133 tokens / image', note:'Open weights \u2014 full steps/CFG/negative-prompt control.' },
+  { id:'runware:runware:400@3', label:'FLUX.2 [klein] 9B', family:'FLUX.2', dims:IG_OPEN_DIMS, i2i:true, maxRefs:4, seed:true, sampler:{steps:32,cfg:3.5}, negative:true, cost:'~1\u20133 tokens / image', note:'Compact + fast with full control. Great value.' },
+  { id:'runware:runware:100@1', label:'FLUX.1 Schnell', family:'FLUX.1', dims:IG_OPEN_DIMS, seed:true, sampler:{steps:4,cfg:1}, cost:'<1 token / image', note:'Fastest, cheapest drafts.' },
+  { id:'runware:runware:101@1', label:'FLUX.1 Dev', family:'FLUX.1', dims:IG_OPEN_DIMS, seed:true, sampler:{steps:28,cfg:3.5}, cost:'~1 token / image', note:'Higher quality than Schnell, slower.' },
+  { id:'runware:civitai:101055@128078', label:'SDXL 1.0 (base)', family:'SDXL', dims:IG_OPEN_DIMS, seed:true, sampler:{steps:30,cfg:7}, negative:true, cost:'<1 token / image', note:'Classic SDXL base. Negative prompt supported.' },
 ];
 
 const igState = { modelId: IG_MODELS[0].id, ar: '1:1', res: null, refs: [], quality: 'auto', speed: 'DEFAULT', busy: false, inited: false };
@@ -19936,20 +19940,39 @@ function profileImageRemove() {
   closeProfileImageModal();
 }
 // Paint the stored profile image into the nav thumbnail slot (created by the
-// sidebar layout). Guarded so it no-ops if the element isn't present yet.
+// sidebar layout) and the Drive/Settings avatar slots. Guarded so it no-ops if
+// elements aren't present. When no profile image is set, the avatar slots keep
+// whatever the Google account picture set (data-google holds that fallback).
 function bmApplyProfileImage() {
-  const slot = document.getElementById('bmProfileThumb');
-  if (!slot) return;
   const cur = (typeof bmPrefs !== 'undefined' && bmPrefs) ? bmPrefs.profileImage : null;
-  if (cur) {
-    slot.style.backgroundImage = 'url(' + cur + ')';
-    slot.classList.add('has-img');
-    slot.textContent = '';
-  } else {
-    slot.style.backgroundImage = '';
-    slot.classList.remove('has-img');
-    slot.textContent = '⊙';
+
+  const slot = document.getElementById('bmProfileThumb');
+  if (slot) {
+    if (cur) {
+      slot.style.backgroundImage = 'url(' + cur + ')';
+      slot.classList.add('has-img');
+      slot.textContent = '';
+    } else {
+      slot.style.backgroundImage = '';
+      slot.classList.remove('has-img');
+      slot.textContent = '⊙';
+    }
   }
+
+  // Drive + Settings avatars: profile image wins; otherwise restore the Google
+  // picture stashed on the element (set by the Drive sign-in handler).
+  ['driveAvatar', 'settingsAvatar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const fallback = el.dataset ? (el.dataset.google || '') : '';
+    if (cur) {
+      el.src = cur;
+      el.style.display = '';
+    } else if (fallback) {
+      el.src = fallback;
+      el.style.display = '';
+    }
+  });
 }
 window.openProfileImageModal = openProfileImageModal;
 
