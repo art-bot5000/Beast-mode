@@ -1,145 +1,56 @@
 // providers/google.js
 //
-// Direct Gemini API adapter ("Nano Banana" family) — bypasses Runware so the
-// Google AI Studio FREE TIER can be used for testing.
+// Direct Google Gemini ("Nano Banana") image adapter. Talks to the public
+// Generative Language REST API (NOT via Runware), so these models use YOUR
+// Google key and bill on YOUR Google account — matching the "DIRECT Google API"
+// label in the Image Gen dropdown.
 //
-// API shape (verified against ai.google.dev/gemini-api/docs/image-generation):
+// API shape (verified against ai.google.dev/gemini-api/docs/image-generation,
+// June 2026):
 //   POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
 //   Header: x-goog-api-key: <GEMINI_API_KEY>
-//   Body: { contents:[{ parts:[{text}, {inlineData:{mimeType,data}}...] }],
-//           generationConfig:{ responseModalities:["TEXT","IMAGE"],
-//                              imageConfig:{ aspectRatio:"16:9", imageSize:"1K"|"2K"|"4K" } } }
-//   Response: candidates[0].content.parts[] -> inlineData {mimeType, data(base64)}
+//   Body: {
+//     contents: [{ parts: [ {text}, {inlineData:{mimeType,data}}… ] }],
+//     generationConfig: {
+//       responseModalities: ["TEXT","IMAGE"],
+//       imageConfig: { aspectRatio, imageSize }   // imageSize: "1K"|"2K"|"4K"
+//     }
+//   }
+//   Response: { candidates:[{ content:{ parts:[ {inlineData:{mimeType,data}} ] }}],
+//               usageMetadata:{…} }
 //
-// Canonical ids routed here: "google:<gemini-model-name>", e.g.
-//   "google:gemini-3-pro-image"       (Nano Banana Pro)
-//   "google:gemini-3.1-flash-image"   (Nano Banana 2)
-//   "google:gemini-2.5-flash-image"   (Nano Banana — most generous free tier)
-//
-// Images come back as BASE64, not URLs. We return them as data: URIs — Deno's
-// fetch() accepts data: URIs, so main.ts's existing rehostToR2() pipeline
-// uploads them to R2 untouched. Without R2 the data URI flows to the client
-// (works, just heavier payloads).
+// Canonical model ids handled here (the part after "google:" is the Gemini id):
+//   "google:gemini-3-pro-image"     -> Nano Banana Pro
+//   "google:gemini-3.1-flash-image" -> Nano Banana 2
+//   "google:gemini-2.5-flash-image" -> Nano Banana (2.5)
 
 import { ProviderError, parseModelId } from './index.js';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-// Aspect ratios the imageConfig accepts (per docs).
-const GEMINI_ARS = ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9'];
+// Models this adapter serves, with which extra config each accepts. Only the
+// 3-series accepts an explicit image size; 2.5 Flash ignores it.
+const GEMINI_MODELS = {
+  'gemini-3-pro-image':     { sizes: true },
+  'gemini-3.1-flash-image': { sizes: true },
+  'gemini-2.5-flash-image': { sizes: false },
+};
 
 function apiKey() {
   const k = process.env.GEMINI_API_KEY;
   if (!k) {
-    throw new ProviderError('GEMINI_API_KEY is not set — Gemini direct models are unavailable.', {
+    throw new ProviderError('GEMINI_API_KEY is not set — direct Gemini (Nano Banana) models are unavailable.', {
       provider: 'google', code: 'auth', status: 503,
     });
   }
   return k;
 }
 
-/** Closest supported aspect-ratio string for a width/height pair. */
-function nearestAR(w, h) {
-  const target = w / h;
-  let best = '1:1', bestDiff = Infinity;
-  for (const ar of GEMINI_ARS) {
-    const [a, b] = ar.split(':').map(Number);
-    const d = Math.abs(a / b - target);
-    if (d < bestDiff) { bestDiff = d; best = ar; }
-  }
-  return best;
-}
-
-/** Size tier from a width/height pair (fallback when no resolution given). */
-function sizeTier(w, h) {
-  const m = Math.max(w || 0, h || 0);
-  if (m >= 3000) return '4K';
-  if (m >= 1700) return '2K';
-  return '1K';
-}
-
-/** Convert a reference (data URI or http URL) into Gemini inlineData. */
-async function toInlineData(ref, signal) {
-  const m = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(ref);
-  if (m) return { inlineData: { mimeType: m[1], data: m[2] } };
-  // http(s) URL (e.g. "USE AS REF" on a previous R2/Runware result): fetch the
-  // bytes server-side and inline them — Gemini inlineData requires base64.
-  const res = await fetch(ref, { signal });
-  if (!res.ok) {
-    throw new ProviderError(`Failed to fetch reference image (HTTP ${res.status})`, {
-      provider: 'google', code: 'bad_request', status: 400,
-    });
-  }
-  const mime = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
-  const buf = new Uint8Array(await res.arrayBuffer());
-  if (buf.length > 12_000_000) {
-    throw new ProviderError('Reference image too large for Gemini inline upload (max ~12MB)', {
-      provider: 'google', code: 'bad_request', status: 400,
-    });
-  }
-  // Chunked base64 to avoid call-stack limits on large images.
-  let bin = '';
-  const CH = 0x8000;
-  for (let i = 0; i < buf.length; i += CH) bin += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
-  return { inlineData: { mimeType: mime, data: btoa(bin) } };
-}
-
-/** Single generateContent call -> one image (data URI). */
-async function generateOne(modelRef, parts, imageConfig, key, signal) {
-  let res;
-  try {
-    res = await fetch(`${GEMINI_BASE}/${encodeURIComponent(modelRef)}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: {
-          responseModalities: ['TEXT', 'IMAGE'],
-          imageConfig,
-        },
-      }),
-      signal,
-    });
-  } catch (e) {
-    if (e?.name === 'AbortError') {
-      throw new ProviderError('Generation cancelled', { provider: 'google', code: 'timeout', status: 499 });
-    }
-    throw new ProviderError(`Network error reaching Gemini: ${e.message}`, {
-      provider: 'google', code: 'upstream', status: 502,
-    });
-  }
-
-  let body;
-  try {
-    body = await res.json();
-  } catch {
-    throw new ProviderError(`Gemini returned non-JSON (HTTP ${res.status})`, {
-      provider: 'google', code: 'upstream', status: 502,
-    });
-  }
-
-  if (!res.ok || body?.error) {
-    throw mapGeminiError(body?.error, res.status, body);
-  }
-
-  const cand = body?.candidates?.[0];
-  // Safety blocks surface as promptFeedback.blockReason or a finishReason.
-  const blocked = body?.promptFeedback?.blockReason ||
-    (cand && /SAFETY|PROHIBITED|IMAGE_SAFETY/i.test(cand.finishReason || '') ? cand.finishReason : null);
-  if (blocked) {
-    throw new ProviderError(`Gemini blocked the request (${blocked})`, {
-      provider: 'google', code: 'content_filtered', status: 422, raw: body,
-    });
-  }
-
-  const img = (cand?.content?.parts || []).find((p) => p.inlineData?.data);
-  if (!img) {
-    throw new ProviderError('Gemini response contained no image', {
-      provider: 'google', code: 'upstream', status: 502, raw: body,
-    });
-  }
-  const mime = img.inlineData.mimeType || 'image/png';
-  return { url: `data:${mime};base64,${img.inlineData.data}` };
+/** Split a "data:image/png;base64,AAAA" URI into { mimeType, data }. */
+function parseDataUri(uri) {
+  const m = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(uri);
+  if (!m) return null;
+  return { mimeType: m[1], data: m[2] };
 }
 
 export const googleAdapter = {
@@ -150,67 +61,124 @@ export const googleAdapter = {
    * @returns {Promise<import('./index.js').GenerateResult>}
    */
   async generate(req) {
-    const [, modelRef] = parseModelId(req.model); // strip "google:" -> gemini model name
-    const key = apiKey();
+    const [, geminiId] = parseModelId(req.model); // strip "google:" prefix
+    const spec = GEMINI_MODELS[geminiId];
+    if (!spec) {
+      throw new ProviderError(`Unknown Gemini model "${geminiId}"`, { provider: 'google', code: 'bad_request', status: 400 });
+    }
 
-    // Prompt + optional reference images (image-to-image / editing).
+    // ── Build the parts array: prompt text + any reference images (i2i). ──────
     const parts = [{ text: req.prompt }];
+    if (req.negativePrompt) {
+      // Gemini has no dedicated negative field; fold it into the prompt as a
+      // soft instruction (this matches Google's own guidance).
+      parts[0].text += `\n\nAvoid: ${req.negativePrompt}`;
+    }
     if (Array.isArray(req.referenceImages) && req.referenceImages.length) {
-      const inlines = await Promise.all(
-        req.referenceImages.slice(0, 10).map((r) => toInlineData(r, req.signal)),
-      );
-      parts.push(...inlines);
+      for (const ref of req.referenceImages.slice(0, 6)) {
+        const parsed = typeof ref === 'string' ? parseDataUri(ref) : null;
+        if (parsed) {
+          parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } });
+        }
+        // Non-data-URI references (bare URLs) aren't inlinable without a fetch;
+        // we skip them rather than send something the API will reject. The
+        // frontend always sends downscaled data URIs, so this is the live path.
+      }
     }
 
-    // imageConfig: prefer explicit aspectRatio/resolution from the client;
-    // fall back to deriving both from a width/height pair. With reference
-    // images and no aspectRatio, Gemini matches the input image's AR.
+    const generationConfig = { responseModalities: ['TEXT', 'IMAGE'] };
     const imageConfig = {};
-    if (req.aspectRatio && GEMINI_ARS.includes(req.aspectRatio)) {
+    if (req.aspectRatio && /^\d+:\d+$/.test(req.aspectRatio)) {
       imageConfig.aspectRatio = req.aspectRatio;
-    } else if (Number.isFinite(req.width) && Number.isFinite(req.height)) {
-      imageConfig.aspectRatio = nearestAR(req.width, req.height);
     }
-    // imageSize (1K/2K/4K) only when asked for: gemini-3* models accept it,
-    // gemini-2.5-flash-image predates the param (the client omits resolution
-    // for that model, so nothing is sent and Gemini uses its default).
-    if (/^(1K|2K|4K)$/.test(req.resolution || '')) {
+    if (spec.sizes && req.resolution && /^(1K|2K|4K)$/.test(req.resolution)) {
       imageConfig.imageSize = req.resolution;
-    } else if (Number.isFinite(req.width) && Math.max(req.width, req.height) >= 1700) {
-      imageConfig.imageSize = sizeTier(req.width, req.height);
+    }
+    if (Object.keys(imageConfig).length) generationConfig.imageConfig = imageConfig;
+
+    const bodyObj = { contents: [{ parts }], generationConfig };
+
+    const key = apiKey(); // resolve first so a missing key is a clean auth error
+    const url = `${GEMINI_BASE}/${encodeURIComponent(geminiId)}:generateContent`;
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(bodyObj),
+        signal: req.signal,
+      });
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        throw new ProviderError('Generation cancelled', { provider: 'google', code: 'timeout', status: 499 });
+      }
+      throw new ProviderError(`Network error reaching Google: ${e.message}`, { provider: 'google', code: 'upstream', status: 502 });
     }
 
-    // The image API has no batch parameter — run count requests in parallel.
-    const count = Math.max(1, Math.min(4, req.count ?? 1));
-    const images = await Promise.all(
-      Array.from({ length: count }, () => generateOne(modelRef, parts, imageConfig, key, req.signal)),
-    );
+    let body;
+    try {
+      body = await res.json();
+    } catch {
+      throw new ProviderError(`Google returned non-JSON (HTTP ${res.status})`, { provider: 'google', code: 'upstream', status: 502 });
+    }
 
+    if (!res.ok || body?.error) {
+      throw mapGoogleError(body?.error, res.status, body);
+    }
+
+    // ── Collect image parts from the first candidate. ────────────────────────
+    const candidates = Array.isArray(body?.candidates) ? body.candidates : [];
+    const first = candidates[0];
+    const outParts = first?.content?.parts || [];
+    const images = [];
+    for (const p of outParts) {
+      const inline = p?.inlineData || p?.inline_data;
+      if (inline?.data) {
+        const mime = inline.mimeType || inline.mime_type || 'image/png';
+        // Return as a data URI in `url`: the route's R2 rehost handles data
+        // URIs (extension derived from the mime type), and the frontend reads
+        // the same bytes as `pristine` for the durable Drive/IndexedDB copy.
+        images.push({ url: `data:${mime};base64,${inline.data}` });
+      }
+    }
+
+    // A safety block returns no image parts but a finishReason — surface it.
+    if (!images.length) {
+      const reason = first?.finishReason || first?.finish_reason;
+      if (reason && /safety|blocklist|prohibited|recitation/i.test(String(reason))) {
+        throw new ProviderError(`Blocked by Google safety filters (${reason}).`, { provider: 'google', code: 'content_filtered', status: 422, raw: body });
+      }
+      throw new ProviderError('Google returned no image for this prompt.', { provider: 'google', code: 'upstream', status: 502, raw: body });
+    }
+
+    // usageMetadata is preserved in `raw` so the route can compute actual cost
+    // via pricing.geminiUsageCostUsd() for margin logging.
     return {
       provider: 'google',
       model: req.model,
       images,
-      // Free-tier calls have no metered cost; paid-tier billing happens on the
-      // Google side and isn't reported per-response, so costUsd stays undefined.
+      // No per-call dollar figure from Gemini; cost is computed from usageMetadata.
+      costUsd: undefined,
+      raw: body,
     };
   },
 };
 
-function mapGeminiError(err, httpStatus, raw) {
+function mapGoogleError(err, httpStatus, raw) {
   const status = err?.status || '';
-  const message = err?.message || `Gemini error (HTTP ${httpStatus})`;
-  if (httpStatus === 401 || httpStatus === 403 || /API key|PERMISSION_DENIED|UNAUTHENTICATED/i.test(status + message)) {
+  const message = err?.message || `Google error (HTTP ${httpStatus})`;
+  const code = err?.code || httpStatus;
+  if (/permission|unauthenticated|api[_ ]?key|forbidden/i.test(status + message) || code === 401 || code === 403) {
     return new ProviderError(message, { provider: 'google', code: 'auth', status: 401, raw });
   }
-  if (httpStatus === 429 || /RESOURCE_EXHAUSTED|quota/i.test(status + message)) {
-    return new ProviderError('Gemini quota/rate limit reached — free tier limits are per-day and per-minute. ' + message, {
-      provider: 'google', code: 'rate_limit', status: 429, raw,
-    });
+  if (/resource_exhausted|quota|rate/i.test(status + message) || code === 429) {
+    return new ProviderError(message, { provider: 'google', code: 'rate_limit', status: 429, raw });
   }
-  if (/SAFETY|blocked/i.test(status + message)) {
+  if (/safety|blocked|prohibited/i.test(status + message)) {
     return new ProviderError(message, { provider: 'google', code: 'content_filtered', status: 422, raw });
   }
-  if (httpStatus === 400 || /INVALID_ARGUMENT|not found|NOT_FOUND/i.test(status + message)) {
+  if (/invalid|failed_precondition|not_found|bad/i.test(status + message) || code === 400 || code === 404) {
     return new ProviderError(message, { provider: 'google', code: 'bad_request', status: 400, raw });
   }
   return new ProviderError(message, { provider: 'google', code: 'upstream', status: 502, raw });

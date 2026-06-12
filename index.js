@@ -85,12 +85,24 @@ export class ProviderError extends Error {
 // + one line here; the router below picks it up automatically.
 
 import { runwareAdapter } from './runware.js';
+import { googleAdapter } from './google.js';
 
-/** @type {Record<string, {id: string, generate: (req: GenerateRequest) => Promise<GenerateResult>}>} */
-const REGISTRY = {
-  [runwareAdapter.id]: runwareAdapter,
-  // [bflAdapter.id]: bflAdapter,   // <- drop-in later, see providers/bfl.js stub
-};
+// Built lazily on first use. The adapter modules import ProviderError/parseModelId
+// FROM this module, so referencing their exports at module-init time hits a
+// temporal-dead-zone error under the circular import. Resolving inside a function
+// (called only when a request arrives) guarantees every module is initialized.
+/** @type {Record<string, {id: string, generate: (req: GenerateRequest) => Promise<GenerateResult>}>|null} */
+let _registry = null;
+function registry() {
+  if (!_registry) {
+    _registry = {
+      [runwareAdapter.id]: runwareAdapter,
+      [googleAdapter.id]: googleAdapter,   // direct Gemini (Nano Banana) models
+      // [bflAdapter.id]: bflAdapter,   // <- drop-in later, see providers/bfl.js stub
+    };
+  }
+  return _registry;
+}
 
 /**
  * Split a canonical model id into [providerPrefix, providerModelRef].
@@ -122,10 +134,11 @@ export async function generate(req) {
   }
 
   const [prefix] = parseModelId(req.model);
-  const adapter = REGISTRY[prefix];
+  const REG = registry();
+  const adapter = REG[prefix];
   if (!adapter) {
     throw new ProviderError(
-      `No provider registered for prefix "${prefix}". Registered: ${Object.keys(REGISTRY).join(', ') || '(none)'}`,
+      `No provider registered for prefix "${prefix}". Registered: ${Object.keys(REG).join(', ') || '(none)'}`,
       { code: 'bad_request', status: 400 }
     );
   }
@@ -165,7 +178,7 @@ export async function generate(req) {
 
 /** Convenience for a /models endpoint or the frontend dropdown. */
 export function registeredProviders() {
-  return Object.keys(REGISTRY);
+  return Object.keys(registry());
 }
 
 /**
@@ -176,7 +189,7 @@ export function registeredProviders() {
  */
 export async function searchModels(opts = {}) {
   const prefix = opts.provider || runwareAdapter.id;
-  const adapter = REGISTRY[prefix];
+  const adapter = registry()[prefix];
   if (!adapter || typeof adapter.searchModels !== 'function') {
     throw new ProviderError(`Provider "${prefix}" does not support model search`, {
       code: 'bad_request',
@@ -288,7 +301,7 @@ export async function upscale(req) {
     throw new ProviderError('Source image too large (max ~10MB)', { code: 'bad_request', status: 400 });
   }
 
-  const adapter = REGISTRY[runwareAdapter.id];
+  const adapter = registry()[runwareAdapter.id];
   if (!adapter || typeof adapter.upscale !== 'function') {
     throw new ProviderError('Upscaling is not available', { code: 'bad_request', status: 400 });
   }
