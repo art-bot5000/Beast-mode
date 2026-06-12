@@ -47,6 +47,24 @@ function clientIp(req: Request): string {
   return xff ? xff.split(",")[0].trim() : "unknown";
 }
 
+// emailHash derivation, byte-for-byte identical to the client (bm-auth-crypto.js)
+// and the contract auth.ts validates: SHA-256(lowercased, trimmed email) sliced
+// to the first 32 hex chars. Computing it here lets us grant tokens to an
+// address by email alone — including one that hasn't registered yet, since the
+// token ledger keys on this hash, not on a UserRecord. When that person later
+// signs up, their client derives the same hash and the balance is already there.
+async function emailToHash(email: string): Promise<string> {
+  const norm = email.trim().toLowerCase();
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(norm));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
+
+// Pragmatic email shape check — not RFC-perfect, just enough to reject typos and
+// obviously-bad input before we hash and grant against it.
+function looksLikeEmail(s: unknown): s is string {
+  return typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim()) && s.trim().length <= 254;
+}
+
 // Constant-time-ish secret comparison: compare SHA-256 digests byte-wise so
 // length and prefix information never shapes the timing profile.
 async function secretMatches(candidate: unknown): Promise<boolean> {
@@ -285,6 +303,33 @@ export async function handleAdmin(req: Request, path: string): Promise<Response>
       if (!r.ok) return json({ error: "Grant failed (contention) — retry", code: "conflict" }, 409);
       await audit("tokens.grant", emailHash, ip, `${tokens > 0 ? "+" : ""}${tokens}${note ? " · " + note : ""}`);
       return json({ ok: true, balance: r.balance });
+    }
+    case "/admin/tokens/grant-by-email": {
+      // Grant by email address. Works whether or not the account exists yet:
+      // we derive the same emailHash the client would and credit the ledger
+      // directly. A future registration under this email inherits the balance.
+      const email = body.email;
+      const tokens = Number(body.tokens);
+      const note = typeof body.note === "string" ? body.note.slice(0, 200) : "";
+      if (!looksLikeEmail(email)) {
+        return json({ error: "Enter a valid email address", code: "bad_request" }, 400);
+      }
+      if (!Number.isInteger(tokens) || tokens === 0 || Math.abs(tokens) > 1_000_000) {
+        return json({ error: "tokens must be a non-zero integer (|n| <= 1,000,000)", code: "bad_request" }, 400);
+      }
+      const emailHash = await emailToHash(email as string);
+      const existing = await kv.get<UserRecord>(["user", emailHash]);
+      const existed = !!existing.value;
+      const r = await grantTokens(emailHash, tokens, note ? `admin: ${note}` : "admin grant (by email)");
+      if (!r.ok) return json({ error: "Grant failed (contention) — retry", code: "conflict" }, 409);
+      // Audit on the hash, never the raw email, matching the rest of the log.
+      await audit(
+        "tokens.grant.email",
+        emailHash,
+        ip,
+        `${tokens > 0 ? "+" : ""}${tokens} · ${existed ? "existing" : "pre-reg"}${note ? " · " + note : ""}`,
+      );
+      return json({ ok: true, balance: r.balance, existed, emailHash });
     }
     case "/admin/audit-log":
       return auditLog(body);

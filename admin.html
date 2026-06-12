@@ -89,6 +89,28 @@ td { padding:8px; border-bottom:1px solid var(--border); vertical-align:middle; 
     </div>
 
     <div class="panel">
+      <h2>Grant Tokens by Email</h2>
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-bottom:14px;line-height:1.6;">
+        Credits any email address. Works for accounts that don't exist yet — the
+        balance waits for them to sign up. 1 token = $0.01. Negative = deduct.
+      </div>
+      <label for="gbeEmail">EMAIL ADDRESS</label>
+      <input type="text" id="gbeEmail" placeholder="person@example.com" autocomplete="off" inputmode="email" style="margin-bottom:12px;">
+      <div class="row" style="align-items:flex-end;">
+        <div style="flex:0 0 140px;">
+          <label for="gbeTokens">TOKENS</label>
+          <input type="text" id="gbeTokens" placeholder="50" inputmode="numeric" autocomplete="off">
+        </div>
+        <div style="flex:1;min-width:180px;">
+          <label for="gbeNote">LEDGER NOTE (OPTIONAL)</label>
+          <input type="text" id="gbeNote" placeholder="e.g. launch credit" autocomplete="off">
+        </div>
+        <button class="btn-primary" id="gbeBtn" onclick="grantByEmail()">GRANT →</button>
+      </div>
+      <div class="msg" id="gbeMsg"></div>
+    </div>
+
+    <div class="panel">
       <h2>Accounts</h2>
       <div class="row" style="margin-bottom:12px;">
         <input type="text" id="acctFilter" placeholder="filter by email or hash…" style="max-width:320px;" oninput="renderAccounts()">
@@ -279,6 +301,36 @@ function renderAccounts() {
   });
 }
 
+// ── Grant by email (existing OR not-yet-registered accounts) ─────────────────
+async function grantByEmail() {
+  const email = document.getElementById('gbeEmail').value.trim();
+  const tokens = parseInt(document.getElementById('gbeTokens').value, 10);
+  const note = document.getElementById('gbeNote').value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    setMsg('gbeMsg', 'Enter a valid email address.', 'warn'); return;
+  }
+  if (!Number.isInteger(tokens) || tokens === 0) {
+    setMsg('gbeMsg', 'Enter a non-zero whole number of tokens.', 'warn'); return;
+  }
+  const btn = document.getElementById('gbeBtn');
+  btn.disabled = true;
+  setMsg('gbeMsg', 'Granting…');
+  try {
+    const r = await post('/admin/tokens/grant-by-email', _auth.sessionBody({ email, tokens, note }));
+    const who = r.existed ? 'existing account' : 'new account (waiting for sign-up)';
+    setMsg('gbeMsg',
+      (tokens > 0 ? 'Granted ' : 'Deducted ') + Math.abs(tokens) +
+      ' to ' + email + ' · ' + who + ' · balance now ' + r.balance + '.', 'ok');
+    document.getElementById('gbeTokens').value = '';
+    document.getElementById('gbeNote').value = '';
+    // Reflect the new balance if they're already in the list; refresh audit too.
+    await refreshAccounts();
+    await loadAudit();
+  } catch (e) {
+    setMsg('gbeMsg', e.message, 'err');
+  } finally { btn.disabled = false; }
+}
+
 async function accountAction(act, a) {
   try {
     if (act === 'grant') {
@@ -329,6 +381,9 @@ async function loadAudit() {
 // Enter-key conveniences
 document.getElementById('adminSecretInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendOtp(); });
 document.getElementById('otpInput').addEventListener('keydown', e => { if (e.key === 'Enter') verifyOtp(); });
+['gbeEmail','gbeTokens','gbeNote'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') grantByEmail(); });
+});
 </script>
 </body>
 </html>
