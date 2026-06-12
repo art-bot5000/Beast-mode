@@ -260,7 +260,9 @@ export const UPSCALERS = [
     kind: 'diffusion',
     factor: { values: [2], default: 2 },
     prompt: true,
-    sampler: { steps: 20, cfg: 6.5, strength: 0.5 },
+    // NB: SD Latent does NOT accept settings.strength (Runware rejects it).
+    // Only Clarity among our upscalers supports strength.
+    sampler: { steps: 20, cfg: 6.5 },
     note: 'Fast 2× latent-space upscale before VAE decode. Improves detail without changing composition.',
   },
 ];

@@ -232,7 +232,12 @@ export const runwareAdapter = {
       if (Number.isFinite(req.steps)) s.steps = Math.max(1, Math.min(60, Math.round(req.steps)));
       if (Number.isFinite(req.CFGScale)) s.CFGScale = req.CFGScale;
       if (Number.isFinite(req.seed)) s.seed = Math.max(0, Math.round(req.seed));
-      if (Number.isFinite(req.strength)) s.strength = Math.max(0, Math.min(1, req.strength));
+      // strength is model-specific: Clarity accepts it, SD Latent (runware:502@1)
+      // REJECTS it ("Unsupported use of 'settings.strength'"). Gate on the model
+      // so a stray value from the client can't produce a hard API error.
+      if (model === 'runware:500@1' && Number.isFinite(req.strength)) {
+        s.strength = Math.max(0, Math.min(1, req.strength));
+      }
       if (Object.keys(s).length) task.settings = s;
     }
 
