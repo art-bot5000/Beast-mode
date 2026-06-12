@@ -19935,7 +19935,21 @@ function toggleNavMore() {
   if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   toggle && toggle.classList.toggle('active', open);
 }
+function closeNavMore() {
+  const panel = document.getElementById('navMorePanel');
+  if (!panel || panel.hasAttribute('hidden')) return;
+  panel.setAttribute('hidden', '');
+  const toggle = document.getElementById('navMoreToggle');
+  if (toggle) { toggle.setAttribute('aria-expanded', 'false'); toggle.classList.remove('active'); }
+}
+// When the rail collapses (pointer leaves the nav), the More dropdown closes
+// with it — otherwise it would linger as an orphaned panel beside the slim rail.
+(function () {
+  const nav = document.querySelector('.mode-nav');
+  if (nav) nav.addEventListener('mouseleave', closeNavMore);
+})();
 window.toggleNavMore = toggleNavMore;
+window.closeNavMore = closeNavMore;
 
 window.bmAccountClick = () => {
   if (window.bmSession) {
