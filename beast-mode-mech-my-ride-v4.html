@@ -784,9 +784,8 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   --mode-nav-w: 220px;            /* legacy fallback (mobile drawer uses its own width) */
   --mode-nav-w-collapsed: 60px;   /* desktop resting width: icons + a little air */
   --mode-nav-w-expanded: 248px;   /* desktop hover width: icons + labels */
-  --mode-nav-pad-x: 17px;         /* fixed left inset for every icon (so icons never move) */
+  --mode-nav-pad-x: 10px;         /* puts the 24px icon box centre on the rail's true centre (30px) */
   --mode-nav-brand-h: 64px;       /* fixed brand-band height so its border never shifts */
-  --mode-nav-footer-h: 132px;     /* fixed footer height so the tabs region never shifts */
 }
 
 /* Desktop: a slim icon rail that slides open on hover. The icons sit at a FIXED
@@ -797,6 +796,12 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 @media(min-width:641px){
   body { padding-left: var(--mode-nav-w-collapsed); }
   .mobile-topbar, .mode-nav-backdrop { display:none !important; }
+
+  /* EVERY selector in this block is prefixed with `body ` for +1 specificity.
+     The base .mode-nav* rules appear LATER in the source, so without the prefix
+     they silently win every equal-specificity contest (this killed the rail
+     width, icon sizes, tab gap, insets, and thumb alignment at various points).
+     Keep the prefix on any rule added here. */
 
   body .mode-nav {
     width: var(--mode-nav-w-collapsed);
@@ -810,73 +815,68 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   }
 
   /* Vertically centre the four mode tabs in the rail's free space. */
-  .mode-nav-tabs { justify-content: center; gap: 20px; }
+  body .mode-nav-tabs { justify-content: center; gap: 18px; }
 
   /* Icons hold a constant left inset in BOTH states → they never move.
      Labels are clipped by the rail's overflow until it widens. */
-  .mode-nav .nav-tab,
-  .mode-nav .mode-nav-profile {
+  body .mode-nav .nav-tab {
     justify-content: flex-start;
-    padding-left: var(--mode-nav-pad-x);
-    padding-right: 16px;
+    padding: 12px 16px 12px var(--mode-nav-pad-x);
+    font-size: 16px;
   }
-  .mode-nav-brand { justify-content: flex-start; }
+  body .mode-nav-brand { justify-content: flex-start; }
 
   /* Labels: present in layout but faded out until the panel opens. */
-  .mode-nav .tab-label,
-  .mode-nav .pfi-name,
-  .mode-nav-brand .version,
-  .mode-nav-brand .brand-text {
+  body .mode-nav .tab-label,
+  body .mode-nav-brand .version,
+  body .mode-nav-brand .brand-text {
     opacity: 0;
     transition: opacity .14s ease .02s;
   }
-  .mode-nav:hover .tab-label,
-  .mode-nav:hover .pfi-name,
-  .mode-nav:hover .mode-nav-brand .version,
-  .mode-nav:hover .mode-nav-brand .brand-text { opacity: 1; }
+  body .mode-nav:hover .tab-label,
+  body .mode-nav:hover .mode-nav-brand .version,
+  body .mode-nav:hover .mode-nav-brand .brand-text { opacity: 1; }
 
-  .mode-nav .tab-badge { display: none !important; }
+  body .mode-nav .tab-badge { display: none !important; }
 
-  /* Collapsed: the account card stays as a bare profile thumb (the profile entry
-     point). Username pill, balance, drive dot and the card's chrome appear only
-     when expanded — but the card keeps a CONSTANT vertical footprint so the
-     centred mode tabs above never shift on expand. */
-  .mode-nav-card { border-color: transparent; background: transparent; padding: 6px 0 6px var(--mode-nav-pad-x); }
-  .mode-nav-identity { gap: 0; }
-  .mode-nav-identity #bmAccountBtn,
-  .mode-nav-identity .mode-nav-balance,
-  .mode-nav-identity #navDriveStatus {
-    opacity: 0; max-width: 0; padding-left: 0; padding-right: 0; margin: 0;
-    overflow: hidden; white-space: nowrap; transition: opacity .14s ease;
+  /* Collapsed: only the bare profile thumb shows; username + balance + drive dot
+     appear on expand. Reveal is opacity-only so footer height never changes. */
+  body .mode-nav .mode-nav-card { padding: 5px 0 5px 7px; }
+  body .mode-nav-identity { gap: 0; }
+  body .mode-nav-identity #bmAccountBtn,
+  body .mode-nav-identity .mode-nav-balance,
+  body .mode-nav-identity #navDriveStatus {
+    /* !important required: the account button & drive dot carry INLINE styles
+       (padding/border/width) which beat normal CSS — leaving them ~30px wide
+       while invisible, which wrapped the row and inflated the collapsed footer. */
+    opacity: 0; width: 0 !important; padding: 0 !important; margin: 0 !important;
+    border-width: 0 !important; min-width: 0 !important;
+    overflow: hidden; white-space: nowrap; pointer-events: none;
   }
-  .mode-nav:hover .mode-nav-card { border-color: var(--border); background: var(--surface2); padding: 6px 12px; }
-  .mode-nav:hover .mode-nav-identity { gap: 8px; }
-  .mode-nav:hover .mode-nav-identity #bmAccountBtn { opacity: 1; max-width: 200px; padding: 4px 14px; }
-  .mode-nav:hover .mode-nav-identity .mode-nav-balance { opacity: 1; max-width: 200px; }
-  .mode-nav:hover .mode-nav-identity #navDriveStatus { opacity: 1; max-width: 12px; }
+  /* Left inset IDENTICAL to the collapsed rule (7px) — this is what stops the
+     thumb drifting on expand; only the right side gains room for the pill. */
+  body .mode-nav:hover .mode-nav-card { padding: 5px 12px 5px 7px; }
+  body .mode-nav:hover .mode-nav-identity { gap: 8px; }
+  body .mode-nav:hover .mode-nav-identity #bmAccountBtn { opacity: 1; width: auto !important; padding: 4px 14px !important; border-width: 1px !important; pointer-events: auto; }
+  body .mode-nav:hover .mode-nav-identity .mode-nav-balance { opacity: 1; width: auto !important; pointer-events: auto; }
+  body .mode-nav:hover .mode-nav-identity #navDriveStatus { opacity: 1; width: 8px !important; pointer-events: auto; }
 
-  /* The More dropdown is itself a label-rich panel; only meaningful expanded. */
-  .mode-nav-more { left: var(--mode-nav-pad-x); }
+  /* The More dropdown opens flush above the More button (footer top). */
+  body .mode-nav-more { left: var(--mode-nav-pad-x); }
 
-  /* Larger icons + text on desktop, per the Instagram-style brief. */
-  .mode-nav .nav-tab { font-size: 16px; padding-top: 12px; padding-bottom: 12px; }
-  .mode-nav .nav-tab .tab-icon { font-size: 25px; width: 26px; }
-  .mode-nav .bm-profile-thumb { width: 34px; height: 34px; font-size: 17px; }
-  .mode-nav-brand .brand-mark { font-size: 26px; }
+  /* Icons at -25% from the prior pass: 23px glyphs in a 24px box. */
+  body .mode-nav .nav-tab .tab-icon { font-size: 23px; width: 24px; }
+  body .mode-nav-brand .brand-mark { font-size: 26px; width: 30px; text-align: center; }
 
-  /* Footer tabs (Settings / More) stay compact; tightened spacing per request. */
-  .mode-nav-footer .nav-tab { padding-top: 5px; padding-bottom: 5px; font-size: 14px; }
-  .mode-nav-footer .nav-tab .tab-icon { font-size: 21px; }
+  /* Profile thumb stays a CONSTANT 30px in both states (so the footer row height
+     never changes → no bounce); centred on the shared 40px icon line. */
+  body .mode-nav-identity .bm-profile-thumb { width: 30px; height: 30px; font-size: 15px; }
+
+  /* Footer tabs (Settings / More) stay compact. */
+  body .mode-nav-footer .nav-tab { padding-top: 5px; padding-bottom: 5px; font-size: 14px; }
+  body .mode-nav-footer .nav-tab .tab-icon { font-size: 21px; }
 }
 
-/* Profile thumbnail button in the nav footer. */
-.mode-nav-profile {
-  display:flex; align-items:center; justify-content:center; gap:10px;
-  width:100%; padding:8px; border:none; background:transparent; cursor:pointer;
-  color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:13px;
-  font-weight:700; letter-spacing:1.5px; border-radius:6px; transition:background .15s;
-}
-.mode-nav-profile:hover { background:var(--surface2); }
 .bm-profile-thumb {
   width:32px; height:32px; border-radius:50%; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
@@ -887,10 +887,6 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .bm-profile-thumb.has-img { border-color:var(--accent); }
 .settings-profile-thumb { width:72px;height:72px;font-size:32px;cursor:pointer;padding:0;flex-shrink:0; }
 .settings-profile-thumb:hover { border-color:var(--accent); }
-@media(min-width:641px){
-  .mode-nav .mode-nav-profile .pfi-name { opacity:0; transition:opacity .12s ease; }
-  .mode-nav:hover .mode-nav-profile .pfi-name { opacity:1; }
-}
 
 .mode-nav {
   position:fixed; top:0; left:0; bottom:0; width:var(--mode-nav-w); z-index:200;
@@ -901,22 +897,28 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   display:flex; align-items:center; gap:8px; flex-wrap:nowrap; overflow:hidden;
   height:var(--mode-nav-brand-h); box-sizing:border-box;
   font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px;
-  color:var(--accent); padding:0 18px 0 var(--mode-nav-pad-x); flex-shrink:0;
+  color:var(--accent); padding:0 18px 0 15px; flex-shrink:0;
   border-bottom:1px solid var(--border);
 }
-.mode-nav-brand .version { font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:600; }
+.mode-nav-brand .version { font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:600;white-space:nowrap; }
+.mode-nav-brand .brand-text { white-space:nowrap; }
 .mode-nav-brand .brand-mark { font-size:22px; line-height:1; color:var(--accent); flex-shrink:0; }
-.mode-nav-tabs { display:flex; flex-direction:column; gap:2px; padding:10px 8px; flex:1; overflow-y:auto; }
-.mode-nav-footer { position:relative; display:flex; flex-direction:column; justify-content:flex-end; gap:1px; padding:6px 8px 10px; border-top:1px solid var(--border); flex-shrink:0; box-sizing:border-box; height:var(--mode-nav-footer-h); }
+.mode-nav-tabs { display:flex; flex-direction:column; gap:2px; padding:10px 8px; flex:1; overflow:hidden; }
+.mode-nav-footer { position:relative; display:flex; flex-direction:column; gap:1px; padding:8px 8px 6px; border-top:1px solid var(--border); flex-shrink:0; box-sizing:border-box; }
 
 /* Account card: holds the identity row (profile thumb + username + balance). */
+/* Account holder: no pill box — the thumb + username sit flush like the tabs. */
 .mode-nav-card {
   display:flex; flex-direction:column; gap:8px;
-  border:1px solid var(--border); border-radius:8px; background:var(--surface2);
-  padding:10px 12px;
+  border:none; border-radius:0; background:transparent;
+  padding:0;
 }
+/* Identity row behaves like the brand band: ONE line, fixed height, overflow
+   clipped. Hidden items can never wrap below the thumb, so the footer height is
+   physically constant between collapsed and expanded. */
 .mode-nav-identity {
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  display:flex; align-items:center; gap:8px; flex-wrap:nowrap;
+  height:30px; overflow:hidden;
 }
 .mode-nav-identity .bm-profile-thumb { width:30px; height:30px; font-size:15px; cursor:pointer; padding:0; }
 .mode-nav-identity .bm-profile-thumb:hover { border-color:var(--accent); }
@@ -950,7 +952,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   display:flex; align-items:center; gap:10px; width:100%; padding:11px 14px;
   font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:700; letter-spacing:2px;
   color:var(--muted); cursor:pointer; border:none; background:transparent;
-  border-radius:6px; transition:all .15s; white-space:nowrap; text-align:left;
+  border-radius:6px; transition:color .15s, background .15s; white-space:nowrap; text-align:left;
 }
 .mode-nav .nav-tab:hover { color:var(--text); background:var(--surface2); }
 .mode-nav .nav-tab.active { color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,transparent); }
@@ -3108,12 +3110,8 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   <!-- Footer: Settings, then an account card. Card rows (top→bottom):
        chrome icons, then identity (account) + token balance. -->
   <div class="mode-nav-footer">
-    <button class="nav-tab" id="navSettings" onclick="switchView('settings')">
-      <span class="tab-icon">⌘</span>
-      <span class="tab-label">SETTINGS</span>
-    </button>
-
-    <!-- More menu: just a burger when collapsed; "More" + dropdown when expanded. -->
+    <!-- More menu sits FIRST so its dropdown (anchored above the footer) opens
+         directly above the More button with no gap. -->
     <button class="nav-tab" id="navMoreToggle" onclick="toggleNavMore()" aria-expanded="false">
       <span class="tab-icon">☰</span>
       <span class="tab-label">MORE</span>
@@ -3132,6 +3130,11 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         <span class="tab-label">SEND FEEDBACK</span>
       </button>
     </div>
+
+    <button class="nav-tab" id="navSettings" onclick="switchView('settings')">
+      <span class="tab-icon">⌘</span>
+      <span class="tab-label">SETTINGS</span>
+    </button>
 
     <div class="mode-nav-card">
       <div class="mode-nav-identity">
