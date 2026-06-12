@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Markup engine harness</title>
+<style>
+  :root{
+    --accent:#e8ff00; --surface:#141414; --surface2:#1d1d1d;
+    --border:#333; --text:#eee; --muted:#888; --radius:6px;
+  }
+  body{margin:0;background:#0a0a0a;color:var(--text);font-family:'Rajdhani',system-ui,sans-serif;}
+  .bar{padding:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  button{font-family:inherit;}
+  #seedOut{white-space:pre-wrap;background:#000;border:1px solid var(--border);padding:8px;margin:10px;color:var(--accent);}
+
+  /* ===== MARKUP EDITOR (copy target) ===== */
+  #mkOverlay{position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.92);
+    display:none;flex-direction:column;padding:14px;gap:10px;}
+  #mkOverlay.open{display:flex;}
+  .mk-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .mk-title{font-family:'Bebas Neue','Rajdhani',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);}
+  .mk-spacer{flex:1;}
+  .mk-btn{background:transparent;border:1px solid var(--border);color:var(--text);
+    border-radius:var(--radius);padding:7px 12px;cursor:pointer;font-weight:700;
+    letter-spacing:1px;font-size:13px;transition:all .15s;}
+  .mk-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .mk-btn.primary{background:var(--accent);color:#000;border-color:var(--accent);}
+  .mk-btn.active{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);}
+  .mk-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .mk-colors{display:flex;gap:6px;}
+  .mk-color{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
+  .mk-color.sel{border-color:#fff;box-shadow:0 0 0 2px #000,0 0 0 4px currentColor;}
+  .mk-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0;}
+  #mkCanvas{max-width:100%;max-height:100%;background:#000;cursor:crosshair;touch-action:none;border:1px solid var(--border);}
+  .mk-hint{font-size:12px;color:var(--muted);letter-spacing:.5px;}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <button class="mk-btn" onclick="document.getElementById('demoFile').click()">Load test image</button>
+    <input type="file" id="demoFile" accept="image/*" style="display:none" onchange="harnessLoad(this.files)">
+    <button class="mk-btn" onclick="harnessSynthetic()">Use synthetic image</button>
+    <span class="mk-hint">refs pushed: <b id="refCount">0</b></span>
+  </div>
+  <textarea id="igPrompt" style="width:90%;margin:10px;height:80px;background:#000;color:#fff;border:1px solid var(--border);" placeholder="existing prompt text…"></textarea>
+  <div id="seedOut">(seed output appears here)</div>
+
+  <!-- ===== MARKUP EDITOR MARKUP (copy target) ===== -->
+  <div id="mkOverlay">
+    <div class="mk-top">
+      <div class="mk-title">✎ MARKUP IMAGE</div>
+      <span class="mk-hint" id="mkHint">Draw on regions, then Apply.</span>
+      <div class="mk-spacer"></div>
+      <button class="mk-btn" onclick="mkUndo()">↶ UNDO</button>
+      <button class="mk-btn" onclick="mkClear()">CLEAR</button>
+      <button class="mk-btn" onclick="mkClose()">CANCEL</button>
+      <button class="mk-btn primary" onclick="mkApply()">APPLY</button>
+    </div>
+    <div class="mk-tools">
+      <div class="mk-colors" id="mkColors"></div>
+      <span class="mk-hint">|</span>
+      <button class="mk-btn active" id="mkToolBrush" onclick="mkSetTool('brush')">✏ BRUSH</button>
+      <button class="mk-btn" id="mkToolArrow" onclick="mkSetTool('arrow')">↗ ARROW</button>
+      <button class="mk-btn" id="mkToolBox" onclick="mkSetTool('box')">▢ BOX</button>
+      <button class="mk-btn" id="mkToolText" onclick="mkSetTool('text')">T TEXT</button>
+    </div>
+    <div class="mk-stage">
+      <canvas id="mkCanvas"></canvas>
+    </div>
+  </div>
+
+<script>
+/* ================= MARKUP ENGINE (copy target) =================
+   Self-contained. Public entry: mkOpen(dataUri, onApply).
+   onApply receives ({ image: dataUri, colours: [names…] }). */
+const MK_COLOURS = [
+  { name:'red',     hex:'#ff3b30' },
+  { name:'blue',    hex:'#0a84ff' },
+  { name:'green',   hex:'#34c759' },
+  { name:'yellow',  hex:'#ffd60a' },
+  { name:'magenta', hex:'#ff2d95' },
+  { name:'cyan',    hex:'#32d4ff' },
+];
+
+const mk = {
+  open:false, tool:'brush', colourIdx:0,
+  img:null,                 // HTMLImageElement (base)
+  strokes:[],               // committed ops, each { tool, colour, name, pts:[], text? }
+  cur:null,                 // in-progress op
+  onApply:null,
+  dpr:1,
+};
+
+function mkBuildPalette(){
+  const wrap=document.getElementById('mkColors');
+  wrap.innerHTML='';
+  MK_COLOURS.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='mk-color'+(i===mk.colourIdx?' sel':'');
+    b.style.background=c.hex; b.style.color=c.hex;
+    b.title=c.name;
+    b.onclick=()=>{ mk.colourIdx=i; mkBuildPalette(); };
+    wrap.appendChild(b);
+  });
+}
+function mkSetTool(t){
+  mk.tool=t;
+  ['brush','arrow','box','text'].forEach(x=>{
+    document.getElementById('mkTool'+x[0].toUpperCase()+x.slice(1)).classList.toggle('active',x===t);
+  });
+}
+function mkColour(){ return MK_COLOURS[mk.colourIdx]; }
+
+function mkOpen(dataUri, onApply){
+  mk.onApply=onApply; mk.strokes=[]; mk.cur=null;
+  mk.tool='brush'; mk.colourIdx=0;
+  mkBuildPalette(); mkSetTool('brush');
+  const img=new Image();
+  img.onload=()=>{
+    mk.img=img;
+    mkFitCanvas();
+    mkRedraw();
+    document.getElementById('mkOverlay').classList.add('open');
+    mk.open=true;
+  };
+  img.src=dataUri;
+}
+function mkClose(){
+  document.getElementById('mkOverlay').classList.remove('open');
+  mk.open=false; mk.img=null; mk.strokes=[]; mk.cur=null;
+}
+
+function mkFitCanvas(){
+  const cv=document.getElementById('mkCanvas');
+  // Internal resolution tracks the image (capped) so flatten is crisp.
+  const maxSide=1536;
+  const scale=Math.min(1, maxSide/Math.max(mk.img.width,mk.img.height));
+  cv.width=Math.max(1,Math.round(mk.img.width*scale));
+  cv.height=Math.max(1,Math.round(mk.img.height*scale));
+}
+
+function mkCanvasPoint(e){
+  const cv=document.getElementById('mkCanvas');
+  const r=cv.getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width*cv.width;
+  const y=(e.clientY-r.top)/r.height*cv.height;
+  return { x, y };
+}
+
+function mkRedraw(){
+  const cv=document.getElementById('mkCanvas');
+  const ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(mk.img) ctx.drawImage(mk.img,0,0,cv.width,cv.height);
+  const all=mk.cur?mk.strokes.concat([mk.cur]):mk.strokes;
+  all.forEach(op=>mkDrawOp(ctx,op,cv));
+}
+function mkDrawOp(ctx,op,cv){
+  const lw=Math.max(3, Math.round(cv.width/220));
+  ctx.lineWidth=lw; ctx.strokeStyle=op.colour; ctx.fillStyle=op.colour;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  if(op.tool==='brush'){
+    ctx.beginPath();
+    op.pts.forEach((p,i)=>{ i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); });
+    ctx.stroke();
+  } else if(op.tool==='box'){
+    const a=op.pts[0], b=op.pts[op.pts.length-1];
+    if(a&&b) ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);
+  } else if(op.tool==='arrow'){
+    const a=op.pts[0], b=op.pts[op.pts.length-1];
+    if(a&&b){
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      const ang=Math.atan2(b.y-a.y,b.x-a.x), h=lw*4;
+      ctx.beginPath();
+      ctx.moveTo(b.x,b.y);
+      ctx.lineTo(b.x-h*Math.cos(ang-0.4), b.y-h*Math.sin(ang-0.4));
+      ctx.lineTo(b.x-h*Math.cos(ang+0.4), b.y-h*Math.sin(ang+0.4));
+      ctx.closePath(); ctx.fill();
+    }
+  } else if(op.tool==='text'){
+    const p=op.pts[0];
+    if(p&&op.text){
+      const fs=Math.max(16, Math.round(cv.width/28));
+      ctx.font='700 '+fs+"px 'Rajdhani',sans-serif";
+      ctx.textBaseline='top';
+      // backing plate for legibility
+      const w=ctx.measureText(op.text).width;
+      ctx.save();
+      ctx.fillStyle='rgba(0,0,0,.55)';
+      ctx.fillRect(p.x-4,p.y-2,w+8,fs+6);
+      ctx.fillStyle=op.colour;
+      ctx.fillText(op.text,p.x,p.y);
+      ctx.restore();
+    }
+  }
+}
+
+/* pointer handling */
+function mkDown(e){
+  if(!mk.open||!mk.img) return;
+  e.preventDefault();
+  const p=mkCanvasPoint(e);
+  const c=mkColour();
+  if(mk.tool==='text'){
+    const txt=prompt('Label text:');
+    if(txt && txt.trim()){
+      mk.strokes.push({ tool:'text', colour:c.hex, name:c.name, pts:[p], text:txt.trim() });
+      mkRedraw();
+    }
+    return;
+  }
+  mk.cur={ tool:mk.tool, colour:c.hex, name:c.name, pts:[p] };
+  mkRedraw();
+}
+function mkMove(e){
+  if(!mk.cur) return;
+  e.preventDefault();
+  const p=mkCanvasPoint(e);
+  if(mk.cur.tool==='brush') mk.cur.pts.push(p);
+  else mk.cur.pts=[mk.cur.pts[0], p]; // shapes: anchor + current
+  mkRedraw();
+}
+function mkUp(){
+  if(!mk.cur) return;
+  // discard degenerate single-point shapes
+  if(mk.cur.tool!=='brush' && mk.cur.pts.length<2){ mk.cur=null; mkRedraw(); return; }
+  mk.strokes.push(mk.cur); mk.cur=null; mkRedraw();
+}
+function mkUndo(){ mk.strokes.pop(); mkRedraw(); }
+function mkClear(){ mk.strokes=[]; mk.cur=null; mkRedraw(); }
+
+function mkUsedColours(){
+  const seen=[];
+  mk.strokes.forEach(op=>{ if(!seen.includes(op.name)) seen.push(op.name); });
+  return seen; // in first-use order
+}
+
+function mkApply(){
+  if(!mk.strokes.length){ mkClose(); return; }
+  const cv=document.getElementById('mkCanvas');
+  const out=cv.toDataURL('image/jpeg',0.9);
+  const colours=mkUsedColours();
+  const cb=mk.onApply;
+  mkClose();
+  if(typeof cb==='function') cb({ image:out, colours });
+}
+
+/* bind pointer events */
+(function(){
+  const cv=document.getElementById('mkCanvas');
+  cv.addEventListener('pointerdown',mkDown);
+  cv.addEventListener('pointermove',mkMove);
+  window.addEventListener('pointerup',mkUp);
+})();
+/* ================ END MARKUP ENGINE ================ */
+
+
+/* ---- harness-only glue (NOT copied) ---- */
+function harnessApply(result){
+  // mimic the integration: push a ref + prepend seed lines
+  document.getElementById('refCount').textContent =
+    (+document.getElementById('refCount').textContent)+1;
+  const ta=document.getElementById('igPrompt');
+  const seed=result.colours.map(c=>'Change the '+c+' region to: ').join('\n');
+  ta.value = seed + (ta.value ? '\n\n'+ta.value : '\n');
+  document.getElementById('seedOut').textContent =
+    'colours used: '+JSON.stringify(result.colours)+'\n'+
+    'image bytes: '+result.image.length+'\nprompt now:\n'+ta.value;
+}
+function harnessLoad(files){
+  if(!files||!files.length) return;
+  const r=new FileReader();
+  r.onload=e=>mkOpen(e.target.result, harnessApply);
+  r.readAsDataURL(files[0]);
+}
+function harnessSynthetic(){
+  const c=document.createElement('canvas'); c.width=800;c.height=600;
+  const x=c.getContext('2d');
+  x.fillStyle='#244';x.fillRect(0,0,800,600);
+  x.fillStyle='#8ab';x.fillRect(100,100,260,200);
+  x.fillStyle='#ba8';x.fillRect(440,260,260,240);
+  x.fillStyle='#fff';x.font='30px sans-serif';x.fillText('TEST IMAGE',280,60);
+  mkOpen(c.toDataURL('image/png'), harnessApply);
+}
+</script>
+</body>
+</html>

@@ -780,12 +780,80 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 
 /* Top nav */
 /* ── Mode navigation: desktop left sidebar / mobile drawer ──────────────── */
-:root { --mode-nav-w: 220px; }
+:root {
+  --mode-nav-w: 220px;            /* legacy fallback (mobile drawer uses its own width) */
+  --mode-nav-w-collapsed: 64px;   /* desktop resting width: icons only */
+  --mode-nav-w-expanded: 220px;   /* desktop hover width: icons + labels */
+}
 
-/* Desktop: fixed left rail, body shifts right to make room. */
+/* Desktop: a slim icon rail that expands on hover. Content only ever reserves
+   the COLLAPSED width, so the expanded rail floats OVER content (overlay, not
+   push). All collapse behaviour is scoped here; the mobile drawer is untouched. */
 @media(min-width:641px){
-  body { padding-left: var(--mode-nav-w); }
+  body { padding-left: var(--mode-nav-w-collapsed); }
   .mobile-topbar, .mode-nav-backdrop { display:none !important; }
+
+  .mode-nav {
+    width: var(--mode-nav-w-collapsed);
+    overflow: hidden;
+    transition: width .18s ease;
+  }
+  .mode-nav:hover {
+    width: var(--mode-nav-w-expanded);
+    z-index: 260;               /* float above page content while expanded */
+    box-shadow: 4px 0 24px rgba(0,0,0,.35);
+  }
+
+  /* Vertically centre the four mode tabs in the rail's free space. */
+  .mode-nav-tabs { justify-content: center; }
+
+  /* Collapsed: hide every text label; keep icons centred. Reveal on hover. */
+  .mode-nav .tab-label,
+  .mode-nav-brand .version,
+  .mode-nav-brand .brand-text {
+    opacity: 0;
+    transition: opacity .12s ease;
+  }
+  .mode-nav:hover .tab-label,
+  .mode-nav:hover .mode-nav-brand .version,
+  .mode-nav:hover .mode-nav-brand .brand-text { opacity: 1; }
+
+  .mode-nav .nav-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+  .mode-nav:hover .nav-tab { justify-content: flex-start; padding-left: 14px; padding-right: 14px; }
+
+  /* Collapsed brand shows just a mark; expands to full wordmark on hover. */
+  .mode-nav-brand { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
+  .mode-nav:hover .mode-nav-brand { justify-content: flex-start; padding-left: 18px; padding-right: 18px; gap: 8px; }
+
+  /* Footer: stack the profile thumb + settings icon, centred when collapsed. */
+  .mode-nav-footer { align-items: stretch; }
+  .mode-nav .tab-badge { display: none !important; }
+
+  /* The account card's chrome/identity rows are label-heavy; hide until hover
+     so the collapsed rail stays clean. */
+  .mode-nav-card { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; transition: opacity .12s ease; }
+  .mode-nav:hover .mode-nav-card { opacity: 1; max-height: 400px; padding-top: 10px; padding-bottom: 10px; }
+}
+
+/* Profile thumbnail button in the nav footer. */
+.mode-nav-profile {
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  width:100%; padding:8px; border:none; background:transparent; cursor:pointer;
+  color:var(--muted); font-family:'Rajdhani',sans-serif; font-size:13px;
+  font-weight:700; letter-spacing:1.5px; border-radius:6px; transition:background .15s;
+}
+.mode-nav-profile:hover { background:var(--surface2); }
+.bm-profile-thumb {
+  width:32px; height:32px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border); background:var(--surface2);
+  background-size:cover; background-position:center;
+  color:var(--muted); font-size:16px; line-height:1;
+}
+.bm-profile-thumb.has-img { border-color:var(--accent); }
+@media(min-width:641px){
+  .mode-nav .mode-nav-profile .pfi-name { opacity:0; transition:opacity .12s ease; }
+  .mode-nav:hover .mode-nav-profile .pfi-name { opacity:1; }
 }
 
 .mode-nav {
@@ -800,6 +868,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   border-bottom:1px solid var(--border);
 }
 .mode-nav-brand .version { font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:600; }
+.mode-nav-brand .brand-mark { font-size:22px; line-height:1; color:var(--accent); flex-shrink:0; }
 .mode-nav-tabs { display:flex; flex-direction:column; gap:2px; padding:10px 8px; flex:1; overflow-y:auto; }
 .mode-nav-footer { display:flex; flex-direction:column; gap:8px; padding:10px 8px 14px; border-top:1px solid var(--border); flex-shrink:0; }
 
@@ -987,6 +1056,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .lib-tag.mode-beast  { background:color-mix(in srgb,#ff6a00 12%,transparent);color:#ff6a00; }
 .lib-tag.mode-fusion { background:color-mix(in srgb,#c800ff 12%,transparent);color:#c800ff; }
 .lib-tag.tag-model   { background:var(--surface2);color:var(--muted);border:1px solid var(--border); }
+.lib-tag.tag-cost    { background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent); }
 .lib-tag.tag-needs-processing {
   background:color-mix(in srgb,#ff9900 15%,transparent);
   color:#ff9900;border:1px solid color-mix(in srgb,#ff9900 40%,transparent);
@@ -1135,6 +1205,52 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;
 }
 #imageUploadModal.open { display:flex; }
+
+/* Profile image modal — reuses .img-modal-card / .img-modal-body. */
+#profileImageModal {
+  display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10001;
+  background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;
+}
+#profileImageModal.open { display:flex; }
+.pfi-tabs { display:flex;gap:6px; }
+.pfi-tab {
+  flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;
+  padding:8px 10px;cursor:pointer;color:var(--muted);
+  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;transition:all .15s;
+}
+.pfi-tab.active { color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent); }
+.pfi-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-height:300px;overflow-y:auto; }
+.pfi-grid img {
+  width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;cursor:pointer;
+  border:2px solid transparent;transition:border-color .15s;
+}
+.pfi-grid img:hover { border-color:var(--accent); }
+.pfi-grid img.sel { border-color:var(--accent); }
+
+/* ===== MARKUP EDITOR ===== */
+#mkOverlay {
+  display:none;position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.92);
+  flex-direction:column;padding:14px;gap:10px;
+}
+#mkOverlay.open { display:flex; }
+.mk-top { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+.mk-title { font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent); }
+.mk-spacer { flex:1; }
+.mk-hint { font-size:12px;color:var(--muted);letter-spacing:.5px; }
+.mk-btn {
+  background:transparent;border:1px solid var(--border);color:var(--text);
+  border-radius:var(--radius);padding:7px 12px;cursor:pointer;
+  font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;font-size:13px;transition:all .15s;
+}
+.mk-btn:hover { border-color:var(--accent);color:var(--accent); }
+.mk-btn.primary { background:var(--accent);color:#000;border-color:var(--accent); }
+.mk-btn.active { border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.mk-tools { display:flex;gap:6px;flex-wrap:wrap;align-items:center; }
+.mk-colors { display:flex;gap:6px; }
+.mk-color { width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;padding:0; }
+.mk-color.sel { border-color:#fff;box-shadow:0 0 0 2px #000,0 0 0 4px currentColor; }
+.mk-stage { flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0; }
+#mkCanvas { max-width:100%;max-height:100%;background:#000;cursor:crosshair;touch-action:none;border:1px solid var(--border); }
 .img-modal-card {
   background:var(--surface);border:1px solid var(--accent);border-radius:4px;
   width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
@@ -2783,6 +2899,68 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   </div>
 </div>
 
+<!-- PROFILE IMAGE MODAL -->
+<div id="profileImageModal">
+  <div class="img-modal-card">
+    <div class="img-modal-header">
+      <div class="img-modal-title">// PROFILE IMAGE</div>
+      <button onclick="closeProfileImageModal()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:3px 10px;cursor:pointer;font-size:14px;">✕</button>
+    </div>
+    <div class="img-modal-body">
+      <div class="pfi-tabs">
+        <button class="pfi-tab active" id="pfiTabUpload" onclick="pfiSwitchTab('upload')">⬆ UPLOAD</button>
+        <button class="pfi-tab" id="pfiTabLibrary" onclick="pfiSwitchTab('library')">▤ FROM LIBRARY</button>
+      </div>
+
+      <div id="pfiUploadPane">
+        <div class="img-drop-zone" onclick="document.getElementById('pfiFileInput').click()">
+          <span class="drop-icon">🖼</span>
+          <p>TAP TO UPLOAD IMAGE</p>
+        </div>
+        <input type="file" id="pfiFileInput" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="pfiFilePicked(this.files)">
+      </div>
+
+      <div id="pfiLibraryPane" style="display:none;">
+        <div id="pfiLibraryGrid" class="pfi-grid"></div>
+        <div id="pfiLibraryEmpty" class="ig-note" style="display:none;">No saved images yet — generate or save one first.</div>
+      </div>
+
+      <div id="pfiPreviewWrap" style="display:none;text-align:center;">
+        <div class="ig-label">PREVIEW</div>
+        <img id="pfiPreview" src="" alt="" style="width:96px;height:96px;border-radius:50%;object-fit:cover;border:2px solid var(--accent);">
+      </div>
+    </div>
+    <div class="img-modal-footer">
+      <button id="pfiRemoveBtn" onclick="profileImageRemove()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:7px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;">REMOVE</button>
+      <button id="pfiSaveBtn" onclick="profileImageSave()" disabled style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:7px 16px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;opacity:.5;">SET IMAGE</button>
+    </div>
+  </div>
+</div>
+
+<!-- MARKUP EDITOR OVERLAY -->
+<div id="mkOverlay">
+  <div class="mk-top">
+    <div class="mk-title">✎ MARKUP IMAGE</div>
+    <span class="mk-hint" id="mkHint">Pick a colour, draw on the regions to change, then Apply.</span>
+    <div class="mk-spacer"></div>
+    <button class="mk-btn" onclick="mkUndo()">↶ UNDO</button>
+    <button class="mk-btn" onclick="mkClear()">CLEAR</button>
+    <button class="mk-btn" onclick="mkClose()">CANCEL</button>
+    <button class="mk-btn primary" onclick="mkApply()">APPLY</button>
+  </div>
+  <div class="mk-tools">
+    <div class="mk-colors" id="mkColors"></div>
+    <span class="mk-hint">·</span>
+    <button class="mk-btn active" id="mkToolBrush" onclick="mkSetTool('brush')">✏ BRUSH</button>
+    <button class="mk-btn" id="mkToolArrow" onclick="mkSetTool('arrow')">↗ ARROW</button>
+    <button class="mk-btn" id="mkToolBox" onclick="mkSetTool('box')">▢ BOX</button>
+    <button class="mk-btn" id="mkToolText" onclick="mkSetTool('text')">T TEXT</button>
+  </div>
+  <div class="mk-stage">
+    <canvas id="mkCanvas"></canvas>
+  </div>
+</div>
+
 <!-- STYLE EDITOR MODAL -->
 <div id="styleEditorOverlay" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:10000;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--surface);border:1px solid var(--accent);border-radius:4px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
@@ -2846,7 +3024,8 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
      are unchanged so switchView()'s active-class logic keeps working. -->
 <nav class="mode-nav" id="modeNav">
   <div class="mode-nav-brand">
-    BEAST MODE
+    <span class="brand-mark">⌬</span>
+    <span class="brand-text">BEAST MODE</span>
     <span class="version">V4.0</span>
   </div>
 
@@ -2865,7 +3044,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
     </button>
     <button class="nav-tab" id="navLibrary" onclick="switchView('library')">
       <span class="tab-icon">▤</span>
-      <span class="tab-label">PROMPT LIBRARY</span>
+      <span class="tab-label">LIBRARY</span>
       <span class="tab-badge" id="libBadge" style="display:none">0</span>
     </button>
   </div>
@@ -2873,6 +3052,10 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   <!-- Footer: Settings, then an account card. Card rows (top→bottom):
        chrome icons, then identity (account) + token balance. -->
   <div class="mode-nav-footer">
+    <button class="mode-nav-profile" onclick="openProfileImageModal()" title="Profile image">
+      <span class="bm-profile-thumb" id="bmProfileThumb">⊙</span>
+      <span class="tab-label pfi-name">PROFILE</span>
+    </button>
     <button class="nav-tab" id="navSettings" onclick="switchView('settings')">
       <span class="tab-icon">⌘</span>
       <span class="tab-label">SETTINGS</span>
@@ -2907,7 +3090,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   <div class="view-inner">
     <header style="margin-bottom:20px;">
       <div class="title-line">
-        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// PROMPT LIBRARY</h1>
+        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// LIBRARY</h1>
       </div>
     </header>
 
@@ -3409,7 +3592,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
           <div class="ig-drop" id="igDrop" onclick="document.getElementById('igRefFile').click()">⬆ DROP IMAGES OR CLICK TO UPLOAD</div>
           <input type="file" id="igRefFile" accept="image/png,image/jpeg,image/webp" multiple style="display:none;" onchange="igRefFilesPicked(this.files)">
           <div class="ig-refs" id="igRefThumbs"></div>
-          <div class="ig-note">Image-to-image: the model uses these as visual references / edit sources.</div>
+          <button class="btn btn-ghost" id="igMarkupBtn" style="margin-top:8px;font-size:13px;letter-spacing:1px;" onclick="document.getElementById('igMarkupFile').click()">✎ MARKUP IMAGE</button>
+          <input type="file" id="igMarkupFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="igMarkupFilePicked(this.files)">
+          <div class="ig-note">Image-to-image: the model uses these as visual references / edit sources. Use <b>Markup image</b> to mark regions by colour and seed change instructions.</div>
         </div>
 
         <div class="ig-label">ASPECT RATIO</div>
@@ -3611,7 +3796,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         </div>
         <div id="bmTokSignedOut" style="display:none;font-size:12px;color:var(--muted);letter-spacing:.5px;">Sign in to see your token balance and activity.</div>
         <div id="bmTokSignedIn" style="display:none;">
-          <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens (1 token = $0.01)</span></div>
+          <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens</span></div>
           <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:12px;">Tokens are spent on image generation and priced per model and resolution. Every charge, refund, and grant is recorded on your account; charges link to the saved image in your library.</div>
           <button class="btn btn-outline" onclick="bmUsageOpen()" style="font-size:12px;">⊞ USAGE HISTORY</button>
         </div>
@@ -8468,6 +8653,7 @@ function buildLibCard(f) {
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
     ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
+    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost">◈ ${f.tokenCost} TOK</span>` : ''}
   `
   body.appendChild(tags)
 
@@ -8627,10 +8813,10 @@ function renderRatingStars(containerId, currentRating, onChange, containerEl) {
 }
 
 function updateLibBadge() {
+  // Count badge intentionally suppressed — the Library tab shows no number.
   const badge = document.getElementById('libBadge')
   if (!badge) return
-  badge.textContent = favourites.length
-  badge.style.display = favourites.length ? 'inline' : 'none'
+  badge.style.display = 'none'
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -17955,7 +18141,7 @@ async function generateImage() {
     status.style.color = 'var(--accent)';
     const costStr = (data.tokens && typeof data.tokens.charged === 'number') ? (' \u00B7 ' + data.tokens.charged + ' TOKEN' + (data.tokens.charged === 1 ? '' : 'S')) : '';
     meta.textContent = 'Model: ' + data.model + costStr + ' \u00B7 auto-saved to library';
-    autoSaveGeneratedImage(prompt, out.dataset.full || visible, image.url, data.model, null, data.tokens && data.tokens.ref);
+    autoSaveGeneratedImage(prompt, out.dataset.full || visible, image.url, data.model, null, data.tokens && data.tokens.ref, data.tokens && (typeof data.tokens.perImage === 'number' ? data.tokens.perImage : data.tokens.charged));
   } catch (e) {
     status.textContent = '\u2717 Network error: ' + e.message;
     status.style.color = 'var(--err, #f85149)';
@@ -17970,7 +18156,7 @@ async function generateImage() {
 // `pristine` (optional): a data: URI of the ORIGINAL image bytes (Gemini direct
 // models). When present, the Drive upload + local cache use it instead of
 // re-fetching the hosted URL — immune to R2 public-URL fetch problems.
-function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tokenRef) {
+function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tokenRef, tokenCost) {
   try {
     let full = fullText;
     const DELIM = (typeof SETTINGS_DELIMITER !== 'undefined') ? SETTINGS_DELIMITER : '---SETTINGS---';
@@ -17997,6 +18183,9 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       // settings Token Activity view uses it to link a charge to THIS image
       // (the durable library copy, not the dying R2 URL).
       tokenRef: tokenRef || null,
+      // Per-image token cost at generation time, shown as a badge on the
+      // library card. Older favourites lack this and simply show no badge.
+      tokenCost: (typeof tokenCost === 'number' && tokenCost >= 0) ? tokenCost : null,
     };
     if (typeof favourites !== 'undefined') {
       favourites.unshift(fav);
@@ -18636,6 +18825,223 @@ function igDownscaleToDataUri(file, maxSide, cb) {
   img.src = url;
 }
 
+// ── IMAGE MARKUP (vector annotation → reference + prompt seed) ──────────────
+// Engine verified standalone. Public entry: mkOpen(dataUri, onApply).
+// onApply receives ({ image: dataUri, colours: [names…] }).
+const MK_COLOURS = [
+  { name:'red',     hex:'#ff3b30' },
+  { name:'blue',    hex:'#0a84ff' },
+  { name:'green',   hex:'#34c759' },
+  { name:'yellow',  hex:'#ffd60a' },
+  { name:'magenta', hex:'#ff2d95' },
+  { name:'cyan',    hex:'#32d4ff' },
+];
+
+const mk = {
+  open:false, tool:'brush', colourIdx:0,
+  img:null,                 // HTMLImageElement (base)
+  strokes:[],               // committed ops, each { tool, colour, name, pts:[], text? }
+  cur:null,                 // in-progress op
+  onApply:null,
+  dpr:1,
+};
+
+function mkBuildPalette(){
+  const wrap=document.getElementById('mkColors');
+  wrap.innerHTML='';
+  MK_COLOURS.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='mk-color'+(i===mk.colourIdx?' sel':'');
+    b.style.background=c.hex; b.style.color=c.hex;
+    b.title=c.name;
+    b.onclick=()=>{ mk.colourIdx=i; mkBuildPalette(); };
+    wrap.appendChild(b);
+  });
+}
+function mkSetTool(t){
+  mk.tool=t;
+  ['brush','arrow','box','text'].forEach(x=>{
+    document.getElementById('mkTool'+x[0].toUpperCase()+x.slice(1)).classList.toggle('active',x===t);
+  });
+}
+function mkColour(){ return MK_COLOURS[mk.colourIdx]; }
+
+function mkOpen(dataUri, onApply){
+  mk.onApply=onApply; mk.strokes=[]; mk.cur=null;
+  mk.tool='brush'; mk.colourIdx=0;
+  mkBuildPalette(); mkSetTool('brush');
+  const img=new Image();
+  img.onload=()=>{
+    mk.img=img;
+    mkFitCanvas();
+    mkRedraw();
+    document.getElementById('mkOverlay').classList.add('open');
+    mk.open=true;
+  };
+  img.src=dataUri;
+}
+function mkClose(){
+  document.getElementById('mkOverlay').classList.remove('open');
+  mk.open=false; mk.img=null; mk.strokes=[]; mk.cur=null;
+}
+
+function mkFitCanvas(){
+  const cv=document.getElementById('mkCanvas');
+  // Internal resolution tracks the image (capped) so flatten is crisp.
+  const maxSide=1536;
+  const scale=Math.min(1, maxSide/Math.max(mk.img.width,mk.img.height));
+  cv.width=Math.max(1,Math.round(mk.img.width*scale));
+  cv.height=Math.max(1,Math.round(mk.img.height*scale));
+}
+
+function mkCanvasPoint(e){
+  const cv=document.getElementById('mkCanvas');
+  const r=cv.getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width*cv.width;
+  const y=(e.clientY-r.top)/r.height*cv.height;
+  return { x, y };
+}
+
+function mkRedraw(){
+  const cv=document.getElementById('mkCanvas');
+  const ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(mk.img) ctx.drawImage(mk.img,0,0,cv.width,cv.height);
+  const all=mk.cur?mk.strokes.concat([mk.cur]):mk.strokes;
+  all.forEach(op=>mkDrawOp(ctx,op,cv));
+}
+function mkDrawOp(ctx,op,cv){
+  const lw=Math.max(3, Math.round(cv.width/220));
+  ctx.lineWidth=lw; ctx.strokeStyle=op.colour; ctx.fillStyle=op.colour;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  if(op.tool==='brush'){
+    ctx.beginPath();
+    op.pts.forEach((p,i)=>{ i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); });
+    ctx.stroke();
+  } else if(op.tool==='box'){
+    const a=op.pts[0], b=op.pts[op.pts.length-1];
+    if(a&&b) ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);
+  } else if(op.tool==='arrow'){
+    const a=op.pts[0], b=op.pts[op.pts.length-1];
+    if(a&&b){
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      const ang=Math.atan2(b.y-a.y,b.x-a.x), h=lw*4;
+      ctx.beginPath();
+      ctx.moveTo(b.x,b.y);
+      ctx.lineTo(b.x-h*Math.cos(ang-0.4), b.y-h*Math.sin(ang-0.4));
+      ctx.lineTo(b.x-h*Math.cos(ang+0.4), b.y-h*Math.sin(ang+0.4));
+      ctx.closePath(); ctx.fill();
+    }
+  } else if(op.tool==='text'){
+    const p=op.pts[0];
+    if(p&&op.text){
+      const fs=Math.max(16, Math.round(cv.width/28));
+      ctx.font='700 '+fs+"px 'Rajdhani',sans-serif";
+      ctx.textBaseline='top';
+      // backing plate for legibility
+      const w=ctx.measureText(op.text).width;
+      ctx.save();
+      ctx.fillStyle='rgba(0,0,0,.55)';
+      ctx.fillRect(p.x-4,p.y-2,w+8,fs+6);
+      ctx.fillStyle=op.colour;
+      ctx.fillText(op.text,p.x,p.y);
+      ctx.restore();
+    }
+  }
+}
+
+/* pointer handling */
+function mkDown(e){
+  if(!mk.open||!mk.img) return;
+  e.preventDefault();
+  const p=mkCanvasPoint(e);
+  const c=mkColour();
+  if(mk.tool==='text'){
+    const txt=prompt('Label text:');
+    if(txt && txt.trim()){
+      mk.strokes.push({ tool:'text', colour:c.hex, name:c.name, pts:[p], text:txt.trim() });
+      mkRedraw();
+    }
+    return;
+  }
+  mk.cur={ tool:mk.tool, colour:c.hex, name:c.name, pts:[p] };
+  mkRedraw();
+}
+function mkMove(e){
+  if(!mk.cur) return;
+  e.preventDefault();
+  const p=mkCanvasPoint(e);
+  if(mk.cur.tool==='brush') mk.cur.pts.push(p);
+  else mk.cur.pts=[mk.cur.pts[0], p]; // shapes: anchor + current
+  mkRedraw();
+}
+function mkUp(){
+  if(!mk.cur) return;
+  // discard degenerate single-point shapes
+  if(mk.cur.tool!=='brush' && mk.cur.pts.length<2){ mk.cur=null; mkRedraw(); return; }
+  mk.strokes.push(mk.cur); mk.cur=null; mkRedraw();
+}
+function mkUndo(){ mk.strokes.pop(); mkRedraw(); }
+function mkClear(){ mk.strokes=[]; mk.cur=null; mkRedraw(); }
+
+function mkUsedColours(){
+  const seen=[];
+  mk.strokes.forEach(op=>{ if(!seen.includes(op.name)) seen.push(op.name); });
+  return seen; // in first-use order
+}
+
+function mkApply(){
+  if(!mk.strokes.length){ mkClose(); return; }
+  const cv=document.getElementById('mkCanvas');
+  const out=cv.toDataURL('image/jpeg',0.9);
+  const colours=mkUsedColours();
+  const cb=mk.onApply;
+  mkClose();
+  if(typeof cb==='function') cb({ image:out, colours });
+}
+
+/* bind pointer events */
+(function(){
+  const cv=document.getElementById('mkCanvas');
+  cv.addEventListener('pointerdown',mkDown);
+  cv.addEventListener('pointermove',mkMove);
+  window.addEventListener('pointerup',mkUp);
+})();
+
+
+// Launch from the refs area: read the chosen file, open the editor on it.
+function igMarkupFilePicked(files) {
+  const m = igModel();
+  if (!m.i2i) { igStatus && igStatus('\u2717 This model has no image input.', true); return; }
+  if (!files || !files.length) return;
+  const r = new FileReader();
+  r.onload = e => mkOpen(e.target.result, igMarkupApply);
+  r.readAsDataURL(files[0]);
+  document.getElementById('igMarkupFile').value = '';
+}
+
+// Apply: add the marked-up image ALONGSIDE as a new reference, and PREPEND one
+// "Change the {colour} region to: " line per used colour above any existing prompt.
+function igMarkupApply(result) {
+  const m = igModel();
+  if (m.i2i) {
+    if (igState.refs.length >= (m.maxRefs || 1)) {
+      igStatus && igStatus('\u2717 Reference limit reached \u2014 remove one to add the markup.', true);
+    } else {
+      igState.refs.push({ data: result.image, markup: true });
+      igRenderAll();
+    }
+  }
+  if (result.colours && result.colours.length) {
+    const seed = result.colours.map(c => 'Change the ' + c + ' region to: ').join('\n');
+    const ta = document.getElementById('igPrompt');
+    if (ta) {
+      ta.value = seed + (ta.value && ta.value.trim() ? '\n\n' + ta.value : '\n');
+      if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
+    }
+  }
+}
+
 function igRemoveRef(i) {
   igState.refs.splice(i, 1);
   if (!igState.refs.length && igState.ar === 'AUTO') igState.ar = '1:1';
@@ -18770,7 +19176,7 @@ async function igGenerate() {
     // depend on re-fetching the R2 public URL.
     images.forEach(im => {
       const pristine = im.pristine || (String(im.url).startsWith('data:') ? im.url : null);
-      if (typeof autoSaveGeneratedImage === 'function') autoSaveGeneratedImage(prompt, '', im.url, m.id, pristine, data.tokens && data.tokens.ref);
+      if (typeof autoSaveGeneratedImage === 'function') autoSaveGeneratedImage(prompt, '', im.url, m.id, pristine, data.tokens && data.tokens.ref, data.tokens && (typeof data.tokens.perImage === 'number' ? data.tokens.perImage : data.tokens.charged));
     });
   } catch (e) {
     igStatus('\u2717 Network error: ' + e.message, true);
@@ -19435,8 +19841,121 @@ window.bmAccountClick = () => {
     window.openAuthModal('login');
   }
 };
+// ── PROFILE IMAGE ───────────────────────────────────────────────────
+// Stored as a small data-URI in bmPrefs.profileImage, which rides along in
+// the synced settings file (driveSaveCurrentSettings). No server/token data.
+let _pfiPending = null; // staged data-URI awaiting "SET IMAGE"
+
+function openProfileImageModal() {
+  _pfiPending = null;
+  const m = document.getElementById('profileImageModal');
+  if (!m) return;
+  pfiSwitchTab('upload');
+  // Preview reflects the current stored image, if any.
+  const cur = (typeof bmPrefs !== 'undefined' && bmPrefs) ? bmPrefs.profileImage : null;
+  const pw = document.getElementById('pfiPreviewWrap');
+  const pv = document.getElementById('pfiPreview');
+  if (cur && pv && pw) { pv.src = cur; pw.style.display = 'block'; } else if (pw) { pw.style.display = 'none'; }
+  const rm = document.getElementById('pfiRemoveBtn');
+  if (rm) rm.style.display = cur ? '' : 'none';
+  pfiSetSaveEnabled(false);
+  m.classList.add('open');
+}
+function closeProfileImageModal() {
+  const m = document.getElementById('profileImageModal');
+  if (m) m.classList.remove('open');
+  _pfiPending = null;
+}
+function pfiSetSaveEnabled(on) {
+  const b = document.getElementById('pfiSaveBtn');
+  if (!b) return;
+  b.disabled = !on;
+  b.style.opacity = on ? '1' : '.5';
+  b.style.cursor = on ? 'pointer' : 'default';
+}
+function pfiSwitchTab(which) {
+  const up = which === 'upload';
+  document.getElementById('pfiTabUpload')?.classList.toggle('active', up);
+  document.getElementById('pfiTabLibrary')?.classList.toggle('active', !up);
+  const upPane = document.getElementById('pfiUploadPane');
+  const libPane = document.getElementById('pfiLibraryPane');
+  if (upPane) upPane.style.display = up ? '' : 'none';
+  if (libPane) libPane.style.display = up ? 'none' : '';
+  if (!up) pfiRenderLibraryGrid();
+}
+function pfiStage(dataUrl) {
+  // Downscale to a compact round-thumbnail source before staging.
+  compressImage(dataUrl, 96, out => {
+    _pfiPending = out;
+    const pv = document.getElementById('pfiPreview');
+    const pw = document.getElementById('pfiPreviewWrap');
+    if (pv && pw) { pv.src = out; pw.style.display = 'block'; }
+    pfiSetSaveEnabled(true);
+  });
+}
+function pfiFilePicked(files) {
+  if (!files || !files.length) return;
+  const reader = new FileReader();
+  reader.onload = e => pfiStage(e.target.result);
+  reader.readAsDataURL(files[0]);
+}
+function pfiRenderLibraryGrid() {
+  const grid = document.getElementById('pfiLibraryGrid');
+  const empty = document.getElementById('pfiLibraryEmpty');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const withImg = (typeof favourites !== 'undefined' ? favourites : []).filter(f => f.imageData);
+  if (!withImg.length) { if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+  withImg.slice(0, 60).forEach(f => {
+    const img = document.createElement('img');
+    img.src = f.imageData;
+    img.alt = f.title || '';
+    img.loading = 'lazy';
+    img.onclick = () => {
+      grid.querySelectorAll('img').forEach(x => x.classList.remove('sel'));
+      img.classList.add('sel');
+      pfiStage(f.imageData);
+    };
+    grid.appendChild(img);
+  });
+}
+function profileImageSave() {
+  if (!_pfiPending) return;
+  if (typeof bmPrefs === 'undefined' || !bmPrefs) return;
+  bmPrefs.profileImage = _pfiPending;
+  if (typeof bmPrefsSave === 'function') bmPrefsSave();
+  bmApplyProfileImage();
+  closeProfileImageModal();
+}
+function profileImageRemove() {
+  if (typeof bmPrefs === 'undefined' || !bmPrefs) return;
+  delete bmPrefs.profileImage;
+  if (typeof bmPrefsSave === 'function') bmPrefsSave();
+  bmApplyProfileImage();
+  closeProfileImageModal();
+}
+// Paint the stored profile image into the nav thumbnail slot (created by the
+// sidebar layout). Guarded so it no-ops if the element isn't present yet.
+function bmApplyProfileImage() {
+  const slot = document.getElementById('bmProfileThumb');
+  if (!slot) return;
+  const cur = (typeof bmPrefs !== 'undefined' && bmPrefs) ? bmPrefs.profileImage : null;
+  if (cur) {
+    slot.style.backgroundImage = 'url(' + cur + ')';
+    slot.classList.add('has-img');
+    slot.textContent = '';
+  } else {
+    slot.style.backgroundImage = '';
+    slot.classList.remove('has-img');
+    slot.textContent = '⊙';
+  }
+}
+window.openProfileImageModal = openProfileImageModal;
+
 function bmUpdateAccountBtn() {
   const btn = document.getElementById('bmAccountBtn');
+  bmApplyProfileImage();
   if (!btn) return;
   if (window.bmSession) {
     btn.textContent = '⊙ ' + (window.bmSession.email.split('@')[0].slice(0, 12));
