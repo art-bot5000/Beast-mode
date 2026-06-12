@@ -779,33 +779,90 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 ═══════════════════════════════════════════════════════ */
 
 /* Top nav */
-.nav-bar {
-  position:sticky;top:0;z-index:200;
-  background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;align-items:stretch;justify-content:space-between;
-  padding:0 20px;
+/* ── Mode navigation: desktop left sidebar / mobile drawer ──────────────── */
+:root { --mode-nav-w: 220px; }
+
+/* Desktop: fixed left rail, body shifts right to make room. */
+@media(min-width:641px){
+  body { padding-left: var(--mode-nav-w); }
+  .mobile-topbar, .mode-nav-backdrop { display:none !important; }
 }
-.nav-brand {
-  display:flex;align-items:center;gap:10px;
-  font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;
-  color:var(--accent);text-decoration:none;padding:12px 0;flex-shrink:0;
+
+.mode-nav {
+  position:fixed; top:0; left:0; bottom:0; width:var(--mode-nav-w); z-index:200;
+  background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column;
 }
-.nav-brand .version { font-family:'Rajdhani',sans-serif;font-size:13px;letter-spacing:3px;color:var(--muted);font-weight:600; }
-.nav-tabs { display:flex;align-items:stretch;gap:0; }
-.nav-tab {
-  display:flex;align-items:center;gap:6px;padding:0 18px;
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;
-  color:var(--muted);cursor:pointer;border:none;background:transparent;
-  border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;
-  white-space:nowrap;
+.mode-nav-brand {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px;
+  color:var(--accent); padding:18px 18px 16px; flex-shrink:0;
+  border-bottom:1px solid var(--border);
 }
-.nav-tab:hover { color:var(--text); }
-.nav-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
-.nav-tab .tab-icon { font-size:17px; }
-.nav-tab .tab-badge {
-  background:var(--accent);color:#000;border-radius:10px;
-  font-size:13px;padding:1px 5px;font-weight:700;min-width:16px;text-align:center;
+.mode-nav-brand .version { font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:600; }
+.mode-nav-tabs { display:flex; flex-direction:column; gap:2px; padding:10px 8px; flex:1; overflow-y:auto; }
+.mode-nav-footer { display:flex; flex-direction:column; gap:8px; padding:10px 8px 14px; border-top:1px solid var(--border); flex-shrink:0; }
+
+/* Token balance readout, sits just above Settings. */
+.mode-nav-balance {
+  display:flex; align-items:baseline; justify-content:space-between;
+  padding:6px 12px; margin:0 2px 2px; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface2);
 }
+.mode-nav-balance .bal-label { font-family:'Rajdhani',sans-serif;font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700; }
+.mode-nav-balance .bal-value { font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;color:var(--accent); }
+
+/* Tabs become full-width vertical rows in this layout. */
+.mode-nav .nav-tab {
+  display:flex; align-items:center; gap:10px; width:100%; padding:11px 14px;
+  font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:700; letter-spacing:2px;
+  color:var(--muted); cursor:pointer; border:none; background:transparent;
+  border-radius:6px; transition:all .15s; white-space:nowrap; text-align:left;
+}
+.mode-nav .nav-tab:hover { color:var(--text); background:var(--surface2); }
+.mode-nav .nav-tab.active { color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.mode-nav .nav-tab .tab-icon { font-size:18px; width:20px; text-align:center; flex-shrink:0; }
+.mode-nav .nav-tab .tab-badge {
+  background:var(--accent); color:#000; border-radius:10px; margin-left:auto;
+  font-size:12px; padding:1px 6px; font-weight:700; min-width:16px; text-align:center;
+}
+.mode-nav-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:6px 8px 0; }
+
+/* Mobile top bar + burger (hidden on desktop via the min-width block above). */
+.mobile-topbar {
+  position:sticky; top:0; z-index:190;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--border);
+}
+.mobile-topbar-title {
+  font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; color:var(--accent);
+}
+.burger-btn {
+  display:flex; flex-direction:column; justify-content:center; gap:5px;
+  width:40px; height:36px; padding:7px 8px; cursor:pointer;
+  background:transparent; border:1px solid var(--border); border-radius:6px;
+}
+.burger-btn span { display:block; height:2px; width:100%; background:var(--text); border-radius:2px; transition:all .2s; }
+.burger-btn[aria-expanded="true"] span:nth-child(1) { transform:translateY(7px) rotate(45deg); }
+.burger-btn[aria-expanded="true"] span:nth-child(2) { opacity:0; }
+.burger-btn[aria-expanded="true"] span:nth-child(3) { transform:translateY(-7px) rotate(-45deg); }
+
+.mode-nav-backdrop {
+  position:fixed; inset:0; z-index:199; background:rgba(0,0,0,.55);
+  opacity:0; pointer-events:none; transition:opacity .2s;
+}
+
+/* Mobile: drawer slides in from the LEFT, opened by the right-side burger. */
+@media(max-width:640px){
+  .mode-nav {
+    transform:translateX(-100%); transition:transform .22s ease;
+    box-shadow:2px 0 18px rgba(0,0,0,.4); width:min(280px,82vw);
+  }
+  body.mode-nav-open .mode-nav { transform:translateX(0); }
+  body.mode-nav-open .mode-nav-backdrop { opacity:1; pointer-events:auto; }
+  .mode-nav-brand { display:none; } /* the mobile top bar already shows the brand */
+}
+
 .nav-actions { display:flex;align-items:center;gap:6px;padding:8px 0; }
 
 /* Views */
@@ -813,14 +870,8 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .view.active { display:block; }
 .view-inner { max-width:900px;margin:0 auto;padding:24px 20px;overflow-x:hidden; }
 
-/* Bottom tab bar on mobile */
+/* (mobile nav handled by the .mode-nav drawer rules above) */
 @media(max-width:640px){
-  .nav-bar { padding:0 8px; }
-  .nav-brand .version { display:none; }
-  .nav-brand { font-size:18px;letter-spacing:2px; }
-  .nav-tab { padding:0 12px;font-size:14px;gap:4px; }
-  .nav-tab .tab-label { display:none; }
-  .nav-tab .tab-icon { font-size:18px; }
   .view-inner { padding:16px 12px; }
 }
 
@@ -2769,19 +2820,34 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 </div>
 
 <!-- ═══════════════════════ NAVIGATION BAR ═══════════════════════ -->
-<nav class="nav-bar">
-  <div class="nav-brand">
+<!-- Mobile top bar: current mode heading (left) + burger (right). Hidden on desktop. -->
+<div class="mobile-topbar">
+  <div class="mobile-topbar-title" id="mobileModeTitle">BEAST MODE</div>
+  <button class="burger-btn" id="burgerBtn" onclick="toggleModeNav()" aria-label="Menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+</div>
+
+<!-- Backdrop behind the mobile drawer -->
+<div class="mode-nav-backdrop" id="modeNavBackdrop" onclick="closeModeNav()"></div>
+
+<!-- Mode navigation: left sidebar on desktop, slide-in drawer on mobile.
+     Button ids (navImagegen/navGenerator/navBuilder/navLibrary/navSettings)
+     are unchanged so switchView()'s active-class logic keeps working. -->
+<nav class="mode-nav" id="modeNav">
+  <div class="mode-nav-brand">
     BEAST MODE
     <span class="version">V4.0</span>
   </div>
-  <div class="nav-tabs">
-    <button class="nav-tab active" id="navGenerator" onclick="switchView('generator')">
-      <span class="tab-icon">⌬</span>
-      <span class="tab-label">PROMPT GEN.</span>
-    </button>
+
+  <div class="mode-nav-tabs">
     <button class="nav-tab" id="navImagegen" onclick="switchView('imagegen')">
       <span class="tab-icon">✦</span>
       <span class="tab-label">IMAGE GEN</span>
+    </button>
+    <button class="nav-tab active" id="navGenerator" onclick="switchView('generator')">
+      <span class="tab-icon">⌬</span>
+      <span class="tab-label">BEAST MODE</span>
     </button>
     <button class="nav-tab" id="navBuilder" onclick="switchView('builder')">
       <span class="tab-icon">⊛</span>
@@ -2789,20 +2855,28 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
     </button>
     <button class="nav-tab" id="navLibrary" onclick="switchView('library')">
       <span class="tab-icon">▤</span>
-      <span class="tab-label">LIBRARY</span>
+      <span class="tab-label">PROMPT LIBRARY</span>
       <span class="tab-badge" id="libBadge" style="display:none">0</span>
     </button>
+  </div>
+
+  <!-- Footer: token balance, then Settings last, then the chrome actions. -->
+  <div class="mode-nav-footer">
+    <div class="mode-nav-balance" id="navBalanceWrap" style="display:none;">
+      <span class="bal-label">TOKENS</span>
+      <span class="bal-value" id="navTokenBalance">—</span>
+    </div>
     <button class="nav-tab" id="navSettings" onclick="switchView('settings')">
       <span class="tab-icon">⌘</span>
       <span class="tab-label">SETTINGS</span>
     </button>
-  </div>
-  <div class="nav-actions">
-    <button id="bmAccountBtn" onclick="bmAccountClick()" title="Account" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);transition:all .2s;">⊙ ACCOUNT</button>
-    <button id="lightToggle" onclick="toggleLightMode()" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:var(--muted);transition:all .2s;">☀</button>
-    <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
-    <a href="https://buymeacoffee.com/artbot5000" target="_blank" rel="noopener" title="Buy me a coffee" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);line-height:1;text-decoration:none;transition:color .15s;display:flex;align-items:center;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;"><path d="M2 4h9v5.5A3.5 3.5 0 017.5 13h-2A3.5 3.5 0 012 9.5V4z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M11 5.5h1.5a1.5 1.5 0 010 3H11" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M4 13.5h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 2.5c0-.5.8-1 .8-1.5M7.5 2.5c0-.5.8-1 .8-1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></a>
-    <button onclick="sendFeedback()" title="Send feedback" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);font-size:16px;line-height:1;transition:color .15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">✉</button>
+    <div class="mode-nav-actions">
+      <button id="bmAccountBtn" onclick="bmAccountClick()" title="Account" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);transition:all .2s;">⊙ ACCOUNT</button>
+      <button id="lightToggle" onclick="toggleLightMode()" title="Toggle light mode" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:var(--muted);transition:all .2s;">☀</button>
+      <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
+      <a href="https://buymeacoffee.com/artbot5000" target="_blank" rel="noopener" title="Buy me a coffee" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);line-height:1;text-decoration:none;transition:color .15s;display:flex;align-items:center;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;"><path d="M2 4h9v5.5A3.5 3.5 0 017.5 13h-2A3.5 3.5 0 012 9.5V4z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M11 5.5h1.5a1.5 1.5 0 010 3H11" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M4 13.5h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 2.5c0-.5.8-1 .8-1.5M7.5 2.5c0-.5.8-1 .8-1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></a>
+      <button onclick="sendFeedback()" title="Send feedback" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:var(--muted);font-size:16px;line-height:1;transition:color .15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">✉</button>
+    </div>
   </div>
 </nav>
 
@@ -7670,12 +7744,33 @@ const VIEW_HASHES = {
 }
 const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) => [h,v]))
 
+// Mobile mode-nav drawer (burger). Desktop ignores these — the sidebar is
+// always visible there and the backdrop is display:none.
+const MODE_TITLES = {
+  generator: 'BEAST MODE', imagegen: 'IMAGE GEN', builder: 'PROMPT LAB',
+  library: 'PROMPT LIBRARY', settings: 'SETTINGS',
+};
+function toggleModeNav() {
+  document.body.classList.contains('mode-nav-open') ? closeModeNav() : openModeNav();
+}
+function openModeNav() {
+  document.body.classList.add('mode-nav-open');
+  const b = document.getElementById('burgerBtn'); if (b) b.setAttribute('aria-expanded', 'true');
+}
+function closeModeNav() {
+  document.body.classList.remove('mode-nav-open');
+  const b = document.getElementById('burgerBtn'); if (b) b.setAttribute('aria-expanded', 'false');
+}
+
 function switchView(view, pushState = true) {
   currentView = view
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'))
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'))
   document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   document.getElementById('nav' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
+  const mt = document.getElementById('mobileModeTitle')
+  if (mt) mt.textContent = MODE_TITLES[view] || 'BEAST MODE'
+  closeModeNav()
   if (view === 'library') renderLibrary()
   if (view === 'settings') {
     renderSettingsView()
@@ -17991,6 +18086,11 @@ function bmTokenBalanceSet(n) {
   if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
   const el = document.getElementById('bmTokSetBalance');
   if (el) el.textContent = String(n);
+  // Sidebar / drawer balance readout (above Settings).
+  const nb = document.getElementById('navTokenBalance');
+  if (nb) nb.textContent = (typeof n === 'number') ? n.toLocaleString() : String(n);
+  const wrap = document.getElementById('navBalanceWrap');
+  if (wrap) wrap.style.display = (typeof n === 'number') ? 'flex' : 'none';
 }
 
 // Mirrors tokensPerImage() in pricing.js, including the conservative rules:
@@ -19008,6 +19108,10 @@ function setSession({ emailHash, email, dataKey, sessionToken }) {
 window.bmSignOut = () => {
   window.bmSession = null;
   try { localStorage.removeItem('bm_app_session'); } catch (e) {}
+  // Clear the cached balance so the sidebar readout hides until next sign-in.
+  bmTokenBalance = null;
+  const nbw = document.getElementById('navBalanceWrap');
+  if (nbw) nbw.style.display = 'none';
   // Flip the image cache back to the unauth DB. The localStorage working copy
   // and cloud connection deliberately stay: in this product the library
   // belongs to the Drive/Dropbox connection, not the account — the account
@@ -19110,6 +19214,11 @@ function bmUpdateAccountBtn() {
   }
 }
 window.addEventListener('bm-auth-changed', bmUpdateAccountBtn);
+// Populate the sidebar/drawer token readout on sign-in, independent of which
+// view is open (igInit / settings render also call this, but not on every view).
+window.addEventListener('bm-auth-changed', (e) => {
+  if (e.detail && e.detail.signedIn && typeof bmFetchBalance === 'function') bmFetchBalance();
+});
 bmUpdateAccountBtn();
 
 </script>
