@@ -782,13 +782,16 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* ── Mode navigation: desktop left sidebar / mobile drawer ──────────────── */
 :root {
   --mode-nav-w: 220px;            /* legacy fallback (mobile drawer uses its own width) */
-  --mode-nav-w-collapsed: 64px;   /* desktop resting width: icons only */
-  --mode-nav-w-expanded: 220px;   /* desktop hover width: icons + labels */
+  --mode-nav-w-collapsed: 76px;   /* desktop resting width: icons + breathing room */
+  --mode-nav-w-expanded: 248px;   /* desktop hover width: icons + labels */
+  --mode-nav-pad-x: 26px;         /* fixed left inset for every icon (so icons never move) */
 }
 
-/* Desktop: a slim icon rail that expands on hover. Content only ever reserves
-   the COLLAPSED width, so the expanded rail floats OVER content (overlay, not
-   push). All collapse behaviour is scoped here; the mobile drawer is untouched. */
+/* Desktop: a slim icon rail that slides open on hover. The icons sit at a FIXED
+   left inset in both states (Instagram-style), so they never shift; only the
+   labels are revealed as the panel widens. Content reserves only the collapsed
+   width, so the expanded rail floats OVER content (overlay, not push). All
+   collapse behaviour is scoped here; the mobile drawer is untouched. */
 @media(min-width:641px){
   body { padding-left: var(--mode-nav-w-collapsed); }
   .mobile-topbar, .mode-nav-backdrop { display:none !important; }
@@ -796,7 +799,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   .mode-nav {
     width: var(--mode-nav-w-collapsed);
     overflow: hidden;
-    transition: width .18s ease;
+    transition: width .2s ease;
   }
   .mode-nav:hover {
     width: var(--mode-nav-w-expanded);
@@ -805,34 +808,42 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   }
 
   /* Vertically centre the four mode tabs in the rail's free space. */
-  .mode-nav-tabs { justify-content: center; }
+  .mode-nav-tabs { justify-content: center; gap: 14px; }
 
-  /* Collapsed: hide every text label; keep icons centred. Reveal on hover. */
+  /* Icons hold a constant left inset in BOTH states → they never move.
+     Labels are clipped by the rail's overflow until it widens. */
+  .mode-nav .nav-tab,
+  .mode-nav .mode-nav-profile {
+    justify-content: flex-start;
+    padding-left: var(--mode-nav-pad-x);
+    padding-right: 16px;
+  }
+  .mode-nav-brand { padding-left: var(--mode-nav-pad-x); padding-right: 16px; gap: 10px; justify-content: flex-start; }
+
+  /* Labels: present in layout but faded out until the panel opens. */
   .mode-nav .tab-label,
+  .mode-nav .pfi-name,
   .mode-nav-brand .version,
   .mode-nav-brand .brand-text {
     opacity: 0;
-    transition: opacity .12s ease;
+    transition: opacity .14s ease .02s;
   }
   .mode-nav:hover .tab-label,
+  .mode-nav:hover .pfi-name,
   .mode-nav:hover .mode-nav-brand .version,
   .mode-nav:hover .mode-nav-brand .brand-text { opacity: 1; }
 
-  .mode-nav .nav-tab { justify-content: center; padding-left: 0; padding-right: 0; }
-  .mode-nav:hover .nav-tab { justify-content: flex-start; padding-left: 14px; padding-right: 14px; }
-
-  /* Collapsed brand shows just a mark; expands to full wordmark on hover. */
-  .mode-nav-brand { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
-  .mode-nav:hover .mode-nav-brand { justify-content: flex-start; padding-left: 18px; padding-right: 18px; gap: 8px; }
-
-  /* Footer: stack the profile thumb + settings icon, centred when collapsed. */
-  .mode-nav-footer { align-items: stretch; }
   .mode-nav .tab-badge { display: none !important; }
 
-  /* The account card's chrome/identity rows are label-heavy; hide until hover
-     so the collapsed rail stays clean. */
+  /* The account card is label-heavy; hide until hover so the rail stays clean. */
   .mode-nav-card { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; transition: opacity .12s ease; }
   .mode-nav:hover .mode-nav-card { opacity: 1; max-height: 400px; padding-top: 10px; padding-bottom: 10px; }
+
+  /* Larger icons + text on desktop, per the Instagram-style brief. */
+  .mode-nav .nav-tab { font-size: 15px; padding-top: 13px; padding-bottom: 13px; }
+  .mode-nav .nav-tab .tab-icon { font-size: 22px; width: 24px; }
+  .mode-nav .bm-profile-thumb { width: 36px; height: 36px; font-size: 18px; }
+  .mode-nav-brand .brand-mark { font-size: 26px; }
 }
 
 /* Profile thumbnail button in the nav footer. */
@@ -851,6 +862,8 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   color:var(--muted); font-size:16px; line-height:1;
 }
 .bm-profile-thumb.has-img { border-color:var(--accent); }
+.settings-profile-thumb { width:72px;height:72px;font-size:32px;cursor:pointer;padding:0;flex-shrink:0; }
+.settings-profile-thumb:hover { border-color:var(--accent); }
 @media(min-width:641px){
   .mode-nav .mode-nav-profile .pfi-name { opacity:0; transition:opacity .12s ease; }
   .mode-nav:hover .mode-nav-profile .pfi-name { opacity:1; }
@@ -3669,6 +3682,18 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         </div>
       </header>
     <div class="settings-grid">
+
+      <!-- Profile -->
+      <div class="settings-section" style="grid-column:1/-1;" id="settingsProfileSection">
+        <div class="settings-section-title">Profile</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <button id="settingsProfileThumb" class="bm-profile-thumb settings-profile-thumb" onclick="openProfileImageModal()" title="Change profile image">⊙</button>
+          <div>
+            <div style="font-size:13px;color:var(--text);font-weight:700;margin-bottom:2px;">Profile image</div>
+            <div style="font-size:12px;color:var(--muted);">Click the image to upload one or choose from your library.</div>
+          </div>
+        </div>
+      </div>
 
       <!-- Cloud Sync -->
       <div class="settings-section" style="grid-column:1/-1;" id="settingsSyncSection">
@@ -19946,8 +19971,10 @@ function profileImageRemove() {
 function bmApplyProfileImage() {
   const cur = (typeof bmPrefs !== 'undefined' && bmPrefs) ? bmPrefs.profileImage : null;
 
-  const slot = document.getElementById('bmProfileThumb');
-  if (slot) {
+  // Both the nav thumb and the Settings-page thumb use .bm-profile-thumb.
+  ['bmProfileThumb', 'settingsProfileThumb'].forEach(id => {
+    const slot = document.getElementById(id);
+    if (!slot) return;
     if (cur) {
       slot.style.backgroundImage = 'url(' + cur + ')';
       slot.classList.add('has-img');
@@ -19957,7 +19984,7 @@ function bmApplyProfileImage() {
       slot.classList.remove('has-img');
       slot.textContent = '⊙';
     }
-  }
+  });
 
   // Drive + Settings avatars: profile image wins; otherwise restore the Google
   // picture stashed on the element (set by the Drive sign-in handler).
@@ -19974,7 +20001,15 @@ function bmApplyProfileImage() {
     }
   });
 }
+// These handlers live in a type="module" block, so they are NOT global by
+// default. Inline onclick/onchange attributes resolve against window, so every
+// handler referenced from markup must be exported explicitly.
 window.openProfileImageModal = openProfileImageModal;
+window.closeProfileImageModal = closeProfileImageModal;
+window.pfiSwitchTab = pfiSwitchTab;
+window.pfiFilePicked = pfiFilePicked;
+window.profileImageSave = profileImageSave;
+window.profileImageRemove = profileImageRemove;
 
 function bmUpdateAccountBtn() {
   const btn = document.getElementById('bmAccountBtn');
