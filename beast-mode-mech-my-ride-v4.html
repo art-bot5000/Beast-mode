@@ -3092,6 +3092,10 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       <span class="tab-icon">✦</span>
       <span class="tab-label">IMAGE GEN</span>
     </button>
+    <button class="nav-tab" id="navUpscaler" onclick="switchView('upscaler')">
+      <span class="tab-icon">⊕</span>
+      <span class="tab-label">UPSCALER</span>
+    </button>
     <button class="nav-tab active" id="navGenerator" onclick="switchView('generator')">
       <span class="tab-icon">⌬</span>
       <span class="tab-label">BEAST MODE</span>
@@ -3571,8 +3575,21 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 <!-- ═══════════════════════ IMAGE GEN VIEW ═══════════════════════ -->
 <style>
 /* Image Gen layout */
-#viewImagegen .ig-layout { display:grid; grid-template-columns:380px 1fr; gap:20px; align-items:start; }
-@media (max-width: 900px) { #viewImagegen .ig-layout { grid-template-columns:1fr; } }
+#viewImagegen .ig-layout, #viewUpscaler .ig-layout { display:grid; grid-template-columns:380px 1fr; gap:20px; align-items:start; }
+@media (max-width: 900px) { #viewImagegen .ig-layout, #viewUpscaler .ig-layout { grid-template-columns:1fr; } }
+/* Upscaler-specific controls (reuse .ig-* for everything else). */
+.ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
+.ig-tab { flex:1; padding:7px 6px; font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
+.ig-tab.active { color:var(--accent); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,transparent); }
+.up-libgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; max-height:220px; overflow-y:auto; }
+.up-libgrid img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px; border:2px solid transparent; cursor:pointer; }
+.up-libgrid img.sel { border-color:var(--accent); }
+.up-preview { position:relative; margin-top:10px; }
+.up-preview img { width:100%; max-height:240px; object-fit:contain; border-radius:6px; border:1px solid var(--border); background:#000; }
+.up-preview-x { position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:50%; border:none; background:rgba(0,0,0,.7); color:#fff; cursor:pointer; font-size:13px; line-height:1; }
+.up-range { width:100%; accent-color:var(--accent); margin:4px 0; }
+.up-check { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text); margin-top:10px; cursor:pointer; }
+.up-check input { accent-color:var(--accent); }
 .ig-panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; }
 .ig-label { font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin:14px 0 6px; display:flex; justify-content:space-between; align-items:center; }
 .ig-label:first-child { margin-top:0; }
@@ -3726,6 +3743,129 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         <div class="ig-results" id="igResults"></div>
         <div id="igEmpty" class="ig-panel ig-gate" style="color:var(--muted);font-size:13px;">
           Generated images appear here.<br>They auto-save to your Library and cloud.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ UPSCALER VIEW ═══════════════════════ -->
+<!-- Mirrors the Image Gen layout (shares .ig-* styles). Source image comes from
+     upload, the Library, or a pasted URL. Controls render per-model: P-Image is
+     megapixel-targeted with detail/realism toggles; Clarity & SD Latent are
+     diffusion upscalers with a factor + optional guiding prompt. Wired to
+     POST /api/upscale (auth-gated, token-metered server-side). -->
+<div class="view" id="viewUpscaler">
+  <div class="view-inner">
+    <header style="margin-bottom:20px;">
+      <div class="title-line">
+        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// UPSCALER</h1>
+      </div>
+      <span class="version" style="font-size:11px;color:var(--muted);letter-spacing:2px;">RUNWARE RESOLUTION ENGINE</span>
+    </header>
+
+    <div id="upAuthGate" class="ig-panel ig-gate" style="display:none;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--accent);margin-bottom:10px;">SIGN IN TO UPSCALE</div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Upscaling runs through your Beast Mode account.<br>Sign in (free) to unlock the resolution engine.</div>
+      <button class="btn btn-primary" onclick="if(typeof openAuthModal==='function')openAuthModal('login')">⊙ SIGN IN / CREATE ACCOUNT</button>
+    </div>
+
+    <div id="upDriveWarn" class="ig-panel" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 8%,var(--surface));">
+      <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;white-space:nowrap;">⚠ NO PERMANENT IMAGE STORAGE</span>
+      <span style="font-size:12px;color:var(--muted);flex:1;min-width:220px;line-height:1.5;">
+        Upscaled images live in a temporary cloud cache that keeps only your <b style="color:var(--accent);">newest 5</b> —
+        each new image pushes the oldest out (FIFO). Connect <b>Google Drive</b> to save a permanent copy automatically.<span id="upDriveWarnDbx" style="display:none;"> Note: your Dropbox sync covers prompts &amp; library data, not generated image files.</span>
+      </span>
+      <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ CONNECT GOOGLE DRIVE</button>
+    </div>
+
+    <div id="upMain" class="ig-layout" style="display:none;">
+      <!-- ── Controls column ─────────────────────────────────────────────── -->
+      <div class="ig-panel">
+        <!-- Source image -->
+        <div class="ig-label">SOURCE IMAGE</div>
+        <div class="ig-tabs" id="upSrcTabs">
+          <button class="ig-tab active" id="upSrcTabUpload" type="button" onclick="upSrcTab('upload')">⬆ UPLOAD</button>
+          <button class="ig-tab" id="upSrcTabLibrary" type="button" onclick="upSrcTab('library')">▤ LIBRARY</button>
+          <button class="ig-tab" id="upSrcTabUrl" type="button" onclick="upSrcTab('url')">⌗ URL</button>
+        </div>
+
+        <div id="upSrcUpload">
+          <div class="ig-drop" id="upDrop" onclick="document.getElementById('upSrcFile').click()">⬆ DROP AN IMAGE OR CLICK TO UPLOAD</div>
+          <input type="file" id="upSrcFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="upSrcFilePicked(this.files)">
+        </div>
+        <div id="upSrcLibrary" style="display:none;">
+          <div class="up-libgrid" id="upLibraryGrid"></div>
+          <div class="ig-note" id="upLibraryEmpty" style="display:none;">No saved images yet — generate some in Image Gen, or upload one.</div>
+        </div>
+        <div id="upSrcUrl" style="display:none;">
+          <input class="ig-input" id="upSrcUrlInput" type="url" placeholder="https://… image URL" oninput="upUrlChanged()">
+          <div class="ig-note">Paste a direct link to an image (jpg/png/webp).</div>
+        </div>
+
+        <div class="up-preview" id="upPreviewWrap" style="display:none;">
+          <img id="upPreviewImg" alt="source preview">
+          <button class="up-preview-x" type="button" onclick="upClearSource()" title="Remove">✕</button>
+        </div>
+
+        <!-- Model -->
+        <div class="ig-label">MODEL</div>
+        <select class="ig-select" id="upModel" onchange="upModelChanged()"></select>
+        <div class="ig-note" id="upModelNote"></div>
+
+        <!-- P-Image controls: megapixels + toggles -->
+        <div id="upMpWrap" style="display:none;">
+          <div class="ig-label">TARGET RESOLUTION <span id="upMpVal" style="color:var(--accent);"></span></div>
+          <input type="range" class="up-range" id="upMp" min="1" max="8" step="1" oninput="upMpChanged()">
+          <div class="ig-note">Output is rendered toward this megapixel count (capped at 8 MP).</div>
+          <label class="up-check"><input type="checkbox" id="upEnhance"> <span>Enhance details</span></label>
+          <label class="up-check"><input type="checkbox" id="upRealism"> <span>Realism enhancement (best for AI images)</span></label>
+        </div>
+
+        <!-- Diffusion controls: factor + prompt + sampler -->
+        <div id="upFactorWrap" style="display:none;">
+          <div class="ig-label">UPSCALE FACTOR</div>
+          <div class="ig-chips" id="upFactorChips"></div>
+        </div>
+        <div id="upPromptWrap" style="display:none;">
+          <div class="ig-label">GUIDING PROMPT <span style="color:var(--muted);">(optional)</span></div>
+          <textarea class="ig-textarea" id="upPrompt" style="min-height:52px;" placeholder="Describe the desired detail, e.g. crisp edges, restored texture…"></textarea>
+          <div class="ig-label">NEGATIVE PROMPT <span style="color:var(--muted);">(optional)</span></div>
+          <textarea class="ig-textarea" id="upNegative" style="min-height:44px;" placeholder="Things to avoid…"></textarea>
+          <div class="ig-row" style="margin-top:14px;">
+            <div style="flex:1;">
+              <div class="ig-label" style="margin-top:0;">STEPS</div>
+              <input class="ig-input" id="upSteps" type="number" min="1" max="60" step="1">
+            </div>
+            <div style="flex:1;">
+              <div class="ig-label" style="margin-top:0;">CFG SCALE</div>
+              <input class="ig-input" id="upCfg" type="number" min="0" max="20" step="0.5">
+            </div>
+          </div>
+          <div class="ig-row" style="margin-top:14px;">
+            <div style="flex:1;">
+              <div class="ig-label" style="margin-top:0;">SEED</div>
+              <div class="ig-row">
+                <input class="ig-input" id="upSeed" type="number" min="0" step="1" placeholder="random">
+                <button class="btn btn-ghost" style="padding:6px 10px;font-size:13px;" onclick="document.getElementById('upSeed').value=''" title="Clear = random seed">⚄</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Output format -->
+        <div class="ig-label">OUTPUT FORMAT</div>
+        <div class="ig-chips" id="upFormatChips"></div>
+
+        <button class="btn btn-primary" id="upRunBtn" onclick="upRun()" style="width:100%;margin-top:18px;padding:12px;font-size:14px;letter-spacing:2px;">✦ UPSCALE</button>
+        <div id="upStatus"></div>
+      </div>
+
+      <!-- ── Results column ──────────────────────────────────────────────── -->
+      <div>
+        <div class="ig-results" id="upResults"></div>
+        <div id="upEmpty" class="ig-panel ig-gate" style="color:var(--muted);font-size:13px;">
+          Upscaled images appear here.<br>They auto-save to your Library and cloud.
         </div>
       </div>
     </div>
@@ -8035,6 +8175,7 @@ const VIEW_HASHES = {
   'library':   'library',
   'generator': 'generator',
   'imagegen':  'image-gen',
+  'upscaler':  'upscaler',
   'builder':   'prompt-lab',
   'settings':  'settings',
 }
@@ -8043,7 +8184,7 @@ const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) 
 // Mobile mode-nav drawer (burger). Desktop ignores these — the sidebar is
 // always visible there and the backdrop is display:none.
 const MODE_TITLES = {
-  generator: 'BEAST MODE', imagegen: 'IMAGE GEN', builder: 'PROMPT LAB',
+  generator: 'BEAST MODE', imagegen: 'IMAGE GEN', upscaler: 'UPSCALER', builder: 'PROMPT LAB',
   library: 'PROMPT LIBRARY', settings: 'SETTINGS',
 };
 function toggleModeNav() {
@@ -8073,6 +8214,7 @@ function switchView(view, pushState = true) {
     if (typeof bmTokensSettingsRender === 'function') bmTokensSettingsRender()
   }
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
+  if (view === 'upscaler' && typeof upInit === 'function') upInit()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
   if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
   if (view === 'generator' && window._pendingCloudSettings) {
@@ -9808,6 +9950,7 @@ document.addEventListener('keydown', e => {
     if (e.key === '3') { e.preventDefault(); switchView('library');   return }
     if (e.key === '4') { e.preventDefault(); switchView('settings');  return }
     if (e.key === '5') { e.preventDefault(); switchView('imagegen');  return }
+    if (e.key === '6') { e.preventDefault(); switchView('upscaler');  return }
   }
 })
 
@@ -19365,7 +19508,388 @@ async function igDownload(url) {
   }
 }
 
-// ── Auth-state sync ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// UPSCALER TAB
+// Mirrors the Image Gen engine. Models + their config surface come from
+// GET /api/upscalers (the curated backend catalogue). Source image is an
+// upload, a Library pick, or a pasted URL. Runs via POST /api/upscale
+// (auth-gated, token-metered server-side). Reuses igDownscaleToDataUri,
+// the session/auth pattern, and autoSaveGeneratedImage.
+// ═══════════════════════════════════════════════════════════════════
+const upState = {
+  models: [],          // fetched from /api/upscalers
+  modelId: null,
+  srcTab: 'upload',    // 'upload' | 'library' | 'url'
+  srcData: null,       // data URI (upload/library) or URL string (url tab)
+  srcIsUrl: false,
+  mp: 4,               // P-Image target megapixels
+  factor: 2,           // diffusion upscale factor
+  format: 'JPG',
+  busy: false,
+  inited: false,
+  fetched: false,
+};
+
+function upInit() {
+  const signedIn = !!(window.bmSession && window.bmSession.sessionToken);
+  document.getElementById('upAuthGate').style.display = signedIn ? 'none' : 'block';
+  document.getElementById('upMain').style.display = signedIn ? 'grid' : 'none';
+  upUpdateCloudWarn(signedIn);
+  if (!signedIn) return;
+  bmFetchBalance();
+
+  if (!upState.fetched) {
+    upState.fetched = true;
+    fetch('/api/upscalers', { headers: { 'Authorization': 'Bearer ' + window.bmSession.sessionToken } })
+      .then(r => r.json()).catch(() => ({ models: [] }))
+      .then(data => {
+        upState.models = Array.isArray(data.models) ? data.models : [];
+        if (upState.models.length && !upState.modelId) upState.modelId = upState.models[0].id;
+        upBuildModelSelect();
+        upRenderAll();
+      });
+  }
+
+  if (upState.inited) { upRenderAll(); return; }
+  upState.inited = true;
+
+  // Format chips.
+  const fwrap = document.getElementById('upFormatChips');
+  fwrap.innerHTML = '';
+  ['JPG', 'PNG', 'WEBP'].forEach(f => {
+    fwrap.appendChild(igChip(f, upState.format === f, () => { upState.format = f; upRenderFormatChips(); }));
+  });
+
+  // Drag & drop onto the source dropzone.
+  const drop = document.getElementById('upDrop');
+  ;['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+  ;['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files) upSrcFilePicked(e.dataTransfer.files); });
+
+  upRenderAll();
+}
+
+function upModel() {
+  return upState.models.find(m => m.id === upState.modelId) || upState.models[0] || null;
+}
+
+function upBuildModelSelect() {
+  const sel = document.getElementById('upModel');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const fams = {};
+  upState.models.forEach(m => (fams[m.family || 'Models'] ||= []).push(m));
+  Object.entries(fams).forEach(([fam, models]) => {
+    const og = document.createElement('optgroup');
+    og.label = fam;
+    models.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.label;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  if (upState.modelId) sel.value = upState.modelId;
+}
+
+function upModelChanged() {
+  upState.modelId = document.getElementById('upModel').value;
+  const m = upModel();
+  // Seed control defaults for the new model.
+  if (m && m.kind === 'megapixels' && m.targetMegapixels) {
+    upState.mp = m.targetMegapixels.default || 4;
+  }
+  if (m && m.kind === 'diffusion' && m.factor) {
+    if (!m.factor.values.includes(upState.factor)) upState.factor = m.factor.default || m.factor.values[0];
+    if (m.sampler) {
+      const st = document.getElementById('upSteps'); const cf = document.getElementById('upCfg');
+      if (st && !st.value) st.value = m.sampler.steps;
+      if (cf && !cf.value) cf.value = m.sampler.cfg;
+    }
+  }
+  upRenderAll();
+}
+
+function upRenderAll() {
+  const m = upModel();
+  upUpdateCloudWarn();
+  if (!m) return;
+  document.getElementById('upModelNote').textContent = m.note || '';
+
+  const isMp = m.kind === 'megapixels';
+  document.getElementById('upMpWrap').style.display = isMp ? 'block' : 'none';
+  document.getElementById('upFactorWrap').style.display = isMp ? 'none' : 'block';
+  document.getElementById('upPromptWrap').style.display = (m.prompt && !isMp) ? 'block' : 'none';
+
+  if (isMp) {
+    const mp = document.getElementById('upMp');
+    mp.min = m.targetMegapixels ? m.targetMegapixels.min : 1;
+    mp.max = m.targetMegapixels ? m.targetMegapixels.max : 8;
+    mp.value = upState.mp;
+    upMpLabel();
+  } else {
+    upRenderFactorChips();
+    if (m.sampler) {
+      const st = document.getElementById('upSteps'); const cf = document.getElementById('upCfg');
+      if (st && !st.value) st.value = m.sampler.steps;
+      if (cf && !cf.value) cf.value = m.sampler.cfg;
+    }
+  }
+  upRenderFormatChips();
+  upUpdateCostHint();
+}
+
+function upMpLabel() {
+  const el = document.getElementById('upMpVal');
+  if (el) el.textContent = upState.mp + ' MP';
+}
+function upMpChanged() {
+  upState.mp = parseInt(document.getElementById('upMp').value, 10) || 4;
+  upMpLabel();
+  upUpdateCostHint();
+}
+
+function upRenderFactorChips() {
+  const m = upModel();
+  const wrap = document.getElementById('upFactorChips');
+  wrap.innerHTML = '';
+  const vals = (m && m.factor && m.factor.values) ? m.factor.values : [2];
+  vals.forEach(v => {
+    wrap.appendChild(igChip(v + '×', upState.factor === v, () => { upState.factor = v; upRenderFactorChips(); }));
+  });
+}
+
+function upRenderFormatChips() {
+  const wrap = document.getElementById('upFormatChips');
+  wrap.innerHTML = '';
+  ['JPG', 'PNG', 'WEBP'].forEach(f => {
+    wrap.appendChild(igChip(f, upState.format === f, () => { upState.format = f; upRenderFormatChips(); }));
+  });
+}
+
+// Live token hint on the Upscale button. P-Image is tiered by MP; the others
+// are flat. Reads the price the backend reported per model so the UI and ledger
+// can't disagree.
+function upUpdateCostHint() {
+  const btn = document.getElementById('upRunBtn');
+  const m = upModel();
+  if (!btn || upState.busy || !m) return;
+  let tok = m.tokens;
+  if (m.kind === 'megapixels' && m.tokensByMp) {
+    tok = (upState.mp <= 4) ? m.tokensByMp.low : m.tokensByMp.high;
+  }
+  btn.textContent = Number.isFinite(tok) ? ('\u2726 UPSCALE ' + tok) : '\u2726 UPSCALE';
+}
+
+// ── Source image: tabs + pickers ────────────────────────────────────────────
+function upSrcTab(tab) {
+  upState.srcTab = tab;
+  document.getElementById('upSrcTabUpload').classList.toggle('active', tab === 'upload');
+  document.getElementById('upSrcTabLibrary').classList.toggle('active', tab === 'library');
+  document.getElementById('upSrcTabUrl').classList.toggle('active', tab === 'url');
+  document.getElementById('upSrcUpload').style.display = tab === 'upload' ? 'block' : 'none';
+  document.getElementById('upSrcLibrary').style.display = tab === 'library' ? 'block' : 'none';
+  document.getElementById('upSrcUrl').style.display = tab === 'url' ? 'block' : 'none';
+  if (tab === 'library') upRenderLibraryGrid();
+}
+
+function upSrcFilePicked(files) {
+  if (!files || !files.length) return;
+  const f = files[0];
+  if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) { upStatus('\u2717 Unsupported file type.', true); return; }
+  // Downscale a touch for transport; 2048 keeps plenty of detail for the
+  // upscaler to work from while capping the data-URI payload.
+  igDownscaleToDataUri(f, 2048, dataUri => {
+    upState.srcData = dataUri; upState.srcIsUrl = false;
+    upShowPreview(dataUri);
+  });
+  document.getElementById('upSrcFile').value = '';
+}
+
+function upRenderLibraryGrid() {
+  const grid = document.getElementById('upLibraryGrid');
+  const empty = document.getElementById('upLibraryEmpty');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const withImg = (typeof favourites !== 'undefined' ? favourites : []).filter(f => f.imageData);
+  if (!withImg.length) { if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+  withImg.slice(0, 60).forEach(f => {
+    const img = document.createElement('img');
+    img.src = f.imageData; img.alt = f.title || ''; img.loading = 'lazy';
+    img.onclick = () => {
+      grid.querySelectorAll('img').forEach(x => x.classList.remove('sel'));
+      img.classList.add('sel');
+      upState.srcData = f.imageData; upState.srcIsUrl = false;
+      upShowPreview(f.imageData);
+    };
+    grid.appendChild(img);
+  });
+}
+
+function upUrlChanged() {
+  const v = (document.getElementById('upSrcUrlInput').value || '').trim();
+  if (/^https?:\/\/.+/i.test(v)) {
+    upState.srcData = v; upState.srcIsUrl = true;
+    upShowPreview(v);
+  } else {
+    upClearSource(true);
+  }
+}
+
+function upShowPreview(src) {
+  const wrap = document.getElementById('upPreviewWrap');
+  const img = document.getElementById('upPreviewImg');
+  if (img) img.src = src;
+  if (wrap) wrap.style.display = 'block';
+}
+function upClearSource(keepUrlText) {
+  upState.srcData = null; upState.srcIsUrl = false;
+  const wrap = document.getElementById('upPreviewWrap');
+  if (wrap) wrap.style.display = 'none';
+  if (!keepUrlText) {
+    const u = document.getElementById('upSrcUrlInput'); if (u) u.value = '';
+    document.querySelectorAll('#upLibraryGrid img.sel').forEach(x => x.classList.remove('sel'));
+  }
+}
+
+function upUpdateCloudWarn(signedIn) {
+  const el = document.getElementById('upDriveWarn');
+  if (!el) return;
+  const show = (signedIn !== false) && !(typeof igHasDurableStorage === 'function' && igHasDurableStorage());
+  el.style.display = show ? 'flex' : 'none';
+  const dbx = (typeof cloudProvider !== 'undefined' && cloudProvider === 'dropbox'
+    && typeof dbxToken !== 'undefined' && !!dbxToken);
+  const dbxNote = document.getElementById('upDriveWarnDbx');
+  if (dbxNote) dbxNote.style.display = (show && dbx) ? 'inline' : 'none';
+}
+
+function upStatus(msg, isError) {
+  const el = document.getElementById('upStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--err, #f85149)' : 'var(--accent)';
+}
+
+// ── Run ─────────────────────────────────────────────────────────────────────
+async function upRun() {
+  if (upState.busy) return;
+  const m = upModel();
+  if (!m) { upStatus('\u2717 No model available.', true); return; }
+  if (!upState.srcData) { upStatus('\u2717 Choose a source image first.', true); return; }
+  if (!window.bmSession || !window.bmSession.sessionToken) {
+    if (typeof openAuthModal === 'function') openAuthModal('login');
+    upInit();
+    return;
+  }
+
+  const body = { model: m.id, inputImage: upState.srcData, outputFormat: upState.format };
+  if (m.kind === 'megapixels') {
+    body.targetMegapixels = upState.mp;
+    if (document.getElementById('upEnhance').checked) body.enhanceDetails = true;
+    if (document.getElementById('upRealism').checked) body.realism = true;
+  } else {
+    body.upscaleFactor = upState.factor;
+    const pp = (document.getElementById('upPrompt').value || '').trim();
+    const np = (document.getElementById('upNegative').value || '').trim();
+    if (pp) body.positivePrompt = pp;
+    if (np) body.negativePrompt = np;
+    const st = parseInt(document.getElementById('upSteps').value, 10);
+    const cf = parseFloat(document.getElementById('upCfg').value);
+    const sd = parseInt(document.getElementById('upSeed').value, 10);
+    if (Number.isFinite(st) && st >= 1 && st <= 60) body.steps = st;
+    if (Number.isFinite(cf) && cf >= 0 && cf <= 20) body.CFGScale = cf;
+    if (Number.isFinite(sd) && sd >= 0) body.seed = sd;
+    if (m.sampler && Number.isFinite(m.sampler.strength)) body.strength = m.sampler.strength;
+  }
+
+  upState.busy = true;
+  const btn = document.getElementById('upRunBtn');
+  btn.disabled = true; btn.style.opacity = '0.6';
+  upStatus('\u25CC UPSCALING\u2026 (' + m.label + ')', false);
+
+  try {
+    const res = await fetch('/api/upscale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.bmSession.sessionToken },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (data.code === 'auth_required') {
+        if (typeof window.bmSignOut === 'function') window.bmSignOut();
+        if (typeof openAuthModal === 'function') openAuthModal('login');
+        upStatus('\u2717 Session expired \u2014 please sign in again.', true);
+        upInit();
+        return;
+      }
+      const msg = data.code === 'insufficient_tokens'
+        ? ('Not enough tokens \u2014 this needs ' + data.needed + ', you have ' + data.balance + '. Top-ups are coming soon.')
+        : data.code === 'rate_limit'
+          ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
+          : (data.error || ('Upscale failed (HTTP ' + res.status + ')'));
+      upStatus('\u2717 ' + msg, true);
+      if (data.code === 'insufficient_tokens' && typeof data.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(data.balance);
+      return;
+    }
+    if (data.tokens && typeof data.tokens.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(data.tokens.balance);
+    const image = data.image && data.image.url ? data.image : null;
+    if (!image) { upStatus('\u2717 No image returned.', true); return; }
+    upAddResultCard(image, m, data.tokens);
+    document.getElementById('upEmpty').style.display = 'none';
+    const costStr = (data.tokens && typeof data.tokens.charged === 'number')
+      ? (' \u00B7 ' + data.tokens.charged + ' TOKEN' + (data.tokens.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + data.tokens.balance)
+      : '';
+    const backupStr = (typeof igHasDurableStorage === 'function' && igHasDurableStorage())
+      ? ' \u00B7 saved to library + Drive'
+      : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
+    upStatus('\u2713 IMAGE UPSCALED' + costStr + backupStr, false);
+    upUpdateCloudWarn();
+    // Save to library + cloud through the existing pipeline. The "prompt" for an
+    // upscale is a short descriptor so the library card is meaningful.
+    const label = 'Upscaled \u00B7 ' + m.label + (m.kind === 'megapixels' ? (' \u00B7 ' + upState.mp + 'MP') : (' \u00B7 ' + upState.factor + '\u00D7'));
+    if (typeof autoSaveGeneratedImage === 'function') {
+      autoSaveGeneratedImage(label, '', image.url, m.id, null, data.tokens && data.tokens.ref, data.tokens && (typeof data.tokens.perImage === 'number' ? data.tokens.perImage : data.tokens.charged));
+    }
+  } catch (e) {
+    upStatus('\u2717 Network error: ' + e.message, true);
+  } finally {
+    upState.busy = false;
+    btn.disabled = false; btn.style.opacity = '1';
+    upUpdateCostHint();
+  }
+}
+
+function upAddResultCard(image, model, tokens) {
+  const grid = document.getElementById('upResults');
+  const card = document.createElement('div');
+  card.className = 'ig-card';
+
+  const img = document.createElement('img');
+  img.src = image.url; img.alt = ''; img.loading = 'lazy';
+  img.onclick = () => window.open(image.url, '_blank', 'noopener');
+
+  const meta = document.createElement('div');
+  meta.className = 'ig-card-meta';
+  const left = document.createElement('span');
+  left.textContent = model.label;
+  const right = document.createElement('span');
+  if (tokens && typeof tokens.perImage === 'number') right.textContent = tokens.perImage + ' TOK';
+  meta.appendChild(left); meta.appendChild(right);
+
+  const actions = document.createElement('div');
+  actions.className = 'ig-card-actions';
+  const dl = document.createElement('button');
+  dl.className = 'btn btn-ghost';
+  dl.textContent = '\u2B07 SAVE';
+  dl.onclick = () => igDownload(image.url);
+  actions.appendChild(dl);
+
+  card.appendChild(img); card.appendChild(meta); card.appendChild(actions);
+  grid.insertBefore(card, grid.firstChild);
+}
+
+
 // Sign-OUT: hard reload so it's unambiguous that generation is locked (any
 // in-flight results clear too). The typed prompt is stashed so an unexpected
 // session-expiry reload doesn't eat work. Sign-IN: re-run igInit immediately
@@ -19381,6 +19905,7 @@ window.addEventListener('bm-auth-changed', (e) => {
     return;
   }
   igInit();
+  if (typeof upInit === 'function') upInit();
 });
 // Restore a stashed prompt after a logout / session-expiry reload.
 try {
