@@ -116,6 +116,94 @@ export const PRICING = {
   'runware:civitai:101055@128078':    { label: 'SDXL 1.0 (base)',   kind: 'flat', tokens: 1, costUsd: 0.0019 },
 };
 
+// ── UPSCALER PRICING ─────────────────────────────────────────────────────────
+// Upscaling is a separate task type with its own per-task provider costs (NOT
+// the imageInference table above). Same philosophy: fixed token price per
+// (model × variant), charge the MAX variant when unresolved, never undercharge.
+// Provider costs verified June 2026 from runware.ai/docs model pages:
+//   P-Image  prunaai:p-image@upscale  $0.005 (1–4 MP) / $0.01 (5–8 MP)
+//   Clarity  runware:500@1            ~$0.0013–0.0038 (diffusion 2×–4×)
+//   SD Latent runware:502@1           ~$0.0013 (diffusion 2×)
+// Token prices (1 tok = $0.01): floor 1, P-Image tiered by megapixel bucket.
+export const UPSCALE_PRICING = {
+  'prunaai:p-image@upscale': {
+    label: 'P-Image Upscale',
+    kind: 'megapixels',
+    byMp: { low: 1, high: 2 },                 // low = 1–4 MP, high = 5–8 MP
+    costUsd: { low: 0.005, high: 0.01 },
+  },
+  'runware:500@1': {
+    label: 'Clarity',
+    kind: 'flat',
+    tokens: 2,
+    costUsd: 0.0038,
+  },
+  'runware:502@1': {
+    label: 'Stable Diffusion Latent Upscaler',
+    kind: 'flat',
+    tokens: 1,
+    costUsd: 0.0013,
+  },
+};
+
+/** Resolve an upscaler model id to its pricing row, or null. */
+export function upscalePricingFor(modelId) {
+  return UPSCALE_PRICING[modelId] || null;
+}
+
+/**
+ * Integer tokens for ONE upscale task. Unknown model -> DEFAULT_TOKENS.
+ * For P-Image, opts.targetMegapixels picks the bucket (>=5 MP -> high).
+ * Unresolved variant -> max (never undercharge). Always >= 1.
+ */
+export function tokensPerUpscale(modelId, opts = {}) {
+  const row = upscalePricingFor(modelId);
+  if (!row) return DEFAULT_TOKENS;
+  let t;
+  switch (row.kind) {
+    case 'flat':
+      t = row.tokens;
+      break;
+    case 'megapixels': {
+      const mp = Number(opts.targetMegapixels);
+      // Unknown/missing MP -> high (conservative). 1–4 -> low, 5–8 -> high.
+      t = (Number.isFinite(mp) && mp <= 4) ? row.byMp.low : row.byMp.high;
+      break;
+    }
+    default:
+      t = DEFAULT_TOKENS;
+  }
+  return Math.max(1, Math.ceil(t));
+}
+
+/**
+ * Full quote for an upscale request — what the ledger HOLDs and the frontend
+ * shows. One output image per task (no batching), so count is always 1.
+ */
+export function quoteUpscale(modelId, opts = {}) {
+  const perImage = tokensPerUpscale(modelId, opts);
+  return {
+    modelId,
+    perImage,
+    count: 1,
+    totalTokens: perImage,
+    retailUsd: +(perImage * TOKEN_USD).toFixed(2),
+    listed: !!upscalePricingFor(modelId),
+  };
+}
+
+/** Estimated provider USD for an upscale variant — ledger margin logging only. */
+export function estimatedUpscaleCostUsd(modelId, opts = {}) {
+  const row = upscalePricingFor(modelId);
+  if (!row || row.costUsd == null) return null;
+  if (typeof row.costUsd === 'number') return row.costUsd;
+  if (row.kind === 'megapixels') {
+    const mp = Number(opts.targetMegapixels);
+    return (Number.isFinite(mp) && mp <= 4) ? row.costUsd.low : row.costUsd.high;
+  }
+  return null;
+}
+
 // ── Resolution inference ─────────────────────────────────────────────────────
 // The app usually sends resolution presets ('1K'|'2K'|'4K') for preset models,
 // but width/height can arrive instead. Map the LONG edge to a bucket,

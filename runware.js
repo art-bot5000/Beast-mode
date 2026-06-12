@@ -175,7 +175,120 @@ export const runwareAdapter = {
   },
 
   /**
-   * Live model discovery via Runware's modelSearch task (same endpoint).
+   * Image upscaling. All three supported models use Runware's `upscale`
+   * taskType with the input under inputs.image, but differ in their tuning:
+   *   - P-Image  (prunaai:p-image@upscale): targetMegapixels (1–8) +
+   *     settings.{enhanceDetails, realism}. No upscaleFactor.
+   *   - Clarity  (runware:500@1) & SD Latent (runware:502@1): diffusion
+   *     upscalers — upscaleFactor + settings.{positivePrompt, negativePrompt,
+   *     steps, CFGScale, seed, strength}.
+   * The response taskType is `imageUpscale`; we match on taskUUID, not type.
+   *
+   * @param {import('./index.js').UpscaleRequest} req
+   * @returns {Promise<import('./index.js').UpscaleResult>}
+   */
+  async upscale(req) {
+    const [, modelRef] = parseModelId(req.model); // strip "runware:" / "prunaai:" prefix? No —
+    // NB: upscaler ids are full AIRs ("prunaai:p-image@upscale", "runware:500@1").
+    // parseModelId strips the FIRST segment, which would corrupt these. Use the
+    // id verbatim as the Runware `model` value instead.
+    void modelRef;
+    const model = req.model;
+
+    const taskUUID = randomUUID();
+    const task = {
+      taskType: 'upscale',
+      taskUUID,
+      model,
+      outputType: 'URL',
+      outputFormat: req.outputFormat && /^(JPG|PNG|WEBP)$/.test(req.outputFormat) ? req.outputFormat : 'JPG',
+      includeCost: true,
+      inputs: { image: req.inputImage },
+    };
+    if (Number.isFinite(req.outputQuality)) {
+      task.outputQuality = Math.max(20, Math.min(99, Math.round(req.outputQuality)));
+    }
+
+    const isPImage = model === 'prunaai:p-image@upscale';
+    if (isPImage) {
+      // Megapixel-targeted; clamp to the documented 1–8 range.
+      if (Number.isFinite(req.targetMegapixels)) {
+        task.targetMegapixels = Math.max(1, Math.min(8, Math.round(req.targetMegapixels)));
+      }
+      const s = {};
+      if (req.enhanceDetails === true) s.enhanceDetails = true;
+      if (req.realism === true) s.realism = true;
+      if (Object.keys(s).length) task.settings = s;
+    } else {
+      // Diffusion upscalers (Clarity / SD Latent): factor + optional settings.
+      if (Number.isFinite(req.upscaleFactor)) {
+        task.upscaleFactor = Math.max(2, Math.min(4, Math.round(req.upscaleFactor)));
+      } else {
+        task.upscaleFactor = 2;
+      }
+      const s = {};
+      if (req.positivePrompt) s.positivePrompt = String(req.positivePrompt);
+      if (req.negativePrompt) s.negativePrompt = String(req.negativePrompt);
+      if (Number.isFinite(req.steps)) s.steps = Math.max(1, Math.min(60, Math.round(req.steps)));
+      if (Number.isFinite(req.CFGScale)) s.CFGScale = req.CFGScale;
+      if (Number.isFinite(req.seed)) s.seed = Math.max(0, Math.round(req.seed));
+      if (Number.isFinite(req.strength)) s.strength = Math.max(0, Math.min(1, req.strength));
+      if (Object.keys(s).length) task.settings = s;
+    }
+
+    const key = apiKey();
+
+    let res;
+    try {
+      res = await fetch(RUNWARE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify([task]),
+        signal: req.signal,
+      });
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        throw new ProviderError('Upscale cancelled', { provider: 'runware', code: 'timeout', status: 499 });
+      }
+      throw new ProviderError(`Network error reaching Runware: ${e.message}`, {
+        provider: 'runware', code: 'upstream', status: 502,
+      });
+    }
+
+    let body;
+    try {
+      body = await res.json();
+    } catch {
+      throw new ProviderError(`Runware returned non-JSON (HTTP ${res.status})`, {
+        provider: 'runware', code: 'upstream', status: 502,
+      });
+    }
+
+    const errors = body?.errors || (body?.error ? [body.error] : null);
+    if (errors && errors.length) throw mapRunwareError(errors[0], res.status, body);
+
+    const items = Array.isArray(body?.data) ? body.data : [];
+    // Match on taskUUID only — the response taskType is `imageUpscale`, not the
+    // `upscale` we sent, so filtering by type would drop every result.
+    const ours = items.filter((d) => d.taskUUID === taskUUID);
+    if (!ours.length) {
+      throw new ProviderError('Runware response contained no upscaled image for this task', {
+        provider: 'runware', code: 'upstream', status: 502, raw: body,
+      });
+    }
+
+    const d = ours[0];
+    const costUsd = typeof d.cost === 'number' ? d.cost : undefined;
+    return {
+      provider: 'runware',
+      model: req.model,
+      image: { url: d.imageURL, b64: d.imageBase64Data || undefined },
+      costUsd,
+      raw: body,
+    };
+  },
+
+  /**
    * Returns normalized rows the frontend can drop straight into the dropdown.
    * @param {Object} opts
    * @param {string} [opts.search]        Free-text query (name/description/AIR id).

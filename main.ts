@@ -62,9 +62,9 @@ if (missing.length) {
 
 // Provider abstraction (the modules we built). Note: import as .js — Deno runs
 // them directly. generate() picks the provider from the model-id prefix.
-import { generate, searchModels, ProviderError } from "./index.js";
+import { generate, searchModels, upscale, UPSCALERS, findUpscaler, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
-import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd } from "./pricing.js";
+import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
 import { rehostToR2, r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
@@ -282,6 +282,119 @@ async function handler(req: Request): Promise<Response> {
     }
   }
 
+  // ── Image upscaling. Mirrors /api/generate's protections exactly: session
+  // gate → IP rate-limit → token HOLD → provider call → R2 rehost → SETTLE,
+  // with a full REFUND on any failure. Upscalers are a separate task family
+  // with their own (cheaper) pricing table, and always produce ONE image.
+  if (path === "/api/upscale" && req.method === "POST") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) {
+      return json({ error: "Sign in to upscale images.", code: "auth_required" }, 401);
+    }
+
+    const ip = clientIp(req);
+    if (rateLimited(ip)) {
+      return json({ error: "Rate limit exceeded. Try again shortly.", code: "rate_limit" }, 429);
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "Invalid JSON body", code: "bad_request" }, 400);
+    }
+
+    const upModel = body.model as string;
+    if (!findUpscaler(upModel)) {
+      return json({ error: `Unknown upscaler "${upModel}".`, code: "bad_request" }, 400);
+    }
+
+    // ── TOKEN QUOTE + HOLD. P-Image is priced by target megapixels; the others
+    // are flat. One output image per task, so the quote is the whole charge.
+    const upOpts = { targetMegapixels: Number(body.targetMegapixels) || undefined };
+    const q = quoteUpscale(upModel, upOpts);
+    const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
+    if (!hold.ok) {
+      return json({
+        error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
+        code: "insufficient_tokens",
+        needed: q.totalTokens,
+        balance: Number.isFinite(hold.balance) ? hold.balance : 0,
+      }, 402);
+    }
+
+    try {
+      const result = await upscale({
+        model: upModel,
+        inputImage: body.inputImage as string,
+        outputFormat: body.outputFormat as string | undefined,
+        outputQuality: body.outputQuality as number | undefined,
+        // P-Image
+        targetMegapixels: body.targetMegapixels as number | undefined,
+        enhanceDetails: body.enhanceDetails as boolean | undefined,
+        realism: body.realism as boolean | undefined,
+        // Diffusion upscalers (Clarity / SD Latent)
+        upscaleFactor: body.upscaleFactor as number | undefined,
+        positivePrompt: body.positivePrompt as string | undefined,
+        negativePrompt: body.negativePrompt as string | undefined,
+        steps: body.steps as number | undefined,
+        CFGScale: body.CFGScale as number | undefined,
+        strength: body.strength as number | undefined,
+        seed: body.seed as number | undefined,
+      });
+
+      // ── Re-host to R2 (same hot-cache policy as generation). Graceful on
+      // failure: keep the Runware URL so the upscale still succeeds.
+      const out = result.image as { url: string; b64?: string; pristine?: string };
+      if (r2Enabled() && out?.url) {
+        try {
+          const ext = out.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
+          const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+          out.url = await rehostToR2(out.url, key);
+        } catch (e) {
+          console.warn("R2 rehost failed (upscale), keeping original URL:", (e as Error).message);
+        }
+        trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
+          console.warn("R2 trim failed (non-fatal):", (e as Error).message)
+        );
+      }
+
+      // ── SETTLE: one image delivered → charge the full quote. Provider cost
+      // (Runware costUsd, or the table estimate) goes to the ledger for margin
+      // tracking only — never billed, never returned to the client.
+      const delivered = out?.url ? 1 : 0;
+      const charged = delivered ? q.totalTokens : 0;
+      const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
+        ?? estimatedUpscaleCostUsd(upModel, upOpts);
+      const settled = await settleHold(userHash, hold.ref, {
+        chargedTokens: charged,
+        refundTokens: q.totalTokens - charged,
+        model: upModel,
+        images: delivered,
+        actualCostUsd,
+      });
+
+      if (!delivered) {
+        return json({ error: "Upscaler returned no image.", code: "upstream" }, 502);
+      }
+      return json({
+        model: result.model,
+        provider: result.provider,
+        image: out,
+        tokens: { charged, perImage: q.perImage, balance: settled.balance, ref: hold.ref },
+      });
+    } catch (e) {
+      await refundHold(userHash, hold.ref, q.totalTokens,
+        e instanceof ProviderError ? `provider:${e.code}` : "internal_error",
+      ).catch((re) => console.error("CRITICAL: refund failed after upscale error:", (re as Error).message));
+      if (e instanceof ProviderError) return json({ error: e.message, code: e.code }, e.status);
+      console.error("upscale failed", e);
+      return json({ error: "Internal error" }, 500);
+    }
+  }
+
   // ── Token balance + ledger (session-gated). Deliberately under /api/* so
   // the existing Caddy proxy and service-worker bypass cover them — no
   // routing changes, no frontend deploy.
@@ -358,6 +471,20 @@ async function handler(req: Request): Promise<Response> {
   // ── Curated model list for the dropdown (instant, no upstream call).
   if (path === "/api/models" && req.method === "GET") {
     return json({ groups: catalogByFamily() });
+  }
+
+  // ── Curated upscaler list for the Upscaler tab. Each entry carries the
+  // config surface (megapixels vs diffusion) the frontend renders, plus the
+  // flat token price so the UI can show the cost before running.
+  if (path === "/api/upscalers" && req.method === "GET") {
+    const models = UPSCALERS.map((u) => ({
+      ...u,
+      tokens: tokensPerUpscale(u.id, { targetMegapixels: u.kind === "megapixels" ? (u.targetMegapixels?.default) : undefined }),
+      tokensByMp: u.kind === "megapixels"
+        ? { low: tokensPerUpscale(u.id, { targetMegapixels: 1 }), high: tokensPerUpscale(u.id, { targetMegapixels: 8 }) }
+        : undefined,
+    }));
+    return json({ models });
   }
 
   // ── Token price table (Pass 3 pricing foundation). Read-only, public:

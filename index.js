@@ -34,8 +34,6 @@
  * @property {string[]} [referenceImages] Image-to-image references (URL or data URI). Max 10.
  * @property {string} [resolution]       Preset ("1K"|"2K"|"4K") for models that support it.
  *                                        Mutually exclusive with width/height.
- * @property {string} [aspectRatio]      Aspect-ratio string ("16:9" etc.) — direct Gemini
- *                                        models take AR + resolution instead of pixel dims.
  * @property {boolean} [snapDims=true]   Snap width/height to /64 (community models).
  *                                        Set false for closed models with exact dim tables.
  * @property {string} [quality]          GPT Image quality (auto|low|medium|high).
@@ -87,12 +85,10 @@ export class ProviderError extends Error {
 // + one line here; the router below picks it up automatically.
 
 import { runwareAdapter } from './runware.js';
-import { googleAdapter } from './google.js';
 
 /** @type {Record<string, {id: string, generate: (req: GenerateRequest) => Promise<GenerateResult>}>} */
 const REGISTRY = {
   [runwareAdapter.id]: runwareAdapter,
-  [googleAdapter.id]: googleAdapter,   // direct Gemini API (free-tier capable)
   // [bflAdapter.id]: bflAdapter,   // <- drop-in later, see providers/bfl.js stub
 };
 
@@ -188,4 +184,113 @@ export async function searchModels(opts = {}) {
     });
   }
   return adapter.searchModels(opts);
+}
+
+/**
+ * @typedef {Object} UpscaleRequest
+ * @property {string}  model          Upscaler id: "prunaai:p-image@upscale" | "runware:500@1" | "runware:502@1".
+ * @property {string}  inputImage     Source image (https URL, data URI, base64, or Runware image UUID).
+ * @property {string} [outputFormat]  JPG | PNG | WEBP (default JPG).
+ * @property {number} [outputQuality] 20–99.
+ * @property {number} [targetMegapixels] P-Image only: 1–8.
+ * @property {boolean}[enhanceDetails] P-Image only.
+ * @property {boolean}[realism]        P-Image only.
+ * @property {number} [upscaleFactor]  Clarity/SD Latent: 2–4 (SD Latent fixed at 2).
+ * @property {string} [positivePrompt] Diffusion upscalers.
+ * @property {string} [negativePrompt] Diffusion upscalers.
+ * @property {number} [steps]          Diffusion upscalers.
+ * @property {number} [CFGScale]       Diffusion upscalers.
+ * @property {number} [strength]       Diffusion upscalers (0–1).
+ * @property {number} [seed]           Diffusion upscalers.
+ * @property {AbortSignal} [signal]
+ */
+
+/**
+ * @typedef {Object} UpscaleResult
+ * @property {string} provider
+ * @property {string} model
+ * @property {{url:string, b64?:string}} image
+ * @property {number} [costUsd]
+ * @property {Object} [raw]
+ */
+
+/**
+ * Curated upscaler catalogue — the models exposed in the Upscaler tab, with the
+ * config surface each one supports so the frontend can render the right controls
+ * and the route can validate. Kept here (not in catalog.js) because upscalers
+ * are a distinct task family from the generation catalog.
+ */
+export const UPSCALERS = [
+  {
+    id: 'prunaai:p-image@upscale',
+    label: 'P-Image Upscale',
+    family: 'Pruna',
+    kind: 'megapixels',                 // controls: target MP slider + toggles
+    targetMegapixels: { min: 1, max: 8, default: 4 },
+    toggles: ['enhanceDetails', 'realism'],
+    note: 'Targets a megapixel count (1–8 MP) with optional detail & realism enhancement. Best on AI-generated images.',
+  },
+  {
+    id: 'runware:500@1',
+    label: 'Clarity',
+    family: 'Runware',
+    kind: 'diffusion',                  // controls: factor + prompt + steps/CFG/seed
+    factor: { values: [2, 4], default: 2 },
+    prompt: true,
+    sampler: { steps: 24, cfg: 5.5, strength: 0.34 },
+    note: 'Diffusion upscaler boosting perceived detail at 2×–4×. A guiding prompt sharpens the result.',
+  },
+  {
+    id: 'runware:502@1',
+    label: 'Stable Diffusion Latent Upscaler',
+    family: 'Stability',
+    kind: 'diffusion',
+    factor: { values: [2], default: 2 },
+    prompt: true,
+    sampler: { steps: 20, cfg: 6.5, strength: 0.5 },
+    note: 'Fast 2× latent-space upscale before VAE decode. Improves detail without changing composition.',
+  },
+];
+
+/** Look up a curated upscaler entry by id. */
+export function findUpscaler(modelId) {
+  return UPSCALERS.find((u) => u.id === modelId) || null;
+}
+
+/**
+ * Provider-agnostic image upscale. All curated upscalers are Runware-served, so
+ * we route to that adapter directly (their ids are full AIRs and must NOT pass
+ * through parseModelId's prefix split). Validates the source image + the
+ * model-specific config before calling the adapter.
+ *
+ * @param {UpscaleRequest} req
+ * @returns {Promise<UpscaleResult>}
+ */
+export async function upscale(req) {
+  if (!req || typeof req.model !== 'string' || !req.model) {
+    throw new ProviderError('An upscaler "model" is required', { code: 'bad_request', status: 400 });
+  }
+  const entry = findUpscaler(req.model);
+  if (!entry) {
+    throw new ProviderError(`Unknown upscaler "${req.model}"`, { code: 'bad_request', status: 400 });
+  }
+  const img = req.inputImage;
+  if (typeof img !== 'string' || !img) {
+    throw new ProviderError('An "inputImage" is required', { code: 'bad_request', status: 400 });
+  }
+  const isUrl = /^https?:\/\//i.test(img);
+  const isDataUri = /^data:image\/(png|jpe?g|webp);base64,/i.test(img);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(img);
+  if (!isUrl && !isDataUri && !isUuid) {
+    throw new ProviderError('inputImage must be an http(s) URL, a base64 image data URI, or a Runware image UUID', { code: 'bad_request', status: 400 });
+  }
+  if (isDataUri && img.length > 15_000_000) {
+    throw new ProviderError('Source image too large (max ~10MB)', { code: 'bad_request', status: 400 });
+  }
+
+  const adapter = REGISTRY[runwareAdapter.id];
+  if (!adapter || typeof adapter.upscale !== 'function') {
+    throw new ProviderError('Upscaling is not available', { code: 'bad_request', status: 400 });
+  }
+  return adapter.upscale(req);
 }
