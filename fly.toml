@@ -39,8 +39,10 @@ primary_region = 'lhr'
     soft_limit = 150
 
 [[vm]]
-  # 256mb is enough for static-serve + auth. Bump to 512mb if/when the backend
-  # starts STREAMING Runware images through itself to save to Drive/Dropbox
-  # (proxying image bytes is the memory-hungry path).
+  # 512mb: the backend now proxies image BYTES through itself — the direct
+  # Gemini (Nano Banana) adapter returns base64 image data, which is held in
+  # memory and re-hosted to R2. A 4K base64 payload plus the JSON parse of
+  # Google's response is several MB resident at once; 256mb OOM-killed the
+  # process (Exit 137) mid-request, surfacing to the client as a 502.
   size = 'shared-cpu-1x'
-  memory = '256mb'
+  memory = '512mb'

@@ -124,7 +124,15 @@ export const googleAdapter = {
     }
 
     if (!res.ok || body?.error) {
-      throw mapGoogleError(body?.error, res.status, body);
+      const mapped = mapGoogleError(body?.error, res.status, body);
+      // Log the real Google message server-side — otherwise a clean ProviderError
+      // reaches the client but the cause never hits the logs, leaving 502s opaque.
+      try {
+        console.error('[google] generateContent error', JSON.stringify({
+          model: geminiId, httpStatus: res.status, googleError: body?.error || body,
+        }).slice(0, 1200));
+      } catch { /* logging must never throw */ }
+      throw mapped;
     }
 
     // ── Collect image parts from the first candidate. ────────────────────────
@@ -136,16 +144,24 @@ export const googleAdapter = {
       const inline = p?.inlineData || p?.inline_data;
       if (inline?.data) {
         const mime = inline.mimeType || inline.mime_type || 'image/png';
-        // Return as a data URI in `url`: the route's R2 rehost handles data
-        // URIs (extension derived from the mime type), and the frontend reads
-        // the same bytes as `pristine` for the durable Drive/IndexedDB copy.
-        images.push({ url: `data:${mime};base64,${inline.data}` });
+        // Return the raw base64 + mime, NOT a data: URI. The route decodes this
+        // to bytes exactly once and uploads straight to R2 — avoiding the old
+        // path that wrapped it in a data URI and let fetch() re-decode it,
+        // keeping several MB-scale copies resident (the 256mb OOM cause).
+        images.push({ b64: inline.data, mimeType: mime });
       }
     }
 
     // A safety block returns no image parts but a finishReason — surface it.
     if (!images.length) {
       const reason = first?.finishReason || first?.finish_reason;
+      try {
+        console.error('[google] no image in response', JSON.stringify({
+          model: geminiId, finishReason: reason, candidateCount: candidates.length,
+          partKinds: outParts.map((p) => Object.keys(p)[0]),
+          promptFeedback: body?.promptFeedback || body?.prompt_feedback,
+        }).slice(0, 1200));
+      } catch { /* logging must never throw */ }
       if (reason && /safety|blocklist|prohibited|recitation/i.test(String(reason))) {
         throw new ProviderError(`Blocked by Google safety filters (${reason}).`, { provider: 'google', code: 'content_filtered', status: 422, raw: body });
       }

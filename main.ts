@@ -66,7 +66,7 @@ import { generate, searchModels, upscale, UPSCALERS, findUpscaler, ProviderError
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
-import { rehostToR2, r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
+import { rehostToR2, rehostBytesToR2, r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
@@ -113,6 +113,17 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
+
+// Decode a base64 string to bytes WITHOUT an intermediate data: URI. atob gives
+// a binary string; we copy it to a Uint8Array. Used for inline provider images
+// (direct Gemini) so we never hold the data URI + re-decoded copy at once.
+function decodeBase64(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const len = bin.length;
+  const out = new Uint8Array(len);
+  for (let i = 0; i < len; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
 // ── Router ───────────────────────────────────────────────────────────────────
 async function handler(req: Request): Promise<Response> {
@@ -210,25 +221,35 @@ async function handler(req: Request): Promise<Response> {
       // URL so generation still succeeds.
       if (r2Enabled()) {
         await Promise.all(
-          result.images.map(async (img: { url: string }) => {
-            if (!img.url) return;
+          result.images.map(async (img: { url?: string; b64?: string; mimeType?: string }) => {
             try {
-              // Gemini direct models return data: URIs (base64) — Deno's fetch
-              // handles those, but the extension must come from the mime type.
-              const dataMime = /^data:image\/([a-z0-9+]+);base64,/i.exec(img.url);
-              const ext = dataMime
-                ? (dataMime[1] === 'jpeg' ? 'jpg' : dataMime[1].slice(0, 4))
-                : (img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg");
-              // Per-user prefix so retention is per user, not global.
-              const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-              const original = img.url;
-              img.url = await rehostToR2(img.url, key);
-              // Keep the PRISTINE bytes alongside the R2 URL: the browser uses
-              // them for the Drive/IndexedDB copies, so a flaky/blocked R2
-              // public URL can never corrupt the durable backups.
-              if (dataMime) (img as Record<string, unknown>).pristine = original;
+              if (img.b64) {
+                // ── Byte-bearing provider (direct Gemini). Decode the base64
+                // ONCE to bytes, upload, return only the short R2 URL. The
+                // base64 is then dropped so it's never serialized to the client
+                // — this is the fix for the 4K-image OOM on small machines.
+                const mime = img.mimeType || "image/png";
+                const ext = mime.split("/")[1]?.replace("jpeg", "jpg").slice(0, 4) || "png";
+                const bytes = decodeBase64(img.b64);
+                const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+                img.url = await rehostBytesToR2(bytes, mime, key);
+                delete img.b64;            // free it — never sent to the client
+                delete img.mimeType;
+              } else if (img.url) {
+                // ── URL-bearing provider (Runware). Fetch + rehost as before.
+                const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
+                const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+                img.url = await rehostToR2(img.url, key);
+              }
             } catch (e) {
-              console.warn("R2 rehost failed, keeping original URL:", (e as Error).message);
+              // Graceful: if R2 upload fails for a byte-bearing image we have no
+              // public URL to fall back to, so surface a data URI as a last
+              // resort (keeps generation working; larger response, rare path).
+              if (img.b64) {
+                img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
+                delete img.b64; delete img.mimeType;
+              }
+              console.warn("R2 rehost failed, keeping original:", (e as Error).message);
             }
           }),
         );
@@ -347,7 +368,7 @@ async function handler(req: Request): Promise<Response> {
 
       // ── Re-host to R2 (same hot-cache policy as generation). Graceful on
       // failure: keep the Runware URL so the upscale still succeeds.
-      const out = result.image as { url: string; b64?: string; pristine?: string };
+      const out = result.image as { url: string; b64?: string };
       if (r2Enabled() && out?.url) {
         try {
           const ext = out.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";

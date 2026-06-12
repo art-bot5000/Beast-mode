@@ -75,7 +75,29 @@ export async function rehostToR2(sourceUrl, key) {
   const bytes = new Uint8Array(await srcRes.arrayBuffer());
   const contentType = srcRes.headers.get('content-type') || 'image/jpeg';
 
-  // 2) Build a signed PUT to R2's S3 API.
+  // Delegate the signing + upload to the bytes path (single implementation).
+  return rehostBytesToR2(bytes, contentType, key);
+}
+
+/**
+ * Upload bytes you ALREADY hold to R2 — no fetch, no re-encode. This is the
+ * memory-efficient path for providers that return inline image bytes (the
+ * direct Gemini adapter): the base64 is decoded to a Uint8Array ONCE by the
+ * caller and handed straight here, instead of being wrapped in a data: URI and
+ * re-parsed by fetch() (which kept several MB-scale copies alive at once and
+ * OOM-killed a 256mb machine on 4K images).
+ *
+ * @param {Uint8Array} bytes
+ * @param {string} contentType  e.g. "image/png"
+ * @param {string} key          R2 object key
+ * @returns {Promise<string>}   durable public URL
+ */
+export async function rehostBytesToR2(bytes, contentType, key) {
+  const cfg = r2Config();
+  if (!cfg) throw new Error('R2 not configured');
+  contentType = contentType || 'image/jpeg';
+
+  // Build a signed PUT to R2's S3 API.
   const region = 'auto';
   const service = 's3';
   const host = `${cfg.accountId}.r2.cloudflarestorage.com`;
@@ -114,7 +136,6 @@ export async function rehostToR2(sourceUrl, key) {
     `AWS4-HMAC-SHA256 Credential=${cfg.accessKey}/${scope}, ` +
     `SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-  // 3) Upload.
   const putRes = await fetch(endpoint, {
     method: 'PUT',
     headers: {
@@ -130,7 +151,6 @@ export async function rehostToR2(sourceUrl, key) {
     throw new Error(`R2 PUT failed: HTTP ${putRes.status} ${txt.slice(0, 120)}`);
   }
 
-  // 4) Return the durable public URL.
   return `${cfg.publicBase.replace(/\/$/, '')}/${key}`;
 }
 
