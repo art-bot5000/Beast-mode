@@ -222,3 +222,67 @@ export async function trimR2ToNewest(prefix, keep) {
   }
   return toDelete.length;
 }
+
+// ── Presigned URLs (SigV4 query-string auth) ─────────────────────────────────
+// Used for the zero-knowledge thumbnail lane: the BROWSER PUTs encrypted bytes
+// straight to R2 and GETs them back, so plaintext never touches our server or
+// Cloudflare. The server only signs the URL (secrets stay here), it never sees
+// the ciphertext body. Payload hash is UNSIGNED-PAYLOAD: the body is opaque to
+// the signer by design. Only `host` is signed, matching presigned-URL rules.
+async function presignR2(method, key, expiresSec) {
+  const cfg = r2Config();
+  if (!cfg) throw new Error('R2 not configured');
+  const region = 'auto', service = 's3';
+  const host = `${cfg.accountId}.r2.cloudflarestorage.com`;
+  const canonicalUri = `/${cfg.bucket}/${key}`;
+
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, ''); // YYYYMMDDTHHMMSSZ
+  const dateStamp = amzDate.slice(0, 8);
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+
+  const q = [
+    ['X-Amz-Algorithm', 'AWS4-HMAC-SHA256'],
+    ['X-Amz-Credential', `${cfg.accessKey}/${scope}`],
+    ['X-Amz-Date', amzDate],
+    ['X-Amz-Expires', String(expiresSec || 300)],
+    ['X-Amz-SignedHeaders', 'host'],
+  ];
+  const canonicalQuery = q
+    .map(([k, v]) => [encodeURIComponent(k), encodeURIComponent(v)])
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&');
+
+  const canonicalHeaders = `host:${host}\n`;
+  const signedHeaders = 'host';
+  const canonicalRequest = [
+    method,
+    canonicalUri,
+    canonicalQuery,
+    canonicalHeaders,
+    signedHeaders,
+    'UNSIGNED-PAYLOAD',
+  ].join('\n');
+
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    scope,
+    await sha256Hex(canonicalRequest),
+  ].join('\n');
+
+  const sk = await signingKey(cfg.secretKey, dateStamp, region, service);
+  const signature = hex(await hmac(sk, stringToSign));
+  return `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+}
+
+/** Presigned PUT URL — browser uploads encrypted thumbnail bytes directly. */
+export async function presignR2Put(key, expiresSec = 300) {
+  return presignR2('PUT', key, expiresSec);
+}
+
+/** Presigned GET URL — browser downloads encrypted thumbnail bytes directly. */
+export async function presignR2Get(key, expiresSec = 300) {
+  return presignR2('GET', key, expiresSec);
+}

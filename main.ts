@@ -66,7 +66,7 @@ import { generate, searchModels, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
-import { rehostToR2, r2Enabled, trimR2ToNewest } from "./r2.js";
+import { rehostToR2, r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
@@ -301,6 +301,58 @@ async function handler(req: Request): Promise<Response> {
       return pub;
     });
     return json({ ok: true, entries });
+  }
+
+  // ── Zero-knowledge thumbnail lane (session-gated). The browser encrypts a
+  // WebP thumbnail under the account DATA KEY and PUTs the ciphertext straight
+  // to R2 via a presigned URL — plaintext never reaches this server or
+  // Cloudflare. We only sign URLs and enforce per-user key isolation. Soft-
+  // degrades to {ok:false} when R2 is unconfigured (client just skips thumbs).
+  if (path === "/api/thumbs/presign-put" && req.method === "POST") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in required.", code: "auth_required" }, 401);
+    if (!r2Enabled()) return json({ ok: false, reason: "r2_disabled" });
+    let body: Record<string, unknown>;
+    try { body = await req.json(); } catch { return json({ error: "Invalid JSON", code: "bad_request" }, 400); }
+    // Server OWNS the key — never trust a caller-supplied path. id is the fav id.
+    const id = String(body.id ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+    if (!id) return json({ error: "id required", code: "bad_request" }, 400);
+    const key = `thumbs/${userHash}/${id}.enc`;
+    try {
+      const presignedUrl = await presignR2Put(key, 300);
+      // FIFO: keep this user's newest 1000 thumbs. Fire-and-forget.
+      trimR2ToNewest(`thumbs/${userHash}/`, 1000).catch((e) =>
+        console.warn("thumb trim failed (non-fatal):", (e as Error).message)
+      );
+      return json({ ok: true, url: presignedUrl, key });
+    } catch (e) {
+      console.warn("presign-put failed:", (e as Error).message);
+      return json({ ok: false, reason: "presign_failed" });
+    }
+  }
+
+  if (path === "/api/thumbs/presign-get" && req.method === "POST") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in required.", code: "auth_required" }, 401);
+    if (!r2Enabled()) return json({ ok: false, reason: "r2_disabled" });
+    let body: Record<string, unknown>;
+    try { body = await req.json(); } catch { return json({ error: "Invalid JSON", code: "bad_request" }, 400); }
+    const key = String(body.key ?? "");
+    // Per-user isolation: a user may only read keys under THEIR own prefix.
+    if (!key.startsWith(`thumbs/${userHash}/`)) {
+      return json({ error: "Forbidden", code: "forbidden" }, 403);
+    }
+    try {
+      const presignedUrl = await presignR2Get(key, 300);
+      return json({ ok: true, url: presignedUrl });
+    } catch (e) {
+      console.warn("presign-get failed:", (e as Error).message);
+      return json({ ok: false, reason: "presign_failed" });
+    }
   }
 
   // ── Curated model list for the dropdown (instant, no upstream call).

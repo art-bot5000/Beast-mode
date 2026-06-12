@@ -950,6 +950,8 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .lib-card-image-ph:hover { background:color-mix(in srgb,var(--accent) 6%,transparent);color:var(--accent); }
 .lib-card-image-ph .ph-icon { font-size:26px;opacity:.3; }
 .lib-card-image-ph .ph-label { font-size:13px;letter-spacing:2px; }
+/* Encrypted thumb with no DATA KEY yet: SVG lock src on a muted tile. */
+img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%; }
 
 /* Body */
 .lib-card-body { padding:14px;flex:1;display:flex;flex-direction:column;gap:9px; }
@@ -3605,13 +3607,13 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
       <div class="settings-section" style="grid-column:1/-1;" id="settingsTokensSection">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
           <div class="settings-section-title" style="margin-bottom:0;">Tokens</div>
-          <button onclick="bmTokensSettingsRender(true)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
+          <button onclick="bmFetchBalance()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
         </div>
         <div id="bmTokSignedOut" style="display:none;font-size:12px;color:var(--muted);letter-spacing:.5px;">Sign in to see your token balance and activity.</div>
         <div id="bmTokSignedIn" style="display:none;">
           <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens (1 token = $0.01)</span></div>
-          <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:10px;">Every charge, refund, and grant on your account. Charges link to the saved image in your library.</div>
-          <div id="bmTokActivity" style="max-height:420px;overflow-y:auto;border-top:1px solid var(--border);"></div>
+          <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:12px;">Tokens are spent on image generation and priced per model and resolution. Every charge, refund, and grant is recorded on your account; charges link to the saved image in your library.</div>
+          <button class="btn btn-outline" onclick="bmUsageOpen()" style="font-size:12px;">⊞ USAGE HISTORY</button>
         </div>
       </div>
 
@@ -8378,17 +8380,18 @@ function buildLibCard(f) {
   card.id = 'libCard_' + f.id
 
   // ── Image ──────────────────────────────────────────────────
-  if (f.imageData) {
+  if (f.imageData || f.thumbKey) {
     const img = document.createElement('img')
     img.className = 'lib-card-image'
-    img.src = f.imageData
+    img.src = f.imageData || ''
     img.alt = f.title || buildAutoTitle(f)
     img.loading = 'lazy'
-    // If the hosted copy is gone (R2 keeps only the newest 5), fall back to the
-    // local cache, then to the user's Drive copy.
+    // Prefer the encrypted R2 thumbnail (small); falls back to local cache,
+    // then the inline copy. Locked encrypted thumbs show a lock placeholder.
     img.dataset.favId = f.id
+    if (typeof bmApplyThumb === 'function') bmApplyThumb(img, f)
     img.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(img, f) }
-    img.onclick = e => { e.stopPropagation(); openLightbox(img.src) }
+    img.onclick = e => { e.stopPropagation(); if (typeof bmOpenFull === 'function') bmOpenFull(f); else openLightbox(img.src) }
     card.appendChild(img)
   } else {
     const ph = document.createElement('div')
@@ -9448,6 +9451,9 @@ document.addEventListener('keydown', e => {
   // ── Escape: close any open modal / overlay / lightbox ──
   if (e.key === 'Escape') {
     closeLightbox()
+    // Usage history modal
+    const um = document.getElementById('bmUsageModal')
+    if (um && um.style.display !== 'none') { bmUsageClose(); return }
     // Formula presets modal
     const fpm = document.getElementById('pbFormulaPresetsModal')
     if (fpm && fpm.style.display !== 'none') { pbCloseFormulaPresets(); return }
@@ -18003,6 +18009,9 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       // the pristine bytes when the backend supplied them.
       const uploadSrc = pristine || imageUrl;
       if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, uploadSrc);
+      // Zero-knowledge thumbnail: encrypt a small WebP under the DATA KEY and
+      // PUT it to R2 directly. Best-effort, never blocks the save.
+      if (typeof bmThumbUpload === 'function') bmThumbUpload(fav, uploadSrc);
       if (typeof driveUploadImage === 'function') {
         driveUploadImage(uploadSrc, 'beast-mode-' + fav.id + '.jpg').then((driveId) => {
           if (driveId) {
@@ -18018,8 +18027,179 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
   }
 }
 
-// ═══════════════════════ IMAGE GEN TAB ═══════════════════════
-// Full-featured multi-model generator. All AIR ids + dimension tables verified
+// ═══════════════════════ ZERO-KNOWLEDGE THUMBNAILS ═══════════════════════
+// Per generated image we make a small WebP thumbnail, encrypt it under the
+// account DATA KEY (AES-GCM), and PUT the ciphertext straight to R2 via a
+// presigned URL. Plaintext never touches our server or Cloudflare. On display
+// (token log + library grid) we fetch the ciphertext and decrypt locally.
+// Full-size images are UNCHANGED (still readable in Drive/R2). If the DATA KEY
+// isn't unlocked this session, encrypted thumbs show a lock placeholder until
+// the user enters their passphrase.
+
+const _thumbUrlCache = {}; // favId -> objectURL (decrypted, in-memory only)
+
+// Standard base64 (not URL-safe) for the per-thumb IV stored on the fav.
+function _b64FromBytes(bytes) {
+  let s = '';
+  const a = new Uint8Array(bytes);
+  for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+  return btoa(s);
+}
+function _bytesFromB64(b64) {
+  const s = atob(b64);
+  const a = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i);
+  return a;
+}
+
+// Downscale to a ~256px WebP (JPEG fallback for old WebKit that ignores webp).
+function bmMakeThumbBytes(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const max = 256;
+        const ratio = Math.min(max / img.width, max / img.height, 1);
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * ratio);
+        c.height = Math.round(img.height * ratio);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob((blob) => {
+          if (blob && blob.type === 'image/webp') {
+            blob.arrayBuffer().then((b) => resolve({ bytes: new Uint8Array(b), mime: 'image/webp' }));
+          } else {
+            // WebP not honoured — fall back to JPEG.
+            c.toBlob((jb) => {
+              if (!jb) { resolve(null); return; }
+              jb.arrayBuffer().then((b) => resolve({ bytes: new Uint8Array(b), mime: 'image/jpeg' }));
+            }, 'image/jpeg', 0.7);
+          }
+        }, 'image/webp', 0.6);
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+// Encrypt + upload a thumbnail for a fav. Best-effort; silent on failure.
+async function bmThumbUpload(fav, srcUrl) {
+  try {
+    const sess = window.bmSession;
+    if (!sess || !sess.sessionToken || !sess.dataKey) return; // need DATA KEY
+    const made = await bmMakeThumbBytes(srcUrl);
+    if (!made) return;
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sess.dataKey, made.bytes);
+    // Ask the server for a presigned PUT (it owns the key).
+    const pres = await fetch('/api/thumbs/presign-put', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sess.sessionToken },
+      body: JSON.stringify({ id: fav.id }),
+    });
+    const pd = await pres.json().catch(() => ({}));
+    if (!pres.ok || !pd.ok || !pd.url) return; // soft-degrade (r2 disabled etc.)
+    const put = await fetch(pd.url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: ct,
+    });
+    if (!put.ok) return;
+    fav.thumbKey = pd.key;
+    fav.thumbIv = _b64FromBytes(iv);
+    fav.thumbMime = made.mime;
+    if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+    if (typeof driveSavePrompt === 'function') driveSavePrompt(fav); // persist keys
+  } catch (e) { /* best-effort */ }
+}
+
+// Fetch + decrypt a thumbnail to an object URL. Returns null if unavailable
+// (no key, locked, or fetch/decrypt failure) so callers can fall back.
+async function bmThumbDecrypt(fav) {
+  try {
+    if (!fav || !fav.thumbKey || !fav.thumbIv) return null;
+    if (_thumbUrlCache[fav.id]) return _thumbUrlCache[fav.id];
+    const sess = window.bmSession;
+    if (!sess || !sess.sessionToken || !sess.dataKey) return null; // locked
+    const pres = await fetch('/api/thumbs/presign-get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sess.sessionToken },
+      body: JSON.stringify({ key: fav.thumbKey }),
+    });
+    const pd = await pres.json().catch(() => ({}));
+    if (!pres.ok || !pd.ok || !pd.url) return null;
+    const res = await fetch(pd.url);
+    if (!res.ok) return null;
+    const ct = await res.arrayBuffer();
+    const iv = _bytesFromB64(fav.thumbIv);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sess.dataKey, ct);
+    const blob = new Blob([plain], { type: fav.thumbMime || 'image/webp' });
+    const url = URL.createObjectURL(blob);
+    _thumbUrlCache[fav.id] = url;
+    return url;
+  } catch (e) { return null; }
+}
+
+// True when this fav has an encrypted thumb we currently CAN'T show (locked).
+function bmThumbLocked(fav) {
+  if (!fav || !fav.thumbKey) return false;
+  const sess = window.bmSession;
+  return !(sess && sess.dataKey);
+}
+
+// Resolve the best thumbnail source for an <img>, async. Order:
+//   encrypted R2 thumb (if unlocked) -> local IndexedDB cache -> fav.imageData.
+// Sets the element's src when resolved; applies a lock placeholder when an
+// encrypted thumb exists but the DATA KEY is absent and nothing else is cached.
+async function bmApplyThumb(imgEl, fav) {
+  // 1) Encrypted thumb (best, smallest).
+  const dec = await bmThumbDecrypt(fav);
+  if (dec) { imgEl.src = dec; return; }
+  // 2) Local cache.
+  if (typeof bmGetCachedImage === 'function') {
+    const cached = await bmGetCachedImage(fav.id);
+    if (cached) { imgEl.src = cached; return; }
+  }
+  // 3) Inline data the fav already carries.
+  if (fav.imageData) { imgEl.src = fav.imageData; return; }
+  // 4) Locked + nothing cached -> lock placeholder (inline SVG; ::after does
+  // not render on <img>, so we set a real src).
+  if (bmThumbLocked(fav)) {
+    imgEl.classList.add('bm-thumb-locked');
+    imgEl.title = 'Unlock to view — enter your passphrase';
+    imgEl.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="%23888" stroke-width="1.6"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
+    );
+  }
+}
+
+// Open the FULL-SIZE image (not the thumb) in the lightbox. Resolves via the
+// existing durable chain: local IndexedDB cache -> Drive -> inline data ->
+// last-known hosted URL. Keeps "open = full quality" even though the grid now
+// shows a small encrypted thumb.
+async function bmOpenFull(fav) {
+  try {
+    if (typeof bmGetCachedImage === 'function') {
+      const cached = await bmGetCachedImage(fav.id);
+      if (cached) { if (typeof openLightbox === 'function') openLightbox(cached); return; }
+    }
+    if (fav.driveImageId && typeof driveFetchImageBlob === 'function') {
+      const fromDrive = await driveFetchImageBlob(fav.driveImageId);
+      if (fromDrive) { if (typeof openLightbox === 'function') openLightbox(fromDrive); return; }
+    }
+    if (fav.imageData) { if (typeof openLightbox === 'function') openLightbox(fav.imageData); return; }
+  } catch (e) { /* fall through */ }
+}
+
+
+// placeholders and re-render the open surfaces so thumbs decrypt.
+function bmThumbsOnUnlock() {
+  for (const k in _thumbUrlCache) { try { URL.revokeObjectURL(_thumbUrlCache[k]); } catch (e) {} delete _thumbUrlCache[k]; }
+  if (typeof renderFavs === 'function') renderFavs();
+  const um = document.getElementById('bmUsageModal');
+  if (um && um.style.display !== 'none' && typeof bmUsageRender === 'function') bmUsageRender(true);
+}
+
 // against runware.ai/docs (June 2026). Dimension pairs for preset models MUST
 // match the published tables exactly — the backend skips /64 snapping for them.
 
@@ -18103,6 +18283,8 @@ function bmTokenBalanceSet(n) {
     : String(n);
   const el = document.getElementById('bmTokSetBalance');
   if (el) el.textContent = display;
+  const ub = document.getElementById('bmUsageBalance');
+  if (ub) ub.textContent = display;
   const nb = document.getElementById('navTokenBalance');
   if (nb) nb.textContent = display;
   const wrap = document.getElementById('navBalanceWrap');
@@ -18137,16 +18319,40 @@ function bmTokensPerImage(modelId, st) {
 // yet show as pending. Settle rows link to the LIBRARY copy of the image via
 // fav.tokenRef — durable, unlike the R2 URL which dies after the newest-5 trim.
 async function bmTokensSettingsRender(force) {
+  // Settings panel: just the signed-in/out toggle + balance now. The activity
+  // log lives in the Usage History modal (bmUsageRender).
   const so = document.getElementById('bmTokSignedOut');
   const si = document.getElementById('bmTokSignedIn');
   if (!so || !si) return;
   const signedIn = !!(window.bmSession && window.bmSession.sessionToken);
   so.style.display = signedIn ? 'none' : 'block';
   si.style.display = signedIn ? 'block' : 'none';
-  if (!signedIn) return;
+  if (signedIn) bmFetchBalance();
+}
 
-  bmFetchBalance();
+function bmUsageOpen() {
+  if (!window.bmSession || !window.bmSession.sessionToken) {
+    if (typeof openAuthModal === 'function') openAuthModal('login');
+    return;
+  }
+  const m = document.getElementById('bmUsageModal');
+  if (m) m.style.display = 'flex';
+  bmUsageRender(true);
+}
+
+function bmUsageClose() {
+  const m = document.getElementById('bmUsageModal');
+  if (m) m.style.display = 'none';
+}
+
+async function bmUsageRender(force) {
   const list = document.getElementById('bmTokActivity');
+  if (!list) return;
+  if (!window.bmSession || !window.bmSession.sessionToken) {
+    list.innerHTML = '<div style="padding:10px 4px;font-size:11px;color:var(--muted);">Sign in to see your activity.</div>';
+    return;
+  }
+  bmFetchBalance();
   list.innerHTML = '<div style="padding:10px 4px;font-size:11px;color:var(--muted);">Loading\u2026</div>';
   let entries = [];
   try {
@@ -18206,12 +18412,13 @@ async function bmTokensSettingsRender(force) {
       const favs = favourites.filter(f => f.tokenRef === rw.ref);
       if (favs.length) {
         const thumb = document.createElement('img');
-        thumb.src = favs[0].imageData;
         thumb.loading = 'lazy';
         thumb.style.cssText = 'width:34px;height:34px;object-fit:cover;border-radius:3px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;';
         thumb.title = 'Open image' + (favs.length > 1 ? ' (1 of ' + favs.length + ')' : '');
+        if (typeof bmApplyThumb === 'function') bmApplyThumb(thumb, favs[0]);
+        else { thumb.src = favs[0].imageData; }
         thumb.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(thumb, favs[0]); };
-        thumb.onclick = () => window.open(thumb.src, '_blank', 'noopener');
+        thumb.onclick = () => { if (typeof bmOpenFull === 'function') bmOpenFull(favs[0]); else window.open(thumb.src, '_blank', 'noopener'); };
         div.appendChild(thumb);
       }
     }
@@ -18726,6 +18933,26 @@ try {
 .bm-warn { font-size:12px; color:#e3b341; line-height:1.5; }
 </style>
 
+<!-- ═══════════════════════ USAGE HISTORY MODAL ═══════════════════════ -->
+<div id="bmUsageModal" onclick="if(event.target===this)bmUsageClose()" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.88);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div class="modal-card" style="max-width:620px;width:100%;margin:auto;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">// USAGE HISTORY</div>
+        <div style="font-size:10px;letter-spacing:1.5px;color:var(--muted);">EVERY CHARGE, REFUND &amp; GRANT</div>
+      </div>
+      <button class="modal-close" onclick="bmUsageClose()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:12px;letter-spacing:1px;">BALANCE: <span id="bmUsageBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens</span></div>
+        <button onclick="bmUsageRender(true)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
+      </div>
+      <div id="bmTokActivity" style="max-height:60vh;overflow-y:auto;border-top:1px solid var(--border);"></div>
+    </div>
+  </div>
+</div>
+
 <div class="bm-auth-overlay" id="bmAuthOverlay">
   <div class="bm-auth-card">
     <div class="bm-auth-head">
@@ -19106,10 +19333,16 @@ function setSession({ emailHash, email, dataKey, sessionToken }) {
   // wipe + reload below restores cleanly into the NEW session.
   if (bmIdentitySwitch(emailHash)) return;
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email } }));
+  // DATA KEY just became available — refresh any locked thumbnail placeholders.
+  if (dataKey && typeof bmThumbsOnUnlock === 'function') bmThumbsOnUnlock();
 }
 window.bmSignOut = () => {
   window.bmSession = null;
   try { localStorage.removeItem('bm_app_session'); } catch (e) {}
+  // Drop decrypted thumbnail object URLs (they belong to this session's key).
+  if (typeof _thumbUrlCache !== 'undefined') {
+    for (const k in _thumbUrlCache) { try { URL.revokeObjectURL(_thumbUrlCache[k]); } catch (e) {} delete _thumbUrlCache[k]; }
+  }
   // Clear the cached balance so the sidebar readout hides until next sign-in.
   bmTokenBalance = null;
   const nbw = document.getElementById('navBalanceWrap');
