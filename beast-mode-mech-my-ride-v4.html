@@ -1236,6 +1236,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   border-color:var(--accent);color:var(--accent);
 }
 .img-status-toggle:hover .img-status-pill { border-color:var(--accent);color:var(--accent); }
+.img-status-action:hover { border-color:var(--accent);color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.img-status-action:active { transform:translateY(1px); }
 
 
 #libLightbox {
@@ -3606,6 +3609,10 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 .ig-chip:hover { border-color:var(--accent); color:var(--accent); }
 .ig-chip.active { background:var(--accent); border-color:var(--accent); color:#000; }
+.ig-chip.disabled, .ig-chip:disabled {
+  opacity:.4; cursor:not-allowed; text-decoration:line-through;
+}
+.ig-chip.disabled:hover, .ig-chip:disabled:hover { border-color:var(--border); color:var(--muted); }
 .ig-row { display:flex; gap:8px; align-items:center; }
 .ig-refs { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .ig-ref-thumb { position:relative; width:64px; height:64px; border:1px solid var(--border); border-radius:4px; overflow:hidden; }
@@ -8963,33 +8970,27 @@ function buildLibCard(f) {
 
   card.appendChild(body)
 
-  // ── Image status toggles (only when image uploaded) ───────────
+  // ── Image action buttons (only when image present) ────────────
+  // "Upscale" takes this image into the Upscaler; "Markup" opens it in the
+  // vector image editor. (These replaced the old passive status toggles.)
   if (f.imageData) {
     const statusRow = document.createElement('div')
     statusRow.className = 'lib-card-img-status'
 
-    const toggleDefs = [
-      { key:'upscaled', label:'⬆ UPSCALED' },
-      { key:'edited',   label:'✎ EDITED'   },
+    const imgActionDefs = [
+      { label:'⬆ UPSCALE', title:'Open this image in the Upscaler',
+        fn: () => sendToUpscaler(f) },
+      { label:'✎ MARKUP',  title:'Open this image in the vector editor',
+        fn: () => markupFav(f) },
     ]
-    toggleDefs.forEach(t => {
-      const lbl = document.createElement('label')
-      lbl.className = 'img-status-toggle'
-      const chk = document.createElement('input')
-      chk.type = 'checkbox'
-      chk.checked = !!f[t.key]
-      chk.onclick = e => e.stopPropagation()
-      chk.onchange = () => {
-        f[t.key] = chk.checked
-        f.updatedAt = Date.now()
-        driveSavePrompt(f)
-      }
-      const pill = document.createElement('span')
-      pill.className = 'img-status-pill'
-      pill.textContent = t.label
-      lbl.appendChild(chk)
-      lbl.appendChild(pill)
-      statusRow.appendChild(lbl)
+    imgActionDefs.forEach(a => {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'img-status-pill img-status-action'
+      btn.textContent = a.label
+      btn.title = a.title
+      btn.onclick = e => { e.stopPropagation(); a.fn() }
+      statusRow.appendChild(btn)
     })
     card.appendChild(statusRow)
   }
@@ -9019,6 +9020,43 @@ function buildLibCard(f) {
   })
   card.appendChild(actions)
   return card
+}
+
+// Send a library image into the Upscaler. Switches view, loads the image as the
+// source, and lets the upscaler compute resolution-aware options from its size.
+function sendToUpscaler(f) {
+  if (!f || !f.imageData) return
+  switchView('upscaler')
+  // upInit() runs on view switch; defer until the panel exists this frame.
+  setTimeout(() => {
+    if (typeof upLoadExternalImage === 'function') upLoadExternalImage(f.imageData)
+  }, 0)
+}
+
+// Open a library image in the vector image editor (markup). On apply, store the
+// annotated result as a new version on the same favourite.
+function markupFav(f) {
+  if (!f || !f.imageData) return
+  if (typeof mkOpen !== 'function') return
+  mkOpen(f.imageData, result => {
+    if (!result || !result.image) return
+    f.imageData = result.image
+    f.updatedAt = Date.now()
+    f.versions = f.versions || []
+    f.versions.push({
+      text: f.text || '', savedAt: Date.now(),
+      label: 'Markup' + (result.colours && result.colours.length ? ' · ' + result.colours.join(', ') : ''),
+      image: result.image,
+    })
+    if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites)
+    if (typeof driveSavePrompt === 'function') driveSavePrompt(f)
+    if (typeof bmCacheImage === 'function') bmCacheImage(f.id, result.image)
+    if (typeof bmThumbUpload === 'function') bmThumbUpload(f, result.image)
+    if (typeof driveUploadImage === 'function') {
+      driveUploadImage(result.image, 'beast-mode-' + f.id + '-markup.jpg').catch(() => {})
+    }
+    renderLibrary()
+  })
 }
 
 function togglePromptExpand(promptEl, btn) {
@@ -19522,6 +19560,9 @@ const upState = {
   srcTab: 'upload',    // 'upload' | 'library' | 'url'
   srcData: null,       // data URI (upload/library) or URL string (url tab)
   srcIsUrl: false,
+  srcW: 0,             // natural width of the loaded source (0 = unknown)
+  srcH: 0,             // natural height of the loaded source
+  srcMp: 0,            // source megapixels (w*h/1e6), 0 = unknown
   mp: 4,               // P-Image target megapixels
   factor: 2,           // diffusion upscale factor
   format: 'JPG',
@@ -19529,6 +19570,11 @@ const upState = {
   inited: false,
   fetched: false,
 };
+
+// Provider hard ceiling for upscaled output (longest side, px). Runware caps
+// upscaled dimensions; we use this to disable factor choices that would exceed
+// it. Conservative single value covering the curated diffusion upscalers.
+const UP_MAX_SIDE = 8192;
 
 function upInit() {
   const signedIn = !!(window.bmSession && window.bmSession.sessionToken);
@@ -19623,10 +19669,32 @@ function upRenderAll() {
 
   if (isMp) {
     const mp = document.getElementById('upMp');
-    mp.min = m.targetMegapixels ? m.targetMegapixels.min : 1;
-    mp.max = m.targetMegapixels ? m.targetMegapixels.max : 8;
+    const hardMin = m.targetMegapixels ? m.targetMegapixels.min : 1;
+    const hardMax = m.targetMegapixels ? m.targetMegapixels.max : 8;
+    // Floor the slider at the source's current MP (rounded up) so you can't
+    // target a *lower* resolution than the source — but same-MP stays allowed.
+    // If the source already meets/exceeds the model ceiling, lock to the max.
+    let floor = hardMin;
+    if (upState.srcMp > 0) floor = Math.min(hardMax, Math.max(hardMin, Math.ceil(upState.srcMp)));
+    mp.min = floor;
+    mp.max = hardMax;
+    // Snap the current target up to the floor if it sits below it.
+    if (upState.mp < floor) upState.mp = floor;
+    if (upState.mp > hardMax) upState.mp = hardMax;
     mp.value = upState.mp;
+    mp.disabled = (floor >= hardMax); // nothing to choose: source already at ceiling
     upMpLabel();
+    const note = document.getElementById('upMpWrap') &&
+      document.getElementById('upMpWrap').querySelector('.ig-note');
+    if (note) {
+      if (upState.srcMp > 0 && floor >= hardMax) {
+        note.textContent = 'Source is already at or above ' + hardMax + ' MP — locked to ' + hardMax + ' MP (re-render at the same resolution).';
+      } else if (upState.srcMp > 0) {
+        note.textContent = 'Source ≈ ' + upState.srcMp.toFixed(1) + ' MP. Target ' + floor + '–' + hardMax + ' MP (can\u2019t go below source; same-MP allowed).';
+      } else {
+        note.textContent = 'Output is rendered toward this megapixel count (capped at ' + hardMax + ' MP).';
+      }
+    }
   } else {
     upRenderFactorChips();
     if (m.sampler) {
@@ -19654,8 +19722,25 @@ function upRenderFactorChips() {
   const wrap = document.getElementById('upFactorChips');
   wrap.innerHTML = '';
   const vals = (m && m.factor && m.factor.values) ? m.factor.values : [2];
+  const longest = Math.max(upState.srcW, upState.srcH); // 0 if unknown
+  // A factor is unavailable when the result would exceed the provider ceiling.
+  // Always keep the smallest factor selectable so there's a valid choice.
+  const minVal = Math.min(...vals);
+  const isDisabled = v => longest > 0 && v !== minVal && (longest * v) > UP_MAX_SIDE;
+  // If the current selection got disabled, fall back to the smallest factor.
+  if (isDisabled(upState.factor)) upState.factor = minVal;
   vals.forEach(v => {
-    wrap.appendChild(igChip(v + '×', upState.factor === v, () => { upState.factor = v; upRenderFactorChips(); }));
+    if (isDisabled(v)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ig-chip disabled';
+      b.textContent = v + '×';
+      b.disabled = true;
+      b.title = 'Result would exceed ' + UP_MAX_SIDE + 'px on the longest side';
+      wrap.appendChild(b);
+    } else {
+      wrap.appendChild(igChip(v + '×', upState.factor === v, () => { upState.factor = v; upRenderFactorChips(); }));
+    }
   });
 }
 
@@ -19742,15 +19827,40 @@ function upShowPreview(src) {
   const img = document.getElementById('upPreviewImg');
   if (img) img.src = src;
   if (wrap) wrap.style.display = 'block';
+  // Measure the natural size so option-gating can react to it. May resolve
+  // after this call returns; upRenderAll() is re-run once it loads.
+  upState.srcW = 0; upState.srcH = 0; upState.srcMp = 0;
+  const probe = new Image();
+  probe.onload = () => {
+    upState.srcW = probe.naturalWidth || 0;
+    upState.srcH = probe.naturalHeight || 0;
+    upState.srcMp = (upState.srcW * upState.srcH) / 1e6;
+    upRenderAll();
+  };
+  probe.onerror = () => { upRenderAll(); };
+  probe.src = src;
 }
 function upClearSource(keepUrlText) {
   upState.srcData = null; upState.srcIsUrl = false;
+  upState.srcW = 0; upState.srcH = 0; upState.srcMp = 0;
   const wrap = document.getElementById('upPreviewWrap');
   if (wrap) wrap.style.display = 'none';
   if (!keepUrlText) {
     const u = document.getElementById('upSrcUrlInput'); if (u) u.value = '';
     document.querySelectorAll('#upLibraryGrid img.sel').forEach(x => x.classList.remove('sel'));
   }
+  upRenderAll();
+}
+
+// Load an image into the upscaler from elsewhere (e.g. the Library card's
+// "Upscale" button). Ensures the panel is initialised, sets the source on the
+// upload tab, shows the preview, and triggers dimension-aware gating.
+function upLoadExternalImage(dataUri) {
+  if (!dataUri) return;
+  if (typeof upInit === 'function') upInit();
+  upSrcTab('upload');
+  upState.srcData = dataUri; upState.srcIsUrl = false;
+  upShowPreview(dataUri);
 }
 
 function upUpdateCloudWarn(signedIn) {
