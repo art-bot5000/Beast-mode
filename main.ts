@@ -70,6 +70,10 @@ import { rehostToR2, rehostBytesToR2, r2Enabled, trimR2ToNewest, presignR2Put, p
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
+import {
+  enqueueJob, listJobs, getJob, claimNextJob, completeJob, failJob,
+  markDelivered, deleteJob, reclaimOrphans, type JobRecord,
+} from "./jobs.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
 
@@ -123,6 +127,254 @@ function decodeBase64(b64: string): Uint8Array {
   const out = new Uint8Array(len);
   for (let i = 0; i < len; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+// ── Shared provider execution ────────────────────────────────────────────────
+// The provider call + R2 rehost + ledger settle/refund, factored out of the
+// request handlers so the SAME code runs whether a job is executed
+// synchronously (legacy /api/generate, /api/upscale) or by the background
+// worker (jobs.ts). The hold is taken by the caller; these settle or refund it.
+//
+// Returns the same payload the old synchronous routes returned on success, or
+// throws (ProviderError or generic) after refunding — the caller decides how to
+// surface that (HTTP error vs. failed job record).
+
+interface RunGenResult {
+  model: string; provider: string;
+  images: Array<{ url?: string }>;
+  tokens: { charged: number; perImage: number; balance: number; ref: string };
+}
+
+async function runGenerateHeld(
+  userHash: string,
+  body: Record<string, unknown>,
+  q: { totalTokens: number; perImage: number },
+  holdRef: string,
+  genCount: number,
+  genOpts: Record<string, unknown>,
+): Promise<RunGenResult> {
+  try {
+    const entry = findInCatalog(body.model as string);
+    const snapDims = entry ? entry.snap !== false : true;
+    const result = await generate({
+      prompt: body.prompt as string,
+      negativePrompt: body.negativePrompt as string | undefined,
+      model: body.model as string,
+      width: body.width as number | undefined,
+      height: body.height as number | undefined,
+      steps: body.steps as number | undefined,
+      cfgScale: body.cfgScale as number | undefined,
+      count: genCount,
+      seed: body.seed as number | undefined,
+      referenceImages: body.referenceImages as string[] | undefined,
+      resolution: body.resolution as string | undefined,
+      aspectRatio: body.aspectRatio as string | undefined,
+      quality: body.quality as string | undefined,
+      renderingSpeed: body.renderingSpeed as string | undefined,
+      snapDims,
+    });
+
+    if (r2Enabled()) {
+      await Promise.all(
+        result.images.map(async (img: { url?: string; b64?: string; mimeType?: string }) => {
+          try {
+            if (img.b64) {
+              const mime = img.mimeType || "image/png";
+              const ext = mime.split("/")[1]?.replace("jpeg", "jpg").slice(0, 4) || "png";
+              const bytes = decodeBase64(img.b64);
+              const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+              img.url = await rehostBytesToR2(bytes, mime, key);
+              delete img.b64; delete img.mimeType;
+            } else if (img.url) {
+              const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
+              const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+              img.url = await rehostToR2(img.url, key);
+            }
+          } catch (e) {
+            if (img.b64) {
+              img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
+              delete img.b64; delete img.mimeType;
+            }
+            console.warn("R2 rehost failed, keeping original:", (e as Error).message);
+          }
+        }),
+      );
+      trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
+        console.warn("R2 trim failed (non-fatal):", (e as Error).message)
+      );
+    }
+
+    const delivered = result.images.length;
+    const charged = Math.min(q.totalTokens, q.perImage * delivered);
+    const rawUsage = (result.raw && typeof result.raw === "object")
+      ? (result.raw as Record<string, unknown>).usageMetadata
+      : undefined;
+    const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
+      ?? geminiUsageCostUsd(body.model as string, rawUsage)
+      ?? estimatedCostUsd(body.model as string, genOpts);
+    const settled = await settleHold(userHash, holdRef, {
+      chargedTokens: charged,
+      refundTokens: q.totalTokens - charged,
+      model: body.model as string,
+      images: delivered,
+      actualCostUsd,
+    });
+
+    return {
+      model: result.model,
+      provider: result.provider,
+      images: result.images,
+      tokens: { charged, perImage: q.perImage, balance: settled.balance, ref: holdRef },
+    };
+  } catch (e) {
+    await refundHold(userHash, holdRef, q.totalTokens,
+      e instanceof ProviderError ? `provider:${e.code}` : "internal_error",
+    ).catch((re) => console.error("CRITICAL: refund failed after generate error:", (re as Error).message));
+    throw e;
+  }
+}
+
+interface RunUpResult {
+  model: string; provider: string;
+  image: { url?: string };
+  tokens: { charged: number; perImage: number; balance: number; ref: string };
+}
+
+async function runUpscaleHeld(
+  userHash: string,
+  body: Record<string, unknown>,
+  q: { totalTokens: number; perImage: number },
+  holdRef: string,
+  upModel: string,
+  upOpts: { targetMegapixels?: number },
+): Promise<RunUpResult> {
+  try {
+    const result = await upscale({
+      model: upModel,
+      inputImage: body.inputImage as string,
+      outputFormat: body.outputFormat as string | undefined,
+      outputQuality: body.outputQuality as number | undefined,
+      targetMegapixels: body.targetMegapixels as number | undefined,
+      enhanceDetails: body.enhanceDetails as boolean | undefined,
+      realism: body.realism as boolean | undefined,
+      upscaleFactor: body.upscaleFactor as number | undefined,
+      positivePrompt: body.positivePrompt as string | undefined,
+      negativePrompt: body.negativePrompt as string | undefined,
+      steps: body.steps as number | undefined,
+      CFGScale: body.CFGScale as number | undefined,
+      strength: body.strength as number | undefined,
+      seed: body.seed as number | undefined,
+    });
+
+    const out = result.image as { url: string; b64?: string };
+    if (r2Enabled() && out?.url) {
+      try {
+        const ext = out.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
+        const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+        out.url = await rehostToR2(out.url, key);
+      } catch (e) {
+        console.warn("R2 rehost failed (upscale), keeping original URL:", (e as Error).message);
+      }
+      trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
+        console.warn("R2 trim failed (non-fatal):", (e as Error).message)
+      );
+    }
+
+    const delivered = out?.url ? 1 : 0;
+    const charged = delivered ? q.totalTokens : 0;
+    const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
+      ?? estimatedUpscaleCostUsd(upModel, upOpts);
+    const settled = await settleHold(userHash, holdRef, {
+      chargedTokens: charged,
+      refundTokens: q.totalTokens - charged,
+      model: upModel,
+      images: delivered,
+      actualCostUsd,
+    });
+
+    if (!delivered) {
+      // Treat "no image" as a provider failure so the job/route surfaces it.
+      // The hold was already settled to charge 0 + full refund above.
+      throw new ProviderError("Upscaler returned no image.", "upstream", 502);
+    }
+    return {
+      model: result.model,
+      provider: result.provider,
+      image: out,
+      tokens: { charged, perImage: q.perImage, balance: settled.balance, ref: holdRef },
+    };
+  } catch (e) {
+    // If we already settled (the no-image case), a refund here is a harmless
+    // no-op against a spent ref? No — settle consumed the ref. Only refund when
+    // the provider call itself threw before settling. Distinguish by code.
+    if (!(e instanceof ProviderError && e.code === "upstream")) {
+      await refundHold(userHash, holdRef, q.totalTokens,
+        e instanceof ProviderError ? `provider:${e.code}` : "internal_error",
+      ).catch((re) => console.error("CRITICAL: refund failed after upscale error:", (re as Error).message));
+    }
+    throw e;
+  }
+}
+
+// ── Background worker ─────────────────────────────────────────────────────────
+// A single in-process loop claims queued jobs and runs them via the shared
+// functions above. The hold is already taken (at enqueue); the worker settles
+// or refunds it, then records the result on the job. Because the work lives in
+// KV, a refresh/disconnect/logout in the browser cannot interrupt it.
+let workerRunning = false;
+
+async function runJob(job: JobRecord): Promise<void> {
+  const body = job.request;
+  const q = { totalTokens: job.quotedTotal, perImage: job.perImage };
+  try {
+    if (job.kind === "generate") {
+      const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
+      const genOpts = {
+        resolution: body.resolution as string | undefined,
+        width: body.width as number | undefined,
+        height: body.height as number | undefined,
+        quality: body.quality as string | undefined,
+        renderingSpeed: body.renderingSpeed as string | undefined,
+      };
+      const res = await runGenerateHeld(job.userHash, body, q, job.holdRef, genCount, genOpts);
+      await completeJob(job, { provider: res.provider, model: res.model, images: res.images, tokens: res.tokens });
+    } else {
+      const upModel = body.model as string;
+      const upOpts = { targetMegapixels: Number(body.targetMegapixels) || undefined };
+      const res = await runUpscaleHeld(job.userHash, body, q, job.holdRef, upModel, upOpts);
+      await completeJob(job, { provider: res.provider, model: res.model, image: res.image, tokens: res.tokens });
+    }
+  } catch (e) {
+    const msg = e instanceof ProviderError ? e.message : "Generation failed — please try again.";
+    const code = e instanceof ProviderError ? e.code : "internal_error";
+    await failJob(job, msg, code);
+    console.error(`job ${job.id} (${job.kind}) failed:`, (e as Error).message);
+  }
+}
+
+async function workerTick(): Promise<void> {
+  const job = await claimNextJob();
+  if (!job) return;
+  await runJob(job);
+}
+
+function startWorker(): void {
+  if (workerRunning) return;
+  workerRunning = true;
+  const loop = async () => {
+    while (workerRunning) {
+      try {
+        await workerTick();
+      } catch (e) {
+        console.error("worker tick error:", (e as Error).message);
+      }
+      // Short idle delay between claims; KV list is cheap but we don't want a
+      // hot spin when the queue is empty.
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  };
+  loop();
+  console.log("Background job worker started.");
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────
@@ -190,113 +442,10 @@ async function handler(req: Request): Promise<Response> {
     }
 
     try {
-      // Snap rule comes from the curated catalog: closed/preset models (snap:
-      // false) need EXACT dims; unknown/community models default to /64 snap.
-      const entry = findInCatalog(body.model as string);
-      const snapDims = entry ? entry.snap !== false : true;
-
-      const result = await generate({
-        prompt: body.prompt as string,
-        negativePrompt: body.negativePrompt as string | undefined,
-        model: body.model as string,
-        width: body.width as number | undefined,
-        height: body.height as number | undefined,
-        steps: body.steps as number | undefined,
-        cfgScale: body.cfgScale as number | undefined,
-        // Clamp count server-side: protects Runware spend even if the client
-        // is tampered with. UI offers 1–4. (Clamped above — the token hold and
-        // the provider request must always agree on the batch size.)
-        count: genCount,
-        seed: body.seed as number | undefined,
-        referenceImages: body.referenceImages as string[] | undefined,
-        resolution: body.resolution as string | undefined,
-        aspectRatio: body.aspectRatio as string | undefined,
-        quality: body.quality as string | undefined,
-        renderingSpeed: body.renderingSpeed as string | undefined,
-        snapDims,
-      });
-
-      // ── Re-host to R2 so saved images don't break when Runware URLs expire.
-      // Graceful: if R2 isn't configured or an upload fails, keep the original
-      // URL so generation still succeeds.
-      if (r2Enabled()) {
-        await Promise.all(
-          result.images.map(async (img: { url?: string; b64?: string; mimeType?: string }) => {
-            try {
-              if (img.b64) {
-                // ── Byte-bearing provider (direct Gemini). Decode the base64
-                // ONCE to bytes, upload, return only the short R2 URL. The
-                // base64 is then dropped so it's never serialized to the client
-                // — this is the fix for the 4K-image OOM on small machines.
-                const mime = img.mimeType || "image/png";
-                const ext = mime.split("/")[1]?.replace("jpeg", "jpg").slice(0, 4) || "png";
-                const bytes = decodeBase64(img.b64);
-                const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-                img.url = await rehostBytesToR2(bytes, mime, key);
-                delete img.b64;            // free it — never sent to the client
-                delete img.mimeType;
-              } else if (img.url) {
-                // ── URL-bearing provider (Runware). Fetch + rehost as before.
-                const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
-                const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-                img.url = await rehostToR2(img.url, key);
-              }
-            } catch (e) {
-              // Graceful: if R2 upload fails for a byte-bearing image we have no
-              // public URL to fall back to, so surface a data URI as a last
-              // resort (keeps generation working; larger response, rare path).
-              if (img.b64) {
-                img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
-                delete img.b64; delete img.mimeType;
-              }
-              console.warn("R2 rehost failed, keeping original:", (e as Error).message);
-            }
-          }),
-        );
-        // FIFO retention: keep only this user's newest 5 images on R2. Their
-        // durable copies belong in their own Drive/Dropbox; R2 is a hot cache.
-        // Fire-and-forget — a trim failure must never break generation.
-        trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
-          console.warn("R2 trim failed (non-fatal):", (e as Error).message)
-        );
-      }
-
-      // ── SETTLE: charge for images actually delivered, refund the rest.
-      // Actual provider cost goes to the ledger for margin tracking only:
-      // Runware reports costUsd; direct Gemini is computed from usageMetadata;
-      // otherwise fall back to the table's estimate.
-      const delivered = result.images.length;
-      const charged = Math.min(q.totalTokens, q.perImage * delivered);
-      const rawUsage = (result.raw && typeof result.raw === "object")
-        ? (result.raw as Record<string, unknown>).usageMetadata
-        : undefined;
-      const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
-        ?? geminiUsageCostUsd(body.model as string, rawUsage)
-        ?? estimatedCostUsd(body.model as string, genOpts);
-      const settled = await settleHold(userHash, hold.ref, {
-        chargedTokens: charged,
-        refundTokens: q.totalTokens - charged,
-        model: body.model as string,
-        images: delivered,
-        actualCostUsd,
-      });
-
-      // NOTE: result.costUsd (raw provider cost) is deliberately NOT returned —
-      // users pay the token table price; provider cost is margin-private and
-      // lives only in the ledger. `ref` lets the client stamp saved library
-      // items so the settings activity view can link a charge to its image.
-      return json({
-        model: result.model,
-        provider: result.provider,
-        images: result.images,
-        tokens: { charged, perImage: q.perImage, balance: settled.balance, ref: hold.ref },
-      });
+      const res = await runGenerateHeld(userHash, body, q, hold.ref, genCount, genOpts);
+      return json(res);
     } catch (e) {
-      // ── REFUND: the provider call failed — return the entire hold. Never
-      // let a refund failure mask the original error.
-      await refundHold(userHash, hold.ref, q.totalTokens,
-        e instanceof ProviderError ? `provider:${e.code}` : "internal_error",
-      ).catch((re) => console.error("CRITICAL: refund failed after generate error:", (re as Error).message));
+      // Hold already refunded inside runGenerateHeld on failure.
       if (e instanceof ProviderError) return json({ error: e.message, code: e.code }, e.status);
       console.error("generate failed", e);
       return json({ error: "Internal error" }, 500);
@@ -347,72 +496,145 @@ async function handler(req: Request): Promise<Response> {
     }
 
     try {
-      const result = await upscale({
-        model: upModel,
-        inputImage: body.inputImage as string,
-        outputFormat: body.outputFormat as string | undefined,
-        outputQuality: body.outputQuality as number | undefined,
-        // P-Image
-        targetMegapixels: body.targetMegapixels as number | undefined,
-        enhanceDetails: body.enhanceDetails as boolean | undefined,
-        realism: body.realism as boolean | undefined,
-        // Diffusion upscalers (Clarity / SD Latent)
-        upscaleFactor: body.upscaleFactor as number | undefined,
-        positivePrompt: body.positivePrompt as string | undefined,
-        negativePrompt: body.negativePrompt as string | undefined,
-        steps: body.steps as number | undefined,
-        CFGScale: body.CFGScale as number | undefined,
-        strength: body.strength as number | undefined,
-        seed: body.seed as number | undefined,
-      });
-
-      // ── Re-host to R2 (same hot-cache policy as generation). Graceful on
-      // failure: keep the Runware URL so the upscale still succeeds.
-      const out = result.image as { url: string; b64?: string };
-      if (r2Enabled() && out?.url) {
-        try {
-          const ext = out.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
-          const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-          out.url = await rehostToR2(out.url, key);
-        } catch (e) {
-          console.warn("R2 rehost failed (upscale), keeping original URL:", (e as Error).message);
-        }
-        trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
-          console.warn("R2 trim failed (non-fatal):", (e as Error).message)
-        );
-      }
-
-      // ── SETTLE: one image delivered → charge the full quote. Provider cost
-      // (Runware costUsd, or the table estimate) goes to the ledger for margin
-      // tracking only — never billed, never returned to the client.
-      const delivered = out?.url ? 1 : 0;
-      const charged = delivered ? q.totalTokens : 0;
-      const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
-        ?? estimatedUpscaleCostUsd(upModel, upOpts);
-      const settled = await settleHold(userHash, hold.ref, {
-        chargedTokens: charged,
-        refundTokens: q.totalTokens - charged,
-        model: upModel,
-        images: delivered,
-        actualCostUsd,
-      });
-
-      if (!delivered) {
-        return json({ error: "Upscaler returned no image.", code: "upstream" }, 502);
-      }
-      return json({
-        model: result.model,
-        provider: result.provider,
-        image: out,
-        tokens: { charged, perImage: q.perImage, balance: settled.balance, ref: hold.ref },
-      });
+      const res = await runUpscaleHeld(userHash, body, q, hold.ref, upModel, upOpts);
+      return json(res);
     } catch (e) {
-      await refundHold(userHash, hold.ref, q.totalTokens,
-        e instanceof ProviderError ? `provider:${e.code}` : "internal_error",
-      ).catch((re) => console.error("CRITICAL: refund failed after upscale error:", (re as Error).message));
+      // Hold already refunded inside runUpscaleHeld on failure.
       if (e instanceof ProviderError) return json({ error: e.message, code: e.code }, e.status);
       console.error("upscale failed", e);
       return json({ error: "Internal error" }, 500);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // BACKGROUND JOB QUEUE  (/api/jobs)
+  //
+  // The durable path. POST enqueues a generate/upscale job (taking the token
+  // HOLD up front so 402 is still synchronous), and the worker runs it whether
+  // or not the browser stays connected. GET lists the user's jobs so the queue
+  // UI survives refresh/logout. POST .../deliver marks a done job as drained
+  // into the library (so multiple tabs don't double-save). DELETE dismisses.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  if (path === "/api/jobs" && req.method === "POST") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in to generate images.", code: "auth_required" }, 401);
+
+    const ip = clientIp(req);
+    if (rateLimited(ip)) {
+      return json({ error: "Rate limit exceeded. Try again shortly.", code: "rate_limit" }, 429);
+    }
+
+    let body: Record<string, unknown>;
+    try { body = await req.json(); }
+    catch { return json({ error: "Invalid JSON body", code: "bad_request" }, 400); }
+
+    const kind = body.kind === "upscale" ? "upscale" : "generate";
+
+    if (kind === "generate") {
+      const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
+      const genOpts = {
+        resolution: body.resolution as string | undefined,
+        width: body.width as number | undefined,
+        height: body.height as number | undefined,
+        quality: body.quality as string | undefined,
+        renderingSpeed: body.renderingSpeed as string | undefined,
+      };
+      const q = quote(body.model as string, genOpts, genCount);
+      const hold = await holdTokens(userHash, q.totalTokens, { model: body.model as string });
+      if (!hold.ok) {
+        return json({
+          error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
+          code: "insufficient_tokens",
+          needed: q.totalTokens,
+          balance: Number.isFinite(hold.balance) ? hold.balance : 0,
+        }, 402);
+      }
+      const promptSnip = String(body.prompt || "").slice(0, 80) || "Untitled";
+      const job = await enqueueJob({
+        userHash, kind, request: body,
+        holdRef: hold.ref, quotedTotal: q.totalTokens, perImage: q.perImage,
+        model: body.model as string,
+        label: (genCount > 1 ? `×${genCount} · ` : "") + promptSnip,
+      });
+      startWorker(); // idempotent — ensures the loop is running
+      return json({ jobId: job.id, status: job.status, balance: hold.balance });
+    } else {
+      const upModel = body.model as string;
+      if (!findUpscaler(upModel)) {
+        return json({ error: `Unknown upscaler "${upModel}".`, code: "bad_request" }, 400);
+      }
+      const upOpts = { targetMegapixels: Number(body.targetMegapixels) || undefined };
+      const q = quoteUpscale(upModel, upOpts);
+      const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
+      if (!hold.ok) {
+        return json({
+          error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
+          code: "insufficient_tokens",
+          needed: q.totalTokens,
+          balance: Number.isFinite(hold.balance) ? hold.balance : 0,
+        }, 402);
+      }
+      const job = await enqueueJob({
+        userHash, kind, request: body,
+        holdRef: hold.ref, quotedTotal: q.totalTokens, perImage: q.perImage,
+        model: upModel, label: `Upscale · ${upModel.split(":").pop() || upModel}`,
+      });
+      startWorker();
+      return json({ jobId: job.id, status: job.status, balance: hold.balance });
+    }
+  }
+
+  if (path === "/api/jobs" && req.method === "GET") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+    const jobs = await listJobs(userHash);
+    // Strip the request payload from the listing — it can be large (reference
+    // images as data URIs) and the client doesn't need it back.
+    const slim = jobs.map((j) => ({
+      id: j.id, kind: j.kind, status: j.status, label: j.label, model: j.model,
+      result: j.status === "done" ? j.result : undefined,
+      error: j.status === "failed" ? j.error : undefined,
+      delivered: !!j.delivered,
+      createdAt: j.createdAt, finishedAt: j.finishedAt,
+    }));
+    return json({ jobs: slim });
+  }
+
+  // POST /api/jobs/<id>/deliver — the browser drained this done job into the
+  // library; mark it so other tabs skip it. Returns ok:false if already taken.
+  {
+    const m = path.match(/^\/api\/jobs\/([^/]+)\/deliver$/);
+    if (m && req.method === "POST") {
+      const authHeader = req.headers.get("authorization") || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      const userHash = await verifySessionToken(token);
+      if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+      const ok = await markDelivered(userHash, m[1]);
+      return json({ ok });
+    }
+  }
+
+  // DELETE /api/jobs/<id> — user dismisses a finished/failed job from the queue.
+  {
+    const m = path.match(/^\/api\/jobs\/([^/]+)$/);
+    if (m && req.method === "DELETE") {
+      const authHeader = req.headers.get("authorization") || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      const userHash = await verifySessionToken(token);
+      if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+      // Only allow dismissing terminal jobs; in-flight jobs must finish so their
+      // hold is settled/refunded rather than orphaned.
+      const job = await getJob(userHash, m[1]);
+      if (job && (job.status === "queued" || job.status === "running")) {
+        return json({ error: "Job still in progress.", code: "in_progress" }, 409);
+      }
+      await deleteJob(userHash, m[1]);
+      return json({ ok: true });
     }
   }
 
@@ -580,4 +802,17 @@ async function handler(req: Request): Promise<Response> {
 }
 
 console.log(`Beast Mode backend listening on :${PORT}`);
+
+// ── Background queue boot ────────────────────────────────────────────────────
+// Re-claim any job left "running" by a previous crash/restart (flips it back to
+// "queued"), then start the worker loop. Both are safe to run before serving;
+// the worker also auto-starts on the first enqueue.
+reclaimOrphans((job) =>
+  refundHold(job.userHash, job.holdRef, job.quotedTotal, "orphan_giveup")
+    .then(() => undefined)
+)
+  .then((n) => { if (n) console.log(`Reclaimed ${n} orphaned job(s) after restart.`); })
+  .catch((e) => console.error("orphan reclaim failed:", (e as Error).message))
+  .finally(() => startWorker());
+
 Deno.serve({ port: PORT }, handler);

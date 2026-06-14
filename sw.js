@@ -1,7 +1,7 @@
 // Beast Mode // Service Worker
-// v4.2 — message-based update flow
+// v4.1 — message-based update flow
 
-const CACHE_NAME = 'beast-mode-v6.3'
+const CACHE_NAME = 'beast-mode-v6.4'
 const CACHE_URLS = [
   './',
   './index.html',
@@ -57,6 +57,13 @@ self.addEventListener('fetch', e => {
     'wikimedia.org',
   ]
   if (passthrough.some(h => url.hostname.includes(h))) {
+    return
+  }
+
+  // Never cache API traffic. The background-queue endpoints (/api/jobs) are
+  // polled and MUST return live data — a cached snapshot would freeze the queue
+  // UI. All /api/* calls go straight to the network, bypassing the cache.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
     return
   }
 

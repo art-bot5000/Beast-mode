@@ -3112,6 +3112,11 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       <span class="tab-label">LIBRARY</span>
       <span class="tab-badge" id="libBadge" style="display:none">0</span>
     </button>
+    <button class="nav-tab" id="navQueue" onclick="switchView('queue')">
+      <span class="tab-icon">⧗</span>
+      <span class="tab-label">QUEUE</span>
+      <span class="tab-badge" id="queueNavBadge" style="display:none">0</span>
+    </button>
   </div>
 
   <!-- Footer: Settings, then an account card. Card rows (top→bottom):
@@ -3875,6 +3880,22 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
           Upscaled images appear here.<br>They auto-save to your Library and cloud.
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ QUEUE VIEW ═══════════════════════ -->
+<!-- Full-page view of the durable background job queue. Populated by the queue
+     client (bmQueue.renderView). Survives refresh/logout — the list is fetched
+     from /api/jobs on every poll. -->
+<div class="view" id="viewQueue">
+  <div class="view-inner">
+    <div class="up-head">
+      <h2 class="view-title">⧗ GENERATION QUEUE</h2>
+      <p class="up-sub">Jobs run on the server and finish even if you refresh, lose connection, or sign out. Finished images are saved to your library automatically.</p>
+    </div>
+    <div id="bmQueueViewList" class="bm-queue-view-list">
+      <div class="bm-queue-empty" id="bmQueueViewEmpty">No jobs yet. Generate or upscale an image and it'll appear here.</div>
     </div>
   </div>
 </div>
@@ -8185,6 +8206,7 @@ const VIEW_HASHES = {
   'upscaler':  'upscaler',
   'builder':   'prompt-lab',
   'settings':  'settings',
+  'queue':     'queue',
 }
 const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) => [h,v]))
 
@@ -8192,7 +8214,7 @@ const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) 
 // always visible there and the backdrop is display:none.
 const MODE_TITLES = {
   generator: 'BEAST MODE', imagegen: 'IMAGE GEN', upscaler: 'UPSCALER', builder: 'PROMPT LAB',
-  library: 'PROMPT LIBRARY', settings: 'SETTINGS',
+  library: 'PROMPT LIBRARY', settings: 'SETTINGS', queue: 'GENERATION QUEUE',
 };
 function toggleModeNav() {
   document.body.classList.contains('mode-nav-open') ? closeModeNav() : openModeNav();
@@ -8222,6 +8244,7 @@ function switchView(view, pushState = true) {
   }
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
   if (view === 'upscaler' && typeof upInit === 'function') upInit()
+  if (view === 'queue' && typeof bmQueue !== 'undefined') bmQueue.renderView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
   if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
   if (view === 'generator' && window._pendingCloudSettings) {
@@ -18342,6 +18365,363 @@ document.addEventListener('viewSwitched', e => {
 </div>
 
 <script>
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKGROUND QUEUE CLIENT  (bmQueue)
+//
+// Talks to the durable server-side queue (/api/jobs). Responsibilities:
+//   • enqueue generate/upscale jobs (returns a jobId; the work then survives
+//     refresh / disconnect / logout because it runs on the server);
+//   • poll /api/jobs while signed in and render the floating widget + the full
+//     Queue view from the result;
+//   • DRAIN finished jobs into the library via the existing
+//     autoSaveGeneratedImage() path, then tell the server they were delivered
+//     (so multiple tabs don't double-save);
+//   • survive reload: polling re-attaches on sign-in and drains anything that
+//     finished while the page was gone.
+//
+// Inline previews are unaffected — the generate/upscale callers still show the
+// live result when the user stays on the page; the queue is the durability and
+// cross-session safety net layered on top.
+// ═══════════════════════════════════════════════════════════════════════════
+const bmQueue = (() => {
+  let timer = null;
+  let polling = false;
+  let lastJobs = [];                 // most recent /api/jobs snapshot
+  const seenDone = new Set();        // jobIds already drained this session
+  // Remember the originating prompt/text per job we enqueued this session, so
+  // the drained library entry keeps the real prompt. Falls back to the label.
+  const jobMeta = Object.create(null); // jobId -> { prompt, fullText, model }
+  // Optional per-job callbacks so the originating view can show the inline
+  // result/failure WITHOUT issuing a second (double-charged) provider call.
+  const jobCbs = Object.create(null);  // jobId -> { onDone(result), onFail(err) }
+
+  function onJob(jobId, cbs) { if (jobId) jobCbs[jobId] = cbs || {}; }
+
+  function token() { return window.bmSession && window.bmSession.sessionToken; }
+  function authed() { return !!token(); }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token(),
+        ...(opts.headers || {}),
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  }
+
+  // ── Enqueue ────────────────────────────────────────────────────────────────
+  // Returns { ok, jobId?, error?, code?, balance? }. The caller takes the jobId
+  // and can show its own inline "queued" state; the widget also picks it up on
+  // the next poll. `meta` carries prompt/fullText so the drained library entry
+  // is faithful.
+  async function enqueue(payload, meta) {
+    if (!authed()) return { ok: false, code: 'auth_required', error: 'Sign in first.' };
+    const { res, data } = await api('/api/jobs', { method: 'POST', body: JSON.stringify(payload) });
+    if (!res.ok) {
+      if (data.code === 'auth_required' && typeof window.bmSignOut === 'function') window.bmSignOut();
+      return { ok: false, code: data.code, error: data.error, needed: data.needed, balance: data.balance };
+    }
+    if (typeof data.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(data.balance);
+    if (data.jobId) jobMeta[data.jobId] = meta || {};
+    start(); // make sure we're polling for the result
+    render();
+    return { ok: true, jobId: data.jobId, status: data.status, balance: data.balance };
+  }
+
+  function enqueueGenerate(body, meta) {
+    return enqueue({ ...body, kind: 'generate' }, meta);
+  }
+  function enqueueUpscale(body, meta) {
+    return enqueue({ ...body, kind: 'upscale' }, meta);
+  }
+
+  // ── Poll + drain ─────────────────────────────────────────────────────────
+  async function poll() {
+    if (!authed()) { stop(); return; }
+    let data;
+    try { ({ data } = await api('/api/jobs', { method: 'GET' })); }
+    catch { return; } // transient network error — try again next tick
+    if (!data || !Array.isArray(data.jobs)) return;
+    lastJobs = data.jobs;
+
+    for (const job of data.jobs) {
+      if (job.status === 'done' && !job.delivered && !seenDone.has(job.id)) {
+        seenDone.add(job.id);
+        try {
+          await drain(job);
+          const cb = jobCbs[job.id];
+          if (cb && typeof cb.onDone === 'function') { try { cb.onDone(job.result || {}); } catch (_) {} }
+          delete jobCbs[job.id];
+        }
+        catch (e) { seenDone.delete(job.id); console.warn('queue drain failed:', e); }
+      } else if (job.status === 'failed' && !seenDone.has(job.id)) {
+        seenDone.add(job.id);
+        const cb = jobCbs[job.id];
+        if (cb && typeof cb.onFail === 'function') { try { cb.onFail(job.error || {}); } catch (_) {} }
+        delete jobCbs[job.id];
+      }
+    }
+    render();
+
+    // Stop polling once nothing is outstanding (no queued/running, nothing
+    // un-drained). It restarts on the next enqueue or sign-in.
+    const active = data.jobs.some(j =>
+      j.status === 'queued' || j.status === 'running' ||
+      (j.status === 'done' && !j.delivered));
+    if (!active) stop();
+  }
+
+  // Save a finished job's image(s) into the library via the existing pipeline,
+  // then tell the server it's delivered so other tabs skip it.
+  async function drain(job) {
+    const meta = jobMeta[job.id] || {};
+    const r = job.result || {};
+    const tokens = r.tokens || {};
+    const model = r.model || meta.model || job.model;
+    const prompt = meta.prompt || job.label || '';
+    const fullText = meta.fullText || '';
+
+    if (job.kind === 'generate') {
+      const images = Array.isArray(r.images) ? r.images.filter(im => im && im.url) : [];
+      images.forEach(im => {
+        const pristine = (typeof im.url === 'string' && im.url.startsWith('data:')) ? im.url : null;
+        if (typeof autoSaveGeneratedImage === 'function') {
+          autoSaveGeneratedImage(prompt, fullText, im.url, model, pristine,
+            tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged));
+        }
+      });
+    } else { // upscale
+      const im = r.image;
+      if (im && im.url && typeof autoSaveGeneratedImage === 'function') {
+        const pristine = (typeof im.url === 'string' && im.url.startsWith('data:')) ? im.url : null;
+        autoSaveGeneratedImage(prompt || ('Upscaled · ' + model), fullText, im.url, model, pristine,
+          tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged));
+      }
+    }
+    if (typeof tokens.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(tokens.balance);
+
+    // Mark delivered server-side (best-effort; another tab may have won — fine).
+    try { await api('/api/jobs/' + job.id + '/deliver', { method: 'POST' }); } catch { /* ignore */ }
+  }
+
+  async function dismiss(jobId) {
+    try { await api('/api/jobs/' + jobId, { method: 'DELETE' }); } catch { /* ignore */ }
+    lastJobs = lastJobs.filter(j => j.id !== jobId);
+    render();
+    poll();
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  function start() {
+    if (!authed()) return;
+    if (polling) return;
+    polling = true;
+    poll();                                   // immediate first pass
+    timer = setInterval(poll, 3000);
+  }
+  function stop() {
+    polling = false;
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+  // Called on sign-in: always resume so jobs finished while away get drained.
+  function resume() { seenDone.clear(); start(); }
+
+  // ── Rendering ────────────────────────────────────────────────────────────
+  function statusInfo(job) {
+    if (job.status === 'queued')  return { icon: '◌', text: 'Queued',      cls: 'q-queued' };
+    if (job.status === 'running') return { icon: '◍', text: 'Generating…', cls: 'q-running' };
+    if (job.status === 'failed')  return { icon: '✕', text: (job.error && job.error.message) || 'Failed', cls: 'q-failed' };
+    return { icon: '✓', text: 'Done · saved to library', cls: 'q-done' };
+  }
+
+  function activeCount() {
+    return lastJobs.filter(j => j.status === 'queued' || j.status === 'running').length;
+  }
+
+  function render() {
+    ensureWidget();
+    const active = activeCount();
+    const anyShown = lastJobs.length > 0;
+
+    // Nav badge: number of in-flight jobs.
+    const navBadge = document.getElementById('queueNavBadge');
+    if (navBadge) {
+      if (active > 0) { navBadge.style.display = ''; navBadge.textContent = String(active); }
+      else navBadge.style.display = 'none';
+    }
+
+    // Floating widget visibility: show while anything is in-flight; auto-hide
+    // shortly after everything settles (handled by the empty state).
+    const wrap = document.getElementById('bmQueueWidget');
+    if (wrap) {
+      const inflight = lastJobs.filter(j => j.status === 'queued' || j.status === 'running');
+      const recentlyDone = lastJobs.filter(j => j.status === 'done' || j.status === 'failed');
+      if (inflight.length === 0 && recentlyDone.length === 0) {
+        wrap.classList.remove('open');
+      } else {
+        wrap.classList.add('open');
+        const body = document.getElementById('bmQueueWidgetBody');
+        const head = document.getElementById('bmQueueWidgetCount');
+        if (head) head.textContent = active > 0 ? (active + ' running') : 'Idle';
+        if (body) {
+          body.innerHTML = '';
+          (inflight.length ? inflight : recentlyDone).slice(0, 5).forEach(job => {
+            body.appendChild(widgetRow(job));
+          });
+        }
+      }
+    }
+
+    // Full view, if open.
+    if (currentView === 'queue') renderView();
+  }
+
+  function widgetRow(job) {
+    const s = statusInfo(job);
+    const row = document.createElement('div');
+    row.className = 'bm-q-row ' + s.cls;
+    const ic = document.createElement('span'); ic.className = 'bm-q-ic'; ic.textContent = s.icon;
+    const lbl = document.createElement('span'); lbl.className = 'bm-q-lbl';
+    lbl.textContent = job.label || job.kind;
+    lbl.title = job.label || job.kind;
+    row.appendChild(ic); row.appendChild(lbl);
+    return row;
+  }
+
+  function renderView() {
+    const list = document.getElementById('bmQueueViewList');
+    const empty = document.getElementById('bmQueueViewEmpty');
+    if (!list) return;
+    // Clear everything except the empty-state node.
+    Array.from(list.querySelectorAll('.bm-q-card')).forEach(n => n.remove());
+    if (!lastJobs.length) { if (empty) empty.style.display = ''; return; }
+    if (empty) empty.style.display = 'none';
+
+    lastJobs.forEach(job => {
+      const s = statusInfo(job);
+      const card = document.createElement('div');
+      card.className = 'bm-q-card ' + s.cls;
+
+      const main = document.createElement('div');
+      main.className = 'bm-q-card-main';
+      const ic = document.createElement('span'); ic.className = 'bm-q-ic'; ic.textContent = s.icon;
+      const txt = document.createElement('div'); txt.className = 'bm-q-card-text';
+      const t1 = document.createElement('div'); t1.className = 'bm-q-card-label'; t1.textContent = job.label || job.kind;
+      const t2 = document.createElement('div'); t2.className = 'bm-q-card-status'; t2.textContent =
+        s.text + (job.kind === 'upscale' ? '' : '') ;
+      txt.appendChild(t1); txt.appendChild(t2);
+      main.appendChild(ic); main.appendChild(txt);
+      card.appendChild(main);
+
+      // Thumbnail for done jobs.
+      if (job.status === 'done' && job.result) {
+        const url = (job.result.images && job.result.images[0] && job.result.images[0].url) ||
+                    (job.result.image && job.result.image.url);
+        if (url) {
+          const im = document.createElement('img');
+          im.className = 'bm-q-thumb'; im.src = url; im.loading = 'lazy';
+          card.appendChild(im);
+        }
+      }
+
+      // Dismiss for terminal jobs.
+      if (job.status === 'done' || job.status === 'failed') {
+        const x = document.createElement('button');
+        x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Dismiss';
+        x.onclick = () => dismiss(job.id);
+        card.appendChild(x);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  // ── Floating widget DOM + styles (injected once) ─────────────────────────
+  let widgetReady = false;
+  function ensureWidget() {
+    if (widgetReady) return;
+    widgetReady = true;
+    const style = document.createElement('style');
+    style.textContent = `
+      #bmQueueWidget { position:fixed; right:16px; bottom:16px; width:280px; z-index:9000;
+        background:var(--surface,#161616); border:1px solid var(--border,#333); border-radius:12px;
+        box-shadow:0 8px 30px rgba(0,0,0,.45); font-family:'Rajdhani',sans-serif; display:none; overflow:hidden; }
+      #bmQueueWidget.open { display:block; }
+      #bmQueueWidget .bm-q-head { display:flex; align-items:center; justify-content:space-between;
+        padding:9px 12px; border-bottom:1px solid var(--border,#333); cursor:pointer;
+        background:color-mix(in srgb,var(--accent,#7c5cff) 10%,transparent); }
+      #bmQueueWidget .bm-q-title { font-weight:700; letter-spacing:1px; font-size:13px; color:var(--text,#eee); }
+      #bmQueueWidget .bm-q-count { font-size:12px; color:var(--muted,#999); }
+      #bmQueueWidget .bm-q-body { max-height:230px; overflow-y:auto; padding:6px; }
+      .bm-q-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; }
+      .bm-q-row + .bm-q-row { margin-top:2px; }
+      .bm-q-ic { width:18px; text-align:center; font-weight:700; }
+      .bm-q-lbl { flex:1; min-width:0; font-size:13px; color:var(--text,#ddd);
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .q-queued  .bm-q-ic { color:var(--muted,#999); }
+      .q-running .bm-q-ic { color:var(--accent,#7c5cff); animation:bmQspin 1.4s linear infinite; }
+      .q-done    .bm-q-ic { color:#3fb950; }
+      .q-failed  .bm-q-ic { color:#f85149; }
+      @keyframes bmQspin { to { transform:rotate(360deg); } }
+      #bmQueueWidget .bm-q-foot { padding:6px 12px; border-top:1px solid var(--border,#333); text-align:center; }
+      #bmQueueWidget .bm-q-foot button { background:none; border:none; color:var(--accent,#7c5cff);
+        font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:1px; font-size:12px; cursor:pointer; }
+      /* Full Queue view cards */
+      .bm-queue-view-list { display:flex; flex-direction:column; gap:10px; max-width:760px; }
+      .bm-queue-empty { color:var(--muted,#999); padding:24px 0; }
+      .bm-q-card { display:flex; align-items:center; gap:12px; position:relative;
+        background:var(--surface,#161616); border:1px solid var(--border,#333); border-radius:12px; padding:12px 14px; }
+      .bm-q-card-main { display:flex; align-items:center; gap:12px; flex:1; min-width:0; }
+      .bm-q-card-text { min-width:0; }
+      .bm-q-card-label { font-weight:700; font-size:15px; color:var(--text,#eee);
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:480px; }
+      .bm-q-card-status { font-size:13px; color:var(--muted,#999); margin-top:2px; }
+      .bm-q-thumb { width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid var(--border,#333); }
+      .bm-q-dismiss { background:none; border:none; color:var(--muted,#999); font-size:16px; cursor:pointer; padding:4px 8px; }
+      .bm-q-dismiss:hover { color:#f85149; }
+      .bm-q-card.q-running { border-color:color-mix(in srgb,var(--accent,#7c5cff) 50%,var(--border,#333)); }
+      .bm-q-card.q-failed { border-color:color-mix(in srgb,#f85149 40%,var(--border,#333)); }
+    `;
+    document.head.appendChild(style);
+
+    const w = document.createElement('div');
+    w.id = 'bmQueueWidget';
+    w.innerHTML = `
+      <div class="bm-q-head" id="bmQueueWidgetHead">
+        <span class="bm-q-title">⧗ QUEUE</span>
+        <span class="bm-q-count" id="bmQueueWidgetCount">Idle</span>
+      </div>
+      <div class="bm-q-body" id="bmQueueWidgetBody"></div>
+      <div class="bm-q-foot"><button id="bmQueueWidgetOpen">OPEN QUEUE</button></div>
+    `;
+    document.body.appendChild(w);
+    document.getElementById('bmQueueWidgetHead').onclick = () => { if (typeof switchView === 'function') switchView('queue'); };
+    document.getElementById('bmQueueWidgetOpen').onclick = () => { if (typeof switchView === 'function') switchView('queue'); };
+  }
+
+  return {
+    enqueueGenerate, enqueueUpscale, onJob,
+    start, stop, resume, poll, render, renderView, dismiss,
+    get jobs() { return lastJobs; },
+  };
+})();
+
+// Start/stop polling with auth state. On sign-in we RESUME (drains anything that
+// finished while signed out / on another device); on sign-out we stop.
+window.addEventListener('bm-auth-changed', (e) => {
+  if (e.detail && e.detail.signedIn) bmQueue.resume();
+  else bmQueue.stop();
+});
+// Also attempt a start on load if a session is already present (page refresh).
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    try { if (window.bmSession && window.bmSession.sessionToken) bmQueue.resume(); } catch (_) {}
+  });
+}
+
 // ── Image generation: calls the BACKEND (/api/generate), never Runware directly,
 //    so the API key stays server-side. Generated images auto-save to library + cloud.
 let GEN_IMAGE_MODEL = 'runware:runware:100@1'; // FLUX.1 Schnell (fast, cheap default)
@@ -18379,52 +18759,56 @@ async function generateImage() {
   status.style.color = 'var(--accent)';
 
   try {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + window.bmSession.sessionToken,
-      },
-      body: JSON.stringify({ prompt, model: GEN_IMAGE_MODEL }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data.code === 'auth_required') {
-        // Token expired or missing — sign out and prompt re-login.
-        if (typeof window.bmSignOut === 'function') window.bmSignOut();
+    const jMeta = { prompt, fullText: out.dataset.full || visible, model: GEN_IMAGE_MODEL };
+    const r = await bmQueue.enqueueGenerate({ prompt, model: GEN_IMAGE_MODEL }, jMeta);
+    if (!r.ok) {
+      if (r.code === 'auth_required') {
         if (typeof openAuthModal === 'function') openAuthModal('login');
         status.textContent = '\u2717 Session expired — please sign in again.';
         status.style.color = 'var(--err, #f85149)';
         if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
         return;
       }
-      const msg = data.code === 'insufficient_tokens'
-        ? ('Not enough tokens \u2014 needs ' + data.needed + ', you have ' + data.balance + '.')
-        : data.code === 'rate_limit'
-          ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
-          : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
+      const msg = r.code === 'insufficient_tokens'
+        ? ('Not enough tokens \u2014 needs ' + r.needed + ', you have ' + r.balance + '.')
+        : r.code === 'rate_limit'
+          ? (r.error || 'Rate limit reached \u2014 wait a moment and try again.')
+          : (r.error || 'Could not queue generation.');
       status.textContent = '\u2717 ' + msg;
       status.style.color = 'var(--err, #f85149)';
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
       return;
     }
-    if (data.tokens && typeof data.tokens.balance === 'number') bmTokenBalanceSet(data.tokens.balance);
-    const image = data.images && data.images[0];
-    if (!image || !image.url) {
-      status.textContent = '\u2717 No image returned.';
-      status.style.color = 'var(--err, #f85149)';
-      return;
-    }
-    img.src = image.url;
-    img.style.display = 'block';
-    status.textContent = '\u2713 IMAGE GENERATED';
+    // Queued. The job now runs server-side and will save to the library even if
+    // this page goes away. Show inline progress + result if we stay here.
+    status.textContent = '\u25CC QUEUED \u2014 generating in the background\u2026';
     status.style.color = 'var(--accent)';
-    const costStr = (data.tokens && typeof data.tokens.charged === 'number') ? (' \u00B7 ' + data.tokens.charged + ' TOKEN' + (data.tokens.charged === 1 ? '' : 'S')) : '';
-    meta.textContent = 'Model: ' + data.model + costStr + ' \u00B7 auto-saved to library';
-    autoSaveGeneratedImage(prompt, out.dataset.full || visible, image.url, data.model, null, data.tokens && data.tokens.ref, data.tokens && (typeof data.tokens.perImage === 'number' ? data.tokens.perImage : data.tokens.charged));
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; } // free the button — queue owns the work
+    bmQueue.onJob(r.jobId, {
+      onDone: (result) => {
+        const image = result.images && result.images[0];
+        if (!image || !image.url) {
+          status.textContent = '\u2717 No image returned.';
+          status.style.color = 'var(--err, #f85149)';
+          return;
+        }
+        img.src = image.url;
+        img.style.display = 'block';
+        status.textContent = '\u2713 IMAGE GENERATED';
+        status.style.color = 'var(--accent)';
+        const tk = result.tokens || {};
+        const costStr = (typeof tk.charged === 'number') ? (' \u00B7 ' + tk.charged + ' TOKEN' + (tk.charged === 1 ? '' : 'S')) : '';
+        document.getElementById('genImageMeta').textContent = 'Model: ' + (result.model || GEN_IMAGE_MODEL) + costStr + ' \u00B7 saved to library';
+        // NOTE: library save is handled by bmQueue.drain() — do NOT save again here.
+      },
+      onFail: (err) => {
+        status.textContent = '\u2717 ' + (err.message || 'Generation failed.');
+        status.style.color = 'var(--err, #f85149)';
+      },
+    });
   } catch (e) {
     status.textContent = '\u2717 Network error: ' + e.message;
     status.style.color = 'var(--err, #f85149)';
-  } finally {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   }
 }
@@ -19411,55 +19795,51 @@ async function igGenerate() {
   igStatus('\u25CC GENERATING\u2026 (' + m.label + ')', false);
 
   try {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + window.bmSession.sessionToken,
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data.code === 'auth_required') {
-        if (typeof window.bmSignOut === 'function') window.bmSignOut();
+    const r = await bmQueue.enqueueGenerate(body, { prompt, fullText: '', model: m.id });
+    if (!r.ok) {
+      if (r.code === 'auth_required') {
         if (typeof openAuthModal === 'function') openAuthModal('login');
         igStatus('\u2717 Session expired \u2014 please sign in again.', true);
         igInit();
         return;
       }
-      const msg = data.code === 'insufficient_tokens'
-        ? ('Not enough tokens \u2014 this run needs ' + data.needed + ', you have ' + data.balance + '. Top-ups are coming soon.')
-        : data.code === 'rate_limit'
-          ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
-          : (data.error || ('Generation failed (HTTP ' + res.status + ')'));
+      const msg = r.code === 'insufficient_tokens'
+        ? ('Not enough tokens \u2014 this run needs ' + r.needed + ', you have ' + r.balance + '. Top-ups are coming soon.')
+        : r.code === 'rate_limit'
+          ? (r.error || 'Rate limit reached \u2014 wait a moment and try again.')
+          : (r.error || 'Could not queue generation.');
       igStatus('\u2717 ' + msg, true);
-      if (data.code === 'insufficient_tokens' && typeof data.balance === 'number') bmTokenBalanceSet(data.balance);
+      if (r.code === 'insufficient_tokens' && typeof r.balance === 'number') bmTokenBalanceSet(r.balance);
+      igState.busy = false;
+      btn.disabled = false; btn.style.opacity = '1';
       return;
     }
-    if (data.tokens && typeof data.tokens.balance === 'number') bmTokenBalanceSet(data.tokens.balance);
-    const images = Array.isArray(data.images) ? data.images.filter(im => im && im.url) : [];
-    if (!images.length) { igStatus('\u2717 No image returned.', true); return; }
-    images.forEach(im => igAddResultCard(im, m, prompt, data.tokens, images.length));
-    document.getElementById('igEmpty').style.display = 'none';
-    const costStr = (data.tokens && typeof data.tokens.charged === 'number')
-      ? (' \u00B7 ' + data.tokens.charged + ' TOKEN' + (data.tokens.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + data.tokens.balance)
-      : '';
-    const backupStr = igHasDurableStorage()
-      ? ' \u00B7 saved to library + Drive'
-      : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
-    igStatus('\u2713 ' + images.length + ' IMAGE' + (images.length > 1 ? 'S' : '') + ' GENERATED' + costStr + backupStr, false);
-    igUpdateCloudWarn();
-    // Auto-save each result to library + cloud via the existing pipeline.
-    // Pass the pristine bytes (Gemini direct) so Drive/cache copies never
-    // depend on re-fetching the R2 public URL.
-    images.forEach(im => {
-      const pristine = im.pristine || (String(im.url).startsWith('data:') ? im.url : null);
-      if (typeof autoSaveGeneratedImage === 'function') autoSaveGeneratedImage(prompt, '', im.url, m.id, pristine, data.tokens && data.tokens.ref, data.tokens && (typeof data.tokens.perImage === 'number' ? data.tokens.perImage : data.tokens.charged));
+    // Queued — runs server-side, saves to library even if we leave this page.
+    igStatus('\u25CC QUEUED \u2014 generating in the background\u2026 (' + m.label + ')', false);
+    igState.busy = false;            // queue owns the work; free the UI
+    btn.disabled = false; btn.style.opacity = '1';
+    if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
+    bmQueue.onJob(r.jobId, {
+      onDone: (result) => {
+        const images = Array.isArray(result.images) ? result.images.filter(im => im && im.url) : [];
+        if (!images.length) { igStatus('\u2717 No image returned.', true); return; }
+        // Inline cards only — bmQueue.drain() already saved to the library.
+        images.forEach(im => igAddResultCard(im, m, prompt, result.tokens, images.length));
+        document.getElementById('igEmpty').style.display = 'none';
+        const tk = result.tokens || {};
+        const costStr = (typeof tk.charged === 'number')
+          ? (' \u00B7 ' + tk.charged + ' TOKEN' + (tk.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + tk.balance)
+          : '';
+        const backupStr = igHasDurableStorage()
+          ? ' \u00B7 saved to library + Drive'
+          : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
+        igStatus('\u2713 ' + images.length + ' IMAGE' + (images.length > 1 ? 'S' : '') + ' GENERATED' + costStr + backupStr, false);
+        igUpdateCloudWarn();
+      },
+      onFail: (err) => { igStatus('\u2717 ' + (err.message || 'Generation failed.'), true); },
     });
   } catch (e) {
     igStatus('\u2717 Network error: ' + e.message, true);
-  } finally {
     igState.busy = false;
     btn.disabled = false; btn.style.opacity = '1';
     if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
@@ -19919,54 +20299,50 @@ async function upRun() {
   upStatus('\u25CC UPSCALING\u2026 (' + m.label + ')', false);
 
   try {
-    const res = await fetch('/api/upscale', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.bmSession.sessionToken },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data.code === 'auth_required') {
-        if (typeof window.bmSignOut === 'function') window.bmSignOut();
+    const label = 'Upscaled \u00B7 ' + m.label + (m.kind === 'megapixels' ? (' \u00B7 ' + upState.mp + 'MP') : (' \u00B7 ' + upState.factor + '\u00D7'));
+    const r = await bmQueue.enqueueUpscale(body, { prompt: label, fullText: '', model: m.id });
+    if (!r.ok) {
+      if (r.code === 'auth_required') {
         if (typeof openAuthModal === 'function') openAuthModal('login');
         upStatus('\u2717 Session expired \u2014 please sign in again.', true);
         upInit();
         return;
       }
-      const msg = data.code === 'insufficient_tokens'
-        ? ('Not enough tokens \u2014 this needs ' + data.needed + ', you have ' + data.balance + '. Top-ups are coming soon.')
-        : data.code === 'rate_limit'
-          ? (data.error || 'Rate limit reached \u2014 wait a moment and try again.')
-          : (data.error || ('Upscale failed (HTTP ' + res.status + ')'));
+      const msg = r.code === 'insufficient_tokens'
+        ? ('Not enough tokens \u2014 this needs ' + r.needed + ', you have ' + r.balance + '. Top-ups are coming soon.')
+        : r.code === 'rate_limit'
+          ? (r.error || 'Rate limit reached \u2014 wait a moment and try again.')
+          : (r.error || 'Could not queue upscale.');
       upStatus('\u2717 ' + msg, true);
-      if (data.code === 'insufficient_tokens' && typeof data.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(data.balance);
+      if (r.code === 'insufficient_tokens' && typeof r.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(r.balance);
+      upState.busy = false; btn.disabled = false; btn.style.opacity = '1'; upUpdateCostHint();
       return;
     }
-    if (data.tokens && typeof data.tokens.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(data.tokens.balance);
-    const image = data.image && data.image.url ? data.image : null;
-    if (!image) { upStatus('\u2717 No image returned.', true); return; }
-    upAddResultCard(image, m, data.tokens);
-    document.getElementById('upEmpty').style.display = 'none';
-    const costStr = (data.tokens && typeof data.tokens.charged === 'number')
-      ? (' \u00B7 ' + data.tokens.charged + ' TOKEN' + (data.tokens.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + data.tokens.balance)
-      : '';
-    const backupStr = (typeof igHasDurableStorage === 'function' && igHasDurableStorage())
-      ? ' \u00B7 saved to library + Drive'
-      : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
-    upStatus('\u2713 IMAGE UPSCALED' + costStr + backupStr, false);
-    upUpdateCloudWarn();
-    // Save to library + cloud through the existing pipeline. The "prompt" for an
-    // upscale is a short descriptor so the library card is meaningful.
-    const label = 'Upscaled \u00B7 ' + m.label + (m.kind === 'megapixels' ? (' \u00B7 ' + upState.mp + 'MP') : (' \u00B7 ' + upState.factor + '\u00D7'));
-    if (typeof autoSaveGeneratedImage === 'function') {
-      autoSaveGeneratedImage(label, '', image.url, m.id, null, data.tokens && data.tokens.ref, data.tokens && (typeof data.tokens.perImage === 'number' ? data.tokens.perImage : data.tokens.charged));
-    }
+    // Queued — runs server-side, saves to library even if we leave this page.
+    upStatus('\u25CC QUEUED \u2014 upscaling in the background\u2026 (' + m.label + ')', false);
+    upState.busy = false; btn.disabled = false; btn.style.opacity = '1'; upUpdateCostHint();
+    bmQueue.onJob(r.jobId, {
+      onDone: (result) => {
+        const image = result.image && result.image.url ? result.image : null;
+        if (!image) { upStatus('\u2717 No image returned.', true); return; }
+        // Inline card only — bmQueue.drain() already saved to the library.
+        upAddResultCard(image, m, result.tokens);
+        document.getElementById('upEmpty').style.display = 'none';
+        const tk = result.tokens || {};
+        const costStr = (typeof tk.charged === 'number')
+          ? (' \u00B7 ' + tk.charged + ' TOKEN' + (tk.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + tk.balance)
+          : '';
+        const backupStr = (typeof igHasDurableStorage === 'function' && igHasDurableStorage())
+          ? ' \u00B7 saved to library + Drive'
+          : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
+        upStatus('\u2713 IMAGE UPSCALED' + costStr + backupStr, false);
+        upUpdateCloudWarn();
+      },
+      onFail: (err) => { upStatus('\u2717 ' + (err.message || 'Upscale failed.'), true); },
+    });
   } catch (e) {
     upStatus('\u2717 Network error: ' + e.message, true);
-  } finally {
-    upState.busy = false;
-    btn.disabled = false; btn.style.opacity = '1';
-    upUpdateCostHint();
+    upState.busy = false; btn.disabled = false; btn.style.opacity = '1'; upUpdateCostHint();
   }
 }
 
