@@ -3638,13 +3638,40 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 #upMain .up-area-rail     { grid-area:rail; min-width:0; }
 #upMain .up-area-library  { grid-area:library; min-width:0; }
 
-/* Center stage — holds the main preview / before-after slider in Phase 3. */
+/* Center stage — fixed viewport; content scales via the zoom controller. */
 .up-stage {
   position:relative; background:transparent; border:none;
-  border-radius:0; min-height:360px; display:flex; align-items:center;
-  justify-content:center; overflow:hidden;
+  border-radius:0; min-height:360px; overflow:hidden;
 }
-.up-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 24px; }
+.up-zoom-viewport {
+  position:absolute; inset:0; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+}
+/* Inner is sized to natural px and transform-scaled; origin centred. */
+.up-zoom-inner { transform-origin:center center; will-change:transform; }
+.up-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 24px;
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
+
+/* Zoom controls (bottom-centre) + scale indicator (top-right). */
+.up-zoom-ctrls {
+  position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
+  display:flex; gap:6px; z-index:6;
+  background:rgba(0,0,0,.55); border:1px solid var(--border); border-radius:8px; padding:4px;
+  backdrop-filter:blur(4px);
+}
+.up-zoom-btn {
+  width:30px; height:28px; border:none; border-radius:5px; cursor:pointer;
+  background:transparent; color:#eee; font-size:16px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .15s, color .15s;
+}
+.up-zoom-btn:hover { background:var(--accent); color:#000; }
+.up-zoom-scale {
+  position:absolute; top:10px; right:12px; z-index:6;
+  font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
+  color:#fff; background:rgba(0,0,0,.55); border:1px solid var(--border);
+  border-radius:6px; padding:3px 8px; pointer-events:none;
+}
 
 /* Right rail — original + upscale thumbnails (Phase 3 populates #upRail). */
 .up-rail-head, .up-libbar-head {
@@ -3696,15 +3723,15 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 
 /* ══ UPSCALER STAGE / SLIDER / RAIL (Phase 3) ═════════════════════ */
-.up-stage-img { position:relative; max-width:100%; max-height:70vh; display:inline-block; line-height:0; }
-.up-stage-img img { max-width:100%; max-height:70vh; object-fit:contain; border-radius:6px; display:block; }
+.up-stage-img { position:relative; display:block; line-height:0; width:100%; height:100%; }
+.up-stage-img img { display:block; width:100%; height:100%; object-fit:contain; }
 
 /* Before/after slider. Both layers are absolutely stacked; the "before" layer
    is clipped via clip-path to the handle position. Images are sized identically
    (object-fit:contain on a fixed-ratio box) so the comparison aligns. */
 .up-slider {
-  position:relative; max-height:70vh; width:auto; max-width:100%;
-  overflow:hidden; border-radius:6px; background:transparent; user-select:none; touch-action:none;
+  position:relative; overflow:hidden; border-radius:6px; background:transparent;
+  user-select:none; touch-action:none;
 }
 .up-slider-after, .up-slider-before { position:relative; inset:0; line-height:0; }
 .up-slider-before { position:absolute; top:0; left:0; right:0; bottom:0; }
@@ -3791,19 +3818,8 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
     flex:1; min-height:0; height:100%;
     max-height:calc(100vh - 16px - var(--up-libbar-h, 40px));
   }
-  /* Single-image preview: wrapper shrink-wraps the image (height-driven), so
-     the resolution labels sit on the IMAGE edges and there are no letterbox
-     bars around it. */
-  #viewUpscaler .up-stage-img {
-    height:100%; max-height:calc(100vh - 28px - var(--up-libbar-h, 40px));
-    width:auto; display:flex;
-  }
-  #viewUpscaler .up-stage-img img {
-    height:100%; width:auto; max-width:100%; object-fit:contain;
-    max-height:calc(100vh - 28px - var(--up-libbar-h, 40px));
-  }
-  /* Slider keeps full available height; bars eliminated by transparent stage. */
-  #viewUpscaler .up-slider { max-height:calc(100vh - 28px - var(--up-libbar-h, 40px)); height:100%; }
+  /* Content is natural-sized inside #upZoomInner and scaled by the zoom
+     controller; no per-image max-height clamps here. */
 
   /* ── Fixed bottom library bar ─────────────────────────────────────── */
   #viewUpscaler .up-area-library {
@@ -4156,8 +4172,17 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       <!-- ── CENTER: chosen-image preview stage (Phase 3 populates) ───────── -->
       <div class="up-area-center">
         <div class="up-stage" id="upStage">
+          <div class="up-zoom-viewport" id="upZoomViewport">
+            <div class="up-zoom-inner" id="upZoomInner"></div>
+          </div>
           <div class="up-stage-empty" id="upStageEmpty">
             Select an image from the bar below to preview it here.
+          </div>
+          <div class="up-zoom-scale" id="upZoomScale" style="display:none;">100%</div>
+          <div class="up-zoom-ctrls" id="upZoomCtrls" style="display:none;">
+            <button type="button" class="up-zoom-btn" title="Zoom out" onclick="upZoomBy(-1)">\u2212</button>
+            <button type="button" class="up-zoom-btn" title="Reset" onclick="upZoomReset()">\u21BA</button>
+            <button type="button" class="up-zoom-btn" title="Zoom in" onclick="upZoomBy(1)">+</button>
           </div>
         </div>
       </div>
@@ -18933,6 +18958,16 @@ const bmQueue = (() => {
     lbl.textContent = job.label || job.kind;
     lbl.title = job.label || job.kind;
     row.appendChild(ic); row.appendChild(lbl);
+    // Delete: only when the job can be cancelled without cost. 'queued' jobs
+    // haven't started, so they're free to remove. 'running' jobs may already
+    // be incurring provider cost → no delete. Terminal jobs get dismiss.
+    if (job.status === 'queued' || job.status === 'done' || job.status === 'failed') {
+      const x = document.createElement('button');
+      x.className = 'bm-q-rowdel'; x.textContent = '\u2715';
+      x.title = (job.status === 'queued') ? 'Cancel & remove' : 'Dismiss';
+      x.onclick = (e) => { e.stopPropagation(); dismiss(job.id); };
+      row.appendChild(x);
+    }
     return row;
   }
 
@@ -18972,10 +19007,15 @@ const bmQueue = (() => {
         }
       }
 
-      // Dismiss for terminal jobs.
+      // Dismiss for terminal jobs; cancel for not-yet-started (queued) jobs.
       if (job.status === 'done' || job.status === 'failed') {
         const x = document.createElement('button');
         x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Dismiss';
+        x.onclick = () => dismiss(job.id);
+        card.appendChild(x);
+      } else if (job.status === 'queued') {
+        const x = document.createElement('button');
+        x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Cancel & remove';
         x.onclick = () => dismiss(job.id);
         card.appendChild(x);
       }
@@ -18999,12 +19039,21 @@ const bmQueue = (() => {
         background:color-mix(in srgb,var(--accent,#7c5cff) 10%,transparent); }
       #bmQueueWidget .bm-q-title { font-weight:700; letter-spacing:1px; font-size:13px; color:var(--text,#eee); }
       #bmQueueWidget .bm-q-count { font-size:12px; color:var(--muted,#999); }
+      #bmQueueWidget .bm-q-min { background:none; border:none; color:var(--muted,#aaa);
+        font-size:16px; line-height:1; cursor:pointer; padding:0 2px; margin-left:8px; }
+      #bmQueueWidget .bm-q-min:hover { color:var(--text,#fff); }
+      /* Collapsed: head only. */
+      body.bm-q-collapsed #bmQueueWidget .bm-q-body,
+      body.bm-q-collapsed #bmQueueWidget .bm-q-foot { display:none; }
       #bmQueueWidget .bm-q-body { max-height:230px; overflow-y:auto; padding:6px; }
       .bm-q-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; }
       .bm-q-row + .bm-q-row { margin-top:2px; }
       .bm-q-ic { width:18px; text-align:center; font-weight:700; }
       .bm-q-lbl { flex:1; min-width:0; font-size:13px; color:var(--text,#ddd);
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .bm-q-rowdel { background:none; border:none; color:var(--muted,#888); cursor:pointer;
+        font-size:12px; line-height:1; padding:2px 4px; border-radius:4px; flex:0 0 auto; }
+      .bm-q-rowdel:hover { color:#f85149; background:rgba(248,81,73,.12); }
       .q-queued  .bm-q-ic { color:var(--muted,#999); }
       .q-running .bm-q-ic { color:var(--accent,#7c5cff); animation:bmQspin 1.4s linear infinite; }
       .q-done    .bm-q-ic { color:#3fb950; }
@@ -19037,13 +19086,26 @@ const bmQueue = (() => {
       <div class="bm-q-head" id="bmQueueWidgetHead">
         <span class="bm-q-title">⧗ QUEUE</span>
         <span class="bm-q-count" id="bmQueueWidgetCount">Idle</span>
+        <button class="bm-q-min" id="bmQueueWidgetMin" title="Minimise" type="button">\u2013</button>
       </div>
       <div class="bm-q-body" id="bmQueueWidgetBody"></div>
       <div class="bm-q-foot"><button id="bmQueueWidgetOpen">OPEN QUEUE</button></div>
     `;
     document.body.appendChild(w);
-    document.getElementById('bmQueueWidgetHead').onclick = () => { if (typeof switchView === 'function') switchView('queue'); };
+    // Head click opens full view, EXCEPT when clicking the minimise toggle.
+    document.getElementById('bmQueueWidgetHead').onclick = (e) => {
+      if (e.target && e.target.id === 'bmQueueWidgetMin') return;
+      if (typeof switchView === 'function') switchView('queue');
+    };
     document.getElementById('bmQueueWidgetOpen').onclick = () => { if (typeof switchView === 'function') switchView('queue'); };
+    const minBtn = document.getElementById('bmQueueWidgetMin');
+    if (minBtn) minBtn.onclick = (e) => { e.stopPropagation(); bmQueueToggleMin(); };
+    // Restore persisted minimise state.
+    try {
+      const saved = (typeof lsLoad === 'function') ? lsLoad('bm_state_queue_min', null) : null;
+      if (saved && saved.min) document.body.classList.add('bm-q-collapsed');
+      if (minBtn) minBtn.textContent = (saved && saved.min) ? '\u2b1c' : '\u2013';
+    } catch (e) {}
   }
 
   return {
@@ -19052,6 +19114,14 @@ const bmQueue = (() => {
     get jobs() { return lastJobs; },
   };
 })();
+
+// Minimise/restore the floating queue widget (works on every view). Persisted.
+function bmQueueToggleMin() {
+  const min = document.body.classList.toggle('bm-q-collapsed');
+  const btn = document.getElementById('bmQueueWidgetMin');
+  if (btn) { btn.textContent = min ? '\u2b1c' : '\u2013'; btn.title = min ? 'Restore' : 'Minimise'; }
+  try { if (typeof lsSave === 'function') lsSave('bm_state_queue_min', { min }); } catch (e) {}
+}
 
 // Start/stop polling with auth state. On sign-in we RESUME (drains anything that
 // finished while signed out / on another device); on sign-out we stop.
@@ -20680,6 +20750,10 @@ function upLibApplyState() {
     pinBtn.classList.toggle('on', upLibState.pinned);
     pinBtn.title = upLibState.pinned ? 'Unpin (free / minimise)' : 'Pin open';
   }
+  // Viewport height changed → re-fit the preview if not zoomed in.
+  if (typeof upZoom !== 'undefined' && upZoom.hasContent) {
+    requestAnimationFrame(() => { if (upZoom.scale <= upZoom.fit + 1e-6) upZoomFit(); });
+  }
 }
 function upLibTogglePin() {
   upLibState.pinned = !upLibState.pinned;
@@ -20773,25 +20847,81 @@ function upSelectFav(f) {
 
 // Single image in the center stage with a top-left resolution overlay whose
 // text colour adapts to the underlying corner brightness.
+// ── Preview zoom/pan controller ─────────────────────────────────────────────
+// The stage is a fixed viewport (fits screen); content lives in #upZoomInner
+// and is scaled via transform. The indicator shows TRUE pixel scale
+// (rendered px / natural px). Fit = the scale at which the content fits the
+// viewport; zoom in/out steps relative to that.
+const upZoom = { natW: 0, natH: 0, scale: 1, fit: 1, panX: 0, panY: 0, hasContent: false };
+
+function upZoomMount(natW, natH) {
+  upZoom.natW = natW || 0; upZoom.natH = natH || 0;
+  upZoom.hasContent = !!(natW && natH);
+  upZoomFit();
+}
+function upZoomFit() {
+  const vp = document.getElementById('upZoomViewport');
+  if (!vp || !upZoom.natW || !upZoom.natH) return;
+  const vw = vp.clientWidth, vh = vp.clientHeight;
+  if (!vw || !vh) return;
+  upZoom.fit = Math.min(vw / upZoom.natW, vh / upZoom.natH);
+  upZoom.scale = upZoom.fit;
+  upZoom.panX = 0; upZoom.panY = 0;
+  upZoomApply();
+}
+function upZoomApply() {
+  const inner = document.getElementById('upZoomInner');
+  const scaleEl = document.getElementById('upZoomScale');
+  const ctrls = document.getElementById('upZoomCtrls');
+  if (!inner) return;
+  const show = upZoom.hasContent;
+  if (scaleEl) scaleEl.style.display = show ? '' : 'none';
+  if (ctrls) ctrls.style.display = show ? '' : 'none';
+  // The inner is sized to natural px; scale transform does the rest.
+  inner.style.width = upZoom.natW + 'px';
+  inner.style.height = upZoom.natH + 'px';
+  inner.style.transform = 'translate(' + upZoom.panX + 'px,' + upZoom.panY + 'px) scale(' + upZoom.scale + ')';
+  if (scaleEl) scaleEl.textContent = Math.round(upZoom.scale * 100) + '%';
+}
+function upZoomBy(dir) {
+  if (!upZoom.hasContent) return;
+  const factor = dir > 0 ? 1.25 : 0.8;
+  upZoom.scale = Math.max(upZoom.fit * 0.5, Math.min(upZoom.fit * 8, upZoom.scale * factor));
+  upZoomApply();
+}
+function upZoomReset() { upZoomFit(); }
+
+// Re-fit on viewport resize so the preview always fits and shows the whole image.
+window.addEventListener('resize', () => {
+  if (document.body.classList.contains('up-sticky') && upZoom.hasContent) {
+    // Keep the user's zoom if they've zoomed in; only re-fit if at/below fit.
+    if (upZoom.scale <= upZoom.fit + 1e-6) upZoomFit(); else upZoomApply();
+  }
+});
+
 function upRenderStageSingle(f) {
-  const stage = document.getElementById('upStage');
-  if (!stage) return;
-  stage.innerHTML = '';
+  const host = document.getElementById('upZoomInner');
+  if (!host) return;
+  host.innerHTML = '';
+  const empty = document.getElementById('upStageEmpty');
+  if (empty) empty.style.display = 'none';
   const wrap = document.createElement('div');
   wrap.className = 'up-stage-img';
   const img = document.createElement('img');
   img.alt = f.title || '';
   wrap.appendChild(img);
-  stage.appendChild(wrap);
+  host.appendChild(wrap);
   const paint = (w, h) => {
     if (w && h && typeof bmResLabel === 'function')
       bmResLabel(wrap, img, w + '\u00D7' + h, 'tl', 'upStageResTL');
   };
+  const mount = (w, h) => { upZoomMount(w, h); };
   // Prefer stored dims; else measure on load.
-  if (f.outW && f.outH) paint(f.outW, f.outH);
+  if (f.outW && f.outH) { paint(f.outW, f.outH); mount(f.outW, f.outH); }
   img.addEventListener('load', () => {
-    if (!(f.outW && f.outH)) paint(img.naturalWidth, img.naturalHeight);
+    if (!(f.outW && f.outH)) { paint(img.naturalWidth, img.naturalHeight); mount(img.naturalWidth, img.naturalHeight); }
   }, { once: true });
+  img.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(img, f); };
   img.src = f.imageData;
 }
 
@@ -20799,25 +20929,29 @@ function upRenderStageSingle(f) {
 // srcImageData if present, else the source fav's current imageData), res top-
 // left. Right = the upscaled image, res bottom-right. Both colours adapt.
 function upRenderStageSlider(upFav) {
-  const stage = document.getElementById('upStage');
-  if (!stage) return;
-  stage.innerHTML = '';
+  const host = document.getElementById('upZoomInner');
+  if (!host) return;
+  host.innerHTML = '';
+  const emptyEl = document.getElementById('upStageEmpty');
+  if (emptyEl) emptyEl.style.display = 'none';
 
   // Resolve the "before" source + its dimensions.
   let beforeSrc = upFav.srcImageData || null;
   let beforeW = upFav.srcW || null, beforeH = upFav.srcH || null;
-  if (!beforeSrc) {
+  let beforeFav = null;
+  {
     const { original } = upResolveGroup(upFav);
-    if (original) { beforeSrc = original.imageData; beforeW = original.outW || null; beforeH = original.outH || null; }
+    beforeFav = original || null;
+    if (!beforeSrc && original) { beforeSrc = original.imageData; beforeW = original.outW || null; beforeH = original.outH || null; }
   }
-  if (!beforeSrc) { upRenderStageSingle(upFav); return; } // no original → just show it
+  if (!beforeSrc && !beforeFav) { upRenderStageSingle(upFav); return; } // no original → just show it
 
   const slider = document.createElement('div');
   slider.className = 'up-slider';
-  // Match the slider box to the upscaled image's aspect so there are no
-  // letterbox bars and the resolution labels sit on the image edges.
+  // Size the slider to the upscaled image's natural pixels; the zoom controller
+  // scales the whole stage. Aspect is preserved and labels hug the edges.
   const aw = upFav.outW || 0, ah = upFav.outH || 0;
-  if (aw > 0 && ah > 0) slider.style.aspectRatio = aw + ' / ' + ah;
+  if (aw > 0 && ah > 0) { slider.style.width = aw + 'px'; slider.style.height = ah + 'px'; }
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
@@ -20838,7 +20972,10 @@ function upRenderStageSlider(upFav) {
   slider.appendChild(afterWrap);
   slider.appendChild(beforeWrap);
   slider.appendChild(handle);
-  stage.appendChild(slider);
+  host.appendChild(slider);
+  // Mount into the zoom controller (fall back to a measured size if dims absent).
+  if (aw > 0 && ah > 0) upZoomMount(aw, ah);
+  else afterImg.addEventListener('load', () => upZoomMount(afterImg.naturalWidth, afterImg.naturalHeight), { once: true });
 
   const setPos = (pct) => {
     pct = Math.max(0, Math.min(100, pct));
@@ -20873,8 +21010,11 @@ function upRenderStageSlider(upFav) {
   handle.addEventListener('pointerup', () => { dragging = false; });
   slider.addEventListener('click', (e) => { if (e.target === handle || handle.contains(e.target)) return; setPos(rectPct(e.clientX)); });
 
+  // Fall back through the cache/Drive chain if a blob: URL is dead.
+  afterImg.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(afterImg, upFav); };
+  if (beforeFav) beforeImg.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(beforeImg, beforeFav); };
   afterImg.src = upFav.imageData;
-  beforeImg.src = beforeSrc;
+  beforeImg.src = beforeSrc || (beforeFav && beforeFav.imageData) || '';
 }
 
 // Right rail: all siblings in the group (original + every upscale), newest
@@ -20897,6 +21037,7 @@ function upRenderRail(f) {
     cell.className = 'up-rail-item' + (upStageState.selId === fav.id ? ' sel' : '');
     const img = document.createElement('img');
     img.src = fav.imageData; img.alt = ''; img.loading = 'lazy';
+    img.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(img, fav); };
     cell.appendChild(img);
     const tag = document.createElement('div');
     tag.className = 'up-rail-tag';
