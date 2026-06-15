@@ -2417,6 +2417,14 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .bm-res-tr { top:6px; right:6px; }
 .bm-res-bl { bottom:6px; left:6px; }
 .bm-res-br { bottom:6px; right:6px; }
+/* Inside the zoom inner, labels are scaled with the image; counter-scale them
+   to a constant readable size, pinned to their corner via transform-origin.
+   --up-zoom-inv = 1 / current zoom scale (set by upZoomApply). */
+#upZoomInner .bm-res-label { font-size:13px; padding:3px 7px; transform:scale(var(--up-zoom-inv, 1)); }
+#upZoomInner .bm-res-tl { transform-origin:top left; }
+#upZoomInner .bm-res-tr { transform-origin:top right; }
+#upZoomInner .bm-res-bl { transform-origin:bottom left; }
+#upZoomInner .bm-res-br { transform-origin:bottom right; }
 
 /* ══ SWIPE TO REVEAL ══════════════════════════════════════════════ */
 .lib-card-swipe-wrap {
@@ -3767,6 +3775,15 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 .up-rail-kind { color:var(--accent); }
 .up-rail-dims { color:#fff; font-weight:600; letter-spacing:.5px; }
+.up-rail-dl {
+  position:absolute; right:5px; bottom:5px; z-index:3;
+  width:24px; height:24px; border-radius:5px; cursor:pointer;
+  border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.55); color:#fff;
+  font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .15s, background .15s, color .15s;
+}
+.up-rail-item:hover .up-rail-dl { opacity:1; }
+.up-rail-dl:hover { background:var(--accent); color:#000; border-color:var(--accent); }
 
 /* ══ UPSCALER LAYOUT (Phase 5: title-in-panel, full-height preview,
       minimise/pin library bar) ═══════════════════════════════════════ */
@@ -3804,7 +3821,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   #viewUpscaler .up-rail::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
   #viewUpscaler .up-rail::-webkit-scrollbar-thumb:hover { background:var(--muted); }
   #viewUpscaler .up-rail::-webkit-scrollbar-track { background:transparent; }
-  #viewUpscaler .up-area-center { display:flex; align-self:stretch; }
+  #viewUpscaler .up-area-center { display:flex; flex-direction:column; align-self:stretch; height:calc(100vh - 16px); min-height:0; }
 
   /* The settings-panel source thumbnail is redundant with the big preview +
      rail (the original already shows there). Hide it on desktop; the hidden
@@ -4180,8 +4197,8 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
           </div>
           <div class="up-zoom-scale" id="upZoomScale" style="display:none;">100%</div>
           <div class="up-zoom-ctrls" id="upZoomCtrls" style="display:none;">
-            <button type="button" class="up-zoom-btn" title="Zoom out" onclick="upZoomBy(-1)">\u2212</button>
-            <button type="button" class="up-zoom-btn" title="Reset" onclick="upZoomReset()">\u21BA</button>
+            <button type="button" class="up-zoom-btn" title="Zoom out" onclick="upZoomBy(-1)">&minus;</button>
+            <button type="button" class="up-zoom-btn" title="Reset" onclick="upZoomReset()">&#x21BA;</button>
             <button type="button" class="up-zoom-btn" title="Zoom in" onclick="upZoomBy(1)">+</button>
           </div>
         </div>
@@ -20351,6 +20368,34 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   grid.prepend(card);
 }
 
+// Download a favourite's image, resolving a dead blob: URL via the cache/Drive
+// fallback chain first so the download doesn't fail silently.
+async function upDownloadFav(fav) {
+  if (!fav) return;
+  let src = fav.imageData;
+  // Probe whether the current src loads; if not, resolve via fallback.
+  const ok = await new Promise((res) => {
+    if (!src) return res(false);
+    const im = new Image();
+    im.onload = () => res(true);
+    im.onerror = () => res(false);
+    im.src = src;
+  });
+  if (!ok) {
+    try {
+      if (typeof bmGetCachedImage === 'function') {
+        const cached = await bmGetCachedImage(fav.id);
+        if (cached) src = cached;
+      }
+      if ((!src || src === fav.imageData) && fav.driveImageId && typeof driveFetchImageBlob === 'function') {
+        const d = await driveFetchImageBlob(fav.driveImageId);
+        if (d) src = d;
+      }
+    } catch (e) {}
+  }
+  if (src && typeof igDownload === 'function') igDownload(src);
+}
+
 async function igDownload(url) {
   try {
     const res = await fetch(url);
@@ -20806,14 +20851,19 @@ function upResolveGroup(f) {
   const all = (typeof favourites !== 'undefined') ? favourites : [];
   if (!f) return { original: null, upscales: [] };
   let original = f;
-  if (f.isUpscale && f.upscaledFromId != null) {
-    const src = all.find(x => x && x.id === f.upscaledFromId);
-    if (src) original = src; // else orphan: the upscale stands alone
+  if (f.isUpscale) {
+    // Forward link first (child → parent id).
+    let src = (f.upscaledFromId != null) ? all.find(x => x && x.id === f.upscaledFromId) : null;
+    // Reverse link fallback (parent.upscaleIds includes this child) — recovers
+    // groups whose child link wasn't written.
+    if (!src) src = all.find(x => x && Array.isArray(x.upscaleIds) && x.upscaleIds.includes(f.id));
+    if (src) original = src;
   }
-  const ups = original.isUpscale
-    ? [] // orphan upscale (no resolvable source): no siblings
-    : all.filter(x => x && x.isUpscale && x.upscaledFromId === original.id);
-  return { original: original.isUpscale ? null : original, upscales: ups };
+  if (original.isUpscale) return { original: null, upscales: [] }; // orphan upscale
+  // Collect children by EITHER direction so partially-linked groups still unite.
+  const ids = new Set(Array.isArray(original.upscaleIds) ? original.upscaleIds : []);
+  const ups = all.filter(x => x && x.isUpscale && (x.upscaledFromId === original.id || ids.has(x.id)));
+  return { original, upscales: ups };
 }
 
 // Central selection handler. Non-upscale → single preview + arm as source.
@@ -20858,6 +20908,8 @@ function upZoomMount(natW, natH) {
   upZoom.natW = natW || 0; upZoom.natH = natH || 0;
   upZoom.hasContent = !!(natW && natH);
   upZoomFit();
+  // Re-fit after layout settles (viewport height may not be final on first paint).
+  requestAnimationFrame(() => upZoomFit());
 }
 function upZoomFit() {
   const vp = document.getElementById('upZoomViewport');
@@ -20881,6 +20933,10 @@ function upZoomApply() {
   inner.style.width = upZoom.natW + 'px';
   inner.style.height = upZoom.natH + 'px';
   inner.style.transform = 'translate(' + upZoom.panX + 'px,' + upZoom.panY + 'px) scale(' + upZoom.scale + ')';
+  // Labels live inside the scaled inner; counter-scale them so they stay at a
+  // constant readable size and hug the image corners regardless of zoom.
+  const inv = upZoom.scale > 0 ? (1 / upZoom.scale) : 1;
+  inner.style.setProperty('--up-zoom-inv', inv);
   if (scaleEl) scaleEl.textContent = Math.round(upZoom.scale * 100) + '%';
 }
 function upZoomBy(dir) {
@@ -21064,6 +21120,13 @@ function upRenderRail(f) {
         }
       }, { once: true });
     }
+    // Download button (bottom-right). Resolves the best available source for
+    // the fav before downloading (handles dead blob: URLs via the cache chain).
+    const dl = document.createElement('button');
+    dl.className = 'up-rail-dl'; dl.type = 'button'; dl.title = 'Download';
+    dl.innerHTML = '&#x2193;';
+    dl.onclick = (e) => { e.stopPropagation(); upDownloadFav(fav); };
+    cell.appendChild(dl);
     cell.onclick = () => upSelectFav(fav);
     rail.appendChild(cell);
   });
