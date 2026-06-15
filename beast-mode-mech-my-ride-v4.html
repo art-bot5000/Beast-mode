@@ -3688,6 +3688,49 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       "library";
   }
 }
+
+/* ══ UPSCALER STAGE / SLIDER / RAIL (Phase 3) ═════════════════════ */
+.up-stage-img { position:relative; max-width:100%; max-height:70vh; display:inline-block; line-height:0; }
+.up-stage-img img { max-width:100%; max-height:70vh; object-fit:contain; border-radius:6px; display:block; }
+
+/* Before/after slider. Both layers are absolutely stacked; the "before" layer
+   is clipped via clip-path to the handle position. Images are sized identically
+   (object-fit:contain on a fixed-ratio box) so the comparison aligns. */
+.up-slider {
+  position:relative; width:100%; max-height:70vh; aspect-ratio:auto;
+  overflow:hidden; border-radius:6px; background:#000; user-select:none; touch-action:none;
+}
+.up-slider-after, .up-slider-before { position:relative; inset:0; line-height:0; }
+.up-slider-before { position:absolute; top:0; left:0; right:0; bottom:0; }
+.up-slider-after img, .up-slider-before img {
+  width:100%; max-height:70vh; object-fit:contain; display:block; background:#000;
+}
+.up-slider-before img { position:absolute; inset:0; height:100%; }
+.up-slider-handle {
+  position:absolute; top:0; bottom:0; left:50%; width:0; z-index:5;
+  transform:translateX(-50%); cursor:ew-resize; touch-action:none;
+}
+.up-slider-line { position:absolute; top:0; bottom:0; left:50%; width:2px; transform:translateX(-50%); background:var(--accent,#00ffb0); box-shadow:0 0 6px rgba(0,0,0,.6); }
+.up-slider-grip {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:30px; height:30px; border-radius:50%; background:var(--accent,#00ffb0);
+  color:#000; display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:700; box-shadow:0 1px 6px rgba(0,0,0,.5); cursor:ew-resize;
+}
+
+/* Right rail items. */
+.up-rail-item {
+  position:relative; border:2px solid transparent; border-radius:6px;
+  overflow:hidden; cursor:pointer; background:#000;
+}
+.up-rail-item.sel { border-color:var(--accent); }
+.up-rail-item img { width:100%; max-height:140px; object-fit:cover; display:block; }
+.up-rail-tag {
+  position:absolute; left:0; right:0; bottom:0;
+  font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px;
+  color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.75));
+  padding:10px 6px 4px; text-align:left; pointer-events:none;
+}
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
 .ig-tab { flex:1; padding:7px 6px; font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
@@ -18657,6 +18700,10 @@ const bmQueue = (() => {
           },
           outW: outW || null,
           outH: outH || null,
+          // Pinned "before" for the slider (in-memory meta; see upRun note).
+          srcImageData: meta.srcImageData || null,
+          srcW: (typeof meta.srcW === 'number') ? meta.srcW : null,
+          srcH: (typeof meta.srcH === 'number') ? meta.srcH : null,
         };
         autoSaveGeneratedImage(prompt || ('Upscaled · ' + model), fullText, im.url, model, pristine,
           tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged), upExtra);
@@ -19018,6 +19065,10 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       upscaleMeta: (extra && extra.upscaleMeta) ? extra.upscaleMeta : null,
       outW: (extra && typeof extra.outW === 'number') ? extra.outW : null,
       outH: (extra && typeof extra.outH === 'number') ? extra.outH : null,
+      // Pinned input for the before/after slider — the exact bytes upscaled.
+      srcImageData: (extra && extra.srcImageData) ? extra.srcImageData : null,
+      srcW: (extra && typeof extra.srcW === 'number') ? extra.srcW : null,
+      srcH: (extra && typeof extra.srcH === 'number') ? extra.srcH : null,
     };
     if (typeof favourites !== 'undefined') {
       favourites.unshift(fav);
@@ -20490,14 +20541,194 @@ function upRenderLibBar() {
       up.title = 'Upscaled image';
       cell.appendChild(up);
     }
-    cell.onclick = () => {
-      bar.querySelectorAll('.up-libbar-thumb').forEach(x => x.classList.remove('sel'));
-      cell.classList.add('sel');
-      upState.srcData = f.imageData; upState.srcIsUrl = false;
-      upState.srcFavId = f.id;
-      upShowPreview(f.imageData);
-    };
+    cell.onclick = () => { upSelectFav(f); };
     bar.appendChild(cell);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// UPSCALER — Phase 3 interactions: preview stage, results rail, slider
+// ═══════════════════════════════════════════════════════════════════
+const upStageState = { selId: null };
+
+// Resolve the upscale "group" any favourite belongs to:
+//   { original: fav|null, upscales: fav[] }  (upscales newest-first)
+// An original is a fav with hasUpscales; an upscale points via upscaledFromId.
+function upResolveGroup(f) {
+  const all = (typeof favourites !== 'undefined') ? favourites : [];
+  if (!f) return { original: null, upscales: [] };
+  let original = f;
+  if (f.isUpscale && f.upscaledFromId != null) {
+    const src = all.find(x => x && x.id === f.upscaledFromId);
+    if (src) original = src; // else orphan: the upscale stands alone
+  }
+  const ups = original.isUpscale
+    ? [] // orphan upscale (no resolvable source): no siblings
+    : all.filter(x => x && x.isUpscale && x.upscaledFromId === original.id);
+  return { original: original.isUpscale ? null : original, upscales: ups };
+}
+
+// Central selection handler. Non-upscale → single preview + arm as source.
+// Upscale → before/after slider + arm its ORIGINAL as the re-upscale source.
+function upSelectFav(f) {
+  if (!f) return;
+  upStageState.selId = f.id;
+  // Sync bottom-bar highlight.
+  const bar = document.getElementById('upLibBar');
+  if (bar) bar.querySelectorAll('.up-libbar-thumb').forEach(x =>
+    x.classList.toggle('sel', x.dataset.favId == f.id));
+
+  if (f.isUpscale) {
+    upRenderStageSlider(f);
+    // Re-arm the original (if resolvable) as the upscale source so the user
+    // can upscale again from the same starting point.
+    const { original } = upResolveGroup(f);
+    if (original) {
+      upState.srcData = original.imageData; upState.srcIsUrl = false;
+      upState.srcFavId = original.id;
+      upShowPreview(original.imageData);
+    }
+  } else {
+    upRenderStageSingle(f);
+    upState.srcData = f.imageData; upState.srcIsUrl = false;
+    upState.srcFavId = f.id;
+    upShowPreview(f.imageData);
+  }
+  upRenderRail(f);
+}
+
+// Single image in the center stage with a top-left resolution overlay whose
+// text colour adapts to the underlying corner brightness.
+function upRenderStageSingle(f) {
+  const stage = document.getElementById('upStage');
+  if (!stage) return;
+  stage.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'up-stage-img';
+  const img = document.createElement('img');
+  img.alt = f.title || '';
+  wrap.appendChild(img);
+  stage.appendChild(wrap);
+  const paint = (w, h) => {
+    if (w && h && typeof bmResLabel === 'function')
+      bmResLabel(wrap, img, w + '\u00D7' + h, 'tl', 'upStageResTL');
+  };
+  // Prefer stored dims; else measure on load.
+  if (f.outW && f.outH) paint(f.outW, f.outH);
+  img.addEventListener('load', () => {
+    if (!(f.outW && f.outH)) paint(img.naturalWidth, img.naturalHeight);
+  }, { once: true });
+  img.src = f.imageData;
+}
+
+// Before/after slider. Left = the ORIGINAL bytes that were upscaled (pinned
+// srcImageData if present, else the source fav's current imageData), res top-
+// left. Right = the upscaled image, res bottom-right. Both colours adapt.
+function upRenderStageSlider(upFav) {
+  const stage = document.getElementById('upStage');
+  if (!stage) return;
+  stage.innerHTML = '';
+
+  // Resolve the "before" source + its dimensions.
+  let beforeSrc = upFav.srcImageData || null;
+  let beforeW = upFav.srcW || null, beforeH = upFav.srcH || null;
+  if (!beforeSrc) {
+    const { original } = upResolveGroup(upFav);
+    if (original) { beforeSrc = original.imageData; beforeW = original.outW || null; beforeH = original.outH || null; }
+  }
+  if (!beforeSrc) { upRenderStageSingle(upFav); return; } // no original → just show it
+
+  const slider = document.createElement('div');
+  slider.className = 'up-slider';
+  // After (upscaled) fills the base layer; res bottom-right.
+  const afterWrap = document.createElement('div');
+  afterWrap.className = 'up-slider-after';
+  const afterImg = document.createElement('img');
+  afterImg.alt = 'upscaled';
+  afterWrap.appendChild(afterImg);
+  // Before (original) on top, clipped to the slider position; res top-left.
+  const beforeWrap = document.createElement('div');
+  beforeWrap.className = 'up-slider-before';
+  const beforeImg = document.createElement('img');
+  beforeImg.alt = 'original';
+  beforeWrap.appendChild(beforeImg);
+  // Handle.
+  const handle = document.createElement('div');
+  handle.className = 'up-slider-handle';
+  handle.innerHTML = '<div class="up-slider-line"></div><div class="up-slider-grip">\u2194</div>';
+
+  slider.appendChild(afterWrap);
+  slider.appendChild(beforeWrap);
+  slider.appendChild(handle);
+  stage.appendChild(slider);
+
+  const setPos = (pct) => {
+    pct = Math.max(0, Math.min(100, pct));
+    beforeWrap.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
+    handle.style.left = pct + '%';
+  };
+  setPos(50);
+
+  // Labels once each image is measurable.
+  const paintLabels = () => {
+    if (beforeImg.complete && beforeImg.naturalWidth) {
+      const w = beforeW || beforeImg.naturalWidth, h = beforeH || beforeImg.naturalHeight;
+      bmResLabel(beforeWrap, beforeImg, w + '\u00D7' + h, 'tl', 'upBeforeRes');
+    }
+    if (afterImg.complete && afterImg.naturalWidth) {
+      const w = upFav.outW || afterImg.naturalWidth, h = upFav.outH || afterImg.naturalHeight;
+      bmResLabel(afterWrap, afterImg, w + '\u00D7' + h, 'br', 'upAfterRes');
+    }
+  };
+  beforeImg.addEventListener('load', paintLabels, { once: true });
+  afterImg.addEventListener('load', paintLabels, { once: true });
+
+  // Drag interaction (pointer events cover mouse + touch).
+  let dragging = false;
+  const rectPct = (clientX) => {
+    const r = slider.getBoundingClientRect();
+    return ((clientX - r.left) / r.width) * 100;
+  };
+  const onMove = (e) => { if (dragging) setPos(rectPct(e.clientX)); };
+  handle.addEventListener('pointerdown', (e) => { dragging = true; handle.setPointerCapture(e.pointerId); });
+  handle.addEventListener('pointermove', onMove);
+  handle.addEventListener('pointerup', () => { dragging = false; });
+  slider.addEventListener('click', (e) => { if (e.target === handle || handle.contains(e.target)) return; setPos(rectPct(e.clientX)); });
+
+  afterImg.src = upFav.imageData;
+  beforeImg.src = beforeSrc;
+}
+
+// Right rail: all siblings in the group (original + every upscale), newest
+// first, original last. Clicking the original re-arms upscaling; clicking an
+// upscale opens its slider.
+function upRenderRail(f) {
+  const rail = document.getElementById('upRail');
+  if (!rail) return;
+  rail.innerHTML = '';
+  const { original, upscales } = upResolveGroup(f);
+  // Nothing to group (a plain image with no upscales): leave the rail empty.
+  if (!original && !upscales.length) return;
+  const items = [];
+  upscales.forEach(u => items.push({ fav: u, kind: 'upscale' }));
+  if (original) items.push({ fav: original, kind: 'original' });
+  items.forEach(({ fav, kind }) => {
+    const cell = document.createElement('div');
+    cell.className = 'up-rail-item' + (upStageState.selId === fav.id ? ' sel' : '');
+    const img = document.createElement('img');
+    img.src = fav.imageData; img.alt = ''; img.loading = 'lazy';
+    cell.appendChild(img);
+    const tag = document.createElement('div');
+    tag.className = 'up-rail-tag';
+    if (kind === 'original') {
+      tag.textContent = 'ORIGINAL';
+    } else {
+      const m = fav.upscaleMeta || {};
+      tag.textContent = m.mp ? (m.mp + 'MP') : (m.factor ? (m.factor + '\u00D7') : 'UPSCALE');
+    }
+    cell.appendChild(tag);
+    cell.onclick = () => upSelectFav(fav);
+    rail.appendChild(cell);
   });
 }
 
@@ -20618,6 +20849,13 @@ async function upRun() {
       upKind: m.kind,
       upFactor: (m.kind === 'megapixels') ? null : upState.factor,
       upMp: (m.kind === 'megapixels') ? upState.mp : null,
+      // Pin the exact input fed to the upscaler (data URI for upload/library,
+      // URL string for the URL tab) + its measured dimensions, so the before/
+      // after slider's "before" is faithful even if the source fav is later
+      // edited. In-memory meta only — absent if the page reloads mid-job.
+      srcImageData: upState.srcData || null,
+      srcW: upState.srcW || null,
+      srcH: upState.srcH || null,
     });
     if (!r.ok) {
       if (r.code === 'auth_required') {
@@ -20655,6 +20893,17 @@ async function upRun() {
           : ' \u00B7 saved to library \u00B7 \u26A0 NOT backed up \u2014 cloud cache keeps newest 5 only';
         upStatus('\u2713 IMAGE UPSCALED' + costStr + backupStr, false);
         upUpdateCloudWarn();
+        // Phase 3: refresh the bottom bar (new upscale now in the library) and
+        // open it in the stage so the before/after slider + rail show up.
+        if (typeof upRenderLibBar === 'function') upRenderLibBar();
+        try {
+          const all = (typeof favourites !== 'undefined') ? favourites : [];
+          // The just-saved upscale: newest fav flagged isUpscale, preferring a
+          // match on the source we upscaled from.
+          let fresh = all.find(x => x && x.isUpscale && x.upscaledFromId === upState.srcFavId);
+          if (!fresh) fresh = all.find(x => x && x.isUpscale);
+          if (fresh && typeof upSelectFav === 'function') upSelectFav(fresh);
+        } catch (e) { /* non-fatal */ }
       },
       onFail: (err) => { upStatus('\u2717 ' + (err.message || 'Upscale failed.'), true); },
     });
