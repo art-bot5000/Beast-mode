@@ -20738,9 +20738,29 @@ function upSrcFilePicked(files) {
   igDownscaleToDataUri(f, 2048, dataUri => {
     upState.srcData = dataUri; upState.srcIsUrl = false;
     upState.srcFavId = null;
-    upShowPreview(dataUri);
+    upShowAdHocSource(dataUri);   // load into the big preview + rail
   });
   document.getElementById('upSrcFile').value = '';
+}
+
+// Show an ad-hoc source (uploaded file or pasted URL — not a saved fav) in the
+// SAME big stage preview + rail that library selections use. Builds a
+// lightweight synthetic fav so the existing stage/rail/zoom path renders it.
+function upShowAdHocSource(src) {
+  const synthetic = {
+    id: '__adhoc__',
+    imageData: src,
+    isUpscale: false,
+    title: 'Uploaded image',
+    _adhoc: true
+  };
+  upStageState.selId = synthetic.id;
+  // Clear any bottom-bar selection highlight (this isn't a saved library item).
+  const bar = document.getElementById('upLibBar');
+  if (bar) bar.querySelectorAll('.up-libbar-thumb').forEach(x => x.classList.remove('sel'));
+  upRenderStageSingle(synthetic);
+  upRenderRail(synthetic);
+  upShowPreview(src);   // keeps dimension-gating (srcW/srcH/srcMp) intact
 }
 
 function upRenderLibraryGrid() {
@@ -20759,7 +20779,7 @@ function upRenderLibraryGrid() {
       img.classList.add('sel');
       upState.srcData = f.imageData; upState.srcIsUrl = false;
       upState.srcFavId = f.id;
-      upShowPreview(f.imageData);
+      upSelectFav(f);   // full stage + rail + group resolution
     };
     grid.appendChild(img);
   });
@@ -20874,6 +20894,9 @@ function upResolveGroup(f) {
 // Upscale → before/after slider + arm its ORIGINAL as the re-upscale source.
 function upSelectFav(f) {
   if (!f) return;
+  // Ad-hoc (uploaded / URL) sources aren't saved favs — re-show them as such
+  // rather than treating the synthetic id as a real library id.
+  if (f._adhoc) { upShowAdHocSource(f.imageData); return; }
   upStageState.selId = f.id;
   // Sync bottom-bar highlight.
   const bar = document.getElementById('upLibBar');
@@ -21147,7 +21170,7 @@ function upUrlChanged() {
   if (/^https?:\/\/.+/i.test(v)) {
     upState.srcData = v; upState.srcIsUrl = true;
     upState.srcFavId = null;
-    upShowPreview(v);
+    upShowAdHocSource(v);
   } else {
     upClearSource(true);
   }
