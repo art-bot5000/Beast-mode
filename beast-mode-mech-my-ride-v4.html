@@ -3658,8 +3658,14 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .up-libbar-hint { font-family:'Rajdhani',sans-serif; font-size:11px; letter-spacing:1px; color:var(--muted); }
 .up-libbar {
   display:flex; gap:8px; overflow-x:auto; overflow-y:hidden;
-  padding:6px 2px 10px; scroll-behavior:smooth;
+  padding:6px 2px 6px; scroll-behavior:smooth;
 }
+/* Slim horizontal scrollbar (~half the default chunkiness). */
+.up-libbar::-webkit-scrollbar { height:6px; }
+.up-libbar::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.up-libbar::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+.up-libbar::-webkit-scrollbar-track { background:transparent; }
+.up-libbar { scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
 .up-libbar-thumb {
   position:relative; flex:0 0 auto; width:84px; height:84px;
   border-radius:6px; border:2px solid transparent; overflow:hidden;
@@ -3732,42 +3738,82 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   padding:10px 6px 4px; text-align:left; pointer-events:none;
 }
 
-/* ══ UPSCALER LAYOUT FEEDBACK (Phase 4) ═══════════════════════════ */
-/* The app centres every view in a 900px column (.view-inner). The upscaler
-   wants the full width, left-aligned and flush to the collapsed nav rail, with
-   a sticky bottom library bar the expanded nav overlays. Applies at the same
-   ≥900px breakpoint the upscaler grid uses; below that the mobile single-column
-   flow (bar in normal flow) is left untouched. */
-@media (min-width: 901px) {
-  #viewUpscaler .view-inner {
-    max-width:none; margin:0; padding:24px 24px 150px 24px;
-  }
-  /* Reserve room so the fixed bottom bar never covers the rail/stage tail. */
-  #viewUpscaler #upMain.up-layout { padding-bottom:8px; }
+/* ══ UPSCALER LAYOUT (Phase 5: title-in-panel, full-height preview,
+      minimise/pin library bar) ═══════════════════════════════════════ */
+/* Title now lives at the top of the settings panel. */
+.up-settings-title { margin-bottom:14px; }
+.up-settings-title h1 {
+  font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:4px;
+  color:var(--accent); margin:0; line-height:1;
+}
+.up-settings-title .up-settings-sub {
+  display:block; font-size:10px; color:var(--muted); letter-spacing:2px; margin-top:4px;
+}
 
-  /* Sticky bottom library bar: fixed to the viewport, starting at the collapsed
-     nav edge. z-index sits BELOW the nav (200 rest / 260 hover) so the expanding
-     rail floats over it, but above page content. */
+@media (min-width: 901px) {
+  /* Full-width, left-aligned; panels run to the very top (no header strip). */
+  #viewUpscaler .view-inner { max-width:none; margin:0; padding:16px 24px 0 24px; }
+
+  /* Three columns, library row removed from the grid (the bar is fixed). */
+  #viewUpscaler #upMain.up-layout {
+    grid-template-areas:"settings center rail";
+    grid-template-rows:auto; padding-bottom:0; height:calc(100vh - 16px);
+    align-items:start;
+  }
+  #viewUpscaler .up-area-center { display:flex; align-self:stretch; }
+  /* Preview fills the centre column top→bottom. Its bottom edge is governed by
+     the library-bar state (see body.up-lib-* rules below). */
+  #viewUpscaler .up-stage {
+    flex:1; min-height:0; height:100%;
+    max-height:calc(100vh - var(--up-libbar-h, 16px));
+  }
+  #viewUpscaler .up-stage-img img,
+  #viewUpscaler .up-slider { max-height:calc(100vh - var(--up-libbar-h, 40px)); }
+
+  /* ── Fixed bottom library bar ─────────────────────────────────────── */
+  /* Anchored at the collapsed nav edge; z-index below the nav so the expanding
+     rail overlays it. Height + collapse handled by the body state classes. */
   #viewUpscaler .up-area-library {
     position:fixed; left:var(--mode-nav-w-collapsed); right:0; bottom:0;
     z-index:150; background:var(--bg,#0d0d0d);
-    border-top:1px solid var(--border); padding:8px 16px 10px;
+    border-top:1px solid var(--border); padding:6px 14px 8px;
     box-shadow:0 -6px 18px rgba(0,0,0,.45);
-  }
-  /* The library area is now fixed, so it no longer participates in the grid.
-     Collapse its grid row to nothing and let the three top areas fill height. */
-  #viewUpscaler #upMain.up-layout {
-    grid-template-areas:"settings center rail";
-    grid-template-rows:auto;
+    transition:transform .18s ease, height .18s ease;
   }
 
-  /* Bigger preview stage. */
-  #viewUpscaler .up-stage { min-height:62vh; }
-  #viewUpscaler .up-stage-img img,
-  #viewUpscaler .up-slider { max-height:74vh; }
+  /* PINNED: bar open at full height; preview reserves room above it. */
+  body.up-lib-pinned { --up-libbar-h:132px; }
+  body.up-lib-pinned #viewUpscaler .up-area-library { height:auto; }
 
-  /* Lift the floating queue widget above the sticky bar when this view is on. */
-  body.up-sticky #bmQueueWidget { bottom:128px; }
+  /* MINIMISED (free): bar collapses to a sliver (head only). The thumb strip
+     is clipped; preview runs to the bottom. Hovering the sliver expands it as
+     an OVERLAY (it floats over the preview; preview height is unchanged). */
+  body.up-lib-min { --up-libbar-h:14px; }
+  body.up-lib-min #viewUpscaler .up-area-library {
+    padding-bottom:4px; transform:translateY(calc(100% - 30px));
+  }
+  body.up-lib-min #viewUpscaler .up-area-library:hover {
+    transform:translateY(0);
+    box-shadow:0 -10px 28px rgba(0,0,0,.6);
+  }
+
+  /* Queue widget rides just above the bar in BOTH states. */
+  body.up-sticky.up-lib-pinned #bmQueueWidget { bottom:142px; }
+  body.up-sticky.up-lib-min    #bmQueueWidget { bottom:44px; }
+
+  /* Library-bar head + controls. */
+  #viewUpscaler .up-libbar-head {
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;
+  }
+  .up-libbar-ctrls { display:flex; gap:6px; }
+  .up-libbar-btn {
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:5px; width:26px; height:22px; font-size:12px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:color .15s, border-color .15s, background .15s;
+  }
+  .up-libbar-btn:hover { color:var(--accent); border-color:var(--accent); }
+  .up-libbar-btn.on { color:#000; background:var(--accent); border-color:var(--accent); }
 }
 
 /* Right-rail thumbnails: show the WHOLE image (contain, not cover). */
@@ -3968,13 +4014,6 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
      POST /api/upscale (auth-gated, token-metered server-side). -->
 <div class="view" id="viewUpscaler">
   <div class="view-inner">
-    <header style="margin-bottom:20px;">
-      <div class="title-line">
-        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// UPSCALER</h1>
-      </div>
-      <span class="version" style="font-size:11px;color:var(--muted);letter-spacing:2px;">RUNWARE RESOLUTION ENGINE</span>
-    </header>
-
     <div id="upAuthGate" class="ig-panel ig-gate" style="display:none;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--accent);margin-bottom:10px;">SIGN IN TO UPSCALE</div>
       <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Upscaling runs through your Beast Mode account.<br>Sign in (free) to unlock the resolution engine.</div>
@@ -3993,6 +4032,10 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
     <div id="upMain" class="up-layout" style="display:none;">
       <!-- ── SETTINGS (left) ─────────────────────────────────────────────── -->
       <div class="up-area-settings ig-panel">
+        <div class="up-settings-title">
+          <h1>// UPSCALER</h1>
+          <span class="up-settings-sub">RUNWARE RESOLUTION ENGINE</span>
+        </div>
         <!-- Source image -->
         <div class="ig-label">SOURCE IMAGE</div>
         <div class="ig-tabs" id="upSrcTabs">
@@ -4093,10 +4136,13 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       </div>
 
       <!-- ── BOTTOM: library bar (creation order) ─────────────────────────── -->
-      <div class="up-area-library">
+      <div class="up-area-library" id="upLibArea">
         <div class="up-libbar-head">
-          <span>LIBRARY</span>
           <span class="up-libbar-hint" id="upLibBarHint"></span>
+          <div class="up-libbar-ctrls">
+            <button type="button" class="up-libbar-btn" id="upLibExpandBtn" title="Expand" onclick="upLibToggleExpand()">⏫</button>
+            <button type="button" class="up-libbar-btn" id="upLibPinBtn" title="Pin open" onclick="upLibTogglePin()">⊙</button>
+          </div>
         </div>
         <div class="up-libbar" id="upLibBar"></div>
         <div class="up-libbar-empty" id="upLibBarEmpty" style="display:none;">No saved images yet — generate some in Image Gen, or upload one on the left.</div>
@@ -8466,6 +8512,7 @@ function switchView(view, pushState = true) {
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
   if (view === 'upscaler' && typeof upInit === 'function') upInit()
   document.body.classList.toggle('up-sticky', view === 'upscaler')
+  if (view !== 'upscaler') document.body.classList.remove('up-lib-pinned', 'up-lib-min')
   if (view === 'queue' && typeof bmQueue !== 'undefined') bmQueue.renderView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
   if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
@@ -10773,6 +10820,7 @@ const LS = {
   PB_LIBS:   'bm_state_pb_libraries',
   PB_FAVS:   'bm_state_pb_favs',
   SETTINGS:  'bm_state_settings',
+  UP_LIBBAR: 'bm_state_up_libbar',
 }
 
 function lsSave(key, value) {
@@ -20331,6 +20379,7 @@ function upInit() {
   if (!signedIn) return;
   bmFetchBalance();
   if (typeof upRenderLibBar === 'function') upRenderLibBar();
+  if (typeof upLibApplyState === 'function') upLibApplyState();
 
   if (!upState.fetched) {
     upState.fetched = true;
@@ -20567,6 +20616,49 @@ function upRenderLibraryGrid() {
 // Phase 1 upscale badge. Clicking sets the upscale source (reuses the same
 // state the LIBRARY source-tab sets). Phase 3 adds preview-stage + grouping
 // behaviour on top of this; for now it is a functional source picker.
+// ── Library bar: pin / minimise state (persisted) ───────────────────────────
+// Two modes drive the layout via body classes:
+//   up-lib-pinned → bar fixed open, preview ends just above it
+//   up-lib-min    → bar collapsed to a sliver, hover expands it OVER the
+//                   preview; preview runs to the viewport bottom
+// First-ever load defaults to minimised. Pin state persists in localStorage.
+const upLibState = { pinned: false, loaded: false };
+
+function upLibLoadState() {
+  if (upLibState.loaded) return;
+  upLibState.loaded = true;
+  try {
+    const saved = (typeof lsLoad === 'function') ? lsLoad(LS.UP_LIBBAR, null) : null;
+    if (saved && typeof saved.pinned === 'boolean') upLibState.pinned = saved.pinned;
+  } catch (e) {}
+}
+function upLibSaveState() {
+  try { if (typeof lsSave === 'function') lsSave(LS.UP_LIBBAR, { pinned: upLibState.pinned }); } catch (e) {}
+}
+function upLibApplyState() {
+  upLibLoadState();
+  const b = document.body;
+  b.classList.toggle('up-lib-pinned', upLibState.pinned);
+  b.classList.toggle('up-lib-min', !upLibState.pinned);
+  const pinBtn = document.getElementById('upLibPinBtn');
+  if (pinBtn) {
+    pinBtn.classList.toggle('on', upLibState.pinned);
+    pinBtn.title = upLibState.pinned ? 'Unpin (free / minimise)' : 'Pin open';
+    pinBtn.textContent = upLibState.pinned ? '\u25C9' : '\u2299'; // ◉ pinned : ⊙
+  }
+  const exBtn = document.getElementById('upLibExpandBtn');
+  if (exBtn) exBtn.style.display = upLibState.pinned ? 'none' : '';
+}
+function upLibTogglePin() {
+  upLibState.pinned = !upLibState.pinned;
+  upLibSaveState();
+  upLibApplyState();
+}
+// Manual expand button (only meaningful while minimised): pin it open.
+function upLibToggleExpand() {
+  if (!upLibState.pinned) { upLibState.pinned = true; upLibSaveState(); upLibApplyState(); }
+}
+
 function upRenderLibBar() {
   const bar = document.getElementById('upLibBar');
   const empty = document.getElementById('upLibBarEmpty');
