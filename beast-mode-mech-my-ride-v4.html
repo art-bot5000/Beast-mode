@@ -3620,6 +3620,74 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 /* Image Gen layout */
 #viewImagegen .ig-layout, #viewUpscaler .ig-layout { display:grid; grid-template-columns:380px 1fr; gap:20px; align-items:start; }
 @media (max-width: 900px) { #viewImagegen .ig-layout, #viewUpscaler .ig-layout { grid-template-columns:1fr; } }
+
+/* ══ UPSCALER LAYOUT (Phase 2) ════════════════════════════════════ */
+/* Large screens: settings left, chosen-image preview center, results rail
+   right, library bar pinned along the bottom (full width). Display is flipped
+   grid/none by upInit(); grid-template lives here. Collapses to a single
+   column at the existing 900px breakpoint, preserving the prior stacked UX. */
+#upMain.up-layout {
+  display:grid; gap:18px; align-items:start;
+  grid-template-columns:360px minmax(0,1fr) 300px;
+  grid-template-areas:
+    "settings center rail"
+    "library  library library";
+}
+#upMain .up-area-settings { grid-area:settings; align-self:stretch; }
+#upMain .up-area-center   { grid-area:center; min-width:0; }
+#upMain .up-area-rail     { grid-area:rail; min-width:0; }
+#upMain .up-area-library  { grid-area:library; min-width:0; }
+
+/* Center stage — holds the main preview / before-after slider in Phase 3. */
+.up-stage {
+  position:relative; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; min-height:360px; display:flex; align-items:center;
+  justify-content:center; overflow:hidden;
+}
+.up-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 24px; }
+
+/* Right rail — original + upscale thumbnails (Phase 3 populates #upRail). */
+.up-rail-head, .up-libbar-head {
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:2px;
+  color:var(--muted); margin-bottom:8px;
+}
+.up-rail { display:flex; flex-direction:column; gap:10px; }
+
+/* Bottom library bar — horizontal scroll, creation order. */
+.up-libbar-head { display:flex; align-items:baseline; justify-content:space-between; }
+.up-libbar-hint { font-family:'Rajdhani',sans-serif; font-size:11px; letter-spacing:1px; color:var(--muted); }
+.up-libbar {
+  display:flex; gap:8px; overflow-x:auto; overflow-y:hidden;
+  padding:6px 2px 10px; scroll-behavior:smooth;
+}
+.up-libbar-thumb {
+  position:relative; flex:0 0 auto; width:84px; height:84px;
+  border-radius:6px; border:2px solid transparent; overflow:hidden;
+  cursor:pointer; background:#000;
+}
+.up-libbar-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.up-libbar-thumb.sel { border-color:var(--accent); }
+.up-libbar-thumb .up-libbar-up {
+  position:absolute; left:4px; bottom:4px;
+  display:flex; align-items:center; justify-content:center;
+  min-width:16px; height:16px; padding:0 4px;
+  font-size:10px; line-height:1; color:#000;
+  background:var(--accent,#00ffb0); border-radius:3px;
+  box-shadow:0 1px 3px rgba(0,0,0,.5); pointer-events:none;
+}
+.up-libbar-empty { color:var(--muted); font-size:12px; padding:10px 2px; }
+
+/* Small screens: single column, areas stack in reading order. */
+@media (max-width: 900px) {
+  #upMain.up-layout {
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "settings"
+      "center"
+      "rail"
+      "library";
+  }
+}
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
 .ig-tab { flex:1; padding:7px 6px; font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
@@ -3826,9 +3894,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ CONNECT GOOGLE DRIVE</button>
     </div>
 
-    <div id="upMain" class="ig-layout" style="display:none;">
-      <!-- ── Controls column ─────────────────────────────────────────────── -->
-      <div class="ig-panel">
+    <div id="upMain" class="up-layout" style="display:none;">
+      <!-- ── SETTINGS (left) ─────────────────────────────────────────────── -->
+      <div class="up-area-settings ig-panel">
         <!-- Source image -->
         <div class="ig-label">SOURCE IMAGE</div>
         <div class="ig-tabs" id="upSrcTabs">
@@ -3908,12 +3976,34 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         <div id="upStatus"></div>
       </div>
 
-      <!-- ── Results column ──────────────────────────────────────────────── -->
-      <div>
+      <!-- ── CENTER: chosen-image preview stage (Phase 3 populates) ───────── -->
+      <div class="up-area-center">
+        <div class="up-stage" id="upStage">
+          <div class="up-stage-empty" id="upStageEmpty">
+            Select an image from the bar below to preview it here.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── RIGHT: original / upscale results rail ───────────────────────── -->
+      <div class="up-area-rail">
+        <div class="up-rail-head">RESULTS</div>
+        <div class="up-rail" id="upRail"></div>
+        <!-- Legacy inline results grid retained (Phase 3 migrates fully). -->
         <div class="ig-results" id="upResults"></div>
-        <div id="upEmpty" class="ig-panel ig-gate" style="color:var(--muted);font-size:13px;">
+        <div id="upEmpty" class="ig-panel ig-gate" style="color:var(--muted);font-size:12px;padding:24px 14px;">
           Upscaled images appear here.<br>They auto-save to your Library and cloud.
         </div>
+      </div>
+
+      <!-- ── BOTTOM: library bar (creation order) ─────────────────────────── -->
+      <div class="up-area-library">
+        <div class="up-libbar-head">
+          <span>LIBRARY</span>
+          <span class="up-libbar-hint" id="upLibBarHint"></span>
+        </div>
+        <div class="up-libbar" id="upLibBar"></div>
+        <div class="up-libbar-empty" id="upLibBarEmpty" style="display:none;">No saved images yet — generate some in Image Gen, or upload one on the left.</div>
       </div>
     </div>
   </div>
@@ -20135,6 +20225,7 @@ function upInit() {
   upUpdateCloudWarn(signedIn);
   if (!signedIn) return;
   bmFetchBalance();
+  if (typeof upRenderLibBar === 'function') upRenderLibBar();
 
   if (!upState.fetched) {
     upState.fetched = true;
@@ -20363,6 +20454,50 @@ function upRenderLibraryGrid() {
       upShowPreview(f.imageData);
     };
     grid.appendChild(img);
+  });
+}
+
+// Bottom library bar (large-screen layout). Renders saved images in the same
+// order as the library (newest first), each as a square thumbnail with the
+// Phase 1 upscale badge. Clicking sets the upscale source (reuses the same
+// state the LIBRARY source-tab sets). Phase 3 adds preview-stage + grouping
+// behaviour on top of this; for now it is a functional source picker.
+function upRenderLibBar() {
+  const bar = document.getElementById('upLibBar');
+  const empty = document.getElementById('upLibBarEmpty');
+  const hint = document.getElementById('upLibBarHint');
+  if (!bar) return;
+  bar.innerHTML = '';
+  const withImg = (typeof favourites !== 'undefined' ? favourites : []).filter(f => f && f.imageData);
+  if (!withImg.length) {
+    if (empty) empty.style.display = 'block';
+    if (hint) hint.textContent = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  if (hint) hint.textContent = withImg.length + ' image' + (withImg.length === 1 ? '' : 's');
+  withImg.forEach(f => {
+    const cell = document.createElement('div');
+    cell.className = 'up-libbar-thumb' + (upState.srcFavId === f.id ? ' sel' : '');
+    cell.dataset.favId = f.id;
+    const img = document.createElement('img');
+    img.src = f.imageData; img.alt = f.title || ''; img.loading = 'lazy';
+    cell.appendChild(img);
+    if (f.isUpscale) {
+      const up = document.createElement('div');
+      up.className = 'up-libbar-up';
+      up.textContent = '\u2726'; // ✦
+      up.title = 'Upscaled image';
+      cell.appendChild(up);
+    }
+    cell.onclick = () => {
+      bar.querySelectorAll('.up-libbar-thumb').forEach(x => x.classList.remove('sel'));
+      cell.classList.add('sel');
+      upState.srcData = f.imageData; upState.srcIsUrl = false;
+      upState.srcFavId = f.id;
+      upShowPreview(f.imageData);
+    };
+    bar.appendChild(cell);
   });
 }
 
