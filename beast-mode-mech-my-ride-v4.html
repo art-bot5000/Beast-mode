@@ -3761,44 +3761,52 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
     align-items:start;
   }
   #viewUpscaler .up-area-center { display:flex; align-self:stretch; }
-  /* Preview fills the centre column top→bottom. Its bottom edge is governed by
-     the library-bar state (see body.up-lib-* rules below). */
+
+  /* The settings-panel source thumbnail is redundant with the big preview +
+     rail (the original already shows there). Hide it on desktop; the hidden
+     element still receives upShowPreview()'s src so dimension gating is intact. */
+  #viewUpscaler #upPreviewWrap { display:none !important; }
+
+  /* Preview fills the centre column top→bottom, stopping just above the library
+     bar in BOTH states (never sliding underneath it). --up-libbar-h carries the
+     reserved height per state. */
   #viewUpscaler .up-stage {
     flex:1; min-height:0; height:100%;
-    max-height:calc(100vh - var(--up-libbar-h, 16px));
+    max-height:calc(100vh - 16px - var(--up-libbar-h, 40px));
   }
   #viewUpscaler .up-stage-img img,
-  #viewUpscaler .up-slider { max-height:calc(100vh - var(--up-libbar-h, 40px)); }
+  #viewUpscaler .up-slider { max-height:calc(100vh - 28px - var(--up-libbar-h, 40px)); }
 
   /* ── Fixed bottom library bar ─────────────────────────────────────── */
-  /* Anchored at the collapsed nav edge; z-index below the nav so the expanding
-     rail overlays it. Height + collapse handled by the body state classes. */
   #viewUpscaler .up-area-library {
     position:fixed; left:var(--mode-nav-w-collapsed); right:0; bottom:0;
     z-index:150; background:var(--bg,#0d0d0d);
     border-top:1px solid var(--border); padding:6px 14px 8px;
     box-shadow:0 -6px 18px rgba(0,0,0,.45);
-    transition:transform .18s ease, height .18s ease;
+    transition:transform .18s ease;
   }
 
-  /* PINNED: bar open at full height; preview reserves room above it. */
-  body.up-lib-pinned { --up-libbar-h:132px; }
-  body.up-lib-pinned #viewUpscaler .up-area-library { height:auto; }
+  /* PINNED: bar open at full height; preview reserves the full bar height. */
+  body.up-lib-pinned { --up-libbar-h:140px; }
 
-  /* MINIMISED (free): bar collapses to a sliver (head only). The thumb strip
-     is clipped; preview runs to the bottom. Hovering the sliver expands it as
-     an OVERLAY (it floats over the preview; preview height is unchanged). */
-  body.up-lib-min { --up-libbar-h:14px; }
+  /* MINIMISED (free): bar slides down to a ~34px sliver (head only). Preview
+     reserves just that sliver, so it stretches nearly full-screen but still
+     stops above the bar. Hovering the sliver slides the full bar up as an
+     OVERLAY over the preview (preview height unchanged). */
+  body.up-lib-min { --up-libbar-h:34px; }
   body.up-lib-min #viewUpscaler .up-area-library {
-    padding-bottom:4px; transform:translateY(calc(100% - 30px));
+    transform:translateY(calc(100% - 34px));
   }
   body.up-lib-min #viewUpscaler .up-area-library:hover {
     transform:translateY(0);
     box-shadow:0 -10px 28px rgba(0,0,0,.6);
   }
 
-  /* Queue widget rides just above the bar in BOTH states. */
-  body.up-sticky.up-lib-pinned #bmQueueWidget { bottom:142px; }
+  /* Queue widget sits physically ABOVE the bar and moves up with it. Its
+     z-index drops below the bar (150) here so the bar's pin control is always
+     clickable even when the queue is open. */
+  body.up-sticky #bmQueueWidget { z-index:140; }
+  body.up-sticky.up-lib-pinned #bmQueueWidget { bottom:150px; }
   body.up-sticky.up-lib-min    #bmQueueWidget { bottom:44px; }
 
   /* Library-bar head + controls. */
@@ -3808,18 +3816,20 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   .up-libbar-ctrls { display:flex; gap:6px; }
   .up-libbar-btn {
     background:transparent; border:1px solid var(--border); color:var(--muted);
-    border-radius:5px; width:26px; height:22px; font-size:12px; line-height:1;
+    border-radius:5px; width:28px; height:24px; font-size:13px; line-height:1;
     cursor:pointer; display:flex; align-items:center; justify-content:center;
     transition:color .15s, border-color .15s, background .15s;
   }
   .up-libbar-btn:hover { color:var(--accent); border-color:var(--accent); }
   .up-libbar-btn.on { color:#000; background:var(--accent); border-color:var(--accent); }
+  .up-libbar-btn svg { width:14px; height:14px; display:block; }
 }
 
 /* Right-rail thumbnails: show the WHOLE image (contain, not cover). */
 #viewUpscaler .up-rail-item img {
   width:100%; max-height:150px; object-fit:contain; background:#000;
 }
+.up-rail-empty { color:var(--muted); font-size:12px; line-height:1.5; padding:18px 4px; }
 
 /* Slider label stacking: the AFTER (upscaled) resolution label lives on the
    base after-layer and must be COVERED by the before (original) layer as the
@@ -4128,11 +4138,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       <div class="up-area-rail">
         <div class="up-rail-head">RESULTS</div>
         <div class="up-rail" id="upRail"></div>
-        <!-- Legacy inline results grid retained (Phase 3 migrates fully). -->
-        <div class="ig-results" id="upResults"></div>
-        <div id="upEmpty" class="ig-panel ig-gate" style="color:var(--muted);font-size:12px;padding:24px 14px;">
-          Upscaled images appear here.<br>They auto-save to your Library and cloud.
-        </div>
+        <div id="upRailEmpty" class="up-rail-empty">Upscaled images appear here.<br>They auto-save to your Library and cloud.</div>
       </div>
 
       <!-- ── BOTTOM: library bar (creation order) ─────────────────────────── -->
@@ -4140,8 +4146,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         <div class="up-libbar-head">
           <span class="up-libbar-hint" id="upLibBarHint"></span>
           <div class="up-libbar-ctrls">
-            <button type="button" class="up-libbar-btn" id="upLibExpandBtn" title="Expand" onclick="upLibToggleExpand()">⏫</button>
-            <button type="button" class="up-libbar-btn" id="upLibPinBtn" title="Pin open" onclick="upLibTogglePin()">⊙</button>
+            <button type="button" class="up-libbar-btn" id="upLibPinBtn" title="Pin open" onclick="upLibTogglePin()" aria-label="Pin library bar">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.4 2.6a1 1 0 0 0-1.7.7v.6L8.9 8.2l-2.8.5a1 1 0 0 0-.5 1.7l3 3-4.3 4.3a1 1 0 1 0 1.4 1.4L10 14.8l3 3a1 1 0 0 0 1.7-.5l.5-2.8 4.3-3.8h.6a1 1 0 0 0 .7-1.7l-6.4-6.6z"/></svg>
+            </button>
           </div>
         </div>
         <div class="up-libbar" id="upLibBar"></div>
@@ -20644,19 +20651,12 @@ function upLibApplyState() {
   if (pinBtn) {
     pinBtn.classList.toggle('on', upLibState.pinned);
     pinBtn.title = upLibState.pinned ? 'Unpin (free / minimise)' : 'Pin open';
-    pinBtn.textContent = upLibState.pinned ? '\u25C9' : '\u2299'; // ◉ pinned : ⊙
   }
-  const exBtn = document.getElementById('upLibExpandBtn');
-  if (exBtn) exBtn.style.display = upLibState.pinned ? 'none' : '';
 }
 function upLibTogglePin() {
   upLibState.pinned = !upLibState.pinned;
   upLibSaveState();
   upLibApplyState();
-}
-// Manual expand button (only meaningful while minimised): pin it open.
-function upLibToggleExpand() {
-  if (!upLibState.pinned) { upLibState.pinned = true; upLibSaveState(); upLibApplyState(); }
 }
 
 function upRenderLibBar() {
@@ -20852,12 +20852,14 @@ function upRenderRail(f) {
   const rail = document.getElementById('upRail');
   if (!rail) return;
   rail.innerHTML = '';
+  const empty = document.getElementById('upRailEmpty');
   const { original, upscales } = upResolveGroup(f);
   // Nothing to group (a plain image with no upscales): leave the rail empty.
-  if (!original && !upscales.length) return;
+  if (!original && !upscales.length) { if (empty) empty.style.display = ''; return; }
+  if (empty) empty.style.display = 'none';
   const items = [];
-  upscales.forEach(u => items.push({ fav: u, kind: 'upscale' }));
   if (original) items.push({ fav: original, kind: 'original' });
+  upscales.forEach(u => items.push({ fav: u, kind: 'upscale' }));
   items.forEach(({ fav, kind }) => {
     const cell = document.createElement('div');
     cell.className = 'up-rail-item' + (upStageState.selId === fav.id ? ' sel' : '');
@@ -21027,9 +21029,8 @@ async function upRun() {
       onDone: (result) => {
         const image = result.image && result.image.url ? result.image : null;
         if (!image) { upStatus('\u2717 No image returned.', true); return; }
-        // Inline card only — bmQueue.drain() already saved to the library.
-        upAddResultCard(image, m, result.tokens);
-        document.getElementById('upEmpty').style.display = 'none';
+        // The big preview + rail now show the upscale; bmQueue.drain() already
+        // saved it to the library. No separate inline result card needed.
         const tk = result.tokens || {};
         const costStr = (typeof tk.charged === 'number')
           ? (' \u00B7 ' + tk.charged + ' TOKEN' + (tk.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + tk.balance)
@@ -21061,6 +21062,7 @@ async function upRun() {
 
 function upAddResultCard(image, model, tokens) {
   const grid = document.getElementById('upResults');
+  if (!grid) return; // result card removed — preview + rail replace it
   const card = document.createElement('div');
   card.className = 'ig-card';
 
