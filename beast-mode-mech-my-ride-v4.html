@@ -3640,8 +3640,8 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 
 /* Center stage — holds the main preview / before-after slider in Phase 3. */
 .up-stage {
-  position:relative; background:var(--surface); border:1px solid var(--border);
-  border-radius:8px; min-height:360px; display:flex; align-items:center;
+  position:relative; background:transparent; border:none;
+  border-radius:0; min-height:360px; display:flex; align-items:center;
   justify-content:center; overflow:hidden;
 }
 .up-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 24px; }
@@ -3703,13 +3703,13 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
    is clipped via clip-path to the handle position. Images are sized identically
    (object-fit:contain on a fixed-ratio box) so the comparison aligns. */
 .up-slider {
-  position:relative; width:100%; max-height:70vh; aspect-ratio:auto;
-  overflow:hidden; border-radius:6px; background:#000; user-select:none; touch-action:none;
+  position:relative; max-height:70vh; width:auto; max-width:100%;
+  overflow:hidden; border-radius:6px; background:transparent; user-select:none; touch-action:none;
 }
 .up-slider-after, .up-slider-before { position:relative; inset:0; line-height:0; }
 .up-slider-before { position:absolute; top:0; left:0; right:0; bottom:0; }
 .up-slider-after img, .up-slider-before img {
-  width:100%; max-height:70vh; object-fit:contain; display:block; background:#000;
+  width:100%; height:100%; object-fit:cover; display:block; background:transparent;
 }
 .up-slider-before img { position:absolute; inset:0; height:100%; }
 .up-slider-handle {
@@ -3727,16 +3727,19 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 /* Right rail items. */
 .up-rail-item {
   position:relative; border:2px solid transparent; border-radius:6px;
-  overflow:hidden; cursor:pointer; background:#000;
+  overflow:hidden; cursor:pointer; background:transparent;
 }
 .up-rail-item.sel { border-color:var(--accent); }
-.up-rail-item img { width:100%; max-height:140px; object-fit:cover; display:block; }
+.up-rail-item img { width:100%; max-height:200px; object-fit:contain; display:block; background:transparent; }
 .up-rail-tag {
   position:absolute; left:0; right:0; bottom:0;
+  display:flex; align-items:baseline; gap:6px;
   font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px;
-  color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.75));
-  padding:10px 6px 4px; text-align:left; pointer-events:none;
+  color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.78));
+  padding:12px 6px 4px; text-align:left; pointer-events:none;
 }
+.up-rail-kind { color:var(--accent); }
+.up-rail-dims { color:#fff; font-weight:600; letter-spacing:.5px; }
 
 /* ══ UPSCALER LAYOUT (Phase 5: title-in-panel, full-height preview,
       minimise/pin library bar) ═══════════════════════════════════════ */
@@ -3757,9 +3760,23 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   /* Three columns, library row removed from the grid (the bar is fixed). */
   #viewUpscaler #upMain.up-layout {
     grid-template-areas:"settings center rail";
+    grid-template-columns:360px minmax(0,1fr) 150px;
     grid-template-rows:auto; padding-bottom:0; height:calc(100vh - 16px);
     align-items:start;
   }
+  /* Rail scrolls vertically (thin bar) if upscales run off-screen. */
+  #viewUpscaler .up-area-rail {
+    align-self:stretch; height:calc(100vh - 16px);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  #viewUpscaler .up-rail {
+    flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding-right:4px;
+    scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+  }
+  #viewUpscaler .up-rail::-webkit-scrollbar { width:6px; }
+  #viewUpscaler .up-rail::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  #viewUpscaler .up-rail::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+  #viewUpscaler .up-rail::-webkit-scrollbar-track { background:transparent; }
   #viewUpscaler .up-area-center { display:flex; align-self:stretch; }
 
   /* The settings-panel source thumbnail is redundant with the big preview +
@@ -3774,8 +3791,19 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
     flex:1; min-height:0; height:100%;
     max-height:calc(100vh - 16px - var(--up-libbar-h, 40px));
   }
-  #viewUpscaler .up-stage-img img,
-  #viewUpscaler .up-slider { max-height:calc(100vh - 28px - var(--up-libbar-h, 40px)); }
+  /* Single-image preview: wrapper shrink-wraps the image (height-driven), so
+     the resolution labels sit on the IMAGE edges and there are no letterbox
+     bars around it. */
+  #viewUpscaler .up-stage-img {
+    height:100%; max-height:calc(100vh - 28px - var(--up-libbar-h, 40px));
+    width:auto; display:flex;
+  }
+  #viewUpscaler .up-stage-img img {
+    height:100%; width:auto; max-width:100%; object-fit:contain;
+    max-height:calc(100vh - 28px - var(--up-libbar-h, 40px));
+  }
+  /* Slider keeps full available height; bars eliminated by transparent stage. */
+  #viewUpscaler .up-slider { max-height:calc(100vh - 28px - var(--up-libbar-h, 40px)); height:100%; }
 
   /* ── Fixed bottom library bar ─────────────────────────────────────── */
   #viewUpscaler .up-area-library {
@@ -3825,9 +3853,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   .up-libbar-btn svg { width:14px; height:14px; display:block; }
 }
 
-/* Right-rail thumbnails: show the WHOLE image (contain, not cover). */
+/* Right-rail thumbnails: show the WHOLE image (contain, transparent bg). */
 #viewUpscaler .up-rail-item img {
-  width:100%; max-height:150px; object-fit:contain; background:#000;
+  width:100%; max-height:200px; object-fit:contain; background:transparent;
 }
 .up-rail-empty { color:var(--muted); font-size:12px; line-height:1.5; padding:18px 4px; }
 
@@ -20786,6 +20814,10 @@ function upRenderStageSlider(upFav) {
 
   const slider = document.createElement('div');
   slider.className = 'up-slider';
+  // Match the slider box to the upscaled image's aspect so there are no
+  // letterbox bars and the resolution labels sit on the image edges.
+  const aw = upFav.outW || 0, ah = upFav.outH || 0;
+  if (aw > 0 && ah > 0) slider.style.aspectRatio = aw + ' / ' + ah;
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
@@ -20868,13 +20900,29 @@ function upRenderRail(f) {
     cell.appendChild(img);
     const tag = document.createElement('div');
     tag.className = 'up-rail-tag';
+    let label, dims = '';
     if (kind === 'original') {
-      tag.textContent = 'ORIGINAL';
+      label = 'ORIGINAL';
+      if (fav.outW && fav.outH) dims = fav.outW + '\u00D7' + fav.outH;
     } else {
       const m = fav.upscaleMeta || {};
-      tag.textContent = m.mp ? (m.mp + 'MP') : (m.factor ? (m.factor + '\u00D7') : 'UPSCALE');
+      label = m.mp ? (m.mp + 'MP') : (m.factor ? (m.factor + '\u00D7') : 'UPSCALE');
+      if (fav.outW && fav.outH) dims = fav.outW + '\u00D7' + fav.outH;
     }
+    tag.innerHTML = '<span class="up-rail-kind">' + label + '</span>' +
+      (dims ? ('<span class="up-rail-dims">' + dims + '</span>') : '');
     cell.appendChild(tag);
+    // If dimensions aren't stored (e.g. originals), fill them from natural size.
+    if (!dims) {
+      img.addEventListener('load', () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          const d = img.naturalWidth + '\u00D7' + img.naturalHeight;
+          const dimsEl = document.createElement('span');
+          dimsEl.className = 'up-rail-dims'; dimsEl.textContent = d;
+          if (!tag.querySelector('.up-rail-dims')) tag.appendChild(dimsEl);
+        }
+      }, { once: true });
+    }
     cell.onclick = () => upSelectFav(fav);
     rail.appendChild(cell);
   });
@@ -20964,7 +21012,16 @@ async function upRun() {
     return;
   }
 
-  const body = { model: m.id, inputImage: upState.srcData, outputFormat: upState.format };
+  // The backend cannot fetch browser-local blob: URLs (used by cached library/
+  // rail images), so normalise the source to a data URI / public URL first.
+  let inputImage = upState.srcData;
+  if (typeof upResolveInputImage === 'function') {
+    upStatus('\u25CC Preparing source\u2026', false);
+    inputImage = await upResolveInputImage(upState.srcData);
+    if (!inputImage) { upStatus('\u2717 Could not read the source image. Try re-selecting or re-uploading it.', true); return; }
+  }
+
+  const body = { model: m.id, inputImage: inputImage, outputFormat: upState.format };
   if (m.kind === 'megapixels') {
     body.targetMegapixels = upState.mp;
     if (document.getElementById('upEnhance').checked) body.enhanceDetails = true;
@@ -21001,7 +21058,7 @@ async function upRun() {
       // URL string for the URL tab) + its measured dimensions, so the before/
       // after slider's "before" is faithful even if the source fav is later
       // edited. In-memory meta only — absent if the page reloads mid-job.
-      srcImageData: upState.srcData || null,
+      srcImageData: inputImage || upState.srcData || null,
       srcW: upState.srcW || null,
       srcH: upState.srcH || null,
     });
@@ -21974,6 +22031,27 @@ async function driveEnsureBeastFolder() {
 // without these checks an R2/CDN error or challenge page (HTML, a few KB) gets
 // blobbed and uploaded as a ".jpg" — Drive then shows "unsupported file format".
 // Returns a real image blob or null (never garbage). data: URIs pass through.
+// Resolve a source image reference into something the upscale backend accepts
+// (data URI, http(s) URL, or base64). Library/rail/cache sources are often
+// blob: URLs created via URL.createObjectURL — those are browser-local and the
+// server cannot fetch them, which yields "Invalid value for 'inputImage'".
+// We fetch any non-data/non-http src locally and re-encode it as a data URI.
+async function upResolveInputImage(src) {
+  if (!src || typeof src !== 'string') return src;
+  // Already acceptable: data URI or remote http(s) URL.
+  if (/^data:/i.test(src)) return src;
+  if (/^https?:\/\//i.test(src)) return src;
+  // blob:, filesystem:, or anything else local → fetch + re-encode.
+  const blob = await bmFetchImageBlob(src);
+  if (!blob) return null;
+  return await new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => resolve(null);
+    r.readAsDataURL(blob);
+  });
+}
+
 async function bmFetchImageBlob(src) {
   try {
     const res = await fetch(src)
