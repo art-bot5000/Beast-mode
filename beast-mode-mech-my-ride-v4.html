@@ -3653,10 +3653,14 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 .up-zoom-viewport {
   position:absolute; inset:0; overflow:hidden;
-  display:flex; align-items:center; justify-content:center;
 }
-/* Inner is sized to natural px and transform-scaled; origin centred. */
-.up-zoom-inner { transform-origin:center center; will-change:transform; }
+/* Inner fills the viewport (definite size). NOT flex — flex centring made the
+   100%-height child collapse to content size. The image is 100%×100% with
+   object-fit:contain, which self-centres and shows whole. */
+.up-zoom-inner {
+  width:100%; height:100%; position:relative;
+  transform-origin:center center; will-change:transform;
+}
 .up-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 24px;
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
 
@@ -3740,6 +3744,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .up-slider {
   position:relative; overflow:hidden; border-radius:6px; background:transparent;
   user-select:none; touch-action:none;
+  height:100%; width:auto; max-width:100%; max-height:100%; margin:0 auto;
 }
 .up-slider-after, .up-slider-before { position:relative; inset:0; line-height:0; }
 .up-slider-before { position:absolute; top:0; left:0; right:0; bottom:0; }
@@ -3821,19 +3826,18 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   #viewUpscaler .up-rail::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
   #viewUpscaler .up-rail::-webkit-scrollbar-thumb:hover { background:var(--muted); }
   #viewUpscaler .up-rail::-webkit-scrollbar-track { background:transparent; }
-  #viewUpscaler .up-area-center { display:flex; flex-direction:column; align-self:stretch; height:calc(100vh - 16px); min-height:0; }
+  #viewUpscaler .up-area-center { display:block; align-self:start; padding-top:0; }
 
   /* The settings-panel source thumbnail is redundant with the big preview +
      rail (the original already shows there). Hide it on desktop; the hidden
      element still receives upShowPreview()'s src so dimension gating is intact. */
   #viewUpscaler #upPreviewWrap { display:none !important; }
 
-  /* Preview fills the centre column top→bottom, stopping just above the library
-     bar in BOTH states (never sliding underneath it). --up-libbar-h carries the
-     reserved height per state. */
+  /* Preview fills the centre column. Explicit height (not flex) so the inner's
+     max-height:100% resolves and CSS can fit the image. Stops above the bar. */
   #viewUpscaler .up-stage {
-    flex:1; min-height:0; height:100%;
-    max-height:calc(100vh - 16px - var(--up-libbar-h, 40px));
+    height:calc(100vh - 32px - var(--up-libbar-h, 40px));
+    min-height:0; max-height:none;
   }
   /* Content is natural-sized inside #upZoomInner and scaled by the zoom
      controller; no per-image max-height clamps here. */
@@ -20795,9 +20799,9 @@ function upLibApplyState() {
     pinBtn.classList.toggle('on', upLibState.pinned);
     pinBtn.title = upLibState.pinned ? 'Unpin (free / minimise)' : 'Pin open';
   }
-  // Viewport height changed → re-fit the preview if not zoomed in.
-  if (typeof upZoom !== 'undefined' && upZoom.hasContent) {
-    requestAnimationFrame(() => { if (upZoom.scale <= upZoom.fit + 1e-6) upZoomFit(); });
+  // Viewport height changed (bar pin/unpin) → CSS auto-refits; update the %.
+  if (typeof upZoom !== 'undefined' && upZoom.hasContent && typeof upZoomUpdatePct === 'function') {
+    requestAnimationFrame(() => upZoomUpdatePct());
   }
 }
 function upLibTogglePin() {
@@ -20902,54 +20906,20 @@ function upSelectFav(f) {
 // and is scaled via transform. The indicator shows TRUE pixel scale
 // (rendered px / natural px). Fit = the scale at which the content fits the
 // viewport; zoom in/out steps relative to that.
-const upZoom = { natW: 0, natH: 0, scale: 1, fit: 1, panX: 0, panY: 0, hasContent: false };
+// ── Preview zoom (clean rebuild) ────────────────────────────────────────────
+// CSS does the FITTING: the content uses max-width/height:100% inside the
+// viewport, so it always fits and shows whole. JS only applies a zoom MULTIPLIER
+// (--up-zoom, default 1 = fitted) and reports the true pixel scale. No landmark
+// measuring, no viewport resizing → no feedback loop.
+const upZoom = { natW: 0, natH: 0, zoom: 1, hasContent: false };
 
 function upZoomMount(natW, natH) {
   upZoom.natW = natW || 0; upZoom.natH = natH || 0;
   upZoom.hasContent = !!(natW && natH);
-  upZoomFit();
-  // Re-fit after layout settles. Landmarks are stable, so this corrects any
-  // first-paint measurement (the cause of the brief "correct then shrink" flash).
-  requestAnimationFrame(() => { upZoomFit(); requestAnimationFrame(() => upZoomFit()); });
-}
-function upZoomFit() {
-  if (!upZoom.natW || !upZoom.natH) return;
-  const vp = document.getElementById('upZoomViewport');
-  const stage = document.getElementById('upStage');
-  if (!vp || !stage) return;
-  // Measure the available preview box from STABLE landmarks only. Critically we
-  // never read or write the viewport's own size here (doing so created a
-  // shrink-on-every-call feedback loop). The viewport stays CSS inset:0 of the
-  // stage; we compute availW/availH purely for the scale math.
-  const settings = document.querySelector('#viewUpscaler .up-area-settings');
-  const bar = document.querySelector('#viewUpscaler .up-area-library');
-  const rail = document.querySelector('#viewUpscaler .up-area-rail');
-  // Seed from the viewport's CSS box position via the STAGE (stable), not the
-  // viewport's measured size.
-  const sRect = stage.getBoundingClientRect();
-  let top = sRect.top, bottom = sRect.bottom, left = sRect.left, right = sRect.right;
-  let padTop = 16;
-  if (settings) {
-    const r = settings.getBoundingClientRect();
-    top = r.top;
-    padTop = Math.max(8, r.top);
-    left = r.right + 16;
-  }
-  if (bar) {
-    const r = bar.getBoundingClientRect();
-    if (r.top < bottom && r.top > top) bottom = r.top;
-  }
-  if (rail) {
-    const r = rail.getBoundingClientRect();
-    if (r.left - 16 < right && r.left > left) right = r.left - 16;
-  }
-  bottom = bottom - padTop;
-  const availW = Math.max(40, right - left);
-  const availH = Math.max(40, bottom - top);
-  upZoom.fit = Math.min(availW / upZoom.natW, availH / upZoom.natH);
-  upZoom.scale = upZoom.fit;
-  upZoom.panX = 0; upZoom.panY = 0;
+  upZoom.zoom = 1;                 // reset to fitted on every new image
   upZoomApply();
+  // Update the % once the fitted render size is known (after layout/paint).
+  requestAnimationFrame(() => upZoomUpdatePct());
 }
 function upZoomApply() {
   const inner = document.getElementById('upZoomInner');
@@ -20959,30 +20929,40 @@ function upZoomApply() {
   const show = upZoom.hasContent;
   if (scaleEl) scaleEl.style.display = show ? '' : 'none';
   if (ctrls) ctrls.style.display = show ? '' : 'none';
-  // The inner is sized to natural px; scale transform does the rest.
-  inner.style.width = upZoom.natW + 'px';
-  inner.style.height = upZoom.natH + 'px';
-  inner.style.transform = 'translate(' + upZoom.panX + 'px,' + upZoom.panY + 'px) scale(' + upZoom.scale + ')';
-  // Labels live inside the scaled inner; counter-scale them so they stay at a
-  // constant readable size and hug the image corners regardless of zoom.
-  const inv = upZoom.scale > 0 ? (1 / upZoom.scale) : 1;
-  inner.style.setProperty('--up-zoom-inv', inv);
-  if (scaleEl) scaleEl.textContent = Math.round(upZoom.scale * 100) + '%';
+  // Zoom multiplier only. transform-origin centre keeps it centred.
+  inner.style.setProperty('--up-zoom', upZoom.zoom);
+  inner.style.transform = 'scale(' + upZoom.zoom + ')';
+  upZoomUpdatePct();
+}
+// True pixel scale = (fitted rendered width × zoom) / natural width. The fitted
+// rendered width is read from the actual image/slider box (post-CSS-fit).
+function upZoomUpdatePct() {
+  const scaleEl = document.getElementById('upZoomScale');
+  if (!scaleEl || !upZoom.hasContent || !upZoom.natW) return;
+  const inner = document.getElementById('upZoomInner');
+  if (!inner) return;
+  // Measure the actual rendered image (single preview) or slider box, not the
+  // full-bleed wrapper, so the % reflects the visible image size.
+  const measured = inner.querySelector('.up-stage-img img, .up-slider');
+  if (!measured) return;
+  const renderedW = measured.getBoundingClientRect().width; // includes zoom
+  if (!renderedW) return;
+  const pct = Math.round((renderedW / upZoom.natW) * 100);
+  scaleEl.textContent = pct + '%';
+  const invv = upZoom.zoom > 0 ? (1 / upZoom.zoom) : 1;
+  inner.style.setProperty('--up-zoom-inv', invv);
 }
 function upZoomBy(dir) {
   if (!upZoom.hasContent) return;
   const factor = dir > 0 ? 1.25 : 0.8;
-  upZoom.scale = Math.max(upZoom.fit * 0.5, Math.min(upZoom.fit * 8, upZoom.scale * factor));
+  upZoom.zoom = Math.max(0.25, Math.min(8, upZoom.zoom * factor));
   upZoomApply();
 }
-function upZoomReset() { upZoomFit(); }
+function upZoomReset() { upZoom.zoom = 1; upZoomApply(); requestAnimationFrame(() => upZoomUpdatePct()); }
 
-// Re-fit on viewport resize so the preview always fits and shows the whole image.
+// On window resize the % may change (fitted size changes); recompute it.
 window.addEventListener('resize', () => {
-  if (document.body.classList.contains('up-sticky') && upZoom.hasContent) {
-    // Keep the user's zoom if they've zoomed in; only re-fit if at/below fit.
-    if (upZoom.scale <= upZoom.fit + 1e-6) upZoomFit(); else upZoomApply();
-  }
+  if (document.body.classList.contains('up-sticky') && upZoom.hasContent) upZoomUpdatePct();
 });
 
 function upRenderStageSingle(f) {
@@ -21037,7 +21017,7 @@ function upRenderStageSlider(upFav) {
   // Size the slider to the upscaled image's natural pixels; the zoom controller
   // scales the whole stage. Aspect is preserved and labels hug the edges.
   const aw = upFav.outW || 0, ah = upFav.outH || 0;
-  if (aw > 0 && ah > 0) { slider.style.width = aw + 'px'; slider.style.height = ah + 'px'; }
+  if (aw > 0 && ah > 0) { slider.style.aspectRatio = aw + ' / ' + ah; }
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
