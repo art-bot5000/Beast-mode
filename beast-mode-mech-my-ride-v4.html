@@ -3731,6 +3731,59 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.75));
   padding:10px 6px 4px; text-align:left; pointer-events:none;
 }
+
+/* ══ UPSCALER LAYOUT FEEDBACK (Phase 4) ═══════════════════════════ */
+/* The app centres every view in a 900px column (.view-inner). The upscaler
+   wants the full width, left-aligned and flush to the collapsed nav rail, with
+   a sticky bottom library bar the expanded nav overlays. Applies at the same
+   ≥900px breakpoint the upscaler grid uses; below that the mobile single-column
+   flow (bar in normal flow) is left untouched. */
+@media (min-width: 901px) {
+  #viewUpscaler .view-inner {
+    max-width:none; margin:0; padding:24px 24px 150px 24px;
+  }
+  /* Reserve room so the fixed bottom bar never covers the rail/stage tail. */
+  #viewUpscaler #upMain.up-layout { padding-bottom:8px; }
+
+  /* Sticky bottom library bar: fixed to the viewport, starting at the collapsed
+     nav edge. z-index sits BELOW the nav (200 rest / 260 hover) so the expanding
+     rail floats over it, but above page content. */
+  #viewUpscaler .up-area-library {
+    position:fixed; left:var(--mode-nav-w-collapsed); right:0; bottom:0;
+    z-index:150; background:var(--bg,#0d0d0d);
+    border-top:1px solid var(--border); padding:8px 16px 10px;
+    box-shadow:0 -6px 18px rgba(0,0,0,.45);
+  }
+  /* The library area is now fixed, so it no longer participates in the grid.
+     Collapse its grid row to nothing and let the three top areas fill height. */
+  #viewUpscaler #upMain.up-layout {
+    grid-template-areas:"settings center rail";
+    grid-template-rows:auto;
+  }
+
+  /* Bigger preview stage. */
+  #viewUpscaler .up-stage { min-height:62vh; }
+  #viewUpscaler .up-stage-img img,
+  #viewUpscaler .up-slider { max-height:74vh; }
+
+  /* Lift the floating queue widget above the sticky bar when this view is on. */
+  body.up-sticky #bmQueueWidget { bottom:128px; }
+}
+
+/* Right-rail thumbnails: show the WHOLE image (contain, not cover). */
+#viewUpscaler .up-rail-item img {
+  width:100%; max-height:150px; object-fit:contain; background:#000;
+}
+
+/* Slider label stacking: the AFTER (upscaled) resolution label lives on the
+   base after-layer and must be COVERED by the before (original) layer as the
+   handle moves right — so the upscaled resolution only ever reads on the
+   upscaled pixels. Give the before layer a z-index above the after-label, and
+   keep the before label (on the before layer) above that. */
+.up-slider-after { z-index:1; }
+.up-slider-after .bm-res-label { z-index:2; }   /* after-res, low — gets covered */
+.up-slider-before { z-index:3; background:#000; }   /* original covers the after-res */
+.up-slider-before .bm-res-label { z-index:4; }  /* before-res rides on top */
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
 .ig-tab { flex:1; padding:7px 6px; font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
@@ -8412,6 +8465,7 @@ function switchView(view, pushState = true) {
   }
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
   if (view === 'upscaler' && typeof upInit === 'function') upInit()
+  document.body.classList.toggle('up-sticky', view === 'upscaler')
   if (view === 'queue' && typeof bmQueue !== 'undefined') bmQueue.renderView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
   if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
