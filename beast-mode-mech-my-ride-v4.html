@@ -20915,33 +20915,33 @@ function upZoomMount(natW, natH) {
 function upZoomFit() {
   if (!upZoom.natW || !upZoom.natH) return;
   const vp = document.getElementById('upZoomViewport');
-  if (!vp) return;
-  // Deterministically measure the available preview box from layout landmarks
-  // (independent of flex/abs height-resolution timing):
-  //   top    = top of the settings panel
-  //   bottom = top of the (minimised) library bar, minus a padding mirroring
-  //            the gap above the settings panel
-  //   left   = right edge of the settings panel
-  //   right  = left edge of the results rail
+  const stage = document.getElementById('upStage');
+  if (!vp || !stage) return;
+  // Measure the available preview box from STABLE landmarks only. Critically we
+  // never read or write the viewport's own size here (doing so created a
+  // shrink-on-every-call feedback loop). The viewport stays CSS inset:0 of the
+  // stage; we compute availW/availH purely for the scale math.
   const settings = document.querySelector('#viewUpscaler .up-area-settings');
   const bar = document.querySelector('#viewUpscaler .up-area-library');
   const rail = document.querySelector('#viewUpscaler .up-area-rail');
-  const vpRect = vp.getBoundingClientRect();
-  let top = vpRect.top, bottom = vpRect.bottom, left = vpRect.left, right = vpRect.right;
+  // Seed from the viewport's CSS box position via the STAGE (stable), not the
+  // viewport's measured size.
+  const sRect = stage.getBoundingClientRect();
+  let top = sRect.top, bottom = sRect.bottom, left = sRect.left, right = sRect.right;
   let padTop = 16;
   if (settings) {
     const r = settings.getBoundingClientRect();
     top = r.top;
     padTop = Math.max(8, r.top);
-    if (r.right + 16 > left) left = r.right + 16;
+    left = r.right + 16;
   }
   if (bar) {
     const r = bar.getBoundingClientRect();
-    if (r.top < bottom) bottom = r.top;
+    if (r.top < bottom && r.top > top) bottom = r.top;
   }
   if (rail) {
     const r = rail.getBoundingClientRect();
-    if (r.left - 16 < right) right = r.left - 16;
+    if (r.left - 16 < right && r.left > left) right = r.left - 16;
   }
   bottom = bottom - padTop;
   const availW = Math.max(40, right - left);
@@ -20949,16 +20949,6 @@ function upZoomFit() {
   upZoom.fit = Math.min(availW / upZoom.natW, availH / upZoom.natH);
   upZoom.scale = upZoom.fit;
   upZoom.panX = 0; upZoom.panY = 0;
-  // Pin the viewport to the measured box (absolute coords within the stage).
-  const stage = document.getElementById('upStage');
-  if (stage) {
-    const s = stage.getBoundingClientRect();
-    vp.style.left = (left - s.left) + 'px';
-    vp.style.top = (top - s.top) + 'px';
-    vp.style.width = availW + 'px';
-    vp.style.height = availH + 'px';
-    vp.style.right = 'auto'; vp.style.bottom = 'auto'; vp.style.inset = 'auto';
-  }
   upZoomApply();
 }
 function upZoomApply() {
