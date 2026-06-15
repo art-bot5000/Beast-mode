@@ -2383,6 +2383,41 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 .lib-card { position:relative; }
 
+/* ══ UPSCALE MARKERS (Phase 1) ════════════════════════════════════ */
+/* Overlay the card image. Hidden in list view (image is hidden there). */
+.lib-upscale-badge {
+  position:absolute; left:6px; bottom:6px; z-index:3;
+  display:flex; align-items:center; justify-content:center;
+  min-width:20px; height:20px; padding:0 5px;
+  font-size:12px; line-height:1; color:#000;
+  background:var(--accent,#00ffb0); border-radius:4px;
+  box-shadow:0 1px 4px rgba(0,0,0,.45); pointer-events:none;
+}
+.lib-upscale-src {
+  position:absolute; left:7px; bottom:7px; z-index:3;
+  width:9px; height:9px; border-radius:50%;
+  background:color-mix(in srgb, var(--accent,#00ffb0) 70%, transparent);
+  box-shadow:0 0 0 2px rgba(0,0,0,.5); pointer-events:none;
+}
+.lib-grid.list-view .lib-upscale-badge,
+.lib-grid.list-view .lib-upscale-src { display:none; }
+
+/* ══ RESOLUTION OVERLAY LABELS (Phases 2–3) ═══════════════════════ */
+/* Positioned inside a position:relative image wrapper. Colour is set by
+   bmResLabel via .on-light (dark text) / .on-dark (light text). */
+.bm-res-label {
+  position:absolute; z-index:4; pointer-events:none;
+  font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700;
+  letter-spacing:1px; padding:2px 6px; border-radius:3px;
+  background:rgba(0,0,0,.0); transition:color .15s ease;
+}
+.bm-res-label.on-light { color:#0a0a0a; text-shadow:0 1px 2px rgba(255,255,255,.55); }
+.bm-res-label.on-dark  { color:#f4f4f4; text-shadow:0 1px 2px rgba(0,0,0,.65); }
+.bm-res-tl { top:6px; left:6px; }
+.bm-res-tr { top:6px; right:6px; }
+.bm-res-bl { bottom:6px; left:6px; }
+.bm-res-br { bottom:6px; right:6px; }
+
 /* ══ SWIPE TO REVEAL ══════════════════════════════════════════════ */
 .lib-card-swipe-wrap {
   position:relative;overflow:hidden;border-radius:6px;
@@ -8847,6 +8882,20 @@ function buildLibCard(f) {
     img.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(img, f) }
     img.onclick = e => { e.stopPropagation(); if (typeof bmOpenFull === 'function') bmOpenFull(f); else openLightbox(img.src) }
     card.appendChild(img)
+    // Upscale marker (bottom-left). Placeholder glyph — slated for redesign.
+    // Shown on upscale OUTPUTS; sources that have upscales get a subtler dot.
+    if (f.isUpscale) {
+      const badge = document.createElement('div')
+      badge.className = 'lib-upscale-badge'
+      badge.title = 'Upscaled image'
+      badge.textContent = '\u2726' // ✦
+      card.appendChild(badge)
+    } else if (f.hasUpscales) {
+      const dot = document.createElement('div')
+      dot.className = 'lib-upscale-src'
+      dot.title = 'Has upscaled version' + ((f.upscaleIds && f.upscaleIds.length > 1) ? 's' : '')
+      card.appendChild(dot)
+    }
   } else {
     const ph = document.createElement('div')
     ph.className = 'lib-card-image-ph'
@@ -9052,7 +9101,7 @@ function sendToUpscaler(f) {
   switchView('upscaler')
   // upInit() runs on view switch; defer until the panel exists this frame.
   setTimeout(() => {
-    if (typeof upLoadExternalImage === 'function') upLoadExternalImage(f.imageData)
+    if (typeof upLoadExternalImage === 'function') upLoadExternalImage(f.imageData, f.id)
   }, 0)
 }
 
@@ -18498,8 +18547,29 @@ const bmQueue = (() => {
       const im = r.image;
       if (im && im.url && typeof autoSaveGeneratedImage === 'function') {
         const pristine = (typeof im.url === 'string' && im.url.startsWith('data:')) ? im.url : null;
+        // Backend returns no dimensions for upscales — measure client-side so
+        // the durable favourite carries outW/outH for the resolution overlays.
+        let outW = 0, outH = 0;
+        try {
+          if (typeof bmImgDims === 'function') {
+            const d = await bmImgDims(pristine || im.url);
+            outW = d.w; outH = d.h;
+          }
+        } catch (e) { /* non-fatal: save without dims */ }
+        const upExtra = {
+          isUpscale: true,
+          upscaledFromId: (meta.srcFavId != null) ? meta.srcFavId : null,
+          upscaleMeta: {
+            model: model,
+            kind: meta.upKind || null,
+            factor: (meta.upFactor != null) ? meta.upFactor : null,
+            mp: (meta.upMp != null) ? meta.upMp : null,
+          },
+          outW: outW || null,
+          outH: outH || null,
+        };
         autoSaveGeneratedImage(prompt || ('Upscaled · ' + model), fullText, im.url, model, pristine,
-          tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged));
+          tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged), upExtra);
       }
     }
     if (typeof tokens.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(tokens.balance);
@@ -18819,7 +18889,7 @@ async function generateImage() {
 // `pristine` (optional): a data: URI of the ORIGINAL image bytes (Gemini direct
 // models). When present, the Drive upload + local cache use it instead of
 // re-fetching the hosted URL — immune to R2 public-URL fetch problems.
-function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tokenRef, tokenCost) {
+function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tokenRef, tokenCost, extra) {
   try {
     let full = fullText;
     const DELIM = (typeof SETTINGS_DELIMITER !== 'undefined') ? SETTINGS_DELIMITER : '---SETTINGS---';
@@ -18849,6 +18919,15 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       // Per-image token cost at generation time, shown as a badge on the
       // library card. Older favourites lack this and simply show no badge.
       tokenCost: (typeof tokenCost === 'number' && tokenCost >= 0) ? tokenCost : null,
+      // ── Upscale linkage (Phase 1) ──────────────────────────────────────
+      // Present only when this image is an upscale output. All optional, so
+      // generation saves and legacy favourites omit them and render as plain
+      // non-upscaled images.
+      isUpscale: !!(extra && extra.isUpscale),
+      upscaledFromId: (extra && extra.upscaledFromId != null) ? extra.upscaledFromId : null,
+      upscaleMeta: (extra && extra.upscaleMeta) ? extra.upscaleMeta : null,
+      outW: (extra && typeof extra.outW === 'number') ? extra.outW : null,
+      outH: (extra && typeof extra.outH === 'number') ? extra.outH : null,
     };
     if (typeof favourites !== 'undefined') {
       favourites.unshift(fav);
@@ -18856,6 +18935,20 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       if (typeof updateLibBadge === 'function') updateLibBadge();
       if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
       if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+      // Two-way linkage: stamp the SOURCE favourite so the bottom-bar badge and
+      // right-rail grouping are O(1). Guarded: if the source was deleted before
+      // this upscale finished (jobs survive refresh/logout), the child still
+      // saves as an orphan and grouping logic tolerates the missing partner.
+      if (fav.isUpscale && fav.upscaledFromId != null) {
+        const srcFav = favourites.find(x => x && x.id === fav.upscaledFromId);
+        if (srcFav) {
+          srcFav.hasUpscales = true;
+          if (!Array.isArray(srcFav.upscaleIds)) srcFav.upscaleIds = [];
+          if (!srcFav.upscaleIds.includes(fav.id)) srcFav.upscaleIds.push(fav.id);
+          srcFav.updatedAt = Date.now();
+          if (typeof driveSavePrompt === 'function') driveSavePrompt(srcFav);
+        }
+      }
       // Durable copies: upload the image itself to the visible "Beast Mode"
       // Drive folder (R2 only keeps the newest 5), and cache locally. Prefer
       // the pristine bytes when the backend supplied them.
@@ -19927,6 +20020,84 @@ async function igDownload(url) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// UPSCALER — shared visual helpers
+// Used by Phase 1 (dimension capture on upscale save) and Phases 2–3
+// (live resolution overlays with brightness-adaptive text colour).
+// ═══════════════════════════════════════════════════════════════════
+
+// Measure a source's natural dimensions off-DOM. Resolves {w,h} (0,0 on error
+// so callers never reject). Mirrors the probe pattern already used by
+// upShowPreview, factored out so the queue-drain save path can await it.
+function bmImgDims(src) {
+  return new Promise((resolve) => {
+    if (!src) { resolve({ w: 0, h: 0 }); return; }
+    const probe = new Image();
+    probe.onload = () => resolve({ w: probe.naturalWidth || 0, h: probe.naturalHeight || 0 });
+    probe.onerror = () => resolve({ w: 0, h: 0 });
+    try { probe.crossOrigin = 'anonymous'; } catch (e) {}
+    probe.src = src;
+  });
+}
+
+// Sample the average luma of one corner of an already-loaded <img> and decide
+// whether overlaid text there should be dark (on a light area) or light (on a
+// dark area). corner ∈ 'tl'|'tr'|'bl'|'br'. Returns 'dark' | 'light' meaning
+// the TEXT colour to use. Falls back to 'light' if the canvas read is tainted
+// (cross-origin R2 without CORS) or the image isn't measurable yet.
+function bmSampleBrightness(imgEl, corner) {
+  try {
+    const w = imgEl.naturalWidth, h = imgEl.naturalHeight;
+    if (!w || !h) return 'light';
+    // Sample a patch ~28% of the shorter side, clamped, from the chosen corner.
+    const patch = Math.max(8, Math.min(64, Math.round(Math.min(w, h) * 0.28)));
+    const sx = (corner === 'tr' || corner === 'br') ? Math.max(0, w - patch) : 0;
+    const sy = (corner === 'bl' || corner === 'br') ? Math.max(0, h - patch) : 0;
+    const cv = document.createElement('canvas');
+    cv.width = patch; cv.height = patch;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(imgEl, sx, sy, patch, patch, 0, 0, patch, patch);
+    const data = ctx.getImageData(0, 0, patch, patch).data;
+    let sum = 0, n = 0;
+    // Step a few pixels at a time — luma average, perceptual weights.
+    for (let i = 0; i < data.length; i += 16) {
+      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      n++;
+    }
+    const avg = n ? (sum / n) : 0;
+    return avg > 140 ? 'dark' : 'light';
+  } catch (e) {
+    // Tainted canvas (cross-origin) or other read failure: safe default.
+    return 'light';
+  }
+}
+
+// Position a resolution label overlay in a corner of a wrapper that contains
+// imgEl, and colour it by sampling the underlying corner. The wrapper must be
+// position:relative. Re-samples on each call; call from imgEl's load handler.
+// corner ∈ 'tl'|'tr'|'bl'|'br'. Returns the label element (created if absent).
+function bmResLabel(wrapEl, imgEl, text, corner, idAttr) {
+  if (!wrapEl) return null;
+  let el = idAttr ? wrapEl.querySelector('#' + idAttr) : null;
+  if (!el) {
+    el = document.createElement('div');
+    if (idAttr) el.id = idAttr;
+    el.className = 'bm-res-label bm-res-' + corner;
+    wrapEl.appendChild(el);
+  } else {
+    el.className = 'bm-res-label bm-res-' + corner;
+  }
+  el.textContent = text || '';
+  const apply = () => {
+    const mode = bmSampleBrightness(imgEl, corner);
+    el.classList.toggle('on-light', mode === 'dark'); // dark text on light bg
+    el.classList.toggle('on-dark', mode === 'light');
+  };
+  if (imgEl.complete && imgEl.naturalWidth) apply();
+  else imgEl.addEventListener('load', apply, { once: true });
+  return el;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // UPSCALER TAB
 // Mirrors the Image Gen engine. Models + their config surface come from
 // GET /api/upscalers (the curated backend catalogue). Source image is an
@@ -19940,6 +20111,7 @@ const upState = {
   srcTab: 'upload',    // 'upload' | 'library' | 'url'
   srcData: null,       // data URI (upload/library) or URL string (url tab)
   srcIsUrl: false,
+  srcFavId: null,      // fav id when source is a library/bottom-bar pick (else null)
   srcW: 0,             // natural width of the loaded source (0 = unknown)
   srcH: 0,             // natural height of the loaded source
   srcMp: 0,            // source megapixels (w*h/1e6), 0 = unknown
@@ -20166,6 +20338,7 @@ function upSrcFilePicked(files) {
   // upscaler to work from while capping the data-URI payload.
   igDownscaleToDataUri(f, 2048, dataUri => {
     upState.srcData = dataUri; upState.srcIsUrl = false;
+    upState.srcFavId = null;
     upShowPreview(dataUri);
   });
   document.getElementById('upSrcFile').value = '';
@@ -20186,6 +20359,7 @@ function upRenderLibraryGrid() {
       grid.querySelectorAll('img').forEach(x => x.classList.remove('sel'));
       img.classList.add('sel');
       upState.srcData = f.imageData; upState.srcIsUrl = false;
+      upState.srcFavId = f.id;
       upShowPreview(f.imageData);
     };
     grid.appendChild(img);
@@ -20196,6 +20370,7 @@ function upUrlChanged() {
   const v = (document.getElementById('upSrcUrlInput').value || '').trim();
   if (/^https?:\/\/.+/i.test(v)) {
     upState.srcData = v; upState.srcIsUrl = true;
+    upState.srcFavId = null;
     upShowPreview(v);
   } else {
     upClearSource(true);
@@ -20222,6 +20397,7 @@ function upShowPreview(src) {
 }
 function upClearSource(keepUrlText) {
   upState.srcData = null; upState.srcIsUrl = false;
+  upState.srcFavId = null;
   upState.srcW = 0; upState.srcH = 0; upState.srcMp = 0;
   const wrap = document.getElementById('upPreviewWrap');
   if (wrap) wrap.style.display = 'none';
@@ -20235,11 +20411,12 @@ function upClearSource(keepUrlText) {
 // Load an image into the upscaler from elsewhere (e.g. the Library card's
 // "Upscale" button). Ensures the panel is initialised, sets the source on the
 // upload tab, shows the preview, and triggers dimension-aware gating.
-function upLoadExternalImage(dataUri) {
+function upLoadExternalImage(dataUri, favId) {
   if (!dataUri) return;
   if (typeof upInit === 'function') upInit();
   upSrcTab('upload');
   upState.srcData = dataUri; upState.srcIsUrl = false;
+  upState.srcFavId = (favId != null) ? favId : null;
   upShowPreview(dataUri);
 }
 
@@ -20300,7 +20477,13 @@ async function upRun() {
 
   try {
     const label = 'Upscaled \u00B7 ' + m.label + (m.kind === 'megapixels' ? (' \u00B7 ' + upState.mp + 'MP') : (' \u00B7 ' + upState.factor + '\u00D7'));
-    const r = await bmQueue.enqueueUpscale(body, { prompt: label, fullText: '', model: m.id });
+    const r = await bmQueue.enqueueUpscale(body, {
+      prompt: label, fullText: '', model: m.id,
+      srcFavId: upState.srcFavId,
+      upKind: m.kind,
+      upFactor: (m.kind === 'megapixels') ? null : upState.factor,
+      upMp: (m.kind === 'megapixels') ? upState.mp : null,
+    });
     if (!r.ok) {
       if (r.code === 'auth_required') {
         if (typeof openAuthModal === 'function') openAuthModal('login');
