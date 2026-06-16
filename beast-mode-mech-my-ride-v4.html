@@ -276,6 +276,10 @@ select, .sd-display { max-width:100%;box-sizing:border-box; }
   html, body { overflow-x:hidden; max-width:100vw; }
   .app { padding:16px 12px; }
 
+  /* The floating queue widget is redundant on mobile — the top-bar Queue
+     button + modal replace it. */
+  #bmQueueWidget { display:none !important; }
+
   /* Single column everything */
   .controls-grid, .controls-grid.three { grid-template-columns:1fr; }
 
@@ -979,26 +983,66 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   font-family:'Bebas Neue',sans-serif; font-size:27px; letter-spacing:3px; color:var(--accent);
   white-space:nowrap;
 }
-/* Mode title doubles as the menu trigger. Styled as a tappable pill (border +
-   caret) so it's clearly interactive; larger than before but below the brand. */
+/* Mode title doubles as the menu trigger. Styled to match the BEAST MODE brand
+   (same accent yellow, no pill) with a caret to signal it opens the mode menu. */
 .mobile-topbar-mode {
   display:inline-flex; align-items:center; gap:6px;
-  font-family:'Bebas Neue',sans-serif; font-size:21px; letter-spacing:2px;
-  color:var(--text); white-space:nowrap; cursor:pointer;
-  background:color-mix(in srgb, var(--accent) 8%, transparent);
-  border:1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-  border-radius:8px; padding:5px 10px; max-width:52%; overflow:hidden;
-  transition:background .15s, border-color .15s, color .15s;
+  font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:2px;
+  color:var(--accent); white-space:nowrap; cursor:pointer;
+  background:none; border:none; padding:0; max-width:34%; overflow:hidden;
 }
-.mobile-topbar-mode:hover, .mobile-topbar-mode.open {
-  color:var(--accent); border-color:var(--accent);
-  background:color-mix(in srgb, var(--accent) 16%, transparent);
-}
+.mobile-topbar-mode:hover .mobile-topbar-mode-text,
+.mobile-topbar-mode.open .mobile-topbar-mode-text { text-decoration:underline; text-underline-offset:3px; }
 .mobile-topbar-mode-text { overflow:hidden; text-overflow:ellipsis; }
 .mobile-topbar-mode-caret {
   font-size:13px; color:var(--accent); transition:transform .2s; flex:0 0 auto;
 }
 .mobile-topbar-mode.open .mobile-topbar-mode-caret { transform:rotate(180deg); }
+
+/* Top-bar Queue button (centre). Opens the queue modal over the current mode. */
+.mobile-topbar-queue {
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  background:none; border:1px solid var(--border); border-radius:7px;
+  padding:5px 10px; color:var(--text); position:relative;
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:12px; letter-spacing:1.5px;
+  transition:color .15s, border-color .15s;
+}
+.mobile-topbar-queue:hover { color:var(--accent); border-color:var(--accent); }
+.mobile-topbar-queue-ic { font-size:14px; color:var(--accent); }
+.mobile-topbar-queue-badge {
+  position:absolute; top:-6px; right:-6px; min-width:16px; height:16px; padding:0 4px;
+  border-radius:8px; background:var(--accent); color:#000; font-size:10px; font-weight:800;
+  display:flex; align-items:center; justify-content:center; line-height:1;
+}
+
+/* Mobile queue modal. */
+.bm-queue-modal { display:none; }
+.bm-queue-modal.open {
+  display:flex; position:fixed; inset:0; z-index:205;
+  background:rgba(0,0,0,.62); backdrop-filter:blur(3px);
+  align-items:flex-start; justify-content:center;
+}
+.bm-queue-modal-inner {
+  width:100%; max-width:640px; max-height:84vh; margin-top:8vh;
+  display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.6); overflow:hidden;
+}
+.bm-queue-modal-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid var(--border); flex:0 0 auto;
+}
+.bm-queue-modal-title {
+  font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:3px; color:var(--accent);
+}
+.bm-queue-modal-x {
+  background:transparent; border:1px solid var(--border); color:var(--muted);
+  border-radius:6px; width:32px; height:30px; font-size:15px; cursor:pointer; line-height:1;
+}
+.bm-queue-modal-x:hover { color:var(--accent); border-color:var(--accent); }
+.bm-queue-modal-body { padding:14px 16px; overflow-y:auto; flex:1 1 auto; -webkit-overflow-scrolling:touch;
+  display:flex; flex-direction:column; gap:10px; }
+body.bm-queue-modal-open { overflow:hidden; }
 
 .mode-nav-backdrop {
   position:fixed; inset:0; z-index:199; background:rgba(0,0,0,.55);
@@ -1030,6 +1074,15 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* (mobile nav handled by the .mode-nav drawer rules above) */
 @media(max-width:640px){
   .view-inner { padding:16px 12px; }
+  /* The mobile mode-title menu already shows the current mode, so the big
+     in-mode "// MODE" headings are redundant on mobile — hide them to reclaim
+     vertical space. (Desktop has no top bar, so they stay there.) */
+  .view > .view-inner > header > .title-line,
+  #viewUpscaler .up-settings-title,
+  #viewQueue .view-title { display:none; }
+  /* Collapse the now-empty header margins so nothing leaves a gap. */
+  .view > .view-inner > header:empty,
+  .view > .view-inner > header > .title-line:only-child { margin:0; }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -3140,6 +3193,11 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
     <span class="mobile-topbar-mark">⌬</span>
     <span class="mobile-topbar-brandtext">BEAST MODE</span>
   </div>
+  <button class="mobile-topbar-queue" id="mobileQueueBtn" onclick="bmQueueModalOpen()" aria-label="Queue" type="button">
+    <span class="mobile-topbar-queue-ic">⧗</span>
+    <span class="mobile-topbar-queue-txt">QUEUE</span>
+    <span class="mobile-topbar-queue-badge" id="mobileQueueBadge" style="display:none;">0</span>
+  </button>
   <button class="mobile-topbar-mode" id="mobileModeTitle" onclick="toggleModeNav()" aria-haspopup="true" aria-expanded="false" aria-label="Change mode">
     <span class="mobile-topbar-mode-text">// IMAGE GEN</span>
     <span class="mobile-topbar-mode-caret" aria-hidden="true">▾</span>
@@ -3148,6 +3206,21 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 
 <!-- Backdrop behind the mobile drawer -->
 <div class="mode-nav-backdrop" id="modeNavBackdrop" onclick="closeModeNav()"></div>
+
+<!-- Mobile queue modal: opens over whichever mode the user is in (tapped from
+     the top-bar Queue button). Lists the same jobs as the full queue view;
+     completed items open their library entry via bmOpenQueueJobEntry. -->
+<div class="bm-queue-modal" id="bmQueueModal" onclick="if(event.target===this)bmQueueModalClose()">
+  <div class="bm-queue-modal-inner">
+    <div class="bm-queue-modal-head">
+      <span class="bm-queue-modal-title">⧗ GENERATION QUEUE</span>
+      <button class="bm-queue-modal-x" type="button" onclick="bmQueueModalClose()" aria-label="Close">✕</button>
+    </div>
+    <div class="bm-queue-modal-body" id="bmQueueModalBody">
+      <div class="bm-queue-empty" id="bmQueueModalEmpty">No jobs yet. Generate or upscale an image and it'll appear here.</div>
+    </div>
+  </div>
+</div>
 
 <!-- Mode navigation: left sidebar on desktop, slide-in drawer on mobile.
      Button ids (navImagegen/navGenerator/navBuilder/navLibrary/navSettings)
@@ -3689,21 +3762,26 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 .up-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 24px;
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
-/* When the stage is empty it doubles as the dropzone — fill the box, dashed
-   border, hover highlight, clickable. (upStageEmpty's onclick opens the file
-   picker; drag/drop handlers attach to it in upInit.) */
+/* When the stage is empty it doubles as the dropzone (drop/click) PLUS a URL
+   field. The container fills the box with a dashed border; the drop sub-area is
+   the click/drop target, the URL field sits below it. */
 .up-stage:has(> .up-stage-empty:not([style*="display: none"])) { outline:none; }
 .up-stage-empty {
   inset:0; top:0; left:0; transform:none; width:100%; height:100%;
-  display:flex; align-items:center; justify-content:center;
-  border:1.5px dashed var(--border); border-radius:10px; cursor:pointer;
-  letter-spacing:1.5px; transition:border-color .15s, color .15s, background .15s;
-  box-sizing:border-box;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  border:1.5px dashed var(--border); border-radius:10px;
+  letter-spacing:1.5px; transition:border-color .15s, background .15s;
+  box-sizing:border-box; padding:24px;
 }
-.up-stage-empty:hover, .up-stage-empty.drag {
-  border-color:var(--accent); color:var(--accent);
-  background:color-mix(in srgb, var(--accent) 5%, transparent);
+.up-stage-empty.drag { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 6%, transparent); }
+.up-stage-empty-drop {
+  cursor:pointer; color:var(--muted); transition:color .15s; padding:8px 4px;
 }
+.up-stage-empty-drop:hover { color:var(--accent); }
+.up-stage-empty-or { color:var(--muted); opacity:.6; font-size:11px; letter-spacing:2px; }
+.up-stage-empty-url { width:100%; max-width:360px; letter-spacing:normal; }
+.up-stage-empty-url .ig-input { width:100%; box-sizing:border-box; text-align:center; }
+.up-stage-empty-url .ig-note { margin-top:6px; text-align:center; }
 
 /* Under-preview action row: Settings (left) / Upscale (right). */
 /* Under-preview action row: Settings (left) / Upscale (right). Display is
@@ -4265,28 +4343,16 @@ body.up-settings-modal-open { overflow:hidden; }
           <span class="up-settings-sub">RUNWARE RESOLUTION ENGINE</span>
         </div>
 
-        <!-- SOURCE BLOCK: stays on the preview screen on mobile. -->
+        <!-- SOURCE BLOCK: the source picker now lives inside the preview stage
+             (drop/click + URL). This block keeps the hidden file input and the
+             (bottom-bar-driven) library pane; the visible upload/URL UI moved
+             into #upStageEmpty. -->
         <div id="upSourceBlock">
-        <!-- Source image -->
-        <div class="ig-label">SOURCE IMAGE</div>
-        <div class="ig-tabs" id="upSrcTabs">
-          <button class="ig-tab active" id="upSrcTabUpload" type="button" onclick="upSrcTab('upload')">⬆ UPLOAD</button>
-          <button class="ig-tab" id="upSrcTabUrl" type="button" onclick="upSrcTab('url')">⌗ URL</button>
-        </div>
-
-        <div id="upSrcUpload">
-          <div class="ig-drop" id="upDrop" onclick="document.getElementById('upSrcFile').click()">⬆ DROP AN IMAGE OR CLICK TO UPLOAD</div>
-          <input type="file" id="upSrcFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="upSrcFilePicked(this.files)">
-        </div>
+        <input type="file" id="upSrcFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="upSrcFilePicked(this.files)">
         <div id="upSrcLibrary" style="display:none;">
           <div class="up-libgrid" id="upLibraryGrid"></div>
           <div class="ig-note" id="upLibraryEmpty" style="display:none;">Select images from the bar at the bottom of the screen.</div>
         </div>
-        <div id="upSrcUrl" style="display:none;">
-          <input class="ig-input" id="upSrcUrlInput" type="url" placeholder="https://… image URL" oninput="upUrlChanged()">
-          <div class="ig-note">Paste a direct link to an image (jpg/png/webp).</div>
-        </div>
-
         </div><!-- /upSourceBlock -->
 
         <!-- CONFIG BLOCK: model + params + run. Moves into a modal on mobile. -->
@@ -4356,9 +4422,17 @@ body.up-settings-modal-open { overflow:hidden; }
           <div class="up-zoom-viewport" id="upZoomViewport">
             <div class="up-zoom-inner" id="upZoomInner"></div>
           </div>
-          <!-- Empty state doubles as the dropzone: click or drop to upload. -->
-          <div class="up-stage-empty" id="upStageEmpty" onclick="document.getElementById('upSrcFile').click()">
-            ⬆ DROP AN IMAGE OR CLICK TO UPLOAD
+          <!-- Empty state doubles as the dropzone: click or drop to upload,
+               or paste an image URL below. -->
+          <div class="up-stage-empty" id="upStageEmpty">
+            <div class="up-stage-empty-drop" onclick="document.getElementById('upSrcFile').click()">
+              ⬆ DROP AN IMAGE OR CLICK TO UPLOAD
+            </div>
+            <div class="up-stage-empty-or">— or —</div>
+            <div class="up-stage-empty-url" onclick="event.stopPropagation()">
+              <input class="ig-input" id="upSrcUrlInput" type="url" placeholder="https://… image URL" oninput="upUrlChanged()">
+              <div class="ig-note">Paste a direct link to an image (jpg/png/webp).</div>
+            </div>
           </div>
           <div class="up-zoom-scale" id="upZoomScale" style="display:none;">100%</div>
           <div class="up-zoom-ctrls" id="upZoomCtrls" style="display:none;">
@@ -18977,6 +19051,11 @@ const bmQueue = (() => {
   // Optional per-job callbacks so the originating view can show the inline
   // result/failure WITHOUT issuing a second (double-charged) provider call.
   const jobCbs = Object.create(null);  // jobId -> { onDone(result), onFail(err) }
+  // Persistent jobId -> saved library fav id, captured when a job drains into
+  // the library. Survives /api/jobs poll refreshes (closure state, not stored
+  // on the replaceable job object) so a queue-card tap can open the entry.
+  const jobFav = Object.create(null);
+  function favIdFor(jobId) { return jobFav[jobId] != null ? jobFav[jobId] : null; }
 
   function onJob(jobId, cbs) { if (jobId) jobCbs[jobId] = cbs || {}; }
 
@@ -19073,8 +19152,12 @@ const bmQueue = (() => {
       images.forEach(im => {
         const pristine = (typeof im.url === 'string' && im.url.startsWith('data:')) ? im.url : null;
         if (typeof autoSaveGeneratedImage === 'function') {
-          autoSaveGeneratedImage(prompt, fullText, im.url, model, pristine,
+          const savedFav = autoSaveGeneratedImage(prompt, fullText, im.url, model, pristine,
             tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged));
+          // Link the job to the first saved library entry so a queue-card tap
+          // can jump straight to it.
+          if (savedFav && savedFav.id != null && job.savedFavId == null) job.savedFavId = savedFav.id;
+          if (savedFav && savedFav.id != null && jobFav[job.id] == null) jobFav[job.id] = savedFav.id;
         }
       });
     } else { // upscale
@@ -19106,8 +19189,10 @@ const bmQueue = (() => {
           srcW: (typeof meta.srcW === 'number') ? meta.srcW : null,
           srcH: (typeof meta.srcH === 'number') ? meta.srcH : null,
         };
-        autoSaveGeneratedImage(prompt || ('Upscaled · ' + model), fullText, im.url, model, pristine,
+        const savedFav = autoSaveGeneratedImage(prompt || ('Upscaled · ' + model), fullText, im.url, model, pristine,
           tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged), upExtra);
+        if (savedFav && savedFav.id != null) job.savedFavId = savedFav.id;
+        if (savedFav && savedFav.id != null) jobFav[job.id] = savedFav.id;
       }
     }
     if (typeof tokens.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(tokens.balance);
@@ -19157,6 +19242,7 @@ const bmQueue = (() => {
 
     // Nav badge: number of in-flight jobs.
     const navBadge = document.getElementById('queueNavBadge');
+    if (typeof bmQueueBadgeUpdate === 'function') bmQueueBadgeUpdate(active);
     if (navBadge) {
       if (active > 0) { navBadge.style.display = ''; navBadge.textContent = String(active); }
       else navBadge.style.display = 'none';
@@ -19192,6 +19278,13 @@ const bmQueue = (() => {
     const s = statusInfo(job);
     const row = document.createElement('div');
     row.className = 'bm-q-row ' + s.cls;
+    if (job.status === 'done') {
+      row.classList.add('bm-q-row-clickable');
+      row.onclick = (e) => {
+        if (e.target && e.target.closest && e.target.closest('.bm-q-rowdel')) return;
+        if (typeof bmOpenQueueJobEntry === 'function') bmOpenQueueJobEntry(job);
+      };
+    }
     const ic = document.createElement('span'); ic.className = 'bm-q-ic'; ic.textContent = s.icon;
     const lbl = document.createElement('span'); lbl.className = 'bm-q-lbl';
     lbl.textContent = job.label || job.kind;
@@ -19210,56 +19303,70 @@ const bmQueue = (() => {
     return row;
   }
 
-  function renderView() {
-    const list = document.getElementById('bmQueueViewList');
-    const empty = document.getElementById('bmQueueViewEmpty');
+  // Build one queue card (used by the full view and the mobile modal).
+  function buildCard(job) {
+    const s = statusInfo(job);
+    const card = document.createElement('div');
+    card.className = 'bm-q-card ' + s.cls;
+    if (job.status === 'done') {
+      card.classList.add('bm-q-card-clickable');
+      card.onclick = (e) => {
+        if (e.target && e.target.closest && e.target.closest('.bm-q-dismiss')) return;
+        if (typeof bmOpenQueueJobEntry === 'function') bmOpenQueueJobEntry(job);
+      };
+    }
+
+    const main = document.createElement('div');
+    main.className = 'bm-q-card-main';
+    const ic = document.createElement('span'); ic.className = 'bm-q-ic'; ic.textContent = s.icon;
+    const txt = document.createElement('div'); txt.className = 'bm-q-card-text';
+    const t1 = document.createElement('div'); t1.className = 'bm-q-card-label'; t1.textContent = job.label || job.kind;
+    const t2 = document.createElement('div'); t2.className = 'bm-q-card-status'; t2.textContent = s.text;
+    txt.appendChild(t1); txt.appendChild(t2);
+    main.appendChild(ic); main.appendChild(txt);
+    card.appendChild(main);
+
+    if (job.status === 'done' && job.result) {
+      const url = (job.result.images && job.result.images[0] && job.result.images[0].url) ||
+                  (job.result.image && job.result.image.url);
+      if (url) {
+        const im = document.createElement('img');
+        im.className = 'bm-q-thumb'; im.src = url; im.loading = 'lazy';
+        card.appendChild(im);
+      }
+    }
+
+    if (job.status === 'done' || job.status === 'failed') {
+      const x = document.createElement('button');
+      x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Dismiss';
+      x.onclick = (e) => { e.stopPropagation(); dismiss(job.id); };
+      card.appendChild(x);
+    } else if (job.status === 'queued') {
+      const x = document.createElement('button');
+      x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Cancel & remove';
+      x.onclick = (e) => { e.stopPropagation(); dismiss(job.id); };
+      card.appendChild(x);
+    }
+    return card;
+  }
+
+  // Render the job list into an arbitrary container (full view or modal body).
+  function renderInto(list, empty) {
     if (!list) return;
-    // Clear everything except the empty-state node.
     Array.from(list.querySelectorAll('.bm-q-card')).forEach(n => n.remove());
     if (!lastJobs.length) { if (empty) empty.style.display = ''; return; }
     if (empty) empty.style.display = 'none';
+    lastJobs.forEach(job => list.appendChild(buildCard(job)));
+  }
 
-    lastJobs.forEach(job => {
-      const s = statusInfo(job);
-      const card = document.createElement('div');
-      card.className = 'bm-q-card ' + s.cls;
-
-      const main = document.createElement('div');
-      main.className = 'bm-q-card-main';
-      const ic = document.createElement('span'); ic.className = 'bm-q-ic'; ic.textContent = s.icon;
-      const txt = document.createElement('div'); txt.className = 'bm-q-card-text';
-      const t1 = document.createElement('div'); t1.className = 'bm-q-card-label'; t1.textContent = job.label || job.kind;
-      const t2 = document.createElement('div'); t2.className = 'bm-q-card-status'; t2.textContent =
-        s.text + (job.kind === 'upscale' ? '' : '') ;
-      txt.appendChild(t1); txt.appendChild(t2);
-      main.appendChild(ic); main.appendChild(txt);
-      card.appendChild(main);
-
-      // Thumbnail for done jobs.
-      if (job.status === 'done' && job.result) {
-        const url = (job.result.images && job.result.images[0] && job.result.images[0].url) ||
-                    (job.result.image && job.result.image.url);
-        if (url) {
-          const im = document.createElement('img');
-          im.className = 'bm-q-thumb'; im.src = url; im.loading = 'lazy';
-          card.appendChild(im);
-        }
-      }
-
-      // Dismiss for terminal jobs; cancel for not-yet-started (queued) jobs.
-      if (job.status === 'done' || job.status === 'failed') {
-        const x = document.createElement('button');
-        x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Dismiss';
-        x.onclick = () => dismiss(job.id);
-        card.appendChild(x);
-      } else if (job.status === 'queued') {
-        const x = document.createElement('button');
-        x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Cancel & remove';
-        x.onclick = () => dismiss(job.id);
-        card.appendChild(x);
-      }
-      list.appendChild(card);
-    });
+  function renderView() {
+    renderInto(document.getElementById('bmQueueViewList'),
+               document.getElementById('bmQueueViewEmpty'));
+    // Mobile modal mirrors the same list while it's open.
+    if (document.body.classList.contains('bm-queue-modal-open')) {
+      renderInto(document.getElementById('bmQueueModalBody'),
+                 document.getElementById('bmQueueModalEmpty'));
+    }
   }
 
   // ── Floating widget DOM + styles (injected once) ─────────────────────────
@@ -19286,6 +19393,10 @@ const bmQueue = (() => {
       body.bm-q-collapsed #bmQueueWidget .bm-q-foot { display:none; }
       #bmQueueWidget .bm-q-body { max-height:230px; overflow-y:auto; padding:6px; }
       .bm-q-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; }
+      .bm-q-row-clickable { cursor:pointer; }
+      .bm-q-row-clickable:hover { background:color-mix(in srgb, var(--accent) 12%, transparent); }
+      .bm-q-card-clickable { cursor:pointer; }
+      .bm-q-card-clickable:hover { border-color:var(--accent); }
       .bm-q-row + .bm-q-row { margin-top:2px; }
       .bm-q-ic { width:18px; text-align:center; font-weight:700; }
       .bm-q-lbl { flex:1; min-width:0; font-size:13px; color:var(--text,#ddd);
@@ -19349,12 +19460,66 @@ const bmQueue = (() => {
 
   return {
     enqueueGenerate, enqueueUpscale, onJob,
-    start, stop, resume, poll, render, renderView, dismiss,
+    start, stop, resume, poll, render, renderView, renderInto, dismiss,
+    favIdFor,
     get jobs() { return lastJobs; },
   };
 })();
 
-// Minimise/restore the floating queue widget (works on every view). Persisted.
+// Open the library entry for a completed queue job: switch to Library and open
+// the saved favourite's modal. Resolves the fav id via the queue's jobId→favId
+// map, falling back to matching the result image URL against the library (for
+// jobs drained before the id was tracked).
+function bmOpenQueueJobEntry(job) {
+  if (!job || job.status !== 'done') return;
+  let favId = (typeof bmQueue !== 'undefined' && bmQueue.favIdFor) ? bmQueue.favIdFor(job.id) : null;
+  if (favId == null && typeof favourites !== 'undefined') {
+    const url = (job.result && ((job.result.images && job.result.images[0] && job.result.images[0].url) ||
+                (job.result.image && job.result.image.url))) || null;
+    if (url) {
+      const hit = favourites.find(f => f && f.imageData === url);
+      if (hit) favId = hit.id;
+    }
+  }
+  if (favId == null) return;
+  // Close the mobile queue modal if it's open.
+  if (typeof bmQueueModalClose === 'function') bmQueueModalClose();
+  if (typeof switchView === 'function') switchView('library');
+  setTimeout(() => {
+    if (typeof openImageModal === 'function') openImageModal(favId);
+  }, 60);
+}
+window.bmOpenQueueJobEntry = bmOpenQueueJobEntry;
+
+// ── Mobile queue modal (opened from the top-bar Queue button) ────────────────
+function bmQueueModalOpen() {
+  const m = document.getElementById('bmQueueModal');
+  if (!m) return;
+  document.body.classList.add('bm-queue-modal-open');
+  m.classList.add('open');
+  if (typeof bmQueue !== 'undefined' && bmQueue.renderInto) {
+    bmQueue.renderInto(document.getElementById('bmQueueModalBody'),
+                       document.getElementById('bmQueueModalEmpty'));
+  }
+}
+function bmQueueModalClose() {
+  const m = document.getElementById('bmQueueModal');
+  if (m) m.classList.remove('open');
+  document.body.classList.remove('bm-queue-modal-open');
+}
+window.bmQueueModalOpen = bmQueueModalOpen;
+window.bmQueueModalClose = bmQueueModalClose;
+
+// Keep the top-bar Queue badge in sync with the in-flight count.
+function bmQueueBadgeUpdate(activeCount) {
+  const b = document.getElementById('mobileQueueBadge');
+  if (!b) return;
+  if (activeCount > 0) { b.style.display = ''; b.textContent = String(activeCount); }
+  else b.style.display = 'none';
+}
+window.bmQueueBadgeUpdate = bmQueueBadgeUpdate;
+
+
 function bmQueueToggleMin() {
   const min = document.body.classList.toggle('bm-q-collapsed');
   const btn = document.getElementById('bmQueueWidgetMin');
@@ -19554,9 +19719,11 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
         });
       }
     }
+    return fav;
   } catch (e) {
     console.warn('auto-save of generated image failed (image still shown):', e);
   }
+  return null;
 }
 
 // ═══════════════════════ ZERO-KNOWLEDGE THUMBNAILS ═══════════════════════
@@ -20560,6 +20727,19 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   dl.onclick = () => igDownload(image.url);
   actions.appendChild(dl);
 
+  // Upscale: send this generated image straight into the Upscaler.
+  const up = document.createElement('button');
+  up.className = 'btn btn-ghost';
+  up.textContent = '\u2726 UPSCALE';
+  up.title = 'Upscale this image';
+  up.onclick = () => {
+    if (typeof switchView === 'function') switchView('upscaler');
+    setTimeout(() => {
+      if (typeof upLoadExternalImage === 'function') upLoadExternalImage(image.url, null);
+    }, 0);
+  };
+  actions.appendChild(up);
+
   if (Number.isFinite(image.seed) && model.seed) {
     const rs = document.createElement('button');
     rs.className = 'btn btn-ghost';
@@ -20775,13 +20955,8 @@ function upInit() {
     fwrap.appendChild(igChip(f, upState.format === f, () => { upState.format = f; upRenderFormatChips(); }));
   });
 
-  // Drag & drop onto the source dropzone.
-  const drop = document.getElementById('upDrop');
-  ;['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
-  ;['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
-  drop.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files) upSrcFilePicked(e.dataTransfer.files); });
-
-  // The empty stage is also a dropzone (it shows "drop or click to upload").
+  // The empty stage is the dropzone (it shows "drop or click to upload" + a
+  // URL field). Drag/drop a file anywhere on it to load the source.
   const stageDrop = document.getElementById('upStageEmpty');
   if (stageDrop) {
     ;['dragenter', 'dragover'].forEach(ev => stageDrop.addEventListener(ev, e => { e.preventDefault(); stageDrop.classList.add('drag'); }));
@@ -20946,14 +21121,10 @@ function upUpdateCostHint() {
 
 // ── Source image: tabs + pickers ────────────────────────────────────────────
 function upSrcTab(tab) {
-  // Library tab was removed (the bottom library bar replaces it). Guard against
-  // any stale callers asking for it by falling back to upload.
-  if (tab === 'library') tab = 'upload';
-  upState.srcTab = tab;
-  document.getElementById('upSrcTabUpload').classList.toggle('active', tab === 'upload');
-  document.getElementById('upSrcTabUrl').classList.toggle('active', tab === 'url');
-  document.getElementById('upSrcUpload').style.display = tab === 'upload' ? 'block' : 'none';
-  document.getElementById('upSrcUrl').style.display = tab === 'url' ? 'block' : 'none';
+  // Source tabs (Upload/Library/URL) were removed — the picker now lives inside
+  // the preview stage (drop/click + a URL field), and the bottom bar handles the
+  // library. Kept as a tolerant no-op so existing callers don't throw.
+  if (tab) upState.srcTab = (tab === 'library') ? 'upload' : tab;
   const lib = document.getElementById('upSrcLibrary');
   if (lib) lib.style.display = 'none';
 }
@@ -21539,7 +21710,11 @@ function upLoadExternalImage(dataUri, favId) {
   upSrcTab('upload');
   upState.srcData = dataUri; upState.srcIsUrl = false;
   upState.srcFavId = (favId != null) ? favId : null;
-  upShowPreview(dataUri);
+  // Render the image into the main stage preview (the dedicated source
+  // thumbnail was removed — the stage IS the preview now). upShowAdHocSource
+  // also runs upShowPreview() for dimension-aware option gating.
+  if (typeof upShowAdHocSource === 'function') upShowAdHocSource(dataUri);
+  else upShowPreview(dataUri);
 }
 
 function upUpdateCloudWarn(signedIn) {
