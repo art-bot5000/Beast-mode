@@ -1025,8 +1025,17 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .mobile-topbar-queue.bm-q-jump {
   animation:bmQueueJump .6s ease; color:var(--accent); border-color:var(--accent);
 }
-/* "Sent to queue" confirmation flash on the under-preview Upscale button. */
-.up-stage-actions .btn.up-sent { background:var(--accent); color:#000; opacity:1 !important; }
+/* The floating queue widget is retired on every viewport — the nav Queue tab
+   (desktop) and top-bar Queue button (mobile), both with the jump animation,
+   replace it. Jobs still run in the background via bmQueue. */
+#bmQueueWidget { display:none !important; }
+/* Same jump on the desktop nav Queue tab icon when work is sent to the queue. */
+#navQueue.bm-q-jump .tab-icon { animation:bmQueueJump .6s ease; color:var(--accent); display:inline-block; }
+#navQueue.bm-q-jump { color:var(--accent); }
+/* "Sent to queue" confirmation flash on the Upscale button(s). */
+.up-stage-actions .btn.up-sent, #upRunBtn.up-sent { background:var(--accent); color:#000; opacity:1 !important; }
+/* Same flash on the Image Gen Generate button. */
+#igGenerateBtn.ig-sent { background:var(--accent); color:#000; opacity:1 !important; }
 
 /* Mobile queue modal. */
 .bm-queue-modal { display:none; }
@@ -3894,6 +3903,11 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 /* ══ UPSCALER STAGE / SLIDER / RAIL (Phase 3) ═════════════════════ */
 .up-stage-img { position:relative; display:block; line-height:0; width:100%; height:100%; }
 .up-stage-img img { display:block; width:100%; height:100%; object-fit:contain; }
+/* Fade preview images in once decoded so switching Original/Upscaled/Compare
+   doesn't flash the empty <img> outline (white box) over a black gap. The img
+   starts transparent and .is-loaded (set on the load event) reveals it. */
+.up-stage-img img, .up-slider-after img, .up-slider-before img { opacity:0; transition:opacity .12s ease; }
+.up-stage-img img.is-loaded, .up-slider-after img.is-loaded, .up-slider-before img.is-loaded { opacity:1; }
 
 /* Before/after slider. Both layers are absolutely stacked; the "before" layer
    is clipped via clip-path to the handle position. Images are sized identically
@@ -3901,24 +3915,17 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .up-slider {
   position:relative; overflow:hidden; border-radius:6px; background:transparent;
   user-select:none; touch-action:none;
-  /* Fit the stage viewport on BOTH axes exactly like the single Original/
-     Upscaled views. The box is a normal flex item centred in #upZoomInner; the
-     AFTER image is the in-flow sizing element (object-fit:contain against the
-     full stage), and the BEFORE layer + handle overlay it absolutely at the
-     same scale. */
+  /* Fit the stage on BOTH axes. The box carries the AFTER image's aspect ratio
+     (set inline from outW/outH), and BOTH layers fill it absolutely with
+     object-fit:contain — so original and upscaled render at the IDENTICAL
+     on-screen scale. Previously the after layer was in-flow (width:auto), so its
+     box and the absolutely-filled before layer used different coordinate spaces
+     and the upscaled image overflowed/bled behind the slider. */
   max-width:100%; max-height:100%; margin:auto;
-  display:flex; align-items:center; justify-content:center;
 }
-/* AFTER (upscaled) is the sizing layer: a normal in-flow image fitted to the
-   stage. BEFORE (original) overlays it, clipped by the handle. Both use the
-   SAME box, so they render at the identical on-screen scale. */
-.up-slider-after { position:relative; display:block; line-height:0; }
-.up-slider-after img {
-  display:block; max-width:100%; max-height:100%; width:auto; height:auto;
-  object-fit:contain; background:transparent;
-}
-.up-slider-before { position:absolute; inset:0; line-height:0; }
-.up-slider-before img {
+/* Both layers occupy the SAME box. After is the base; before overlays clipped. */
+.up-slider-after, .up-slider-before { position:absolute; inset:0; line-height:0; }
+.up-slider-after img, .up-slider-before img {
   position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
   display:block; background:transparent;
 }
@@ -20834,6 +20841,23 @@ function igPullPrompt() {
 }
 
 // ── Generate ────────────────────────────────────────────────────────────────
+// "Sent to queue" confirmation flash on the Image Gen Generate button. Restores
+// the button label + enabled state after a short delay. Mirrors the upscaler.
+let _igSentToQueueTimer = null;
+function igFlashSentToQueue(btn) {
+  if (!btn) return;
+  const original = btn.dataset.label || btn.textContent;
+  btn.dataset.label = original;
+  btn.textContent = '\u2713 SENT TO QUEUE';
+  btn.classList.add('ig-sent');
+  btn.disabled = false; btn.style.opacity = '1';
+  if (_igSentToQueueTimer) clearTimeout(_igSentToQueueTimer);
+  _igSentToQueueTimer = setTimeout(() => {
+    btn.classList.remove('ig-sent');
+    btn.textContent = btn.dataset.label || '\u2726 GENERATE';
+  }, 1600);
+}
+
 async function igGenerate() {
   if (igState.busy) return;
   const m = igModel();
@@ -20908,7 +20932,11 @@ async function igGenerate() {
     // Queued — runs server-side, saves to library even if we leave this page.
     igStatus('\u25CC QUEUED \u2014 generating in the background\u2026 (' + m.label + ')', false);
     igState.busy = false;            // queue owns the work; free the UI
-    btn.disabled = false; btn.style.opacity = '1';
+    // Brief "Sent to queue" confirmation on the Generate button + a jump on the
+    // Queue nav icon (mirrors the upscaler + mobile behaviour). The floating
+    // widget is gone, so this is the feedback that work was accepted.
+    igFlashSentToQueue(btn);
+    if (typeof bmQueueJump === 'function') bmQueueJump();
     if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
     bmQueue.onJob(r.jobId, {
       onDone: (result) => {
@@ -21716,6 +21744,7 @@ function upRenderStageSingle(f) {
   // Prefer stored dims; else measure on load.
   if (f.outW && f.outH) { paint(f.outW, f.outH); mount(f.outW, f.outH); }
   img.addEventListener('load', () => {
+    img.classList.add('is-loaded');
     if (!(f.outW && f.outH)) { paint(img.naturalWidth, img.naturalHeight); mount(img.naturalWidth, img.naturalHeight); }
   }, { once: true });
   img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f); };
@@ -21748,10 +21777,13 @@ function upRenderStageSlider(upFav) {
 
   const slider = document.createElement('div');
   slider.className = 'up-slider';
-  // The slider box is sized by the AFTER image (object-fit:contain against the
-  // stage) so Compare matches the single Original/Upscaled views exactly. No
-  // inline aspect-ratio needed.
+  // Fill the zoom host, which upZoomMount() has already sized to the AFTER
+  // image's (aw×ah) aspect ratio. Both layers then object-fit:contain inside one
+  // shared box — fixing the upscaled layer rendering at a different scale and
+  // bleeding through behind the slider.
   const aw = upFav.outW || 0, ah = upFav.outH || 0;
+  slider.style.width = '100%';
+  slider.style.height = '100%';
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
@@ -21795,8 +21827,8 @@ function upRenderStageSlider(upFav) {
       bmResLabel(afterWrap, afterImg, 'UPSCALED \u00B7 ' + w + '\u00D7' + h, 'br', 'upAfterRes');
     }
   };
-  beforeImg.addEventListener('load', paintLabels, { once: true });
-  afterImg.addEventListener('load', paintLabels, { once: true });
+  beforeImg.addEventListener('load', () => { beforeImg.classList.add('is-loaded'); paintLabels(); }, { once: true });
+  afterImg.addEventListener('load', () => { afterImg.classList.add('is-loaded'); paintLabels(); }, { once: true });
 
   // Drag interaction (pointer events cover mouse + touch).
   let dragging = false;
@@ -22026,30 +22058,44 @@ function upSyncMobileRunBtn() {
   dst.style.opacity = src.style.opacity || '1';
 }
 
-// Briefly show "✓ SENT TO QUEUE" on the under-preview Upscale button, then let
-// the next upSyncMobileRunBtn() (via upUpdateCostHint) restore the cost label.
+// Briefly show "✓ SENT TO QUEUE" on the Upscale button(s), then let the next
+// upSyncMobileRunBtn() (via upUpdateCostHint) restore the cost label. Flashes
+// BOTH the panel button (#upRunBtn, visible on desktop) and the under-preview
+// button (#upStageRunBtn, visible ≤900px) so it shows on every width.
 let _upSentToQueueTimer = null;
 function upFlashSentToQueue() {
-  const dst = document.getElementById('upStageRunBtn');
-  if (!dst) return;
-  dst.textContent = '\u2713 SENT TO QUEUE';
-  dst.classList.add('up-sent');
+  const targets = [
+    document.getElementById('upRunBtn'),
+    document.getElementById('upStageRunBtn'),
+  ].filter(Boolean);
+  if (!targets.length) return;
+  targets.forEach((dst) => {
+    dst.textContent = '\u2713 SENT TO QUEUE';
+    dst.classList.add('up-sent');
+  });
   if (_upSentToQueueTimer) clearTimeout(_upSentToQueueTimer);
   _upSentToQueueTimer = setTimeout(() => {
-    dst.classList.remove('up-sent');
+    targets.forEach((dst) => dst.classList.remove('up-sent'));
     if (typeof upUpdateCostHint === 'function') upUpdateCostHint();
   }, 1600);
 }
 
-// Make the top-bar Queue button "jump" to draw the eye when work is sent there.
+// Make the Queue affordance "jump" to draw the eye when work is sent there.
+// Animates BOTH the mobile top-bar button and the desktop nav Queue tab, so the
+// floating widget is no longer needed on desktop.
 function bmQueueJump() {
-  const btn = document.getElementById('mobileQueueBtn');
-  if (!btn) return;
-  btn.classList.remove('bm-q-jump');
-  // Force reflow so re-adding the class restarts the animation.
-  void btn.offsetWidth;
-  btn.classList.add('bm-q-jump');
-  setTimeout(() => btn.classList.remove('bm-q-jump'), 700);
+  const targets = [
+    document.getElementById('mobileQueueBtn'),
+    document.getElementById('navQueue'),
+  ];
+  targets.forEach((btn) => {
+    if (!btn) return;
+    btn.classList.remove('bm-q-jump');
+    // Force reflow so re-adding the class restarts the animation.
+    void btn.offsetWidth;
+    btn.classList.add('bm-q-jump');
+    setTimeout(() => btn.classList.remove('bm-q-jump'), 700);
+  });
 }
 window.bmQueueJump = bmQueueJump;
 
