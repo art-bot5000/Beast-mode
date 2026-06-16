@@ -20,7 +20,7 @@ primary_region = 'lhr'
 [[mounts]]
   source = 'beastmode_data'
   destination = '/data'
-  initial_size = '1gb'
+  initial_size = '5gb'
   snapshot_retention = 5
 
 [http_service]

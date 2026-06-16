@@ -66,7 +66,8 @@ import { generate, searchModels, upscale, UPSCALERS, findUpscaler, ProviderError
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
-import { rehostToR2, rehostBytesToR2, r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
+import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
+import { storeImage, readImage, userUsage } from "./data-store.ts";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
@@ -174,47 +175,50 @@ async function runGenerateHeld(
       snapDims,
     });
 
-    if (r2Enabled()) {
-      // LEVER 2 — bound peak memory by rehosting SEQUENTIALLY, one image at a
-      // time. The old Promise.all decoded/fetched every image in the batch at
-      // once, so a 4-image 4K batch held 4× the multi-MB payload resident
-      // simultaneously — the OOM class this fly.toml comment documents. One at
-      // a time caps peak resident bytes at ~1× a single image regardless of
-      // batch size.
-      //
-      // Why these stay AWAITED (not backgrounded): completeJob() snapshots the
-      // result into KV immediately after this returns. A background task that
-      // swapped img.url -> the R2 URL afterwards would mutate only the in-memory
-      // object, never the persisted job record, so the client would poll the
-      // provider/data URL forever and the R2 object would be orphaned. Worker
-      // throughput is solved by the bounded-concurrency dispatcher (lever 1)
-      // instead — N jobs run in parallel, so an awaited rehost no longer caps
-      // the whole queue at one-at-a-time.
-      for (const img of result.images as Array<{ url?: string; b64?: string; mimeType?: string }>) {
-        try {
-          if (img.b64) {
-            const mime = img.mimeType || "image/png";
-            const ext = mime.split("/")[1]?.replace("jpeg", "jpg").slice(0, 4) || "png";
-            const bytes = decodeBase64(img.b64);
-            const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-            img.url = await rehostBytesToR2(bytes, mime, key);
-            delete img.b64; delete img.mimeType;
-          } else if (img.url) {
-            const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
-            const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-            img.url = await rehostToR2(img.url, key);
-          }
-        } catch (e) {
-          if (img.b64) {
-            img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
-            delete img.b64; delete img.mimeType;
-          }
-          console.warn("R2 rehost failed, keeping original:", (e as Error).message);
+    // PRIMARY IMAGE STORE — write bytes to the per-user /data volume and hand
+    // the client a STABLE /api/img/<favId> URL. This replaces the old R2
+    // newest-5 buffer (r2.js trimR2ToNewest), which silently emptied libraries.
+    // R2 is no longer in the image path at all.
+    //
+    // Memory: still SEQUENTIAL, one image at a time — bounds peak resident bytes
+    // at ~1× a single image regardless of batch size (the OOM class fly.toml
+    // documents). Still AWAITED, not backgrounded: completeJob() snapshots the
+    // result into KV right after this returns, so a backgrounded swap of img.url
+    // would never reach the persisted job record.
+    //
+    // favId: the client mirrors this id onto the library favourite (it uses
+    // Date.now() too), so /api/img/<favId> resolves to the same image the
+    // library card references. We mint it here and return it on the img object.
+    for (const img of result.images as Array<{ url?: string; b64?: string; mimeType?: string; favId?: string }>) {
+      const favId = String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, "0");
+      try {
+        let bytes: Uint8Array;
+        let mime: string;
+        if (img.b64) {
+          mime = img.mimeType || "image/png";
+          bytes = decodeBase64(img.b64);
+        } else if (img.url) {
+          // Provider returned only a hosted URL — fetch the pristine bytes once.
+          const res = await fetch(img.url);
+          if (!res.ok) throw new Error(`fetch provider image: HTTP ${res.status}`);
+          mime = res.headers.get("content-type") || "image/jpeg";
+          bytes = new Uint8Array(await res.arrayBuffer());
+        } else {
+          continue; // nothing to store
         }
+        img.url = await storeImage(userHash, favId, bytes, mime);
+        img.favId = favId;
+        delete img.b64; delete img.mimeType;
+      } catch (e) {
+        // SOFT-DEGRADE (house pattern): on quota/disk failure keep the image
+        // viewable this session as a data URI rather than failing the whole
+        // generation. The library just won't have a durable server copy for it.
+        if (img.b64) {
+          img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
+          delete img.b64; delete img.mimeType;
+        }
+        console.warn("/data store failed, serving inline (no durable copy):", (e as Error).message);
       }
-      trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
-        console.warn("R2 trim failed (non-fatal):", (e as Error).message)
-      );
     }
 
     const delivered = result.images.length;
@@ -279,18 +283,28 @@ async function runUpscaleHeld(
       seed: body.seed as number | undefined,
     });
 
-    const out = result.image as { url: string; b64?: string };
-    if (r2Enabled() && out?.url) {
+    const out = result.image as { url?: string; b64?: string; favId?: string };
+    if (out && (out.url || out.b64)) {
+      const favId = String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, "0");
       try {
-        const ext = out.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
-        const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-        out.url = await rehostToR2(out.url, key);
+        let bytes: Uint8Array;
+        let mime: string;
+        if (out.b64) {
+          mime = "image/png";
+          bytes = decodeBase64(out.b64);
+        } else {
+          const res = await fetch(out.url as string);
+          if (!res.ok) throw new Error(`fetch upscale image: HTTP ${res.status}`);
+          mime = res.headers.get("content-type") || "image/jpeg";
+          bytes = new Uint8Array(await res.arrayBuffer());
+        }
+        out.url = await storeImage(userHash, favId, bytes, mime);
+        out.favId = favId;
+        delete out.b64;
       } catch (e) {
-        console.warn("R2 rehost failed (upscale), keeping original URL:", (e as Error).message);
+        if (out.b64) { out.url = `data:image/png;base64,${out.b64}`; delete out.b64; }
+        console.warn("/data store failed (upscale), serving inline:", (e as Error).message);
       }
-      trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
-        console.warn("R2 trim failed (non-fatal):", (e as Error).message)
-      );
     }
 
     const delivered = out?.url ? 1 : 0;
@@ -740,6 +754,36 @@ async function handler(req: Request): Promise<Response> {
       console.warn("presign-get failed:", (e as Error).message);
       return json({ ok: false, reason: "presign_failed" });
     }
+  }
+
+  // ── PRIMARY IMAGE READ — stream a user's stored image bytes off /data.
+  // SESSION-GATED: userHash comes ONLY from verifySessionToken, never the URL,
+  // so a user can never read another user's favId. The path is /api/img/<favId>;
+  // <favId> selects WITHIN that user's namespace. Cached aggressively — bytes at
+  // a given favId never change (new generations get new ids).
+  if (path.startsWith("/api/img/") && req.method === "GET") {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in to view images.", code: "auth_required" }, 401);
+    const favId = path.slice("/api/img/".length);
+    const img = await readImage(userHash, favId);
+    if (!img) return json({ error: "Image not found.", code: "not_found" }, 404);
+    return new Response(img.bytes, {
+      status: 200,
+      headers: {
+        "content-type": img.mime,
+        "cache-control": "private, max-age=31536000, immutable",
+      },
+    });
+  }
+
+  // ── Per-user storage meter (used + cap), for the library "storage" UI and
+  // the future Stripe "buy more" upsell. Session-gated.
+  if (path === "/api/storage" && req.method === "GET") {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+    return json(await userUsage(userHash));
   }
 
   // ── Curated model list for the dropdown (instant, no upstream call).
