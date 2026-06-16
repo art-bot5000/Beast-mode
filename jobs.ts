@@ -33,6 +33,7 @@
 //   unchanged — they just happen in the worker instead of the request handler.
 
 import { kv } from "./auth.ts";
+import { stashJobBlob } from "./data-store.ts";
 
 export type JobKind = "generate" | "upscale";
 export type JobStatus = "queued" | "running" | "done" | "failed";
@@ -97,12 +98,39 @@ export async function enqueueJob(args: {
   label: string;
 }): Promise<JobRecord> {
   const now = Date.now();
+  const jobId = crypto.randomUUID();
+  // Deno KV caps values at 64KB. Image inputs arrive as multi-MB data URIs, so
+  // we move them OFF the record: stash each oversized data: field on /data and
+  // leave a "jobblob:<field>" marker. runJob() rehydrates them before running.
+  // Only data: URIs are stashed — http(s)/UUID refs are small and stay inline.
+  const request: Record<string, unknown> = { ...args.request };
+  const STASH_FIELDS = ["inputImage"];
+  for (const field of STASH_FIELDS) {
+    const v = request[field];
+    if (typeof v === "string" && v.startsWith("data:") && v.length > 8192) {
+      request[field] = await stashJobBlob(jobId, field, v);
+    }
+  }
+  // referenceImages is an array of data URIs; stash each element that's large.
+  if (Array.isArray(request.referenceImages)) {
+    const refs = request.referenceImages as unknown[];
+    const out: string[] = [];
+    for (let i = 0; i < refs.length; i++) {
+      const r = refs[i];
+      if (typeof r === "string" && r.startsWith("data:") && r.length > 8192) {
+        out.push(await stashJobBlob(jobId, `referenceImages_${i}`, r));
+      } else {
+        out.push(typeof r === "string" ? r : "");
+      }
+    }
+    request.referenceImages = out;
+  }
   const job: JobRecord = {
-    id: crypto.randomUUID(),
+    id: jobId,
     userHash: args.userHash,
     kind: args.kind,
     status: "queued",
-    request: args.request,
+    request,
     holdRef: args.holdRef,
     quotedTotal: args.quotedTotal,
     perImage: args.perImage,

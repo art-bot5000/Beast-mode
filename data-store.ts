@@ -247,3 +247,51 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
     .map((x) => ({ favId: x.favId, ext: x.meta.ext, bytes: x.meta.bytes, mime: x.meta.mime, createdAt: x.meta.createdAt }))
     .sort((a, b) => b.createdAt - a.createdAt); // newest first, matches library order
 }
+
+// ── job input blobs ───────────────────────────────────────────────────────────
+// Deno KV caps a value at 64KB. Job records (jobs.ts) store the request body,
+// and image inputs (upscale `inputImage`, generate `referenceImages`) arrive as
+// multi-MB data URIs — far over the cap, so committing the job throws
+// "Value too large". We keep those bytes OFF KV: stash each on the /data volume
+// under the job id, store only a marker in the record, and rehydrate in the
+// worker before the job runs. Cleaned up when the job finishes.
+const JOBTMP_ROOT = `${DATA_ROOT}/jobtmp`;
+
+function jobTmpPath(jobId: string, field: string): string {
+  if (!/^[a-f0-9-]{8,64}$/i.test(jobId)) throw new Error("bad jobId");
+  if (!/^[a-z0-9_]{1,32}$/i.test(field)) throw new Error("bad field");
+  return `${JOBTMP_ROOT}/${jobId}.${field}`;
+}
+
+// Persist a data URI (or raw string) for a job field. Returns the marker string
+// the job record should carry in place of the bytes.
+export async function stashJobBlob(jobId: string, field: string, dataUri: string): Promise<string> {
+  await Deno.mkdir(JOBTMP_ROOT, { recursive: true });
+  const path = jobTmpPath(jobId, field);
+  const tmp = `${path}.tmp-${crypto.randomUUID()}`;
+  await Deno.writeFile(tmp, new TextEncoder().encode(dataUri));
+  await Deno.rename(tmp, path);
+  return `jobblob:${field}`;
+}
+
+// Read a previously stashed job field back as its original string (data URI).
+export async function fetchJobBlob(jobId: string, field: string): Promise<string | null> {
+  try {
+    const bytes = await Deno.readFile(jobTmpPath(jobId, field));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+// Remove all stashed blobs for a job (best-effort; called when a job finishes).
+export async function clearJobBlobs(jobId: string, fields: string[]): Promise<void> {
+  for (const field of fields) {
+    try { await Deno.remove(jobTmpPath(jobId, field)); } catch { /* already gone */ }
+  }
+}
+
+// True when a job-record value is a stash marker rather than inline bytes.
+export function isJobBlobMarker(v: unknown): v is string {
+  return typeof v === "string" && v.startsWith("jobblob:");
+}

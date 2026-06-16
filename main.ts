@@ -67,7 +67,7 @@ import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
 import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
-import { storeImage, readImage, userUsage, listManifest } from "./data-store.ts";
+import { storeImage, readImage, userUsage, listManifest, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
@@ -351,7 +351,26 @@ async function runUpscaleHeld(
 let workerRunning = false;
 
 async function runJob(job: JobRecord): Promise<void> {
-  const body = job.request;
+  const body = { ...job.request } as Record<string, unknown>;
+  // Rehydrate any image inputs stashed off-KV at enqueue (see jobs.ts). A
+  // "jobblob:<field>" marker means the bytes live on /data; read them back into
+  // the body so the run functions see the original data URI. Track what we
+  // rehydrated so we can clean the temp files after the job settles.
+  const stashedFields: string[] = [];
+  if (isJobBlobMarker(body.inputImage)) {
+    const v = await fetchJobBlob(job.id, "inputImage");
+    if (v) { body.inputImage = v; stashedFields.push("inputImage"); }
+  }
+  if (Array.isArray(body.referenceImages)) {
+    const refs = body.referenceImages as unknown[];
+    for (let i = 0; i < refs.length; i++) {
+      if (isJobBlobMarker(refs[i])) {
+        const v = await fetchJobBlob(job.id, `referenceImages_${i}`);
+        if (v) { refs[i] = v; stashedFields.push(`referenceImages_${i}`); }
+      }
+    }
+    body.referenceImages = refs;
+  }
   const q = { totalTokens: job.quotedTotal, perImage: job.perImage };
   try {
     if (job.kind === "generate") {
@@ -376,6 +395,8 @@ async function runJob(job: JobRecord): Promise<void> {
     const code = e instanceof ProviderError ? e.code : "internal_error";
     await failJob(job, msg, code);
     console.error(`job ${job.id} (${job.kind}) failed:`, (e as Error).message);
+  } finally {
+    if (stashedFields.length) clearJobBlobs(job.id, stashedFields).catch(() => {});
   }
 }
 
