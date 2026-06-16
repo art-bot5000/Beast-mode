@@ -175,30 +175,43 @@ async function runGenerateHeld(
     });
 
     if (r2Enabled()) {
-      await Promise.all(
-        result.images.map(async (img: { url?: string; b64?: string; mimeType?: string }) => {
-          try {
-            if (img.b64) {
-              const mime = img.mimeType || "image/png";
-              const ext = mime.split("/")[1]?.replace("jpeg", "jpg").slice(0, 4) || "png";
-              const bytes = decodeBase64(img.b64);
-              const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-              img.url = await rehostBytesToR2(bytes, mime, key);
-              delete img.b64; delete img.mimeType;
-            } else if (img.url) {
-              const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
-              const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
-              img.url = await rehostToR2(img.url, key);
-            }
-          } catch (e) {
-            if (img.b64) {
-              img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
-              delete img.b64; delete img.mimeType;
-            }
-            console.warn("R2 rehost failed, keeping original:", (e as Error).message);
+      // LEVER 2 — bound peak memory by rehosting SEQUENTIALLY, one image at a
+      // time. The old Promise.all decoded/fetched every image in the batch at
+      // once, so a 4-image 4K batch held 4× the multi-MB payload resident
+      // simultaneously — the OOM class this fly.toml comment documents. One at
+      // a time caps peak resident bytes at ~1× a single image regardless of
+      // batch size.
+      //
+      // Why these stay AWAITED (not backgrounded): completeJob() snapshots the
+      // result into KV immediately after this returns. A background task that
+      // swapped img.url -> the R2 URL afterwards would mutate only the in-memory
+      // object, never the persisted job record, so the client would poll the
+      // provider/data URL forever and the R2 object would be orphaned. Worker
+      // throughput is solved by the bounded-concurrency dispatcher (lever 1)
+      // instead — N jobs run in parallel, so an awaited rehost no longer caps
+      // the whole queue at one-at-a-time.
+      for (const img of result.images as Array<{ url?: string; b64?: string; mimeType?: string }>) {
+        try {
+          if (img.b64) {
+            const mime = img.mimeType || "image/png";
+            const ext = mime.split("/")[1]?.replace("jpeg", "jpg").slice(0, 4) || "png";
+            const bytes = decodeBase64(img.b64);
+            const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+            img.url = await rehostBytesToR2(bytes, mime, key);
+            delete img.b64; delete img.mimeType;
+          } else if (img.url) {
+            const ext = img.url.split("?")[0].split(".").pop()?.slice(0, 4) || "jpg";
+            const key = `gen/${userHash}/${crypto.randomUUID()}.${ext}`;
+            img.url = await rehostToR2(img.url, key);
           }
-        }),
-      );
+        } catch (e) {
+          if (img.b64) {
+            img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
+            delete img.b64; delete img.mimeType;
+          }
+          console.warn("R2 rehost failed, keeping original:", (e as Error).message);
+        }
+      }
       trimR2ToNewest(`gen/${userHash}/`, 5).catch((e) =>
         console.warn("R2 trim failed (non-fatal):", (e as Error).message)
       );
@@ -352,29 +365,47 @@ async function runJob(job: JobRecord): Promise<void> {
   }
 }
 
-async function workerTick(): Promise<void> {
-  const job = await claimNextJob();
-  if (!job) return;
-  await runJob(job);
-}
+// Max jobs running concurrently in this process. Each job is I/O-bound (it
+// spends almost all its time awaiting Runware/Gemini, not on CPU), so the
+// shared-cpu-1x core is not the limit — peak RESIDENT MEMORY is. With lever 2
+// capping each job's rehost at ~1× a single image, a handful of concurrent
+// jobs stays well within 512MB. Tune via WORKER_CONCURRENCY; default 4.
+const WORKER_CONCURRENCY = Math.max(
+  1,
+  Math.min(16, Number(process.env.WORKER_CONCURRENCY) || 4),
+);
 
 function startWorker(): void {
   if (workerRunning) return;
   workerRunning = true;
-  const loop = async () => {
+
+  // Bounded-concurrency dispatcher. We run WORKER_CONCURRENCY independent
+  // claim→run lanes. Each lane loops: claim the oldest queued job and run it;
+  // if the queue is empty, idle briefly then retry. claimNextJob()'s KV CAS
+  // (queued→running, atomic with removing the queue pointer) guarantees no two
+  // lanes — or two machines — ever run the same job, so this is safe to fan out.
+  const lane = async (laneId: number) => {
     while (workerRunning) {
       try {
-        await workerTick();
+        const job = await claimNextJob();
+        if (!job) {
+          // Queue empty for this lane — idle, then re-check. Jitter the delay a
+          // little per lane so the lanes don't all wake and hammer KV in phase.
+          await new Promise((r) => setTimeout(r, 1500 + laneId * 120));
+          continue;
+        }
+        await runJob(job);
+        // No idle delay after real work: immediately try to claim the next job
+        // so a backlog drains at full concurrency.
       } catch (e) {
-        console.error("worker tick error:", (e as Error).message);
+        console.error("worker lane error:", (e as Error).message);
+        await new Promise((r) => setTimeout(r, 1500));
       }
-      // Short idle delay between claims; KV list is cheap but we don't want a
-      // hot spin when the queue is empty.
-      await new Promise((r) => setTimeout(r, 1500));
     }
   };
-  loop();
-  console.log("Background job worker started.");
+
+  for (let i = 0; i < WORKER_CONCURRENCY; i++) lane(i);
+  console.log(`Background job worker started (concurrency=${WORKER_CONCURRENCY}).`);
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────
