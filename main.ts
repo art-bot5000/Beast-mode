@@ -67,7 +67,7 @@ import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
 import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
-import { storeImage, readImage, userUsage } from "./data-store.ts";
+import { storeImage, readImage, userUsage, listManifest } from "./data-store.ts";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
@@ -775,6 +775,16 @@ async function handler(req: Request): Promise<Response> {
         "cache-control": "private, max-age=31536000, immutable",
       },
     });
+  }
+
+  // ── Library manifest for login re-hydration. Returns the lightweight index
+  // (favId + metadata, NO bytes); the client rebuilds its library list and
+  // lazy-loads each image via /api/img/<favId> on demand. Session-gated.
+  if (path === "/api/manifest" && req.method === "GET") {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+    return json({ images: await listManifest(userHash) });
   }
 
   // ── Per-user storage meter (used + cap), for the library "storage" UI and

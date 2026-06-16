@@ -4241,17 +4241,17 @@ body.up-settings-modal-open { overflow:hidden; }
       <button class="btn btn-primary" onclick="if(typeof openAuthModal==='function')openAuthModal('login')">⊙ SIGN IN / CREATE ACCOUNT</button>
     </div>
 
-    <!-- Durable-storage warning: R2 is a hot cache that keeps only each user's
-         NEWEST 5 generated images (FIFO trim server-side). Permanent copies are
-         uploaded to Google Drive by autoSaveGeneratedImage — but only when
-         Drive is connected. Shown whenever driveToken is absent. -->
+    <!-- Storage info: images are saved permanently server-side (per-user /data
+         volume) by default. Google Drive is an OPTIONAL extra backup the user
+         can enable in Settings. With igHasDurableStorage() now always true this
+         banner stays hidden in normal use; copy kept accurate regardless. -->
     <div id="igDriveWarn" class="ig-panel" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 8%,var(--surface));">
-      <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;white-space:nowrap;">⚠ NO PERMANENT IMAGE STORAGE</span>
+      <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;white-space:nowrap;">⊙ IMAGES SAVED AUTOMATICALLY</span>
       <span style="font-size:12px;color:var(--muted);flex:1;min-width:220px;line-height:1.5;">
-        Generated images live in a temporary cloud cache that keeps only your <b style="color:var(--accent);">newest 5</b> —
-        each new image pushes the oldest out (FIFO). Connect <b>Google Drive</b> to save a permanent copy of every image automatically.<span id="igDriveWarnDbx" style="display:none;"> Note: your Dropbox sync covers prompts &amp; library data, not generated image files.</span>
+        Every image you generate is saved permanently to your account and synced when you sign in.
+        Want a second copy in your own cloud? Connect <b>Google Drive</b> in Settings for optional backup.<span id="igDriveWarnDbx" style="display:none;"> Your Dropbox sync covers prompts &amp; library data.</span>
       </span>
-      <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ CONNECT GOOGLE DRIVE</button>
+      <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ SETTINGS</button>
     </div>
 
     <div id="igMain" class="ig-layout" style="display:none;">
@@ -4359,12 +4359,12 @@ body.up-settings-modal-open { overflow:hidden; }
     </div>
 
     <div id="upDriveWarn" class="ig-panel" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 8%,var(--surface));">
-      <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;white-space:nowrap;">⚠ NO PERMANENT IMAGE STORAGE</span>
+      <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;white-space:nowrap;">⊙ IMAGES SAVED AUTOMATICALLY</span>
       <span style="font-size:12px;color:var(--muted);flex:1;min-width:220px;line-height:1.5;">
-        Upscaled images live in a temporary cloud cache that keeps only your <b style="color:var(--accent);">newest 5</b> —
-        each new image pushes the oldest out (FIFO). Connect <b>Google Drive</b> to save a permanent copy automatically.<span id="upDriveWarnDbx" style="display:none;"> Note: your Dropbox sync covers prompts &amp; library data, not generated image files.</span>
+        Every upscale is saved permanently to your account and synced when you sign in.
+        Want a second copy in your own cloud? Connect <b>Google Drive</b> in Settings for optional backup.<span id="upDriveWarnDbx" style="display:none;"> Your Dropbox sync covers prompts &amp; library data.</span>
       </span>
-      <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ CONNECT GOOGLE DRIVE</button>
+      <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ SETTINGS</button>
     </div>
 
     <div id="upMain" class="up-layout" style="display:none;">
@@ -4581,6 +4581,22 @@ body.up-settings-modal-open { overflow:hidden; }
         </div>
       </div>
 
+      <!-- Account Storage — images persist to your account (/data) by default.
+           This meter reflects /api/storage (used vs cap). Independent of Drive. -->
+      <div class="settings-section" style="grid-column:1/-1;" id="settingsStorageSection">
+        <div class="settings-section-title">Account Storage</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+          Your generated and upscaled images are saved to your account automatically.
+          When storage is full, the oldest images are removed first.
+        </div>
+        <div id="bmStorageMeterWrap" style="max-width:420px;">
+          <div style="height:10px;border-radius:6px;background:var(--panel-2,rgba(255,255,255,0.08));overflow:hidden;">
+            <div id="bmStorageMeterBar" style="height:100%;width:0%;background:var(--accent);transition:width .3s ease;"></div>
+          </div>
+          <div id="bmStorageMeterLabel" style="font-size:12px;color:var(--muted);margin-top:6px;letter-spacing:0.5px;">Loading storage usage…</div>
+        </div>
+      </div>
+
       <!-- Cloud Sync -->
       <div class="settings-section" style="grid-column:1/-1;" id="settingsSyncSection">
         <div class="settings-section-title">Cloud Sync</div>
@@ -4610,6 +4626,12 @@ body.up-settings-modal-open { overflow:hidden; }
             </div>
             <button class="btn btn-ghost" onclick="driveSync()" style="font-size:12px;margin-right:6px;">↻ SYNC NOW</button>
             <button class="btn btn-ghost" onclick="driveSignOut()" style="font-size:12px;">SIGN OUT</button>
+            <!-- Image backup is OPT-IN: images already persist to your account
+                 (/data) by default; this mirrors each new image into Drive too. -->
+            <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:12px;color:var(--muted);cursor:pointer;">
+              <input type="checkbox" id="bmDriveBackupToggle" onchange="setDriveBackupEnabled(this.checked)" style="width:16px;height:16px;cursor:pointer;">
+              <span>Also back up new images to Google Drive <span style="opacity:0.7;">(optional — your images are already saved to your account)</span></span>
+            </label>
           </div>
           <div id="settingsDriveSignedOut" style="display:block;">
             <div id="settingsDriveStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
@@ -8908,6 +8930,7 @@ function switchView(view, pushState = true) {
   if (view === 'settings') {
     renderSettingsView()
     if (typeof bmTokensSettingsRender === 'function') bmTokensSettingsRender()
+    if (typeof bmRenderStorageMeter === 'function') bmRenderStorageMeter()
   }
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
   if (view === 'upscaler' && typeof upInit === 'function') upInit()
@@ -10760,6 +10783,9 @@ function renderSettingsView() {
     if (typeof bmApplyProfileImage === 'function') bmApplyProfileImage()
     const sl = document.getElementById('settingsStatusLine')
     if (sl) sl.textContent = '✓ Connected to Google Drive'
+    // Reflect the saved opt-in image-backup choice on the toggle.
+    const dbt = document.getElementById('bmDriveBackupToggle')
+    if (dbt && typeof driveBackupEnabled === 'function') dbt.checked = driveBackupEnabled()
   } else {
     // Always render OUR connect button. (Previously this branch rendered
     // Google's GIS sign-in button whenever the SDK was loaded — the old flow.
@@ -11225,6 +11251,19 @@ const LS = {
   PB_FAVS:   'bm_state_pb_favs',
   SETTINGS:  'bm_state_settings',
   UP_LIBBAR: 'bm_state_up_libbar',
+  DRIVE_BACKUP: 'bm_state_drive_backup',
+}
+
+// Drive image backup is now OPT-IN (images persist to /data by default; Drive
+// is an extra copy). Off unless the user explicitly enables it. Stored locally
+// so the choice survives reloads without a server round-trip.
+function driveBackupEnabled() {
+  try { return localStorage.getItem(LS.DRIVE_BACKUP) === '1'; } catch (e) { return false; }
+}
+function setDriveBackupEnabled(on) {
+  try { localStorage.setItem(LS.DRIVE_BACKUP, on ? '1' : '0'); } catch (e) {}
+  const t = document.getElementById('bmDriveBackupToggle');
+  if (t) t.checked = !!on;
 }
 
 function lsSave(key, value) {
@@ -19585,6 +19624,67 @@ window.addEventListener('bm-auth-changed', (e) => {
   if (e.detail && e.detail.signedIn) bmQueue.resume();
   else bmQueue.stop();
 });
+
+// ── LIBRARY SYNC ON LOGIN ────────────────────────────────────────────────────
+// Pull the server's image manifest (favId + metadata, no bytes) and merge any
+// images this device doesn't already have into the library. Bytes lazy-load on
+// display via bmApplyThumb -> bmFetchServerImage. This is what makes "sign in
+// anywhere and your images are there" work: the durable store is /data, and a
+// fresh device rebuilds its library list from this manifest.
+let _bmManifestSyncing = false;
+async function bmSyncLibraryFromManifest() {
+  if (_bmManifestSyncing) return;
+  const tok = window.bmSession && window.bmSession.sessionToken;
+  if (!tok) return;
+  _bmManifestSyncing = true;
+  try {
+    const res = await fetch('/api/manifest', { headers: { 'Authorization': 'Bearer ' + tok } });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    const images = Array.isArray(data.images) ? data.images : [];
+    if (!images.length) return;
+    if (typeof favourites === 'undefined') return;
+    // Index existing favourites by their server URL so we never duplicate.
+    const have = new Set();
+    for (const f of favourites) { if (f && f.serverImageUrl) have.add(f.serverImageUrl); }
+    let added = 0;
+    for (const m of images) {
+      const url = '/api/img/' + m.favId;
+      if (have.has(url)) continue;
+      // Lightweight placeholder fav — bmApplyThumb lazy-loads the bytes. Prompt
+      // text isn't here (it lives in the ZK store / Drive-synced prompt files);
+      // a re-hydrated image shows with no prompt until that side syncs, which is
+      // correct: the at-rest image record deliberately carries no prompt.
+      favourites.push({
+        id: Number(m.favId) || Date.now(),
+        text: '', promptOnly: '', mode: '', preset: '',
+        title: '', model: '', rating: 0, starred: false, folderId: null,
+        versions: [],
+        imageData: null,
+        serverImageUrl: url,
+        createdAt: m.createdAt || Date.now(),
+        updatedAt: m.createdAt || Date.now(),
+        rehydrated: true,
+      });
+      added++;
+    }
+    if (added) {
+      favourites.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+      if (typeof renderFavs === 'function') renderFavs();
+      if (typeof updateLibBadge === 'function') updateLibBadge();
+    }
+  } catch (e) {
+    console.warn('library manifest sync failed:', e && e.message);
+  } finally {
+    _bmManifestSyncing = false;
+  }
+}
+window.addEventListener('bm-auth-changed', (e) => {
+  if (e.detail && e.detail.signedIn) {
+    try { bmSyncLibraryFromManifest(); } catch (_) {}
+  }
+});
 // Also attempt a start on load if a session is already present (page refresh).
 if (typeof window !== 'undefined') {
   window.addEventListener('DOMContentLoaded', () => {
@@ -19753,15 +19853,22 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
           if (typeof driveSavePrompt === 'function') driveSavePrompt(srcFav);
         }
       }
-      // Durable copies: upload the image itself to the visible "Beast Mode"
-      // Drive folder (R2 only keeps the newest 5), and cache locally. Prefer
-      // the pristine bytes when the backend supplied them.
+      // Durable copies: the image is ALREADY permanently stored on our /data
+      // volume (autoSaveGeneratedImage receives its /api/img/<id> URL as
+      // imageUrl). We record that as the durable server source and cache the
+      // bytes locally for instant display. Drive upload is now OPT-IN — an
+      // extra backup the user can enable, no longer the primary store.
       const uploadSrc = pristine || imageUrl;
+      // serverImageUrl: the authed /api/img URL when the backend stored bytes
+      // (not a data: soft-degrade fallback). Used by the resolve chain.
+      if (typeof imageUrl === 'string' && imageUrl.indexOf('/api/img/') === 0) {
+        fav.serverImageUrl = imageUrl;
+      }
       if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, uploadSrc);
       // Zero-knowledge thumbnail: encrypt a small WebP under the DATA KEY and
       // PUT it to R2 directly. Best-effort, never blocks the save.
       if (typeof bmThumbUpload === 'function') bmThumbUpload(fav, uploadSrc);
-      if (typeof driveUploadImage === 'function') {
+      if (driveBackupEnabled() && typeof driveUploadImage === 'function') {
         driveUploadImage(uploadSrc, 'beast-mode-' + fav.id + '.jpg').then((driveId) => {
           if (driveId) {
             fav.driveImageId = driveId;
@@ -19911,6 +20018,16 @@ async function bmApplyThumb(imgEl, fav) {
     const cached = await bmGetCachedImage(fav.id);
     if (cached) { imgEl.src = cached; return; }
   }
+  // 2.5) Durable /data copy (authed). Re-hydrated favourites after login land
+  // here — no local cache yet, but a serverImageUrl. Fetch once, cache, show.
+  if (fav.serverImageUrl && typeof bmFetchServerImage === 'function') {
+    const fromServer = await bmFetchServerImage(fav.serverImageUrl);
+    if (fromServer) {
+      if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, fromServer);
+      imgEl.src = fromServer;
+      return;
+    }
+  }
   // 3) Inline data the fav already carries.
   if (fav.imageData) { imgEl.src = fav.imageData; return; }
   // 4) Locked + nothing cached -> lock placeholder (inline SVG; ::after does
@@ -19933,6 +20050,15 @@ async function bmOpenFull(fav) {
     if (typeof bmGetCachedImage === 'function') {
       const cached = await bmGetCachedImage(fav.id);
       if (cached) { if (typeof openLightbox === 'function') openLightbox(cached); return; }
+    }
+    // Primary durable source: our /data volume (authed fetch -> blob URL).
+    if (fav.serverImageUrl && typeof bmFetchServerImage === 'function') {
+      const fromServer = await bmFetchServerImage(fav.serverImageUrl);
+      if (fromServer) {
+        if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, fromServer);
+        if (typeof openLightbox === 'function') openLightbox(fromServer);
+        return;
+      }
     }
     if (fav.driveImageId && typeof driveFetchImageBlob === 'function') {
       const fromDrive = await driveFetchImageBlob(fav.driveImageId);
@@ -20022,6 +20148,41 @@ async function bmFetchBalance() {
     if (r.ok && typeof d.balance === 'number') bmTokenBalanceSet(d.balance);
   } catch (e) {}
   return bmTokenBalance;
+}
+
+// Account storage meter — reads /api/storage (usedBytes + capBytes) and paints
+// the bar + label in the settings "Account Storage" section. Best-effort: on
+// failure it leaves a neutral message rather than throwing. The bar turns
+// warning-coloured past 90% so a user nearing the FIFO-trim threshold sees it.
+function _bmFmtBytes(n) {
+  if (typeof n !== 'number' || n < 0) return '—';
+  if (n < 1024) return n + ' B';
+  const u = ['KB', 'MB', 'GB', 'TB'];
+  let v = n / 1024, i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return (v >= 10 ? Math.round(v) : v.toFixed(1)) + ' ' + u[i];
+}
+async function bmRenderStorageMeter() {
+  const bar = document.getElementById('bmStorageMeterBar');
+  const label = document.getElementById('bmStorageMeterLabel');
+  if (!bar || !label) return;
+  const tok = window.bmSession && window.bmSession.sessionToken;
+  if (!tok) { label.textContent = 'Sign in to see your storage usage.'; bar.style.width = '0%'; return; }
+  try {
+    const r = await fetch('/api/storage', { headers: { 'Authorization': 'Bearer ' + tok } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || typeof d.usedBytes !== 'number' || typeof d.capBytes !== 'number') {
+      label.textContent = 'Storage usage unavailable right now.';
+      return;
+    }
+    const pct = d.capBytes > 0 ? Math.min(100, Math.round((d.usedBytes / d.capBytes) * 100)) : 0;
+    bar.style.width = pct + '%';
+    // Warn past 90% — the point where new saves start FIFO-trimming oldest.
+    bar.style.background = pct >= 90 ? 'var(--err, #f85149)' : 'var(--accent)';
+    label.textContent = _bmFmtBytes(d.usedBytes) + ' of ' + _bmFmtBytes(d.capBytes) + ' used (' + pct + '%)';
+  } catch (e) {
+    label.textContent = 'Storage usage unavailable right now.';
+  }
 }
 
 function bmTokenBalanceSet(n) {
@@ -20194,11 +20355,13 @@ function igUpdateCostHint() {
 
 function igModel() { return IG_MODELS.find(m => m.id === igState.modelId) || IG_MODELS[0]; }
 
-// Durable-storage check: images only get permanent copies via Google Drive
-// (driveUploadImage in autoSaveGeneratedImage). R2 trims each user to their
-// newest 5 server-side, so without Drive, image #6 evicts image #1.
+// Durable-storage check: images are now permanently stored server-side on our
+// /data volume by default (see autoSaveGeneratedImage -> /api/img). Drive is an
+// optional extra backup, not the durable store, so durable storage is ALWAYS
+// available for a signed-in user. Kept as a function so the banner logic below
+// has a single source of truth.
 function igHasDurableStorage() {
-  return (typeof driveToken !== 'undefined') && !!driveToken;
+  return true;
 }
 
 function igUpdateCloudWarn(signedIn) {
@@ -22956,6 +23119,23 @@ async function bmFetchImageBlob(src) {
     console.warn('[bm] image fetch failed:', e.message)
     return null
   }
+}
+
+// Fetch a permanently-stored image back from our own /data volume as a blob
+// URL. AUTHED: /api/img/<favId> requires the session bearer token (a plain
+// <img src> can't send it), so we fetch here and hand back a blob: URL. This is
+// the primary durable source now — Drive (driveFetchImageBlob) is an optional
+// backup below it in the resolve chain.
+async function bmFetchServerImage(serverImageUrl) {
+  try {
+    const tok = (window.bmSession && window.bmSession.sessionToken) || null;
+    if (!tok || !serverImageUrl) return null;
+    const res = await fetch(serverImageUrl, { headers: { 'Authorization': 'Bearer ' + tok } });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!/^image\//.test(blob.type || '')) return null;
+    return URL.createObjectURL(blob);
+  } catch (e) { return null; }
 }
 
 async function driveUploadImage(imageUrl, filename) {
