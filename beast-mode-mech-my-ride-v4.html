@@ -3901,7 +3901,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 
 /* ══ UPSCALER STAGE / SLIDER / RAIL (Phase 3) ═════════════════════ */
-.up-stage-img { position:relative; display:block; line-height:0; width:100%; height:100%; }
+.up-stage-img { position:absolute; inset:0; display:block; line-height:0; width:100%; height:100%; }
 .up-stage-img img { display:block; width:100%; height:100%; object-fit:contain; }
 /* Fade preview images in once decoded so switching Original/Upscaled/Compare
    doesn't flash the empty <img> outline (white box) over a black gap. The img
@@ -3929,6 +3929,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
   display:block; background:transparent;
 }
+/* Centre the aspect-ratio'd slider box within the zoom host so the letterbox
+   space sits OUTSIDE the slider (handle stays within the image). */
+.up-zoom-inner:has(> .up-slider) { display:flex; align-items:center; justify-content:center; }
 .up-slider-handle {
   position:absolute; top:0; bottom:0; left:50%; width:0; z-index:5;
   transform:translateX(-50%); cursor:ew-resize; touch-action:none;
@@ -4002,6 +4005,12 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   #viewUpscaler .up-rail {
     flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding-right:4px;
     scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+  }
+  /* Empty-state text vertically centred in the rail (only shown while no
+     upscales exist; upRenderRail hides it once the rail is populated). */
+  #viewUpscaler .up-rail-empty {
+    flex:1; min-height:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
   }
   #viewUpscaler .up-rail::-webkit-scrollbar { width:6px; }
   #viewUpscaler .up-rail::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
@@ -21605,7 +21614,12 @@ function upResolveGroup(f) {
     if (!src) src = all.find(x => x && Array.isArray(x.upscaleIds) && x.upscaleIds.includes(f.id));
     if (src) original = src;
   }
-  if (original.isUpscale) return { original: null, upscales: [] }; // orphan upscale
+  if (original.isUpscale) {
+    // Orphan upscale — its source isn't a saved favourite (e.g. upscaled from an
+    // ad-hoc uploaded/generated preview). Still surface the upscale itself so the
+    // results rail isn't empty after a successful run.
+    return { original: null, upscales: [f] };
+  }
   // Collect children by EITHER direction so partially-linked groups still unite.
   const ids = new Set(Array.isArray(original.upscaleIds) ? original.upscaleIds : []);
   const ups = all.filter(x => x && x.isUpscale && (x.upscaledFromId === original.id || ids.has(x.id)));
@@ -21727,7 +21741,10 @@ window.addEventListener('resize', () => {
 function upRenderStageSingle(f) {
   const host = document.getElementById('upZoomInner');
   if (!host) return;
-  host.innerHTML = '';
+  // Crossfade: keep any existing image mounted and overlay the new one, then
+  // remove the old once the new has loaded — avoids the black gap on view
+  // switches. The new img fades in via .is-loaded.
+  const oldWraps = Array.from(host.querySelectorAll('.up-stage-img'));
   const empty = document.getElementById('upStageEmpty');
   if (empty) empty.style.display = 'none';
   const wrap = document.createElement('div');
@@ -21736,6 +21753,7 @@ function upRenderStageSingle(f) {
   img.alt = f.title || '';
   wrap.appendChild(img);
   host.appendChild(wrap);
+  const clearOld = () => { oldWraps.forEach(w => { if (w && w.parentNode) w.parentNode.removeChild(w); }); };
   const paint = (w, h) => {
     if (w && h && typeof bmResLabel === 'function')
       bmResLabel(wrap, img, w + '\u00D7' + h, 'tl', 'upStageResTL');
@@ -21745,9 +21763,12 @@ function upRenderStageSingle(f) {
   if (f.outW && f.outH) { paint(f.outW, f.outH); mount(f.outW, f.outH); }
   img.addEventListener('load', () => {
     img.classList.add('is-loaded');
+    clearOld();
     if (!(f.outW && f.outH)) { paint(img.naturalWidth, img.naturalHeight); mount(img.naturalWidth, img.naturalHeight); }
   }, { once: true });
-  img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f); };
+  img.onerror = () => { clearOld(); if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f); };
+  // Safety: if load never fires (cached/edge cases), drop the old layer shortly.
+  setTimeout(clearOld, 400);
   // imageData may be an authed /api/img URL — a raw src 401s and the stage stays
   // blank (the post-upscale "preview not working" symptom). Route via bmSetImgSrc.
   if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
@@ -21760,7 +21781,9 @@ function upRenderStageSingle(f) {
 function upRenderStageSlider(upFav) {
   const host = document.getElementById('upZoomInner');
   if (!host) return;
-  host.innerHTML = '';
+  // Crossfade: keep existing layers until the new slider's after-image loads.
+  const oldChildren = Array.from(host.children);
+  const clearOldSlider = () => { oldChildren.forEach(c => { if (c && c.parentNode) c.parentNode.removeChild(c); }); };
   const emptyEl = document.getElementById('upStageEmpty');
   if (emptyEl) emptyEl.style.display = 'none';
 
@@ -21777,13 +21800,21 @@ function upRenderStageSlider(upFav) {
 
   const slider = document.createElement('div');
   slider.className = 'up-slider';
-  // Fill the zoom host, which upZoomMount() has already sized to the AFTER
-  // image's (aw×ah) aspect ratio. Both layers then object-fit:contain inside one
-  // shared box — fixing the upscaled layer rendering at a different scale and
-  // bleeding through behind the slider.
+  // Size the box to the AFTER image's aspect ratio and fit it within the stage
+  // (max 100% on both axes, centred). The box then matches the rendered image
+  // exactly — so the divider handle/line can't extend into the letterbox bars
+  // above/below the image. Both layers fill this box with object-fit:contain.
   const aw = upFav.outW || 0, ah = upFav.outH || 0;
-  slider.style.width = '100%';
-  slider.style.height = '100%';
+  if (aw > 0 && ah > 0) {
+    slider.style.aspectRatio = aw + ' / ' + ah;
+    slider.style.width = 'auto';
+    slider.style.height = 'auto';
+    slider.style.maxWidth = '100%';
+    slider.style.maxHeight = '100%';
+  } else {
+    slider.style.width = '100%';
+    slider.style.height = '100%';
+  }
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
@@ -21828,7 +21859,9 @@ function upRenderStageSlider(upFav) {
     }
   };
   beforeImg.addEventListener('load', () => { beforeImg.classList.add('is-loaded'); paintLabels(); }, { once: true });
-  afterImg.addEventListener('load', () => { afterImg.classList.add('is-loaded'); paintLabels(); }, { once: true });
+  afterImg.addEventListener('load', () => { afterImg.classList.add('is-loaded'); clearOldSlider(); paintLabels(); }, { once: true });
+  // Safety net if load never fires.
+  setTimeout(clearOldSlider, 400);
 
   // Drag interaction (pointer events cover mouse + touch).
   let dragging = false;
