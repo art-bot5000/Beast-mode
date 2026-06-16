@@ -969,8 +969,21 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--border);
 }
-.mobile-topbar-title {
+.mobile-topbar-brand {
+  display:flex; align-items:center; gap:8px; min-width:0;
+}
+.mobile-topbar-mark {
+  font-family:'Bebas Neue',sans-serif; font-size:24px; color:var(--accent); line-height:1;
+}
+.mobile-topbar-brandtext {
   font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; color:var(--accent);
+  white-space:nowrap;
+}
+.mobile-topbar-mode {
+  position:absolute; left:50%; transform:translateX(-50%);
+  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:2px;
+  color:var(--muted); white-space:nowrap; pointer-events:none;
+  max-width:38%; overflow:hidden; text-overflow:ellipsis;
 }
 .burger-btn {
   display:flex; flex-direction:column; justify-content:center; gap:5px;
@@ -3114,7 +3127,11 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 <!-- ═══════════════════════ NAVIGATION BAR ═══════════════════════ -->
 <!-- Mobile top bar: current mode heading (left) + burger (right). Hidden on desktop. -->
 <div class="mobile-topbar">
-  <div class="mobile-topbar-title" id="mobileModeTitle">BEAST MODE</div>
+  <div class="mobile-topbar-brand">
+    <span class="mobile-topbar-mark">⌬</span>
+    <span class="mobile-topbar-brandtext">BEAST MODE</span>
+  </div>
+  <div class="mobile-topbar-mode" id="mobileModeTitle">// IMAGE GEN</div>
   <button class="burger-btn" id="burgerBtn" onclick="toggleModeNav()" aria-label="Menu" aria-expanded="false">
     <span></span><span></span><span></span>
   </button>
@@ -3890,6 +3907,94 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   .up-libbar-btn svg { width:14px; height:14px; display:block; }
 }
 
+/* ══ UPSCALER MOBILE (≤900px): source on screen, settings in a modal,
+      split Settings/Upscale actions, tall preview, vertical chronological
+      results, sticky bottom library bar ════════════════════════════════ */
+/* Base (all widths): the mobile-only chrome is hidden by default; the modal is
+   closed. The 901px+ media block keeps these hidden on desktop too. */
+.up-mobile-actions { display:none; gap:10px; margin-top:14px; }
+.up-mobile-actions .btn { flex:1; padding:12px; font-size:14px; letter-spacing:2px; }
+.up-settings-modal { display:none; }
+.up-settings-modal.open {
+  display:flex; position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,.62); backdrop-filter:blur(3px);
+  align-items:flex-end; justify-content:center;
+}
+.up-settings-modal-inner {
+  width:100%; max-width:640px; max-height:88vh; display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px 14px 0 0; box-shadow:0 -10px 40px rgba(0,0,0,.6);
+}
+.up-settings-modal-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid var(--border); flex:0 0 auto;
+}
+.up-settings-modal-title {
+  font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:3px; color:var(--accent);
+}
+.up-settings-modal-x {
+  background:transparent; border:1px solid var(--border); color:var(--muted);
+  border-radius:6px; width:32px; height:30px; font-size:15px; cursor:pointer; line-height:1;
+}
+.up-settings-modal-x:hover { color:var(--accent); border-color:var(--accent); }
+.up-settings-modal-body { padding:16px; overflow-y:auto; flex:1 1 auto; -webkit-overflow-scrolling:touch; }
+.up-settings-modal-foot { padding:12px 16px 16px; border-top:1px solid var(--border); flex:0 0 auto; }
+body.up-settings-modal-open { overflow:hidden; }
+
+@media (max-width: 900px) {
+  /* Single column already set by the base .up-layout small-screen rule. The
+     library row is removed from the grid flow because the bar is fixed. */
+  #viewUpscaler #upMain.up-layout {
+    grid-template-columns:1fr;
+    grid-template-areas:"settings" "center" "rail";
+    /* leave room at the bottom for the fixed library bar */
+    padding-bottom:var(--up-libbar-h-mob, 96px);
+  }
+
+  /* Settings panel on mobile = the SOURCE picker + title only. The config block
+     lives in the modal; the desktop run button + status are replaced by the
+     split mobile action row. */
+  #viewUpscaler .up-area-settings { align-self:start; }
+  #viewUpscaler #upConfigBlock { /* shown only inside the modal */ }
+  #viewUpscaler .up-area-settings > #upRunBtn,
+  #viewUpscaler .up-area-settings > #upStatus { display:none; }
+  /* When the config block is sitting in the panel (modal never opened yet),
+     keep it hidden; it becomes visible once moved into the modal body. */
+  .up-area-settings > #upConfigBlock { display:none; }
+  .up-settings-modal-body > #upConfigBlock { display:block; }
+  #viewUpscaler .up-mobile-actions { display:flex; }
+
+  /* Big preview: the stage takes a tall slice of the viewport. */
+  #viewUpscaler .up-area-center { align-self:start; }
+  #viewUpscaler .up-stage {
+    min-height:56vh; height:56vh; max-height:56vh;
+    border:1px solid var(--border); border-radius:10px;
+  }
+
+  /* Results: original always on top, then upscales in chronological order,
+     scrolling vertically below the preview. (upRenderRail builds them in
+     creation order; original is first.) */
+  #viewUpscaler .up-area-rail { align-self:start; margin-top:12px; }
+  #viewUpscaler .up-rail { display:flex; flex-direction:column; gap:12px; }
+  #viewUpscaler .up-rail-item img { max-height:none; width:100%; }
+
+  /* Sticky bottom library bar — fixed, full width inside the content column. */
+  :root { --up-libbar-h-mob:96px; }
+  #viewUpscaler .up-area-library {
+    position:fixed; left:0; right:0; bottom:0; z-index:150;
+    background:var(--bg,#0d0d0d); border-top:1px solid var(--border);
+    padding:6px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    box-shadow:0 -6px 18px rgba(0,0,0,.45);
+  }
+  #viewUpscaler .up-libbar-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+  #viewUpscaler .up-libbar-ctrls { display:none; }  /* no pin/min control on mobile */
+  #viewUpscaler .up-libbar { padding:4px 0; }
+  #viewUpscaler .up-libbar-thumb { width:64px; height:64px; }
+
+  /* Queue widget rides above the fixed bar on mobile. */
+  body.up-sticky #bmQueueWidget { bottom:calc(var(--up-libbar-h-mob,96px) + 8px); }
+}
+
 /* Right-rail thumbnails: show the WHOLE image (contain, transparent bg). */
 #viewUpscaler .up-rail-item img {
   width:100%; max-height:200px; object-fit:contain; background:transparent;
@@ -4111,11 +4216,13 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
           <h1>// UPSCALER</h1>
           <span class="up-settings-sub">RUNWARE RESOLUTION ENGINE</span>
         </div>
+
+        <!-- SOURCE BLOCK: stays on the preview screen on mobile. -->
+        <div id="upSourceBlock">
         <!-- Source image -->
         <div class="ig-label">SOURCE IMAGE</div>
         <div class="ig-tabs" id="upSrcTabs">
           <button class="ig-tab active" id="upSrcTabUpload" type="button" onclick="upSrcTab('upload')">⬆ UPLOAD</button>
-          <button class="ig-tab" id="upSrcTabLibrary" type="button" onclick="upSrcTab('library')">▤ LIBRARY</button>
           <button class="ig-tab" id="upSrcTabUrl" type="button" onclick="upSrcTab('url')">⌗ URL</button>
         </div>
 
@@ -4125,7 +4232,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         </div>
         <div id="upSrcLibrary" style="display:none;">
           <div class="up-libgrid" id="upLibraryGrid"></div>
-          <div class="ig-note" id="upLibraryEmpty" style="display:none;">No saved images yet — generate some in Image Gen, or upload one.</div>
+          <div class="ig-note" id="upLibraryEmpty" style="display:none;">Select images from the bar at the bottom of the screen.</div>
         </div>
         <div id="upSrcUrl" style="display:none;">
           <input class="ig-input" id="upSrcUrlInput" type="url" placeholder="https://… image URL" oninput="upUrlChanged()">
@@ -4136,7 +4243,10 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
           <img id="upPreviewImg" alt="source preview">
           <button class="up-preview-x" type="button" onclick="upClearSource()" title="Remove">✕</button>
         </div>
+        </div><!-- /upSourceBlock -->
 
+        <!-- CONFIG BLOCK: model + params + run. Moves into a modal on mobile. -->
+        <div id="upConfigBlock">
         <!-- Model -->
         <div class="ig-label">MODEL</div>
         <select class="ig-select" id="upModel" onchange="upModelChanged()"></select>
@@ -4185,9 +4295,19 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         <!-- Output format -->
         <div class="ig-label">OUTPUT FORMAT</div>
         <div class="ig-chips" id="upFormatChips"></div>
+        </div><!-- /upConfigBlock -->
+        <div id="upConfigBlockAnchor" style="display:none;"></div>
+
 
         <button class="btn btn-primary" id="upRunBtn" onclick="upRun()" style="width:100%;margin-top:18px;padding:12px;font-size:14px;letter-spacing:2px;">✦ UPSCALE</button>
         <div id="upStatus"></div>
+
+        <!-- Mobile-only split action row: Settings (opens config modal) / Upscale. -->
+        <div class="up-mobile-actions" id="upMobileActions">
+          <button class="btn btn-ghost" type="button" id="upMobileSettingsBtn" onclick="upOpenSettingsModal()">⚙ SETTINGS</button>
+          <button class="btn btn-primary" type="button" id="upMobileRunBtn" onclick="upRun()">✦ UPSCALE</button>
+        </div>
+        <div id="upStatusMobile"></div>
       </div>
 
       <!-- ── CENTER: chosen-image preview stage (Phase 3 populates) ───────── -->
@@ -4232,6 +4352,23 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   </div>
 </div>
 
+<!-- Mobile upscaler SETTINGS modal. On open, #upConfigBlock is physically moved
+     into #upSettingsModalBody (single source of truth for the inputs — no ID
+     duplication); on close it's moved back into the settings panel before
+     #upConfigBlockAnchor so desktop layout is restored exactly. -->
+<div class="up-settings-modal" id="upSettingsModal" onclick="if(event.target===this)upCloseSettingsModal()">
+  <div class="up-settings-modal-inner">
+    <div class="up-settings-modal-head">
+      <span class="up-settings-modal-title">// UPSCALE SETTINGS</span>
+      <button class="up-settings-modal-x" type="button" onclick="upCloseSettingsModal()" aria-label="Close">✕</button>
+    </div>
+    <div class="up-settings-modal-body" id="upSettingsModalBody"></div>
+    <div class="up-settings-modal-foot">
+      <button class="btn btn-primary" type="button" style="width:100%;padding:12px;letter-spacing:2px;" onclick="upCloseSettingsModal()">DONE</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════ QUEUE VIEW ═══════════════════════ -->
 <!-- Full-page view of the durable background job queue. Populated by the queue
      client (bmQueue.renderView). Survives refresh/logout — the list is fetched
@@ -4263,10 +4400,20 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
         <div class="settings-section-title">Profile</div>
         <div style="display:flex;align-items:center;gap:16px;">
           <button id="settingsProfileThumb" class="bm-profile-thumb settings-profile-thumb" onclick="openProfileImageModal()" title="Change profile image">⊙</button>
-          <div>
+          <div style="flex:1;min-width:0;">
             <div style="font-size:13px;color:var(--text);font-weight:700;margin-bottom:2px;">Profile image</div>
             <div style="font-size:12px;color:var(--muted);">Click the image to upload one or choose from your library.</div>
           </div>
+        </div>
+        <div style="margin-top:16px;">
+          <label for="settingsUsernameInput" style="display:block;font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;font-weight:700;">USERNAME</label>
+          <input class="ig-input" id="settingsUsernameInput" type="text" maxlength="24" autocomplete="off"
+            placeholder="Choose a display name"
+            style="max-width:320px;"
+            oninput="usernameInputChanged()"
+            onblur="usernameCommit()"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+          <div class="ig-note" id="settingsUsernameNote" style="margin-top:6px;">Shown on your account. Defaults to the first part of your email.</div>
         </div>
       </div>
 
@@ -8560,9 +8707,11 @@ const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) 
 
 // Mobile mode-nav drawer (burger). Desktop ignores these — the sidebar is
 // always visible there and the backdrop is display:none.
+// Centred mobile-topbar mode label (the brand "BEAST MODE" is now static at
+// the left). Values mirror each view's in-section // heading.
 const MODE_TITLES = {
-  generator: 'BEAST MODE', imagegen: 'IMAGE GEN', upscaler: 'UPSCALER', builder: 'PROMPT LAB',
-  library: 'PROMPT LIBRARY', settings: 'SETTINGS', queue: 'GENERATION QUEUE',
+  generator: '// BEAST MODE', imagegen: '// IMAGE GEN', upscaler: '// UPSCALER', builder: '// PROMPT LAB',
+  library: '// PROMPT LIBRARY', settings: '// SETTINGS', queue: '// GENERATION QUEUE',
 };
 function toggleModeNav() {
   document.body.classList.contains('mode-nav-open') ? closeModeNav() : openModeNav();
@@ -8583,7 +8732,7 @@ function switchView(view, pushState = true) {
   document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   document.getElementById('nav' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   const mt = document.getElementById('mobileModeTitle')
-  if (mt) mt.textContent = MODE_TITLES[view] || 'BEAST MODE'
+  if (mt) mt.textContent = MODE_TITLES[view] || '// BEAST MODE'
   closeModeNav()
   if (view === 'library') renderLibrary()
   if (view === 'settings') {
@@ -8593,7 +8742,10 @@ function switchView(view, pushState = true) {
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
   if (view === 'upscaler' && typeof upInit === 'function') upInit()
   document.body.classList.toggle('up-sticky', view === 'upscaler')
-  if (view !== 'upscaler') document.body.classList.remove('up-lib-pinned', 'up-lib-min')
+  if (view !== 'upscaler') {
+    document.body.classList.remove('up-lib-pinned', 'up-lib-min')
+    if (typeof upCloseSettingsModal === 'function') upCloseSettingsModal()
+  }
   if (view === 'queue' && typeof bmQueue !== 'undefined') bmQueue.renderView()
   if (view === 'builder' && !pbInitDone) { pbInitDone = true; pbInit() }
   if (view === 'builder') { pbRenderTypeNav(); pbUpdateBottomBar(); pbInitBottomObserver() }
@@ -10416,6 +10568,7 @@ function renderSettingsView() {
   renderThemePicker()
   renderSettingsViewGenOnly()
   pbRenderUsageStats()
+  if (typeof usernameRenderSetting === 'function') usernameRenderSetting()
   // Sync the provider selector buttons
   document.getElementById('providerBtnGdrive')?.classList.toggle('active', cloudProvider === 'gdrive')
   document.getElementById('providerBtnDropbox')?.classList.toggle('active', cloudProvider === 'dropbox')
@@ -20715,19 +20868,50 @@ function upUpdateCostHint() {
     tok = (upState.mp <= 4) ? m.tokensByMp.low : m.tokensByMp.high;
   }
   btn.textContent = Number.isFinite(tok) ? ('\u2726 UPSCALE ' + tok) : '\u2726 UPSCALE';
+  upSyncMobileRunBtn();
 }
 
 // ── Source image: tabs + pickers ────────────────────────────────────────────
 function upSrcTab(tab) {
+  // Library tab was removed (the bottom library bar replaces it). Guard against
+  // any stale callers asking for it by falling back to upload.
+  if (tab === 'library') tab = 'upload';
   upState.srcTab = tab;
   document.getElementById('upSrcTabUpload').classList.toggle('active', tab === 'upload');
-  document.getElementById('upSrcTabLibrary').classList.toggle('active', tab === 'library');
   document.getElementById('upSrcTabUrl').classList.toggle('active', tab === 'url');
   document.getElementById('upSrcUpload').style.display = tab === 'upload' ? 'block' : 'none';
-  document.getElementById('upSrcLibrary').style.display = tab === 'library' ? 'block' : 'none';
   document.getElementById('upSrcUrl').style.display = tab === 'url' ? 'block' : 'none';
-  if (tab === 'library') upRenderLibraryGrid();
+  const lib = document.getElementById('upSrcLibrary');
+  if (lib) lib.style.display = 'none';
 }
+
+// ── Mobile settings modal ────────────────────────────────────────────────────
+// Moves the live #upConfigBlock node into the modal (single source of truth, no
+// duplicated input IDs) and back to its anchor on close. Desktop never calls
+// these (the buttons that trigger them are display:none > 900px).
+function upOpenSettingsModal() {
+  const modal = document.getElementById('upSettingsModal');
+  const body  = document.getElementById('upSettingsModalBody');
+  const block = document.getElementById('upConfigBlock');
+  if (!modal || !body || !block) return;
+  if (block.parentNode !== body) body.appendChild(block);
+  modal.classList.add('open');
+  document.body.classList.add('up-settings-modal-open');
+}
+function upCloseSettingsModal() {
+  const modal  = document.getElementById('upSettingsModal');
+  const block  = document.getElementById('upConfigBlock');
+  const anchor = document.getElementById('upConfigBlockAnchor');
+  if (modal) modal.classList.remove('open');
+  document.body.classList.remove('up-settings-modal-open');
+  // Return the block to its desktop position (before the anchor) so the panel
+  // layout is identical to never having opened the modal.
+  if (block && anchor && anchor.parentNode && block.parentNode !== anchor.parentNode) {
+    anchor.parentNode.insertBefore(block, anchor);
+  }
+}
+window.upOpenSettingsModal = upOpenSettingsModal;
+window.upCloseSettingsModal = upCloseSettingsModal;
 
 function upSrcFilePicked(files) {
   if (!files || !files.length) return;
@@ -21231,10 +21415,23 @@ function upUpdateCloudWarn(signedIn) {
 }
 
 function upStatus(msg, isError) {
-  const el = document.getElementById('upStatus');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = isError ? 'var(--err, #f85149)' : 'var(--accent)';
+  const color = isError ? 'var(--err, #f85149)' : 'var(--accent)';
+  ['upStatus', 'upStatusMobile'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = color;
+  });
+}
+// Keep the mobile split-action Upscale button in lock-step with #upRunBtn
+// (label/cost-hint + busy disabled state). Desktop hides the mobile button.
+function upSyncMobileRunBtn() {
+  const src = document.getElementById('upRunBtn');
+  const dst = document.getElementById('upMobileRunBtn');
+  if (!src || !dst) return;
+  dst.textContent = src.textContent;
+  dst.disabled = src.disabled;
+  dst.style.opacity = src.style.opacity || '1';
 }
 
 // ── Run ─────────────────────────────────────────────────────────────────────
@@ -21281,6 +21478,7 @@ async function upRun() {
   upState.busy = true;
   const btn = document.getElementById('upRunBtn');
   btn.disabled = true; btn.style.opacity = '0.6';
+  upSyncMobileRunBtn();
   upStatus('\u25CC UPSCALING\u2026 (' + m.label + ')', false);
 
   try {
@@ -22081,6 +22279,48 @@ function profileImageRemove() {
   bmApplyProfileImage();
   closeProfileImageModal();
 }
+
+// ── Username (display name) ──────────────────────────────────────────────────
+// Stored in bmPrefs.username, which rides along in the synced settings file
+// (same portable zone as profileImage). The account button falls back to the
+// email's local-part when no username is set. No server/token data involved.
+function bmDefaultUsername() {
+  const email = (window.bmSession && window.bmSession.email) || '';
+  return email ? email.split('@')[0].slice(0, 24) : '';
+}
+function bmCurrentUsername() {
+  const u = (typeof bmPrefs !== 'undefined' && bmPrefs && bmPrefs.username) ? String(bmPrefs.username).trim() : '';
+  return u || bmDefaultUsername();
+}
+// Reflect the stored username (or default) into the Settings input.
+function usernameRenderSetting() {
+  const inp = document.getElementById('settingsUsernameInput');
+  if (!inp) return;
+  const stored = (typeof bmPrefs !== 'undefined' && bmPrefs && bmPrefs.username) ? String(bmPrefs.username) : '';
+  inp.value = stored;
+  inp.placeholder = bmDefaultUsername() || 'Choose a display name';
+}
+function usernameInputChanged() {
+  // Light live feedback only; persistence happens on blur/Enter (usernameCommit).
+  const note = document.getElementById('settingsUsernameNote');
+  if (note) note.textContent = 'Shown on your account. Defaults to the first part of your email.';
+}
+function usernameCommit() {
+  if (typeof bmPrefs === 'undefined' || !bmPrefs) return;
+  const inp = document.getElementById('settingsUsernameInput');
+  if (!inp) return;
+  const val = inp.value.trim().slice(0, 24);
+  if (val) bmPrefs.username = val;
+  else delete bmPrefs.username;           // empty → revert to email-based default
+  if (typeof bmPrefsSave === 'function') bmPrefsSave();
+  if (typeof bmUpdateAccountBtn === 'function') bmUpdateAccountBtn();
+  const note = document.getElementById('settingsUsernameNote');
+  if (note) note.textContent = val ? 'Saved.' : 'Cleared — using your email name.';
+}
+window.usernameInputChanged = usernameInputChanged;
+window.usernameCommit = usernameCommit;
+window.usernameRenderSetting = usernameRenderSetting;
+window.bmCurrentUsername = bmCurrentUsername;
 // Paint the stored profile image into the nav thumbnail slot (created by the
 // sidebar layout) and the Drive/Settings avatar slots. Guarded so it no-ops if
 // elements aren't present. When no profile image is set, the avatar slots keep
@@ -22133,7 +22373,10 @@ function bmUpdateAccountBtn() {
   bmApplyProfileImage();
   if (!btn) return;
   if (window.bmSession) {
-    btn.textContent = (window.bmSession.email.split('@')[0].slice(0, 14));
+    const name = (typeof bmCurrentUsername === 'function')
+      ? bmCurrentUsername()
+      : window.bmSession.email.split('@')[0];
+    btn.textContent = (name || '').slice(0, 14);
     btn.style.color = 'var(--accent)';
     btn.style.borderColor = 'var(--accent)';
   } else {
