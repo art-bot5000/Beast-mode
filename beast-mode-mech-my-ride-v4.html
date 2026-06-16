@@ -963,48 +963,57 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 }
 .mode-nav-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
-/* Mobile top bar + burger (hidden on desktop via the min-width block above). */
+/* Mobile top bar: brand (left) + tappable mode-title menu (right). Hidden on desktop. */
 .mobile-topbar {
   position:sticky; top:0; z-index:190;
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--border);
 }
 .mobile-topbar-brand {
-  display:flex; align-items:center; gap:8px; min-width:0;
+  display:flex; align-items:center; gap:9px; min-width:0;
 }
 .mobile-topbar-mark {
-  font-family:'Bebas Neue',sans-serif; font-size:24px; color:var(--accent); line-height:1;
+  font-family:'Bebas Neue',sans-serif; font-size:30px; color:var(--accent); line-height:1;
 }
 .mobile-topbar-brandtext {
-  font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; color:var(--accent);
+  font-family:'Bebas Neue',sans-serif; font-size:27px; letter-spacing:3px; color:var(--accent);
   white-space:nowrap;
 }
+/* Mode title doubles as the menu trigger. Styled as a tappable pill (border +
+   caret) so it's clearly interactive; larger than before but below the brand. */
 .mobile-topbar-mode {
-  position:absolute; left:50%; transform:translateX(-50%);
-  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:2px;
-  color:var(--muted); white-space:nowrap; pointer-events:none;
-  max-width:38%; overflow:hidden; text-overflow:ellipsis;
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:'Bebas Neue',sans-serif; font-size:21px; letter-spacing:2px;
+  color:var(--text); white-space:nowrap; cursor:pointer;
+  background:color-mix(in srgb, var(--accent) 8%, transparent);
+  border:1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius:8px; padding:5px 10px; max-width:52%; overflow:hidden;
+  transition:background .15s, border-color .15s, color .15s;
 }
-.burger-btn {
-  display:flex; flex-direction:column; justify-content:center; gap:5px;
-  width:40px; height:36px; padding:7px 8px; cursor:pointer;
-  background:transparent; border:1px solid var(--border); border-radius:6px;
+.mobile-topbar-mode:hover, .mobile-topbar-mode.open {
+  color:var(--accent); border-color:var(--accent);
+  background:color-mix(in srgb, var(--accent) 16%, transparent);
 }
-.burger-btn span { display:block; height:2px; width:100%; background:var(--text); border-radius:2px; transition:all .2s; }
-.burger-btn[aria-expanded="true"] span:nth-child(1) { transform:translateY(7px) rotate(45deg); }
-.burger-btn[aria-expanded="true"] span:nth-child(2) { opacity:0; }
-.burger-btn[aria-expanded="true"] span:nth-child(3) { transform:translateY(-7px) rotate(-45deg); }
+.mobile-topbar-mode-text { overflow:hidden; text-overflow:ellipsis; }
+.mobile-topbar-mode-caret {
+  font-size:13px; color:var(--accent); transition:transform .2s; flex:0 0 auto;
+}
+.mobile-topbar-mode.open .mobile-topbar-mode-caret { transform:rotate(180deg); }
 
 .mode-nav-backdrop {
   position:fixed; inset:0; z-index:199; background:rgba(0,0,0,.55);
   opacity:0; pointer-events:none; transition:opacity .2s;
 }
 
-/* Mobile: drawer slides in from the LEFT, opened by the right-side burger. */
+/* Mobile: drawer slides in from the RIGHT, opened by tapping the mode title.
+   The current mode's nav tab carries .active (set by switchView) so it reads as
+   highlighted in the open menu. */
 @media(max-width:640px){
   .mode-nav {
-    transform:translateX(-100%); transition:transform .22s ease;
-    box-shadow:2px 0 18px rgba(0,0,0,.4); width:min(280px,82vw);
+    left:auto; right:0;
+    transform:translateX(100%); transition:transform .22s ease;
+    box-shadow:-2px 0 18px rgba(0,0,0,.4); width:min(280px,82vw);
+    border-right:none; border-left:1px solid var(--border);
   }
   body.mode-nav-open .mode-nav { transform:translateX(0); }
   body.mode-nav-open .mode-nav-backdrop { opacity:1; pointer-events:auto; }
@@ -3125,15 +3134,15 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 </div>
 
 <!-- ═══════════════════════ NAVIGATION BAR ═══════════════════════ -->
-<!-- Mobile top bar: current mode heading (left) + burger (right). Hidden on desktop. -->
+<!-- Mobile top bar: static brand (left) + tappable mode-title menu trigger (right). Hidden on desktop. -->
 <div class="mobile-topbar">
   <div class="mobile-topbar-brand">
     <span class="mobile-topbar-mark">⌬</span>
     <span class="mobile-topbar-brandtext">BEAST MODE</span>
   </div>
-  <div class="mobile-topbar-mode" id="mobileModeTitle">// IMAGE GEN</div>
-  <button class="burger-btn" id="burgerBtn" onclick="toggleModeNav()" aria-label="Menu" aria-expanded="false">
-    <span></span><span></span><span></span>
+  <button class="mobile-topbar-mode" id="mobileModeTitle" onclick="toggleModeNav()" aria-haspopup="true" aria-expanded="false" aria-label="Change mode">
+    <span class="mobile-topbar-mode-text">// IMAGE GEN</span>
+    <span class="mobile-topbar-mode-caret" aria-hidden="true">▾</span>
   </button>
 </div>
 
@@ -3680,6 +3689,46 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 .up-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:40px 24px;
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
+/* When the stage is empty it doubles as the dropzone — fill the box, dashed
+   border, hover highlight, clickable. (upStageEmpty's onclick opens the file
+   picker; drag/drop handlers attach to it in upInit.) */
+.up-stage:has(> .up-stage-empty:not([style*="display: none"])) { outline:none; }
+.up-stage-empty {
+  inset:0; top:0; left:0; transform:none; width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px dashed var(--border); border-radius:10px; cursor:pointer;
+  letter-spacing:1.5px; transition:border-color .15s, color .15s, background .15s;
+  box-sizing:border-box;
+}
+.up-stage-empty:hover, .up-stage-empty.drag {
+  border-color:var(--accent); color:var(--accent);
+  background:color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+/* Under-preview action row: Settings (left) / Upscale (right). */
+/* Under-preview action row: Settings (left) / Upscale (right). Display is
+   toggled by the responsive rules below (hidden on desktop, flex ≤900px). */
+.up-stage-actions { gap:10px; margin-top:12px; }
+.up-stage-actions .btn { flex:1; padding:12px; font-size:14px; letter-spacing:2px; }
+
+/* View toolbar: Original/Upscaled/Compare segmented control + Clear. */
+.up-stage-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
+.up-view-toggle { display:inline-flex; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+.up-view-btn {
+  background:transparent; border:none; border-right:1px solid var(--border);
+  color:var(--muted); font-family:'Rajdhani',sans-serif; font-weight:700;
+  font-size:12px; letter-spacing:1.5px; padding:8px 14px; cursor:pointer;
+  transition:background .15s, color .15s;
+}
+.up-view-btn:last-child { border-right:none; }
+.up-view-btn:hover { color:var(--accent); }
+.up-view-btn.active { background:var(--accent); color:#000; }
+.up-clear-btn {
+  background:transparent; border:1px solid var(--border); color:var(--muted);
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:12px; letter-spacing:1.5px;
+  padding:8px 14px; border-radius:7px; cursor:pointer; transition:color .15s, border-color .15s;
+}
+.up-clear-btn:hover { color:var(--err,#f85149); border-color:var(--err,#f85149); }
 
 /* Zoom controls (bottom-centre) + scale indicator (top-right). */
 .up-zoom-ctrls {
@@ -3780,6 +3829,10 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   color:#000; display:flex; align-items:center; justify-content:center;
   font-size:15px; font-weight:700; box-shadow:0 1px 6px rgba(0,0,0,.5); cursor:ew-resize;
 }
+/* Keep the grip + handle line a constant on-screen size regardless of preview
+   zoom (the stage scales via transform; counter-scale by 1/zoom). */
+#upZoomInner .up-slider-grip { transform:translate(-50%,-50%) scale(var(--up-zoom-inv, 1)); }
+#upZoomInner .up-slider-line { transform:translateX(-50%) scaleX(var(--up-zoom-inv, 1)); transform-origin:center; }
 
 /* Right rail items. */
 .up-rail-item {
@@ -3845,11 +3898,6 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   #viewUpscaler .up-rail::-webkit-scrollbar-track { background:transparent; }
   #viewUpscaler .up-area-center { display:block; align-self:start; padding-top:0; }
 
-  /* The settings-panel source thumbnail is redundant with the big preview +
-     rail (the original already shows there). Hide it on desktop; the hidden
-     element still receives upShowPreview()'s src so dimension gating is intact. */
-  #viewUpscaler #upPreviewWrap { display:none !important; }
-
   /* Preview fills the centre column. Explicit height (not flex) so the inner's
      max-height:100% resolves and CSS can fit the image. Stops above the bar. */
   #viewUpscaler .up-stage {
@@ -3912,8 +3960,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
       results, sticky bottom library bar ════════════════════════════════ */
 /* Base (all widths): the mobile-only chrome is hidden by default; the modal is
    closed. The 901px+ media block keeps these hidden on desktop too. */
-.up-mobile-actions { display:none; gap:10px; margin-top:14px; }
-.up-mobile-actions .btn { flex:1; padding:12px; font-size:14px; letter-spacing:2px; }
+/* Under-preview Settings/Upscale row is mobile-primary: hidden by default,
+   shown ≤900px. (Desktop keeps the panel's own run button + inline config.) */
+.up-stage-actions { display:none; }
 .up-settings-modal { display:none; }
 .up-settings-modal.open {
   display:flex; position:fixed; inset:0; z-index:200;
@@ -3952,17 +4001,16 @@ body.up-settings-modal-open { overflow:hidden; }
   }
 
   /* Settings panel on mobile = the SOURCE picker + title only. The config block
-     lives in the modal; the desktop run button + status are replaced by the
-     split mobile action row. */
+     lives in the modal; the panel's run button + status are hidden (the
+     under-preview action row drives Settings/Upscale instead). */
   #viewUpscaler .up-area-settings { align-self:start; }
-  #viewUpscaler #upConfigBlock { /* shown only inside the modal */ }
   #viewUpscaler .up-area-settings > #upRunBtn,
   #viewUpscaler .up-area-settings > #upStatus { display:none; }
   /* When the config block is sitting in the panel (modal never opened yet),
      keep it hidden; it becomes visible once moved into the modal body. */
   .up-area-settings > #upConfigBlock { display:none; }
   .up-settings-modal-body > #upConfigBlock { display:block; }
-  #viewUpscaler .up-mobile-actions { display:flex; }
+  #viewUpscaler .up-stage-actions { display:flex; }
 
   /* Big preview: the stage takes a tall slice of the viewport. */
   #viewUpscaler .up-area-center { align-self:start; }
@@ -4239,10 +4287,6 @@ body.up-settings-modal-open { overflow:hidden; }
           <div class="ig-note">Paste a direct link to an image (jpg/png/webp).</div>
         </div>
 
-        <div class="up-preview" id="upPreviewWrap" style="display:none;">
-          <img id="upPreviewImg" alt="source preview">
-          <button class="up-preview-x" type="button" onclick="upClearSource()" title="Remove">✕</button>
-        </div>
         </div><!-- /upSourceBlock -->
 
         <!-- CONFIG BLOCK: model + params + run. Moves into a modal on mobile. -->
@@ -4301,23 +4345,20 @@ body.up-settings-modal-open { overflow:hidden; }
 
         <button class="btn btn-primary" id="upRunBtn" onclick="upRun()" style="width:100%;margin-top:18px;padding:12px;font-size:14px;letter-spacing:2px;">✦ UPSCALE</button>
         <div id="upStatus"></div>
-
-        <!-- Mobile-only split action row: Settings (opens config modal) / Upscale. -->
-        <div class="up-mobile-actions" id="upMobileActions">
-          <button class="btn btn-ghost" type="button" id="upMobileSettingsBtn" onclick="upOpenSettingsModal()">⚙ SETTINGS</button>
-          <button class="btn btn-primary" type="button" id="upMobileRunBtn" onclick="upRun()">✦ UPSCALE</button>
-        </div>
-        <div id="upStatusMobile"></div>
       </div>
 
-      <!-- ── CENTER: chosen-image preview stage (Phase 3 populates) ───────── -->
+      <!-- ── CENTER: preview stage. When empty it IS the dropzone; once an
+              image loads it becomes the single preview where upscaling applies.
+              Settings/Upscale sit directly beneath; a toolbar (view toggle +
+              Clear) sits below that, outside the preview box. ──────────────── -->
       <div class="up-area-center">
         <div class="up-stage" id="upStage">
           <div class="up-zoom-viewport" id="upZoomViewport">
             <div class="up-zoom-inner" id="upZoomInner"></div>
           </div>
-          <div class="up-stage-empty" id="upStageEmpty">
-            Select an image from the bar below to preview it here.
+          <!-- Empty state doubles as the dropzone: click or drop to upload. -->
+          <div class="up-stage-empty" id="upStageEmpty" onclick="document.getElementById('upSrcFile').click()">
+            ⬆ DROP AN IMAGE OR CLICK TO UPLOAD
           </div>
           <div class="up-zoom-scale" id="upZoomScale" style="display:none;">100%</div>
           <div class="up-zoom-ctrls" id="upZoomCtrls" style="display:none;">
@@ -4325,6 +4366,24 @@ body.up-settings-modal-open { overflow:hidden; }
             <button type="button" class="up-zoom-btn" title="Reset" onclick="upZoomReset()">&#x21BA;</button>
             <button type="button" class="up-zoom-btn" title="Zoom in" onclick="upZoomBy(1)">+</button>
           </div>
+        </div>
+
+        <!-- Action row directly under the preview (mobile + desktop center). -->
+        <div class="up-stage-actions" id="upStageActions">
+          <button class="btn btn-ghost" type="button" id="upStageSettingsBtn" onclick="upOpenSettingsModal()">⚙ SETTINGS</button>
+          <button class="btn btn-primary" type="button" id="upStageRunBtn" onclick="upRun()">✦ UPSCALE</button>
+        </div>
+        <div id="upStatusStage"></div>
+
+        <!-- View toolbar: Original / Upscaled / Compare on the left, Clear on the
+             right (outside the preview box). Visibility is driven by upStageView. -->
+        <div class="up-stage-toolbar" id="upStageToolbar" style="display:none;">
+          <div class="up-view-toggle" id="upViewToggle">
+            <button type="button" class="up-view-btn" id="upViewOriginal" onclick="upSetView('original')">ORIGINAL</button>
+            <button type="button" class="up-view-btn" id="upViewUpscaled" onclick="upSetView('upscaled')">UPSCALED</button>
+            <button type="button" class="up-view-btn" id="upViewCompare" onclick="upSetView('compare')">COMPARE</button>
+          </div>
+          <button type="button" class="up-clear-btn" id="upClearBtn" onclick="upClearSource()">✕ CLEAR</button>
         </div>
       </div>
 
@@ -8705,7 +8764,7 @@ const VIEW_HASHES = {
 }
 const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) => [h,v]))
 
-// Mobile mode-nav drawer (burger). Desktop ignores these — the sidebar is
+// Mobile mode-nav drawer (opened by tapping the mode title). Desktop ignores these — the sidebar is
 // always visible there and the backdrop is display:none.
 // Centred mobile-topbar mode label (the brand "BEAST MODE" is now static at
 // the left). Values mirror each view's in-section // heading.
@@ -8718,11 +8777,13 @@ function toggleModeNav() {
 }
 function openModeNav() {
   document.body.classList.add('mode-nav-open');
-  const b = document.getElementById('burgerBtn'); if (b) b.setAttribute('aria-expanded', 'true');
+  const m = document.getElementById('mobileModeTitle');
+  if (m) { m.setAttribute('aria-expanded', 'true'); m.classList.add('open'); }
 }
 function closeModeNav() {
   document.body.classList.remove('mode-nav-open');
-  const b = document.getElementById('burgerBtn'); if (b) b.setAttribute('aria-expanded', 'false');
+  const m = document.getElementById('mobileModeTitle');
+  if (m) { m.setAttribute('aria-expanded', 'false'); m.classList.remove('open'); }
 }
 
 function switchView(view, pushState = true) {
@@ -8732,7 +8793,11 @@ function switchView(view, pushState = true) {
   document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   document.getElementById('nav' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   const mt = document.getElementById('mobileModeTitle')
-  if (mt) mt.textContent = MODE_TITLES[view] || '// BEAST MODE'
+  if (mt) {
+    const txt = mt.querySelector('.mobile-topbar-mode-text')
+    if (txt) txt.textContent = MODE_TITLES[view] || '// BEAST MODE'
+    else mt.textContent = MODE_TITLES[view] || '// BEAST MODE'
+  }
   closeModeNav()
   if (view === 'library') renderLibrary()
   if (view === 'settings') {
@@ -20716,6 +20781,14 @@ function upInit() {
   ;['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
   drop.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files) upSrcFilePicked(e.dataTransfer.files); });
 
+  // The empty stage is also a dropzone (it shows "drop or click to upload").
+  const stageDrop = document.getElementById('upStageEmpty');
+  if (stageDrop) {
+    ;['dragenter', 'dragover'].forEach(ev => stageDrop.addEventListener(ev, e => { e.preventDefault(); stageDrop.classList.add('drag'); }));
+    ;['dragleave', 'drop'].forEach(ev => stageDrop.addEventListener(ev, e => { e.preventDefault(); stageDrop.classList.remove('drag'); }));
+    stageDrop.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files) upSrcFilePicked(e.dataTransfer.files); });
+  }
+
   upRenderAll();
 }
 
@@ -20942,7 +21015,11 @@ function upShowAdHocSource(src) {
   // Clear any bottom-bar selection highlight (this isn't a saved library item).
   const bar = document.getElementById('upLibBar');
   if (bar) bar.querySelectorAll('.up-libbar-thumb').forEach(x => x.classList.remove('sel'));
+  upStageView.curUpFav = null;
+  upStageView.curOrigFav = synthetic;
+  upStageView.view = 'original';
   upRenderStageSingle(synthetic);
+  upRenderToolbar();
   upRenderRail(synthetic);
   upShowPreview(src);   // keeps dimension-gating (srcW/srcH/srcMp) intact
 }
@@ -21051,6 +21128,11 @@ function upRenderLibBar() {
 // UPSCALER — Phase 3 interactions: preview stage, results rail, slider
 // ═══════════════════════════════════════════════════════════════════
 const upStageState = { selId: null };
+// View-toggle state for the preview toolbar:
+//   view: 'compare' | 'original' | 'upscaled'
+//   curUpFav / curOrigFav: the upscale + its original currently in the stage
+//   (curUpFav is null when a non-upscale/plain image is selected).
+const upStageView = { view: 'compare', curUpFav: null, curOrigFav: null };
 
 // Resolve the upscale "group" any favourite belongs to:
 //   { original: fav|null, upscales: fav[] }  (upscales newest-first)
@@ -21088,17 +21170,24 @@ function upSelectFav(f) {
     x.classList.toggle('sel', x.dataset.favId == f.id));
 
   if (f.isUpscale) {
-    upRenderStageSlider(f);
+    const { original } = upResolveGroup(f);
+    upStageView.curUpFav = f;
+    upStageView.curOrigFav = original || null;
+    upStageView.view = 'compare';        // Compare is the default on an upscale.
+    upRenderStageForView();
     // Re-arm the original (if resolvable) as the upscale source so the user
     // can upscale again from the same starting point.
-    const { original } = upResolveGroup(f);
     if (original) {
       upState.srcData = original.imageData; upState.srcIsUrl = false;
       upState.srcFavId = original.id;
       upShowPreview(original.imageData);
     }
   } else {
+    upStageView.curUpFav = null;
+    upStageView.curOrigFav = f;
+    upStageView.view = 'original';
     upRenderStageSingle(f);
+    upRenderToolbar();
     upState.srcData = f.imageData; upState.srcIsUrl = false;
     upState.srcFavId = f.id;
     upShowPreview(f.imageData);
@@ -21261,11 +21350,11 @@ function upRenderStageSlider(upFav) {
   const paintLabels = () => {
     if (beforeImg.complete && beforeImg.naturalWidth) {
       const w = beforeW || beforeImg.naturalWidth, h = beforeH || beforeImg.naturalHeight;
-      bmResLabel(beforeWrap, beforeImg, w + '\u00D7' + h, 'tl', 'upBeforeRes');
+      bmResLabel(beforeWrap, beforeImg, 'ORIGINAL \u00B7 ' + w + '\u00D7' + h, 'tl', 'upBeforeRes');
     }
     if (afterImg.complete && afterImg.naturalWidth) {
       const w = upFav.outW || afterImg.naturalWidth, h = upFav.outH || afterImg.naturalHeight;
-      bmResLabel(afterWrap, afterImg, w + '\u00D7' + h, 'br', 'upAfterRes');
+      bmResLabel(afterWrap, afterImg, 'UPSCALED \u00B7 ' + w + '\u00D7' + h, 'br', 'upAfterRes');
     }
   };
   beforeImg.addEventListener('load', paintLabels, { once: true });
@@ -21289,6 +21378,47 @@ function upRenderStageSlider(upFav) {
   afterImg.src = upFav.imageData;
   beforeImg.src = beforeSrc || (beforeFav && beforeFav.imageData) || '';
 }
+
+// ── Preview view toggle (Original / Upscaled / Compare) ──────────────────────
+// Drives what the stage shows for the current selection and which toolbar
+// buttons are visible. Compare is the slider; Original/Upscaled are single
+// images. When a plain (non-upscale) image is selected, only Original shows.
+function upRenderToolbar() {
+  const toolbar = document.getElementById('upStageToolbar');
+  if (!toolbar) return;
+  const hasSel = !!upStageState.selId;
+  toolbar.style.display = hasSel ? 'flex' : 'none';
+  const hasUpscale = !!upStageView.curUpFav;
+  const bOrig = document.getElementById('upViewOriginal');
+  const bUp   = document.getElementById('upViewUpscaled');
+  const bComp = document.getElementById('upViewCompare');
+  if (bUp)   bUp.style.display   = hasUpscale ? '' : 'none';
+  if (bComp) bComp.style.display = hasUpscale ? '' : 'none';
+  // Original is always available once something is selected.
+  if (bOrig) bOrig.style.display = '';
+  // Active highlight.
+  [['original', bOrig], ['upscaled', bUp], ['compare', bComp]].forEach(([v, el]) => {
+    if (el) el.classList.toggle('active', upStageView.view === v);
+  });
+}
+// Render the stage according to the active view for the current group.
+function upRenderStageForView() {
+  const up = upStageView.curUpFav;
+  const orig = upStageView.curOrigFav;
+  if (up) {
+    if (upStageView.view === 'compare') { upRenderStageSlider(up); }
+    else if (upStageView.view === 'upscaled') { upRenderStageSingle(up); }
+    else { /* original */ if (orig) upRenderStageSingle(orig); else upRenderStageSlider(up); }
+  } else if (orig) {
+    upRenderStageSingle(orig);
+  }
+  upRenderToolbar();
+}
+function upSetView(view) {
+  upStageView.view = view;
+  upRenderStageForView();
+}
+window.upSetView = upSetView;
 
 // Right rail: all siblings in the group (original + every upscale), newest
 // first, original last. Clicking the original re-arms upscaling; clicking an
@@ -21361,12 +21491,9 @@ function upUrlChanged() {
 }
 
 function upShowPreview(src) {
-  const wrap = document.getElementById('upPreviewWrap');
-  const img = document.getElementById('upPreviewImg');
-  if (img) img.src = src;
-  if (wrap) wrap.style.display = 'block';
-  // Measure the natural size so option-gating can react to it. May resolve
-  // after this call returns; upRenderAll() is re-run once it loads.
+  // The dedicated source thumbnail was removed — the main stage IS the preview
+  // now. This keeps the dimension probe so option-gating still reacts to the
+  // loaded source size; upRenderAll() re-runs once it resolves.
   upState.srcW = 0; upState.srcH = 0; upState.srcMp = 0;
   const probe = new Image();
   probe.onload = () => {
@@ -21382,8 +21509,20 @@ function upClearSource(keepUrlText) {
   upState.srcData = null; upState.srcIsUrl = false;
   upState.srcFavId = null;
   upState.srcW = 0; upState.srcH = 0; upState.srcMp = 0;
-  const wrap = document.getElementById('upPreviewWrap');
-  if (wrap) wrap.style.display = 'none';
+  // Reset the stage to its empty (dropzone) state.
+  upStageState.selId = null;
+  upStageView.curUpFav = null; upStageView.curOrigFav = null; upStageView.view = 'compare';
+  const inner = document.getElementById('upZoomInner');
+  if (inner) inner.innerHTML = '';
+  const empty = document.getElementById('upStageEmpty');
+  if (empty) empty.style.display = '';
+  const scale = document.getElementById('upZoomScale'); if (scale) scale.style.display = 'none';
+  const ctrls = document.getElementById('upZoomCtrls'); if (ctrls) ctrls.style.display = 'none';
+  upZoom.hasContent = false; upZoom.zoom = 1;
+  if (typeof upRenderToolbar === 'function') upRenderToolbar();
+  // Drop bottom-bar highlight.
+  const bar = document.getElementById('upLibBar');
+  if (bar) bar.querySelectorAll('.up-libbar-thumb.sel').forEach(x => x.classList.remove('sel'));
   if (!keepUrlText) {
     const u = document.getElementById('upSrcUrlInput'); if (u) u.value = '';
     document.querySelectorAll('#upLibraryGrid img.sel').forEach(x => x.classList.remove('sel'));
@@ -21416,18 +21555,18 @@ function upUpdateCloudWarn(signedIn) {
 
 function upStatus(msg, isError) {
   const color = isError ? 'var(--err, #f85149)' : 'var(--accent)';
-  ['upStatus', 'upStatusMobile'].forEach(id => {
+  ['upStatus', 'upStatusStage'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = msg;
     el.style.color = color;
   });
 }
-// Keep the mobile split-action Upscale button in lock-step with #upRunBtn
-// (label/cost-hint + busy disabled state). Desktop hides the mobile button.
+// Keep the under-preview Upscale button (shown on every width) in lock-step
+// with the panel's #upRunBtn (label/cost-hint + busy disabled state).
 function upSyncMobileRunBtn() {
   const src = document.getElementById('upRunBtn');
-  const dst = document.getElementById('upMobileRunBtn');
+  const dst = document.getElementById('upStageRunBtn');
   if (!src || !dst) return;
   dst.textContent = src.textContent;
   dst.disabled = src.disabled;
