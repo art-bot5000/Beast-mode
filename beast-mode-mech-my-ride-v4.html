@@ -1014,6 +1014,19 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   border-radius:8px; background:var(--accent); color:#000; font-size:10px; font-weight:800;
   display:flex; align-items:center; justify-content:center; line-height:1;
 }
+/* Jump animation when work is sent to the queue. */
+@keyframes bmQueueJump {
+  0%   { transform:translateY(0) scale(1); }
+  30%  { transform:translateY(-6px) scale(1.08); }
+  55%  { transform:translateY(0) scale(1); }
+  70%  { transform:translateY(-3px) scale(1.04); }
+  100% { transform:translateY(0) scale(1); }
+}
+.mobile-topbar-queue.bm-q-jump {
+  animation:bmQueueJump .6s ease; color:var(--accent); border-color:var(--accent);
+}
+/* "Sent to queue" confirmation flash on the under-preview Upscale button. */
+.up-stage-actions .btn.up-sent { background:var(--accent); color:#000; opacity:1 !important; }
 
 /* Mobile queue modal. */
 .bm-queue-modal { display:none; }
@@ -3195,7 +3208,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   </div>
   <button class="mobile-topbar-queue" id="mobileQueueBtn" onclick="bmQueueModalOpen()" aria-label="Queue" type="button">
     <span class="mobile-topbar-queue-ic">⧗</span>
-    <span class="mobile-topbar-queue-txt">QUEUE</span>
+    <span class="mobile-topbar-queue-txt" id="mobileQueueTxt">QUEUE</span>
     <span class="mobile-topbar-queue-badge" id="mobileQueueBadge" style="display:none;">0</span>
   </button>
   <button class="mobile-topbar-mode" id="mobileModeTitle" onclick="toggleModeNav()" aria-haspopup="true" aria-expanded="false" aria-label="Change mode">
@@ -3888,12 +3901,17 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .up-slider {
   position:relative; overflow:hidden; border-radius:6px; background:transparent;
   user-select:none; touch-action:none;
-  height:100%; width:auto; max-width:100%; max-height:100%; margin:0 auto;
+  /* Fit within the stage viewport on BOTH axes (like object-fit:contain on the
+     single Original/Upscaled views), so switching between Compare and the
+     single views keeps the image the same on-screen size. The aspect-ratio is
+     set inline from the upscaled pixels; max-* caps clamp it into the box. */
+  width:auto; height:auto; max-width:100%; max-height:100%; margin:auto;
+  position:absolute; top:0; left:0; right:0; bottom:0;
 }
 .up-slider-after, .up-slider-before { position:relative; inset:0; line-height:0; }
 .up-slider-before { position:absolute; top:0; left:0; right:0; bottom:0; }
 .up-slider-after img, .up-slider-before img {
-  width:100%; height:100%; object-fit:cover; display:block; background:transparent;
+  width:100%; height:100%; object-fit:contain; display:block; background:transparent;
 }
 .up-slider-before img { position:absolute; inset:0; height:100%; }
 .up-slider-handle {
@@ -4081,7 +4099,13 @@ body.up-settings-modal-open { overflow:hidden; }
   /* Settings panel on mobile = the SOURCE picker + title only. The config block
      lives in the modal; the panel's run button + status are hidden (the
      under-preview action row drives Settings/Upscale instead). */
-  #viewUpscaler .up-area-settings { align-self:start; }
+  /* On mobile the settings panel holds only hidden elements (title hidden,
+     source picker moved into the stage, config block moved to the modal), so
+     strip its panel chrome — otherwise it renders as an empty bordered bar
+     above the preview. */
+  #viewUpscaler .up-area-settings {
+    align-self:start; border:none; background:none; padding:0; margin:0; min-height:0;
+  }
   #viewUpscaler .up-area-settings > #upRunBtn,
   #viewUpscaler .up-area-settings > #upStatus { display:none; }
   /* When the config block is sitting in the panel (modal never opened yet),
@@ -4442,15 +4466,8 @@ body.up-settings-modal-open { overflow:hidden; }
           </div>
         </div>
 
-        <!-- Action row directly under the preview (mobile + desktop center). -->
-        <div class="up-stage-actions" id="upStageActions">
-          <button class="btn btn-ghost" type="button" id="upStageSettingsBtn" onclick="upOpenSettingsModal()">⚙ SETTINGS</button>
-          <button class="btn btn-primary" type="button" id="upStageRunBtn" onclick="upRun()">✦ UPSCALE</button>
-        </div>
-        <div id="upStatusStage"></div>
-
-        <!-- View toolbar: Original / Upscaled / Compare on the left, Clear on the
-             right (outside the preview box). Visibility is driven by upStageView. -->
+        <!-- View toolbar: directly below the preview. Original/Upscaled/Compare
+             on the left, Clear on the right. Visibility driven by upStageView. -->
         <div class="up-stage-toolbar" id="upStageToolbar" style="display:none;">
           <div class="up-view-toggle" id="upViewToggle">
             <button type="button" class="up-view-btn" id="upViewOriginal" onclick="upSetView('original')">ORIGINAL</button>
@@ -4458,6 +4475,12 @@ body.up-settings-modal-open { overflow:hidden; }
             <button type="button" class="up-view-btn" id="upViewCompare" onclick="upSetView('compare')">COMPARE</button>
           </div>
           <button type="button" class="up-clear-btn" id="upClearBtn" onclick="upClearSource()">✕ CLEAR</button>
+        </div>
+
+        <!-- Action row under the toolbar (mobile + desktop center). -->
+        <div class="up-stage-actions" id="upStageActions">
+          <button class="btn btn-ghost" type="button" id="upStageSettingsBtn" onclick="upOpenSettingsModal()">⚙ SETTINGS</button>
+          <button class="btn btn-primary" type="button" id="upStageRunBtn" onclick="upRun()">✦ UPSCALE</button>
         </div>
       </div>
 
@@ -19240,9 +19263,21 @@ const bmQueue = (() => {
     const active = activeCount();
     const anyShown = lastJobs.length > 0;
 
+    // Tokens for the top-bar Queue button: charged tokens from finished jobs
+    // this session + the known cost of in-flight jobs (from enqueue meta).
+    let tokTotal = 0;
+    lastJobs.forEach(j => {
+      if (j.status === 'done' && j.result && j.result.tokens && typeof j.result.tokens.charged === 'number') {
+        tokTotal += j.result.tokens.charged;
+      } else if ((j.status === 'queued' || j.status === 'running')) {
+        const m = jobMeta[j.id] || {};
+        if (typeof m.tokens === 'number') tokTotal += m.tokens;
+      }
+    });
+
     // Nav badge: number of in-flight jobs.
     const navBadge = document.getElementById('queueNavBadge');
-    if (typeof bmQueueBadgeUpdate === 'function') bmQueueBadgeUpdate(active);
+    if (typeof bmQueueBadgeUpdate === 'function') bmQueueBadgeUpdate(active, tokTotal);
     if (navBadge) {
       if (active > 0) { navBadge.style.display = ''; navBadge.textContent = String(active); }
       else navBadge.style.display = 'none';
@@ -19510,12 +19545,19 @@ function bmQueueModalClose() {
 window.bmQueueModalOpen = bmQueueModalOpen;
 window.bmQueueModalClose = bmQueueModalClose;
 
-// Keep the top-bar Queue badge in sync with the in-flight count.
-function bmQueueBadgeUpdate(activeCount) {
+// Keep the top-bar Queue button in sync: the badge shows the in-flight count,
+// and the label shows the session token total (tokens used / in use).
+function bmQueueBadgeUpdate(activeCount, tokenTotal) {
   const b = document.getElementById('mobileQueueBadge');
-  if (!b) return;
-  if (activeCount > 0) { b.style.display = ''; b.textContent = String(activeCount); }
-  else b.style.display = 'none';
+  if (b) {
+    if (activeCount > 0) { b.style.display = ''; b.textContent = String(activeCount); }
+    else b.style.display = 'none';
+  }
+  const txt = document.getElementById('mobileQueueTxt');
+  if (txt) {
+    txt.textContent = (typeof tokenTotal === 'number' && tokenTotal > 0)
+      ? (tokenTotal + ' TOK') : 'QUEUE';
+  }
 }
 window.bmQueueBadgeUpdate = bmQueueBadgeUpdate;
 
@@ -21107,15 +21149,21 @@ function upRenderFormatChips() {
 // Live token hint on the Upscale button. P-Image is tiered by MP; the others
 // are flat. Reads the price the backend reported per model so the UI and ledger
 // can't disagree.
-function upUpdateCostHint() {
-  const btn = document.getElementById('upRunBtn');
+function upCurrentTokenCost() {
   const m = upModel();
-  if (!btn || upState.busy || !m) return;
+  if (!m) return null;
   let tok = m.tokens;
   if (m.kind === 'megapixels' && m.tokensByMp) {
     tok = (upState.mp <= 4) ? m.tokensByMp.low : m.tokensByMp.high;
   }
-  btn.textContent = Number.isFinite(tok) ? ('\u2726 UPSCALE ' + tok) : '\u2726 UPSCALE';
+  return Number.isFinite(tok) ? tok : null;
+}
+function upUpdateCostHint() {
+  const btn = document.getElementById('upRunBtn');
+  const m = upModel();
+  if (!btn || upState.busy || !m) return;
+  const tok = upCurrentTokenCost();
+  btn.textContent = (tok != null) ? ('\u2726 UPSCALE ' + tok) : '\u2726 UPSCALE';
   upSyncMobileRunBtn();
 }
 
@@ -21730,7 +21778,7 @@ function upUpdateCloudWarn(signedIn) {
 
 function upStatus(msg, isError) {
   const color = isError ? 'var(--err, #f85149)' : 'var(--accent)';
-  ['upStatus', 'upStatusStage'].forEach(id => {
+  ['upStatus'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = msg;
@@ -21747,6 +21795,33 @@ function upSyncMobileRunBtn() {
   dst.disabled = src.disabled;
   dst.style.opacity = src.style.opacity || '1';
 }
+
+// Briefly show "✓ SENT TO QUEUE" on the under-preview Upscale button, then let
+// the next upSyncMobileRunBtn() (via upUpdateCostHint) restore the cost label.
+let _upSentToQueueTimer = null;
+function upFlashSentToQueue() {
+  const dst = document.getElementById('upStageRunBtn');
+  if (!dst) return;
+  dst.textContent = '\u2713 SENT TO QUEUE';
+  dst.classList.add('up-sent');
+  if (_upSentToQueueTimer) clearTimeout(_upSentToQueueTimer);
+  _upSentToQueueTimer = setTimeout(() => {
+    dst.classList.remove('up-sent');
+    if (typeof upUpdateCostHint === 'function') upUpdateCostHint();
+  }, 1600);
+}
+
+// Make the top-bar Queue button "jump" to draw the eye when work is sent there.
+function bmQueueJump() {
+  const btn = document.getElementById('mobileQueueBtn');
+  if (!btn) return;
+  btn.classList.remove('bm-q-jump');
+  // Force reflow so re-adding the class restarts the animation.
+  void btn.offsetWidth;
+  btn.classList.add('bm-q-jump');
+  setTimeout(() => btn.classList.remove('bm-q-jump'), 700);
+}
+window.bmQueueJump = bmQueueJump;
 
 // ── Run ─────────────────────────────────────────────────────────────────────
 async function upRun() {
@@ -21801,6 +21876,7 @@ async function upRun() {
       prompt: label, fullText: '', model: m.id,
       srcFavId: upState.srcFavId,
       upKind: m.kind,
+      tokens: upCurrentTokenCost(),
       upFactor: (m.kind === 'megapixels') ? null : upState.factor,
       upMp: (m.kind === 'megapixels') ? upState.mp : null,
       // Pin the exact input fed to the upscaler (data URI for upload/library,
@@ -21829,8 +21905,11 @@ async function upRun() {
       return;
     }
     // Queued — runs server-side, saves to library even if we leave this page.
-    upStatus('\u25CC QUEUED \u2014 upscaling in the background\u2026 (' + m.label + ')', false);
     upState.busy = false; btn.disabled = false; btn.style.opacity = '1'; upUpdateCostHint();
+    // Brief "Sent to queue" confirmation on the under-preview button + a jump on
+    // the top-bar Queue button so the user notices the work moved there.
+    if (typeof upFlashSentToQueue === 'function') upFlashSentToQueue();
+    if (typeof bmQueueJump === 'function') bmQueueJump();
     bmQueue.onJob(r.jobId, {
       onDone: (result) => {
         const image = result.image && result.image.url ? result.image : null;
