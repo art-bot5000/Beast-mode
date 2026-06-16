@@ -3901,19 +3901,27 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .up-slider {
   position:relative; overflow:hidden; border-radius:6px; background:transparent;
   user-select:none; touch-action:none;
-  /* Fit within the stage viewport on BOTH axes (like object-fit:contain on the
-     single Original/Upscaled views), so switching between Compare and the
-     single views keeps the image the same on-screen size. The aspect-ratio is
-     set inline from the upscaled pixels; max-* caps clamp it into the box. */
-  width:auto; height:auto; max-width:100%; max-height:100%; margin:auto;
-  position:absolute; top:0; left:0; right:0; bottom:0;
+  /* Fit the stage viewport on BOTH axes exactly like the single Original/
+     Upscaled views. The box is a normal flex item centred in #upZoomInner; the
+     AFTER image is the in-flow sizing element (object-fit:contain against the
+     full stage), and the BEFORE layer + handle overlay it absolutely at the
+     same scale. */
+  max-width:100%; max-height:100%; margin:auto;
+  display:flex; align-items:center; justify-content:center;
 }
-.up-slider-after, .up-slider-before { position:relative; inset:0; line-height:0; }
-.up-slider-before { position:absolute; top:0; left:0; right:0; bottom:0; }
-.up-slider-after img, .up-slider-before img {
-  width:100%; height:100%; object-fit:contain; display:block; background:transparent;
+/* AFTER (upscaled) is the sizing layer: a normal in-flow image fitted to the
+   stage. BEFORE (original) overlays it, clipped by the handle. Both use the
+   SAME box, so they render at the identical on-screen scale. */
+.up-slider-after { position:relative; display:block; line-height:0; }
+.up-slider-after img {
+  display:block; max-width:100%; max-height:100%; width:auto; height:auto;
+  object-fit:contain; background:transparent;
 }
-.up-slider-before img { position:absolute; inset:0; height:100%; }
+.up-slider-before { position:absolute; inset:0; line-height:0; }
+.up-slider-before img {
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+  display:block; background:transparent;
+}
 .up-slider-handle {
   position:absolute; top:0; bottom:0; left:50%; width:0; z-index:5;
   transform:translateX(-50%); cursor:ew-resize; touch-action:none;
@@ -4158,7 +4166,7 @@ body.up-settings-modal-open { overflow:hidden; }
    keep the before label (on the before layer) above that. */
 .up-slider-after { z-index:1; }
 .up-slider-after .bm-res-label { z-index:2; }   /* after-res, low — gets covered */
-.up-slider-before { z-index:3; background:#000; }   /* original covers the after-res */
+.up-slider-before { z-index:3; }   /* original covers the after-res as the handle moves right */
 .up-slider-before .bm-res-label { z-index:4; }  /* before-res rides on top */
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
@@ -19254,6 +19262,18 @@ const bmQueue = (() => {
     return { icon: '✓', text: 'Done · saved to library', cls: 'q-done' };
   }
 
+  // Tokens for a job: the charged amount once done, else the cost passed in the
+  // enqueue meta for jobs still queued/running. Returns null when unknown.
+  function jobTokens(job) {
+    if (job.status === 'done' && job.result && job.result.tokens) {
+      const t = job.result.tokens;
+      if (typeof t.charged === 'number') return t.charged;
+      if (typeof t.perImage === 'number') return t.perImage;
+    }
+    const m = jobMeta[job.id] || {};
+    return (typeof m.tokens === 'number') ? m.tokens : null;
+  }
+
   function activeCount() {
     return lastJobs.filter(j => j.status === 'queued' || j.status === 'running').length;
   }
@@ -19263,21 +19283,9 @@ const bmQueue = (() => {
     const active = activeCount();
     const anyShown = lastJobs.length > 0;
 
-    // Tokens for the top-bar Queue button: charged tokens from finished jobs
-    // this session + the known cost of in-flight jobs (from enqueue meta).
-    let tokTotal = 0;
-    lastJobs.forEach(j => {
-      if (j.status === 'done' && j.result && j.result.tokens && typeof j.result.tokens.charged === 'number') {
-        tokTotal += j.result.tokens.charged;
-      } else if ((j.status === 'queued' || j.status === 'running')) {
-        const m = jobMeta[j.id] || {};
-        if (typeof m.tokens === 'number') tokTotal += m.tokens;
-      }
-    });
-
     // Nav badge: number of in-flight jobs.
     const navBadge = document.getElementById('queueNavBadge');
-    if (typeof bmQueueBadgeUpdate === 'function') bmQueueBadgeUpdate(active, tokTotal);
+    if (typeof bmQueueBadgeUpdate === 'function') bmQueueBadgeUpdate(active);
     if (navBadge) {
       if (active > 0) { navBadge.style.display = ''; navBadge.textContent = String(active); }
       else navBadge.style.display = 'none';
@@ -19325,6 +19333,11 @@ const bmQueue = (() => {
     lbl.textContent = job.label || job.kind;
     lbl.title = job.label || job.kind;
     row.appendChild(ic); row.appendChild(lbl);
+    const _tok = jobTokens(job);
+    if (_tok != null) {
+      const tk = document.createElement('span'); tk.className = 'bm-q-rowtok'; tk.textContent = _tok + ' TOK';
+      row.appendChild(tk);
+    }
     // Delete: only when the job can be cancelled without cost. 'queued' jobs
     // haven't started, so they're free to remove. 'running' jobs may already
     // be incurring provider cost → no delete. Terminal jobs get dismiss.
@@ -19356,7 +19369,9 @@ const bmQueue = (() => {
     const ic = document.createElement('span'); ic.className = 'bm-q-ic'; ic.textContent = s.icon;
     const txt = document.createElement('div'); txt.className = 'bm-q-card-text';
     const t1 = document.createElement('div'); t1.className = 'bm-q-card-label'; t1.textContent = job.label || job.kind;
-    const t2 = document.createElement('div'); t2.className = 'bm-q-card-status'; t2.textContent = s.text;
+    const t2 = document.createElement('div'); t2.className = 'bm-q-card-status';
+    const _tok = jobTokens(job);
+    t2.textContent = s.text + (_tok != null ? (' · ' + _tok + ' TOK') : '');
     txt.appendChild(t1); txt.appendChild(t2);
     main.appendChild(ic); main.appendChild(txt);
     card.appendChild(main);
@@ -19438,6 +19453,8 @@ const bmQueue = (() => {
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       .bm-q-rowdel { background:none; border:none; color:var(--muted,#888); cursor:pointer;
         font-size:12px; line-height:1; padding:2px 4px; border-radius:4px; flex:0 0 auto; }
+      .bm-q-rowtok { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:.5px;
+        color:var(--accent,#7c5cff); white-space:nowrap; }
       .bm-q-rowdel:hover { color:#f85149; background:rgba(248,81,73,.12); }
       .q-queued  .bm-q-ic { color:var(--muted,#999); }
       .q-running .bm-q-ic { color:var(--accent,#7c5cff); animation:bmQspin 1.4s linear infinite; }
@@ -19545,19 +19562,12 @@ function bmQueueModalClose() {
 window.bmQueueModalOpen = bmQueueModalOpen;
 window.bmQueueModalClose = bmQueueModalClose;
 
-// Keep the top-bar Queue button in sync: the badge shows the in-flight count,
-// and the label shows the session token total (tokens used / in use).
-function bmQueueBadgeUpdate(activeCount, tokenTotal) {
+// Keep the top-bar Queue button badge in sync with the in-flight count.
+function bmQueueBadgeUpdate(activeCount) {
   const b = document.getElementById('mobileQueueBadge');
-  if (b) {
-    if (activeCount > 0) { b.style.display = ''; b.textContent = String(activeCount); }
-    else b.style.display = 'none';
-  }
-  const txt = document.getElementById('mobileQueueTxt');
-  if (txt) {
-    txt.textContent = (typeof tokenTotal === 'number' && tokenTotal > 0)
-      ? (tokenTotal + ' TOK') : 'QUEUE';
-  }
+  if (!b) return;
+  if (activeCount > 0) { b.style.display = ''; b.textContent = String(activeCount); }
+  else b.style.display = 'none';
 }
 window.bmQueueBadgeUpdate = bmQueueBadgeUpdate;
 
@@ -21441,7 +21451,12 @@ function upZoomApply() {
   const scaleEl = document.getElementById('upZoomScale');
   const ctrls = document.getElementById('upZoomCtrls');
   if (!inner) return;
-  const show = upZoom.hasContent;
+  // Compare mode is a fixed fit-to-screen view — zoom is disabled there so the
+  // slider never CSS-scales (which pixelated the bitmap). Hide the controls and
+  // pin zoom to 1.
+  const isCompare = (typeof upStageView !== 'undefined' && upStageView.view === 'compare');
+  if (isCompare) upZoom.zoom = 1;
+  const show = upZoom.hasContent && !isCompare;
   if (scaleEl) scaleEl.style.display = show ? '' : 'none';
   if (ctrls) ctrls.style.display = show ? '' : 'none';
   // Zoom multiplier only. transform-origin centre keeps it centred.
@@ -21469,6 +21484,8 @@ function upZoomUpdatePct() {
 }
 function upZoomBy(dir) {
   if (!upZoom.hasContent) return;
+  // Zoom is disabled in compare mode (fixed fit-to-screen).
+  if (typeof upStageView !== 'undefined' && upStageView.view === 'compare') return;
   const factor = dir > 0 ? 1.25 : 0.8;
   upZoom.zoom = Math.max(0.25, Math.min(8, upZoom.zoom * factor));
   upZoomApply();
@@ -21529,10 +21546,10 @@ function upRenderStageSlider(upFav) {
 
   const slider = document.createElement('div');
   slider.className = 'up-slider';
-  // Size the slider to the upscaled image's natural pixels; the zoom controller
-  // scales the whole stage. Aspect is preserved and labels hug the edges.
+  // The slider box is sized by the AFTER image (object-fit:contain against the
+  // stage) so Compare matches the single Original/Upscaled views exactly. No
+  // inline aspect-ratio needed.
   const aw = upFav.outW || 0, ah = upFav.outH || 0;
-  if (aw > 0 && ah > 0) { slider.style.aspectRatio = aw + ' / ' + ah; }
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
