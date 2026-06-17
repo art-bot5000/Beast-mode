@@ -21669,7 +21669,13 @@ function upRenderLibBar() {
   plus.onclick = () => { if (typeof upClearSource === 'function') upClearSource(); };
   bar.appendChild(plus);
 
-  const withImg = (typeof favourites !== 'undefined' ? favourites : []).filter(f => f && f.imageData);
+  // Match the library card's "has an image" predicate (buildLibCard) — NOT just
+  // inline imageData. Rehydrated favourites (server/KV manifest, no Drive) carry
+  // serverImageUrl + thumbKey with imageData:null; filtering on imageData alone
+  // hid the ENTIRE library here. bmApplyThumb resolves all three sources (thumb
+  // -> cache -> /api/img authed -> inline), and upSelectFav loads full size on tap.
+  const withImg = (typeof favourites !== 'undefined' ? favourites : [])
+    .filter(f => f && (f.imageData || f.thumbKey || f.serverImageUrl));
   if (!withImg.length) {
     if (empty) empty.style.display = 'block';
     if (hint) hint.textContent = '';
@@ -21942,7 +21948,7 @@ function upResolveGroup(f) {
 
 // Central selection handler. Non-upscale → single preview + arm as source.
 // Upscale → before/after slider + arm its ORIGINAL as the re-upscale source.
-function upSelectFav(f) {
+async function upSelectFav(f) {
   if (!f) return;
   // Ad-hoc (uploaded / URL) sources aren't saved favs — re-show them as such
   // rather than treating the synthetic id as a real library id.
@@ -21950,6 +21956,21 @@ function upSelectFav(f) {
   // A synthesised "original" (reconstructed from an orphan upscale's pinned
   // source bytes) likewise has no real library id — show it as an ad-hoc source.
   if (f._synthOriginal) { upShowAdHocSource(f.imageData); return; }
+  // Resolve full-size bytes on PICK. Rehydrated favs (server/KV manifest, no
+  // Drive) have imageData:null + serverImageUrl — the bottom-bar thumb came from
+  // bmApplyThumb, but the stage preview and the upscale source both need real
+  // bytes. Resolve the authed /api/img URL to a data URI once, here, so every
+  // downstream consumer (upShowPreview, upRenderStageSingle, upState.srcData)
+  // gets readable bytes instead of null. Cheap no-op when imageData is already
+  // a usable data:/blob: URI.
+  if (!f.imageData || (typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0)) {
+    const serverUrl = f.serverImageUrl
+      || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : null);
+    if (serverUrl && typeof upResolveInputImage === 'function') {
+      const resolved = await upResolveInputImage(serverUrl);
+      if (resolved) { f.imageData = resolved; }
+    }
+  }
   upStageState.selId = f.id;
   // Sync bottom-bar highlight.
   const bar = document.getElementById('upLibBar');
