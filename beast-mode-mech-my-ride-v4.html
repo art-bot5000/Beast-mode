@@ -3812,7 +3812,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .up-stage-actions .btn { flex:1; padding:12px; font-size:14px; letter-spacing:2px; }
 
 /* View toolbar: Original/Upscaled/Compare segmented control + Clear. */
-.up-stage-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
+.up-stage-toolbar { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
 .up-view-toggle { display:inline-flex; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
 .up-view-btn {
   background:transparent; border:none; border-right:1px solid var(--border);
@@ -3824,11 +3824,9 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 .up-view-btn:hover { color:var(--accent); }
 .up-view-btn.active { background:var(--accent); color:#000; }
 .up-clear-btn {
-  background:transparent; border:1px solid var(--border); color:var(--muted);
-  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:12px; letter-spacing:1.5px;
-  padding:8px 14px; border-radius:7px; cursor:pointer; transition:color .15s, border-color .15s;
+  /* (Removed — Clear is now the + button at the far left of the bottom bar.) */
+  display:none !important;
 }
-.up-clear-btn:hover { color:var(--err,#f85149); border-color:var(--err,#f85149); }
 
 /* Zoom controls (bottom-centre) + scale indicator (top-right). */
 .up-zoom-ctrls {
@@ -3878,6 +3876,16 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 .up-libbar-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .up-libbar-thumb.sel { border-color:var(--accent); }
+/* "+ New" button — far-left libbar item, sized to match the thumbnails. */
+.up-libbar-new {
+  flex:0 0 auto; width:84px; height:84px;
+  display:flex; align-items:center; justify-content:center;
+  background:transparent; border:1.5px dashed var(--border); border-radius:6px;
+  color:var(--muted); font-size:30px; font-weight:300; line-height:1; cursor:pointer;
+  transition:color .15s, border-color .15s, background .15s;
+}
+.up-libbar-new:hover { color:var(--accent); border-color:var(--accent);
+  background:color-mix(in srgb, var(--accent) 8%, transparent); }
 .up-libbar-thumb .up-libbar-up {
   position:absolute; left:4px; bottom:4px;
   display:flex; align-items:center; justify-content:center;
@@ -3901,7 +3909,7 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 }
 
 /* ══ UPSCALER STAGE / SLIDER / RAIL (Phase 3) ═════════════════════ */
-.up-stage-img { position:absolute; inset:0; display:block; line-height:0; width:100%; height:100%; }
+.up-stage-img { position:relative; display:block; line-height:0; width:100%; height:100%; }
 .up-stage-img img { display:block; width:100%; height:100%; object-fit:contain; }
 /* Fade preview images in once decoded so switching Original/Upscaled/Compare
    doesn't flash the empty <img> outline (white box) over a black gap. The img
@@ -3912,26 +3920,31 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
 /* Before/after slider. Both layers are absolutely stacked; the "before" layer
    is clipped via clip-path to the handle position. Images are sized identically
    (object-fit:contain on a fixed-ratio box) so the comparison aligns. */
+/* The slider fills the stage and centres its content; the AFTER image is the
+   in-flow sizer (object-fit:contain), so the slider box — and therefore the
+   handle line, before overlay and labels — are bounded to the IMAGE rectangle,
+   never the full preview area. */
 .up-slider {
-  position:relative; overflow:hidden; border-radius:6px; background:transparent;
-  user-select:none; touch-action:none;
-  /* Fit the stage on BOTH axes. The box carries the AFTER image's aspect ratio
-     (set inline from outW/outH), and BOTH layers fill it absolutely with
-     object-fit:contain — so original and upscaled render at the IDENTICAL
-     on-screen scale. Previously the after layer was in-flow (width:auto), so its
-     box and the absolutely-filled before layer used different coordinate spaces
-     and the upscaled image overflowed/bled behind the slider. */
-  max-width:100%; max-height:100%; margin:auto;
+  position:relative; width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+  user-select:none; touch-action:none; overflow:hidden; background:transparent;
 }
-/* Both layers occupy the SAME box. After is the base; before overlays clipped. */
-.up-slider-after, .up-slider-before { position:absolute; inset:0; line-height:0; }
-.up-slider-after img, .up-slider-before img {
+/* AFTER is the base + sizer: shrink-wraps the fitted image so the handle line,
+   before overlay and labels align exactly to the image edges. */
+.up-slider-after {
+  position:relative; display:block; line-height:0;
+  max-width:100%; max-height:100%; width:fit-content; height:fit-content;
+}
+.up-slider-after img {
+  display:block; max-width:100%; max-height:100%; width:auto; height:auto;
+  object-fit:contain; background:transparent; border-radius:6px;
+}
+/* BEFORE overlays the after image exactly (same box), clipped by the handle. */
+.up-slider-before { position:absolute; inset:0; line-height:0; overflow:hidden; border-radius:6px; }
+.up-slider-before img {
   position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
   display:block; background:transparent;
 }
-/* Centre the aspect-ratio'd slider box within the zoom host so the letterbox
-   space sits OUTSIDE the slider (handle stays within the image). */
-.up-zoom-inner:has(> .up-slider) { display:flex; align-items:center; justify-content:center; }
 .up-slider-handle {
   position:absolute; top:0; bottom:0; left:50%; width:0; z-index:5;
   transform:translateX(-50%); cursor:ew-resize; touch-action:none;
@@ -4005,12 +4018,6 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   #viewUpscaler .up-rail {
     flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding-right:4px;
     scrollbar-width:thin; scrollbar-color:var(--border) transparent;
-  }
-  /* Empty-state text vertically centred in the rail (only shown while no
-     upscales exist; upRenderRail hides it once the rail is populated). */
-  #viewUpscaler .up-rail-empty {
-    flex:1; min-height:0; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; text-align:center;
   }
   #viewUpscaler .up-rail::-webkit-scrollbar { width:6px; }
   #viewUpscaler .up-rail::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
@@ -4169,6 +4176,7 @@ body.up-settings-modal-open { overflow:hidden; }
   #viewUpscaler .up-libbar-ctrls { display:none; }  /* no pin/min control on mobile */
   #viewUpscaler .up-libbar { padding:4px 0; }
   #viewUpscaler .up-libbar-thumb { width:64px; height:64px; }
+  #viewUpscaler .up-libbar-new { width:64px; height:64px; font-size:26px; }
 
   /* Queue widget rides above the fixed bar on mobile. */
   body.up-sticky #bmQueueWidget { bottom:calc(var(--up-libbar-h-mob,96px) + 8px); }
@@ -4180,15 +4188,19 @@ body.up-settings-modal-open { overflow:hidden; }
 }
 .up-rail-empty { color:var(--muted); font-size:12px; line-height:1.5; padding:18px 4px; }
 
-/* Slider label stacking: the AFTER (upscaled) resolution label lives on the
-   base after-layer and must be COVERED by the before (original) layer as the
-   handle moves right — so the upscaled resolution only ever reads on the
-   upscaled pixels. Give the before layer a z-index above the after-label, and
-   keep the before label (on the before layer) above that. */
-.up-slider-after { z-index:1; }
-.up-slider-after .bm-res-label { z-index:2; }   /* after-res, low — gets covered */
-.up-slider-before { z-index:3; }   /* original covers the after-res as the handle moves right */
-.up-slider-before .bm-res-label { z-index:4; }  /* before-res rides on top */
+/* Slider layering: AFTER (upscaled) is the base; BEFORE (original) overlays it,
+   clipped by the handle. Corner labels sit above both; the handle/line top. */
+.up-slider-before { z-index:2; }
+.up-slider-label {
+  position:absolute; z-index:3; pointer-events:none;
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:12px; letter-spacing:1.5px;
+  color:#fff; background:rgba(0,0,0,.55); padding:3px 8px; border-radius:5px;
+  /* Constant on-screen size irrespective of any residual zoom transform. */
+  transform-origin:top left;
+}
+.up-slider-label-orig { top:8px; left:8px; }          /* Original — top-left */
+.up-slider-label-up   { bottom:8px; right:8px; transform-origin:bottom right; } /* Upscale — bottom-right */
+.up-slider-handle { z-index:5; }
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
 .ig-tab { flex:1; padding:7px 6px; font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
@@ -4495,15 +4507,15 @@ body.up-settings-modal-open { overflow:hidden; }
           </div>
         </div>
 
-        <!-- View toolbar: directly below the preview. Original/Upscaled/Compare
-             on the left, Clear on the right. Visibility driven by upStageView. -->
+        <!-- View toolbar: directly below the preview, centred against it.
+             Original/Upscaled/Compare. (Clear moved to the + button at the far
+             left of the bottom image bar.) -->
         <div class="up-stage-toolbar" id="upStageToolbar" style="display:none;">
           <div class="up-view-toggle" id="upViewToggle">
             <button type="button" class="up-view-btn" id="upViewOriginal" onclick="upSetView('original')">ORIGINAL</button>
             <button type="button" class="up-view-btn" id="upViewUpscaled" onclick="upSetView('upscaled')">UPSCALED</button>
             <button type="button" class="up-view-btn" id="upViewCompare" onclick="upSetView('compare')">COMPARE</button>
           </div>
-          <button type="button" class="up-clear-btn" id="upClearBtn" onclick="upClearSource()">✕ CLEAR</button>
         </div>
 
         <!-- Action row under the toolbar (mobile + desktop center). -->
@@ -21561,6 +21573,18 @@ function upRenderLibBar() {
   const hint = document.getElementById('upLibBarHint');
   if (!bar) return;
   bar.innerHTML = '';
+
+  // "+ New" button — always the far-left item on every screen size. Clears the
+  // current source/preview back to the dropzone so a new image can be loaded.
+  const plus = document.createElement('button');
+  plus.type = 'button';
+  plus.className = 'up-libbar-new';
+  plus.title = 'New — clear the preview to load another image';
+  plus.setAttribute('aria-label', 'New image');
+  plus.textContent = '+';
+  plus.onclick = () => { if (typeof upClearSource === 'function') upClearSource(); };
+  bar.appendChild(plus);
+
   const withImg = (typeof favourites !== 'undefined' ? favourites : []).filter(f => f && f.imageData);
   if (!withImg.length) {
     if (empty) empty.style.display = 'block';
@@ -21615,10 +21639,22 @@ function upResolveGroup(f) {
     if (src) original = src;
   }
   if (original.isUpscale) {
-    // Orphan upscale — its source isn't a saved favourite (e.g. upscaled from an
-    // ad-hoc uploaded/generated preview). Still surface the upscale itself so the
-    // results rail isn't empty after a successful run.
-    return { original: null, upscales: [f] };
+    // Orphan upscale (source was an ad-hoc upload/URL, never saved as a fav).
+    // Synthesize an "original" from the pinned source bytes so the rail + slider
+    // can still show the before image at the top.
+    if (original.srcImageData) {
+      const synth = {
+        id: '__orig__' + original.id,
+        imageData: original.srcImageData,
+        outW: original.srcW || null,
+        outH: original.srcH || null,
+        isUpscale: false,
+        _synthOriginal: true,
+        title: 'Original',
+      };
+      return { original: synth, upscales: [original] };
+    }
+    return { original: null, upscales: [] };
   }
   // Collect children by EITHER direction so partially-linked groups still unite.
   const ids = new Set(Array.isArray(original.upscaleIds) ? original.upscaleIds : []);
@@ -21633,6 +21669,9 @@ function upSelectFav(f) {
   // Ad-hoc (uploaded / URL) sources aren't saved favs — re-show them as such
   // rather than treating the synthetic id as a real library id.
   if (f._adhoc) { upShowAdHocSource(f.imageData); return; }
+  // A synthesised "original" (reconstructed from an orphan upscale's pinned
+  // source bytes) likewise has no real library id — show it as an ad-hoc source.
+  if (f._synthOriginal) { upShowAdHocSource(f.imageData); return; }
   upStageState.selId = f.id;
   // Sync bottom-bar highlight.
   const bar = document.getElementById('upLibBar');
@@ -21741,10 +21780,7 @@ window.addEventListener('resize', () => {
 function upRenderStageSingle(f) {
   const host = document.getElementById('upZoomInner');
   if (!host) return;
-  // Crossfade: keep any existing image mounted and overlay the new one, then
-  // remove the old once the new has loaded — avoids the black gap on view
-  // switches. The new img fades in via .is-loaded.
-  const oldWraps = Array.from(host.querySelectorAll('.up-stage-img'));
+  host.innerHTML = '';
   const empty = document.getElementById('upStageEmpty');
   if (empty) empty.style.display = 'none';
   const wrap = document.createElement('div');
@@ -21753,7 +21789,6 @@ function upRenderStageSingle(f) {
   img.alt = f.title || '';
   wrap.appendChild(img);
   host.appendChild(wrap);
-  const clearOld = () => { oldWraps.forEach(w => { if (w && w.parentNode) w.parentNode.removeChild(w); }); };
   const paint = (w, h) => {
     if (w && h && typeof bmResLabel === 'function')
       bmResLabel(wrap, img, w + '\u00D7' + h, 'tl', 'upStageResTL');
@@ -21763,12 +21798,9 @@ function upRenderStageSingle(f) {
   if (f.outW && f.outH) { paint(f.outW, f.outH); mount(f.outW, f.outH); }
   img.addEventListener('load', () => {
     img.classList.add('is-loaded');
-    clearOld();
     if (!(f.outW && f.outH)) { paint(img.naturalWidth, img.naturalHeight); mount(img.naturalWidth, img.naturalHeight); }
   }, { once: true });
-  img.onerror = () => { clearOld(); if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f); };
-  // Safety: if load never fires (cached/edge cases), drop the old layer shortly.
-  setTimeout(clearOld, 400);
+  img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f); };
   // imageData may be an authed /api/img URL — a raw src 401s and the stage stays
   // blank (the post-upscale "preview not working" symptom). Route via bmSetImgSrc.
   if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
@@ -21781,9 +21813,7 @@ function upRenderStageSingle(f) {
 function upRenderStageSlider(upFav) {
   const host = document.getElementById('upZoomInner');
   if (!host) return;
-  // Crossfade: keep existing layers until the new slider's after-image loads.
-  const oldChildren = Array.from(host.children);
-  const clearOldSlider = () => { oldChildren.forEach(c => { if (c && c.parentNode) c.parentNode.removeChild(c); }); };
+  host.innerHTML = '';
   const emptyEl = document.getElementById('upStageEmpty');
   if (emptyEl) emptyEl.style.display = 'none';
 
@@ -21800,28 +21830,20 @@ function upRenderStageSlider(upFav) {
 
   const slider = document.createElement('div');
   slider.className = 'up-slider';
-  // Size the box to the AFTER image's aspect ratio and fit it within the stage
-  // (max 100% on both axes, centred). The box then matches the rendered image
-  // exactly — so the divider handle/line can't extend into the letterbox bars
-  // above/below the image. Both layers fill this box with object-fit:contain.
+  // Fill the zoom host, which upZoomMount() has already sized to the AFTER
+  // image's (aw×ah) aspect ratio. Both layers then object-fit:contain inside one
+  // shared box — fixing the upscaled layer rendering at a different scale and
+  // bleeding through behind the slider.
   const aw = upFav.outW || 0, ah = upFav.outH || 0;
-  if (aw > 0 && ah > 0) {
-    slider.style.aspectRatio = aw + ' / ' + ah;
-    slider.style.width = 'auto';
-    slider.style.height = 'auto';
-    slider.style.maxWidth = '100%';
-    slider.style.maxHeight = '100%';
-  } else {
-    slider.style.width = '100%';
-    slider.style.height = '100%';
-  }
+  slider.style.width = '100%';
+  slider.style.height = '100%';
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
   const afterImg = document.createElement('img');
   afterImg.alt = 'upscaled';
   afterWrap.appendChild(afterImg);
-  // Before (original) on top, clipped to the slider position; res top-left.
+  // Before (original) on top, clipped to the slider position.
   const beforeWrap = document.createElement('div');
   beforeWrap.className = 'up-slider-before';
   const beforeImg = document.createElement('img');
@@ -21832,9 +21854,23 @@ function upRenderStageSlider(upFav) {
   handle.className = 'up-slider-handle';
   handle.innerHTML = '<div class="up-slider-line"></div><div class="up-slider-grip">\u2194</div>';
 
+  // Simple corner labels: "Original" top-left, "Upscale" bottom-right — both
+  // bounded to the image. (Resolution + verbose labels removed by request.)
+  const lblOrig = document.createElement('div');
+  lblOrig.className = 'up-slider-label up-slider-label-orig';
+  lblOrig.textContent = 'Original';
+  const lblUp = document.createElement('div');
+  lblUp.className = 'up-slider-label up-slider-label-up';
+  lblUp.textContent = 'Upscale';
+
+  // Everything that must hug the IMAGE rectangle lives inside afterWrap (the
+  // in-flow image sizer), so the handle line, before overlay and labels are
+  // bounded to the image — never the full preview area.
+  afterWrap.appendChild(beforeWrap);
+  afterWrap.appendChild(lblOrig);
+  afterWrap.appendChild(lblUp);
+  afterWrap.appendChild(handle);
   slider.appendChild(afterWrap);
-  slider.appendChild(beforeWrap);
-  slider.appendChild(handle);
   host.appendChild(slider);
   // Mount into the zoom controller (fall back to a measured size if dims absent).
   if (aw > 0 && ah > 0) upZoomMount(aw, ah);
@@ -21847,33 +21883,21 @@ function upRenderStageSlider(upFav) {
   };
   setPos(50);
 
-  // Labels once each image is measurable.
-  const paintLabels = () => {
-    if (beforeImg.complete && beforeImg.naturalWidth) {
-      const w = beforeW || beforeImg.naturalWidth, h = beforeH || beforeImg.naturalHeight;
-      bmResLabel(beforeWrap, beforeImg, 'ORIGINAL \u00B7 ' + w + '\u00D7' + h, 'tl', 'upBeforeRes');
-    }
-    if (afterImg.complete && afterImg.naturalWidth) {
-      const w = upFav.outW || afterImg.naturalWidth, h = upFav.outH || afterImg.naturalHeight;
-      bmResLabel(afterWrap, afterImg, 'UPSCALED \u00B7 ' + w + '\u00D7' + h, 'br', 'upAfterRes');
-    }
-  };
-  beforeImg.addEventListener('load', () => { beforeImg.classList.add('is-loaded'); paintLabels(); }, { once: true });
-  afterImg.addEventListener('load', () => { afterImg.classList.add('is-loaded'); clearOldSlider(); paintLabels(); }, { once: true });
-  // Safety net if load never fires.
-  setTimeout(clearOldSlider, 400);
+  beforeImg.addEventListener('load', () => beforeImg.classList.add('is-loaded'), { once: true });
+  afterImg.addEventListener('load', () => afterImg.classList.add('is-loaded'), { once: true });
 
-  // Drag interaction (pointer events cover mouse + touch).
+  // Drag interaction (pointer events cover mouse + touch). Measure against the
+  // image box (afterWrap), not the full slider, so the handle tracks the cursor.
   let dragging = false;
   const rectPct = (clientX) => {
-    const r = slider.getBoundingClientRect();
+    const r = afterWrap.getBoundingClientRect();
     return ((clientX - r.left) / r.width) * 100;
   };
   const onMove = (e) => { if (dragging) setPos(rectPct(e.clientX)); };
   handle.addEventListener('pointerdown', (e) => { dragging = true; handle.setPointerCapture(e.pointerId); });
   handle.addEventListener('pointermove', onMove);
   handle.addEventListener('pointerup', () => { dragging = false; });
-  slider.addEventListener('click', (e) => { if (e.target === handle || handle.contains(e.target)) return; setPos(rectPct(e.clientX)); });
+  afterWrap.addEventListener('click', (e) => { if (e.target === handle || handle.contains(e.target)) return; setPos(rectPct(e.clientX)); });
 
   // Fall back through the cache/Drive chain if a blob: URL is dead.
   afterImg.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(afterImg, upFav); };
@@ -21893,11 +21917,12 @@ function upRenderToolbar() {
   const hasSel = !!upStageState.selId;
   toolbar.style.display = hasSel ? 'flex' : 'none';
   const hasUpscale = !!upStageView.curUpFav;
+  const canCompare = !!(upStageView.curUpFav && upStageView.curOrigFav);
   const bOrig = document.getElementById('upViewOriginal');
   const bUp   = document.getElementById('upViewUpscaled');
   const bComp = document.getElementById('upViewCompare');
   if (bUp)   bUp.style.display   = hasUpscale ? '' : 'none';
-  if (bComp) bComp.style.display = hasUpscale ? '' : 'none';
+  if (bComp) bComp.style.display = canCompare ? '' : 'none';
   // Original is always available once something is selected.
   if (bOrig) bOrig.style.display = '';
   // Active highlight.
@@ -21909,12 +21934,19 @@ function upRenderToolbar() {
 function upRenderStageForView() {
   const up = upStageView.curUpFav;
   const orig = upStageView.curOrigFav;
-  if (up) {
-    if (upStageView.view === 'compare') { upRenderStageSlider(up); }
-    else if (upStageView.view === 'upscaled') { upRenderStageSingle(up); }
-    else { /* original */ if (orig) upRenderStageSingle(orig); else upRenderStageSlider(up); }
+  // The slider must ONLY ever appear in Compare. Original/Upscaled are always
+  // single images; if a piece is missing, show whatever single image we have
+  // rather than falling back to the slider.
+  if (upStageView.view === 'compare' && up && orig) {
+    upRenderStageSlider(up);
+  } else if (upStageView.view === 'upscaled' && up) {
+    upRenderStageSingle(up);
+  } else if (upStageView.view === 'original' && orig) {
+    upRenderStageSingle(orig);
   } else if (orig) {
     upRenderStageSingle(orig);
+  } else if (up) {
+    upRenderStageSingle(up);
   }
   upRenderToolbar();
 }
@@ -21937,8 +21969,16 @@ function upRenderRail(f) {
   if (!original && !upscales.length) { if (empty) empty.style.display = ''; return; }
   if (empty) empty.style.display = 'none';
   const items = [];
+  // Original always pinned to the top of the rail.
   if (original) items.push({ fav: original, kind: 'original' });
-  upscales.forEach(u => items.push({ fav: u, kind: 'upscale' }));
+  // Upscales below it, newest first. Sort by id (Date.now()-based) descending;
+  // fall back to createdAt if present.
+  const sortedUps = upscales.slice().sort((a, b) => {
+    const ak = (a.createdAt != null ? a.createdAt : a.id) || 0;
+    const bk = (b.createdAt != null ? b.createdAt : b.id) || 0;
+    return bk - ak;
+  });
+  sortedUps.forEach(u => items.push({ fav: u, kind: 'upscale' }));
   items.forEach(({ fav, kind }) => {
     const cell = document.createElement('div');
     cell.className = 'up-rail-item' + (upStageState.selId === fav.id ? ' sel' : '');
