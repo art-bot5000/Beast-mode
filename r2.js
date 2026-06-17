@@ -229,6 +229,21 @@ export async function deleteFromR2(key) {
 }
 
 /**
+ * Read a single object's raw bytes. Returns null when the object does not
+ * exist (404) so callers can treat "no snapshot yet" as a normal state rather
+ * than an error. Throws on other transport/auth failures. Counterpart to
+ * rehostBytesToR2 — used by the kv-store snapshot RESTORE path.
+ */
+export async function getFromR2(key) {
+  const cfg = r2Config();
+  if (!cfg) throw new Error('R2 not configured');
+  const res = await signedR2Fetch('GET', `/${cfg.bucket}/${key}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`R2 get failed: HTTP ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+/**
  * FIFO retention: keep only the newest `keep` objects under a prefix, delete
  * the rest (oldest first). Designed to be fire-and-forget after each upload.
  */

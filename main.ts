@@ -68,6 +68,10 @@ import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
 import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
 import { storeImage, readImage, userUsage, listManifest, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
+import {
+  putDoc, getDoc, deleteDoc, listDocs, isAllowedDocKey,
+  snapshotAllToR2, snapshotDocToR2, restoreDocFromR2, dataDocsEnabled,
+} from "./kv-store.ts";
 import { handleAuth, verifySessionToken } from "./auth.ts";
 import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
@@ -128,6 +132,17 @@ function decodeBase64(b64: string): Uint8Array {
   const out = new Uint8Array(len);
   for (let i = 0; i < len; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let bin = "";
+  // Chunk to avoid blowing the argument limit on String.fromCharCode for large
+  // ciphertexts (the bundled prompts doc can be hundreds of KB).
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
 }
 
 // ── Shared provider execution ────────────────────────────────────────────────
@@ -817,6 +832,95 @@ async function handler(req: Request): Promise<Response> {
     return json(await userUsage(userHash));
   }
 
+  // ── Zero-knowledge document store (prompts, particles, settings, styles,
+  // recent, folders, models, formula-presets). Fly /data is the source of
+  // truth; R2 is the offsite snapshot. The server stores OPAQUE CIPHERTEXT +
+  // IV only — content is AES-GCM-encrypted client-side with the DATA KEY, so
+  // these routes never see plaintext. All session-gated.
+  //
+  //   GET    /api/data                      -> list index (no ciphertext)
+  //   GET    /api/data/<docKey>             -> { iv, ct(b64), ver, updatedAt }
+  //   PUT    /api/data/<docKey>  {iv,ct}     -> { ver, updatedAt }
+  //   DELETE /api/data/<docKey>
+  //   POST   /api/data/snapshot             -> snapshot ALL docs to R2
+  //   POST   /api/data/<docKey>/restore     -> restore one doc from R2
+  if (path === "/api/data" && req.method === "GET") {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+    return json({ docs: await listDocs(userHash) });
+  }
+
+  if (path === "/api/data/snapshot" && req.method === "POST") {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+    const n = await snapshotAllToR2(userHash);
+    return json({ ok: true, snapshotted: n });
+  }
+
+  if (path.startsWith("/api/data/")) {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+
+    // Parse "/api/data/<docKey>" or "/api/data/<docKey>/restore".
+    const rest = path.slice("/api/data/".length);
+    const restoreMatch = /^([a-z0-9-]+)\/restore$/.exec(rest);
+    if (restoreMatch && req.method === "POST") {
+      const docKey = restoreMatch[1];
+      if (!isAllowedDocKey(docKey)) return json({ error: "Unknown doc.", code: "bad_request" }, 400);
+      try {
+        const ok = await restoreDocFromR2(userHash, docKey);
+        return json({ ok, restored: ok });
+      } catch (e) {
+        console.error("data restore failed", docKey, (e as Error).message);
+        return json({ error: "Restore failed.", code: "server_error" }, 500);
+      }
+    }
+
+    const docKey = rest;
+    if (!isAllowedDocKey(docKey)) return json({ error: "Unknown doc.", code: "bad_request" }, 400);
+
+    if (req.method === "GET") {
+      const doc = await getDoc(userHash, docKey);
+      if (!doc) return json({ error: "Not found.", code: "not_found" }, 404);
+      return json({
+        iv: doc.iv,
+        ct: encodeBase64(doc.ct),
+        ver: doc.ver,
+        updatedAt: doc.updatedAt,
+      });
+    }
+
+    if (req.method === "PUT") {
+      let body: Record<string, unknown>;
+      try { body = await req.json(); } catch { return json({ error: "Invalid JSON", code: "bad_request" }, 400); }
+      const iv = String(body.iv ?? "");
+      const ctB64 = String(body.ct ?? "");
+      if (!iv || !ctB64) return json({ error: "iv and ct required", code: "bad_request" }, 400);
+      let ct: Uint8Array;
+      try { ct = decodeBase64(ctB64); } catch { return json({ error: "ct not base64", code: "bad_request" }, 400); }
+      // Soft cap: refuse absurd payloads (10 MB ciphertext) so a bug can't fill
+      // the volume in one write. Real docs are KB-scale.
+      if (ct.length > 10 * 1024 * 1024) return json({ error: "Doc too large.", code: "too_large" }, 413);
+      try {
+        const out = await putDoc(userHash, docKey, iv, ct);
+        return json({ ok: true, ...out });
+      } catch (e) {
+        console.error("data put failed", docKey, (e as Error).message);
+        return json({ error: "Save failed.", code: "server_error" }, 500);
+      }
+    }
+
+    if (req.method === "DELETE") {
+      await deleteDoc(userHash, docKey);
+      return json({ ok: true });
+    }
+
+    return json({ error: "Method not allowed", code: "bad_method" }, 405);
+  }
+
   // ── Curated model list for the dropdown (instant, no upstream call).
   if (path === "/api/models" && req.method === "GET") {
     return json({ groups: catalogByFamily() });
@@ -920,5 +1024,10 @@ reclaimOrphans((job) =>
   .then((n) => { if (n) console.log(`Reclaimed ${n} orphaned job(s) after restart.`); })
   .catch((e) => console.error("orphan reclaim failed:", (e as Error).message))
   .finally(() => startWorker());
+
+// Probe the ZK doc volume at boot — warn-not-block (local dev has no /data).
+dataDocsEnabled()
+  .then((ok) => { if (!ok) console.warn("kv-store: doc persistence disabled (/data not writable)"); })
+  .catch((e) => console.warn("kv-store boot probe failed:", (e as Error).message));
 
 Deno.serve({ port: PORT }, handler);
