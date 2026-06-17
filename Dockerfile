@@ -9,6 +9,7 @@ RUN npm install
 # to minify on the frontend — the app logic lives inside the HTML.)
 COPY beast-mode-mech-my-ride-v4.html admin.html sw.js manifest.json bm-auth-crypto.js ./
 COPY icon192.png icon512.png ./
+COPY fonts/ ./fonts/
 
 RUN mkdir -p public && \
     npx html-minifier-terser beast-mode-mech-my-ride-v4.html \
@@ -21,7 +22,8 @@ RUN mkdir -p public && \
     cp manifest.json public/manifest.json && \
     cp bm-auth-crypto.js public/bm-auth-crypto.js && \
     cp icon192.png public/icon192.png && \
-    cp icon512.png public/icon512.png
+    cp icon512.png public/icon512.png && \
+    mkdir -p public/fonts && cp fonts/*.woff2 public/fonts/
 
 # ── Stage 2: Deno runtime + Caddy (Brotli build) ─────────────────────────────
 FROM denoland/deno:2.3.1

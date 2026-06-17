@@ -60,13 +60,13 @@ function showUpdateBanner(waitingWorker) {
     'z-index:99999','display:flex','align-items:center','gap:12px',
     'background:#0d0d0d','border:1px solid var(--accent,#00ffb0)',
     'border-radius:6px','padding:10px 16px','box-shadow:0 4px 20px rgba(0,0,0,.6)',
-    'font-family:\'Rajdhani\',sans-serif','max-width:calc(100vw - 32px)',
+    'font-family:\'IBM Plex Sans\',sans-serif','max-width:calc(100vw - 32px)',
     'animation:bmBannerIn .3s ease'
   ].join(';')
   banner.innerHTML = `
     <span style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--accent,#00ffb0);white-space:nowrap;">⊛ UPDATE READY</span>
     <span style="font-size:11px;color:#aaa;letter-spacing:.5px;flex:1;">A new version of Beast Mode is available.</span>
-    <button id="bmUpdateBtn" style="background:var(--accent,#00ffb0);border:none;border-radius:3px;padding:6px 14px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;color:#000;white-space:nowrap;flex-shrink:0;">UPDATE NOW</button>
+    <button id="bmUpdateBtn" style="background:var(--accent,#00ffb0);border:none;border-radius:3px;padding:6px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;color:#000;white-space:nowrap;flex-shrink:0;">UPDATE NOW</button>
     <button id="bmUpdateDismiss" style="background:none;border:none;cursor:pointer;color:#666;font-size:18px;padding:0 2px;flex-shrink:0;line-height:1;">×</button>
   `
   document.body.appendChild(banner)
@@ -165,10 +165,34 @@ handleShareTarget()
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap');
-
-
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap');
+/* ── Self-hosted fonts (phase: typography migration) ──────────────────
+   IBM Plex Sans  → replaces Rajdhani (UI body / labels / controls)
+   IBM Plex Mono  → replaces Bebas Neue (wordmark / display headings / data)
+   woff2 files live in public/fonts/ — see Dockerfile COPY + sw.js CACHE_URLS. */
+@font-face {
+  font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400;
+  font-display: swap; src: url('/fonts/plex-sans-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 500;
+  font-display: swap; src: url('/fonts/plex-sans-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 600;
+  font-display: swap; src: url('/fonts/plex-sans-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 700;
+  font-display: swap; src: url('/fonts/plex-sans-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500;
+  font-display: swap; src: url('/fonts/plex-mono-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600;
+  font-display: swap; src: url('/fonts/plex-mono-600.woff2') format('woff2');
+}
 
 :root {
   --bg: #06080a;
@@ -203,7 +227,7 @@ body.theme-moss    { --accent:#7a9e5e; --accent2:#50723a; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { overflow-x: hidden; }
 body {
-  font-family: 'Rajdhani', sans-serif;
+  font-family: 'IBM Plex Sans', sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -226,7 +250,7 @@ body::before {
 header { margin-bottom:28px; }
 .title-line { display:flex;align-items:baseline;gap:12px;flex-wrap:wrap; }
 h1 {
-  font-family:'Bebas Neue',sans-serif;
+  font-family:'IBM Plex Mono',sans-serif;
   font-size:36px;
   letter-spacing:4px;
   color:var(--accent);
@@ -239,7 +263,7 @@ h1 {
   display:flex;gap:0;margin:16px 0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;
 }
 .mode-btn {
-  padding:8px 22px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;
+  padding:8px 22px;font-family:'IBM Plex Sans',sans-serif;font-weight:700;font-size:16px;
   letter-spacing:2px;cursor:pointer;border:none;background:transparent;color:var(--muted);
   transition:all .2s;text-transform:uppercase;
 }
@@ -372,7 +396,7 @@ select, .sd-display { max-width:100%;box-sizing:border-box; }
 select {
   width:100%;padding:9px 10px;background:var(--surface2);color:var(--text);
   border:1px solid var(--border);border-radius:var(--radius);
-  font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:500;
+  font-family:'IBM Plex Sans',sans-serif;font-size:17px;font-weight:500;
   cursor:pointer;outline:none;transition:border-color .2s;appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;
@@ -384,7 +408,7 @@ select:focus { border-color: var(--accent); }
 .sd-display {
   width:100%;padding:9px 32px 9px 10px;background:var(--surface2);color:var(--text);
   border:1px solid var(--border);border-radius:var(--radius);
-  font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:500;
+  font-family:'IBM Plex Sans',sans-serif;font-size:17px;font-weight:500;
   cursor:pointer;outline:none;transition:border-color .2s;
   display:flex;align-items:center;justify-content:space-between;user-select:none;
   white-space:nowrap;overflow:hidden;
@@ -405,13 +429,13 @@ select:focus { border-color: var(--accent); }
 }
 .sd-search {
   flex:1;background:transparent;border:none;outline:none;
-  font-family:'Rajdhani',sans-serif;font-size:17px;color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;font-size:17px;color:var(--text);
 }
 .sd-search::placeholder { color:var(--muted); }
 .sd-sort-btn {
   font-size:13px;letter-spacing:1px;padding:3px 8px;cursor:pointer;
   border:1px solid var(--border);background:transparent;color:var(--muted);
-  border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;
+  border-radius:2px;font-family:'IBM Plex Sans',sans-serif;font-weight:700;
   white-space:nowrap;transition:all .15s;
 }
 .sd-sort-btn:hover,.sd-sort-btn.active { border-color:var(--accent);color:var(--accent); }
@@ -424,7 +448,7 @@ select:focus { border-color: var(--accent); }
   background:var(--surface);z-index:1;border-bottom:1px solid var(--border);
 }
 .sd-option {
-  padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:500;
+  padding:5px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:17px;font-weight:500;
   cursor:pointer;color:var(--text);transition:background .1s;
   display:flex;align-items:center;gap:9px;
 }
@@ -465,7 +489,7 @@ select:focus { border-color: var(--accent); }
   border:1px solid var(--border);
 }
 #thumbPreview .preview-label {
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:600;
   letter-spacing:1px;color:var(--accent);text-align:left;line-height:1.3;
   flex:1;
 }
@@ -480,7 +504,7 @@ select:focus { border-color: var(--accent); }
 /* BUTTONS */
 .btn-row { display:flex;gap:10px;flex-wrap:wrap;margin-top:4px; }
 .btn {
-  padding:10px 20px;font-family:'Rajdhani',sans-serif;font-weight:700;
+  padding:10px 20px;font-family:'IBM Plex Sans',sans-serif;font-weight:700;
   font-size:15px;letter-spacing:2px;cursor:pointer;border-radius:var(--radius);
   transition:all .2s;text-transform:uppercase;border:none;
 }
@@ -521,7 +545,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 
 #lightToggle {
   background:transparent;border:1px solid var(--border);border-radius:20px;
-  padding:4px 12px;cursor:pointer;font-family:'Rajdhani',sans-serif;
+  padding:4px 12px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;
   font-size:15px;font-weight:700;letter-spacing:2px;color:var(--muted);
   transition:all .2s;display:flex;align-items:center;gap:6px;
 }
@@ -570,7 +594,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   cursor:pointer;border-radius:3px;padding:5px 6px;
   border:1px solid var(--accent);
   background:transparent;color:var(--accent);
-  font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
   letter-spacing:1px;line-height:1.2;transition:background .15s,color .15s;
   user-select:none;
 }
@@ -587,7 +611,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   background:#000;border:1px solid var(--border);border-left:2px solid var(--accent);
   border-radius:var(--radius);padding:16px;font-size:16px;line-height:1.8;
   color:#8ecfb8;min-height:80px;max-height:340px;overflow-y:auto;
-  font-family:'Rajdhani',sans-serif;font-weight:500;letter-spacing:.3px;
+  font-family:'IBM Plex Sans',sans-serif;font-weight:500;letter-spacing:.3px;
   white-space:pre-wrap;transition:border-color .3s;
 }
 
@@ -598,11 +622,11 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   padding:10px 12px;font-size:15px;line-height:1.6;color:var(--text);
   display:flex;gap:10px;align-items:flex-start;
 }
-.fav-text { flex:1;font-family:'Rajdhani',sans-serif;font-weight:500; }
+.fav-text { flex:1;font-family:'IBM Plex Sans',sans-serif;font-weight:500; }
 .fav-actions { display:flex;gap:6px;flex-shrink:0; }
 .fav-btn {
   padding:3px 8px;font-size:14px;letter-spacing:1px;cursor:pointer;
-  border-radius:var(--radius);border:none;font-family:'Rajdhani',sans-serif;font-weight:700;
+  border-radius:var(--radius);border:none;font-family:'IBM Plex Sans',sans-serif;font-weight:700;
 }
 .fav-copy { background:var(--accent);color:#000; }
 .fav-del  { background:transparent;color:var(--muted);border:1px solid var(--border); }
@@ -633,7 +657,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 .hsl-slider { flex:1;height:4px;border-radius:2px;outline:none;border:none;cursor:pointer;accent-color:var(--accent); }
 .hsl-input {
   width:36px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);
-  border-radius:2px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:16px;
+  border-radius:2px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:16px;
   font-weight:600;text-align:right;padding:1px 3px;outline:none;
   -moz-appearance:textfield;
 }
@@ -677,7 +701,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
   box-shadow:0 16px 48px rgba(0,0,0,.9);
 }
 .restore-card h3 {
-  font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;
+  font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:1.5px;
   color:var(--accent);margin:0;
 }
 .restore-card p { font-size:16px;color:var(--muted);line-height:1.7;margin:0; }
@@ -686,7 +710,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 .rand-check-label {
   display:flex;align-items:center;gap:7px;cursor:pointer;
   font-size:15px;letter-spacing:1px;color:var(--muted);
-  font-family:'Rajdhani',sans-serif;font-weight:600;
+  font-family:'IBM Plex Sans',sans-serif;font-weight:600;
   user-select:none;
 }
 .rand-check-label input[type=checkbox] {
@@ -707,7 +731,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 .drive-status { font-size:14px;letter-spacing:2px;color:var(--muted); }
 .drive-status.ok  { color:#00cc88; }
 .drive-status.err { color:#ff4444; }
-.fav-restore { background:var(--surface2);color:var(--accent);border:1px solid var(--accent);padding:3px 8px;font-size:14px;letter-spacing:1px;cursor:pointer;border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700; }
+.fav-restore { background:var(--surface2);color:var(--accent);border:1px solid var(--accent);padding:3px 8px;font-size:14px;letter-spacing:1px;cursor:pointer;border-radius:2px;font-family:'IBM Plex Sans',sans-serif;font-weight:700; }
 .fav-restore:hover { background:color-mix(in srgb,var(--accent) 15%,transparent); }
 
 /* PRESET CATEGORY SELECTS */
@@ -717,7 +741,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 }
 .preset-dd-btn {
   width:100%;padding:7px 28px 7px 10px;cursor:pointer;border-radius:var(--radius);
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;
   letter-spacing:1px;border:1px solid var(--border);
   background:var(--surface2);color:var(--muted);
   transition:border-color .15s,color .15s;
@@ -736,7 +760,7 @@ body.light .pb-bottom-formula { background:var(--surface2) !important;color:var(
 }
 .preset-dd-item {
   display:block;width:100%;padding:9px 14px;text-align:left;
-  font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
   letter-spacing:.5px;border:none;background:transparent;cursor:pointer;
   color:var(--muted);transition:background .1s,color .1s;
 }
@@ -750,7 +774,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* STYLE EDITOR */
 .style-tab {
   padding:8px 16px;background:transparent;border:none;cursor:pointer;
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;
   color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;
   transition:all .15s;white-space:nowrap;
 }
@@ -768,7 +792,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .style-preset-del  {
   flex-shrink:0;background:transparent;border:1px solid var(--border);
   color:var(--muted);border-radius:2px;padding:3px 8px;cursor:pointer;font-size:14px;
-  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif;font-weight:700;
 }
 .style-preset-del:hover { color:#ff4444;border-color:#ff4444; }
 
@@ -900,11 +924,11 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .mode-nav-brand {
   display:flex; align-items:center; gap:8px; flex-wrap:nowrap; overflow:hidden;
   height:var(--mode-nav-brand-h); box-sizing:border-box;
-  font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px;
+  font-family:'IBM Plex Mono',sans-serif; font-size:22px; letter-spacing:1.5px;
   color:var(--accent); padding:0 18px 0 15px; flex-shrink:0;
   border-bottom:1px solid var(--border);
 }
-.mode-nav-brand .version { font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:600;white-space:nowrap; }
+.mode-nav-brand .version { font-family:'IBM Plex Sans',sans-serif;font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:600;white-space:nowrap; }
 .mode-nav-brand .brand-text { white-space:nowrap; }
 .mode-nav-brand .brand-mark { font-size:22px; line-height:1; color:var(--accent); flex-shrink:0; }
 .mode-nav-tabs { display:flex; flex-direction:column; gap:2px; padding:10px 8px; flex:1; overflow:hidden; }
@@ -930,8 +954,8 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .mode-nav-balance {
   display:flex; align-items:baseline; gap:6px; margin-left:auto;
 }
-.mode-nav-balance .bal-label { font-family:'Rajdhani',sans-serif;font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700; }
-.mode-nav-balance .bal-value { font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;color:var(--accent); }
+.mode-nav-balance .bal-label { font-family:'IBM Plex Sans',sans-serif;font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700; }
+.mode-nav-balance .bal-value { font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;color:var(--accent); }
 
 /* "More" dropdown: floats ABOVE the footer flow (absolute) so revealing it never
    reflows or shifts the centred mode tabs. */
@@ -944,7 +968,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .mode-nav-more[hidden] { display:none; }
 .nav-more-item {
   display:flex; align-items:center; gap:10px; width:100%; padding:9px 12px;
-  font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700; letter-spacing:1.5px;
+  font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:700; letter-spacing:1.5px;
   color:var(--muted); cursor:pointer; border:none; background:transparent;
   border-radius:6px; transition:all .15s; white-space:nowrap; text-align:left; text-decoration:none;
 }
@@ -954,7 +978,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* Tabs become full-width vertical rows in this layout. */
 .mode-nav .nav-tab {
   display:flex; align-items:center; gap:10px; width:100%; padding:11px 14px;
-  font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:700; letter-spacing:2px;
+  font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:700; letter-spacing:2px;
   color:var(--muted); cursor:pointer; border:none; background:transparent;
   border-radius:6px; transition:color .15s, background .15s; white-space:nowrap; text-align:left;
 }
@@ -977,17 +1001,17 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   display:flex; align-items:center; gap:9px; min-width:0;
 }
 .mobile-topbar-mark {
-  font-family:'Bebas Neue',sans-serif; font-size:30px; color:var(--accent); line-height:1;
+  font-family:'IBM Plex Mono',sans-serif; font-size:30px; color:var(--accent); line-height:1;
 }
 .mobile-topbar-brandtext {
-  font-family:'Bebas Neue',sans-serif; font-size:27px; letter-spacing:3px; color:var(--accent);
+  font-family:'IBM Plex Mono',sans-serif; font-size:27px; letter-spacing:1.5px; color:var(--accent);
   white-space:nowrap;
 }
 /* Mode title doubles as the menu trigger. Styled to match the BEAST MODE brand
    (same accent yellow, no pill) with a caret to signal it opens the mode menu. */
 .mobile-topbar-mode {
   display:inline-flex; align-items:center; gap:6px;
-  font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:2px;
+  font-family:'IBM Plex Mono',sans-serif; font-size:22px; letter-spacing:2px;
   color:var(--accent); white-space:nowrap; cursor:pointer;
   background:none; border:none; padding:0; max-width:34%; overflow:hidden;
 }
@@ -1004,7 +1028,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   display:inline-flex; align-items:center; gap:6px; cursor:pointer;
   background:none; border:1px solid var(--border); border-radius:7px;
   padding:5px 10px; color:var(--text); position:relative;
-  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:12px; letter-spacing:1.5px;
+  font-family:'IBM Plex Sans',sans-serif; font-weight:700; font-size:12px; letter-spacing:1.5px;
   transition:color .15s, border-color .15s;
 }
 .mobile-topbar-queue:hover { color:var(--accent); border-color:var(--accent); }
@@ -1055,7 +1079,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   padding:14px 16px; border-bottom:1px solid var(--border); flex:0 0 auto;
 }
 .bm-queue-modal-title {
-  font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:3px; color:var(--accent);
+  font-family:'IBM Plex Mono',sans-serif; font-size:18px; letter-spacing:1.5px; color:var(--accent);
 }
 .bm-queue-modal-x {
   background:transparent; border:1px solid var(--border); color:var(--muted);
@@ -1116,7 +1140,7 @@ body.bm-queue-modal-open { overflow:hidden; }
 .lib-search {
   flex:1;min-width:160px;padding:9px 12px 9px 36px;
   background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:17px;outline:none;
+  color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:17px;outline:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%234a5a68' stroke-width='2'%3E%3Ccircle cx='6' cy='6' r='4'/%3E%3Cpath d='M10 10l3 3'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:10px center;
 }
@@ -1134,7 +1158,7 @@ body.bm-queue-modal-open { overflow:hidden; }
 .lib-filter-chip {
   padding:4px 10px;border-radius:12px;font-size:14px;letter-spacing:1px;font-weight:700;
   cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);
-  font-family:'Rajdhani',sans-serif;transition:all .15s;white-space:nowrap;
+  font-family:'IBM Plex Sans',sans-serif;transition:all .15s;white-space:nowrap;
 }
 .lib-filter-chip:hover { border-color:var(--accent);color:var(--accent); }
 .lib-filter-chip.active { background:var(--accent);color:#000;border-color:var(--accent); }
@@ -1188,7 +1212,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 
 .lib-card-header { display:flex;align-items:flex-start;justify-content:space-between;gap:8px; }
 .lib-card-title {
-  font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif;font-size:17px;font-weight:700;
   color:var(--text);letter-spacing:.5px;line-height:1.2;
   background:transparent;border:none;outline:none;width:100%;padding:0;
   cursor:text;border-bottom:1px solid transparent;transition:border-color .15s;
@@ -1249,7 +1273,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   background:var(--surface);border:1px solid var(--accent);border-radius:8px;
   width:100%;max-width:480px;padding:20px;
 }
-.cpo-title { font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent);margin-bottom:4px; }
+.cpo-title { font-family:'IBM Plex Mono',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--accent);margin-bottom:4px; }
 .cpo-sub   { font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:16px; }
 .cpo-progress-track { height:4px;background:var(--surface2);border-radius:2px;margin-bottom:14px; }
 .cpo-progress-fill  { height:100%;background:var(--accent);border-radius:2px;transition:width .4s; }
@@ -1260,7 +1284,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 /* Prompt text */
 .lib-card-prompt-wrap { position:relative; }
 .lib-card-prompt {
-  font-size:15px;color:var(--muted);line-height:1.7;font-family:'Rajdhani',sans-serif;
+  font-size:15px;color:var(--muted);line-height:1.7;font-family:'IBM Plex Sans',sans-serif;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
   cursor:pointer;transition:color .1s;
 }
@@ -1270,7 +1294,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .lib-card-expand-btn {
   font-size:13px;letter-spacing:1px;color:var(--accent);cursor:pointer;
-  background:none;border:none;padding:0;font-family:'Rajdhani',sans-serif;
+  background:none;border:none;padding:0;font-family:'IBM Plex Sans',sans-serif;
   font-weight:700;margin-top:2px;display:block;
 }
 
@@ -1287,7 +1311,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   background:var(--surface2);overflow:hidden;
 }
 .lib-card-actions .lib-action-btn {
-  flex:1;padding:9px 6px;font-family:'Rajdhani',sans-serif;font-size:14px;
+  flex:1;padding:9px 6px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;
   font-weight:700;letter-spacing:1px;cursor:pointer;border:none;background:transparent;
   color:var(--muted);transition:background .15s,color .15s;border-right:1px solid var(--border);
   white-space:nowrap;
@@ -1301,14 +1325,14 @@ img.bm-thumb-missing { background:var(--surface2); }
   grid-column:1/-1;text-align:center;padding:80px 20px;
 }
 .lib-empty-icon { font-size:48px;opacity:.15;display:block;margin-bottom:16px; }
-.lib-empty-title { font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:3px;color:var(--muted);margin-bottom:8px; }
+.lib-empty-title { font-family:'IBM Plex Mono',sans-serif;font-size:26px;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px; }
 .lib-empty-sub { font-size:15px;color:var(--muted);letter-spacing:1px;line-height:1.8;opacity:.7; }
 .lib-empty-cta { margin-top:20px; }
 
 /* Sort select */
 .lib-sort-select {
   padding:8px 28px 8px 10px;background:var(--surface2);border:1px solid var(--border);
-  border-radius:var(--radius);color:var(--muted);font-family:'Rajdhani',sans-serif;
+  border-radius:var(--radius);color:var(--muted);font-family:'IBM Plex Sans',sans-serif;
   font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;outline:none;
   appearance:none;-webkit-appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5a68'/%3E%3C/svg%3E");
@@ -1329,7 +1353,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:none;
 }
 .img-status-pill {
-  padding:3px 10px;border-radius:10px;font-family:'Rajdhani',sans-serif;
+  padding:3px 10px;border-radius:10px;font-family:'IBM Plex Sans',sans-serif;
   font-size:14px;font-weight:700;letter-spacing:1px;
   border:1px solid var(--border);color:var(--muted);background:transparent;
   transition:all .15s;white-space:nowrap;cursor:pointer;
@@ -1357,7 +1381,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 #libLightbox .lb-close {
   position:absolute;top:16px;right:16px;background:rgba(0,0,0,.6);
   border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:4px;
-  padding:6px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;
+  padding:6px 14px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;
   font-size:16px;letter-spacing:2px;
 }
 
@@ -1380,7 +1404,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pfi-tab {
   flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;
   padding:8px 10px;cursor:pointer;color:var(--muted);
-  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;transition:all .15s;
+  font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;transition:all .15s;
 }
 .pfi-tab.active { color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent); }
 .pfi-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-height:300px;overflow-y:auto; }
@@ -1398,13 +1422,13 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 #mkOverlay.open { display:flex; }
 .mk-top { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
-.mk-title { font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent); }
+.mk-title { font-family:'IBM Plex Mono',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--accent); }
 .mk-spacer { flex:1; }
 .mk-hint { font-size:12px;color:var(--muted);letter-spacing:.5px; }
 .mk-btn {
   background:transparent;border:1px solid var(--border);color:var(--text);
   border-radius:var(--radius);padding:7px 12px;cursor:pointer;
-  font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;font-size:13px;transition:all .15s;
+  font-family:'IBM Plex Sans',sans-serif;font-weight:700;letter-spacing:1px;font-size:13px;transition:all .15s;
 }
 .mk-btn:hover { border-color:var(--accent);color:var(--accent); }
 .mk-btn.primary { background:var(--accent);color:#000;border-color:var(--accent); }
@@ -1424,7 +1448,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;align-items:center;justify-content:space-between;
   padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;
 }
-.img-modal-title { font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:3px;color:var(--accent); }
+.img-modal-title { font-family:'IBM Plex Mono',sans-serif;font-size:18px;letter-spacing:1.5px;color:var(--accent); }
 .img-modal-body { padding:18px;display:flex;flex-direction:column;gap:14px; }
 .img-drop-zone {
   border:2px dashed var(--border);border-radius:4px;padding:28px 16px;text-align:center;
@@ -1443,7 +1467,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .img-modal-field label { font-size:13px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:5px;font-weight:700; }
 .img-modal-input {
   width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);
-  border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;
+  border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;
   font-size:17px;outline:none;
 }
 .img-modal-input:focus { border-color:var(--accent); }
@@ -1474,7 +1498,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .theme-swatch.active .swatch-check { opacity:1; }
 
 
-.settings-section-title { font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:14px; }
+.settings-section-title { font-family:'IBM Plex Mono',sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:14px; }
 .settings-row { display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border); }
 .settings-row:last-child { border-bottom:none; }
 .settings-label { font-size:15px;letter-spacing:1px;color:var(--text);font-weight:600; }
@@ -1508,7 +1532,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pb-formula-output {
   background:var(--formula-bg, #000);border-left:2px solid var(--accent);
-  font-family:'Rajdhani',sans-serif;font-size:15px;line-height:1.9;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;line-height:1.9;
   outline:none;word-break:break-word;white-space:pre-wrap;
   cursor:text;color:var(--text);
 }
@@ -1520,7 +1544,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-formula-ph { display:none; }
 .pb-formula-chip {
   display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;
-  font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;letter-spacing:.3px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:16px;font-weight:700;letter-spacing:.3px;
   border:1px solid transparent;user-select:none;cursor:pointer;
   vertical-align:middle;margin:0 2px;
   transition:transform .1s, box-shadow .15s;
@@ -1582,7 +1606,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-type-block.pb-replace-dimmed { opacity:.18;pointer-events:none; }
 .pb-replace-cancel {
   margin-left:auto;padding:2px 8px;border-radius:3px;border:1px solid var(--border);
-  background:transparent;color:var(--muted);font-family:'Rajdhani',sans-serif;
+  background:transparent;color:var(--muted);font-family:'IBM Plex Sans',sans-serif;
   font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;
 }
 .pb-replace-cancel:hover { color:var(--text);border-color:var(--text); }
@@ -1616,7 +1640,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pb-search {
   padding:7px 12px;background:var(--surface2);border:1px solid var(--border);
-  border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;
+  border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;
   font-size:16px;outline:none;min-width:180px;
 }
 .pb-search:focus { border-color:#38b6ff; }
@@ -1631,7 +1655,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-field-label { font-size:13px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;font-weight:700; }
 .pb-input {
   width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--border);
-  border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;
+  border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;
   font-size:16px;outline:none;
 }
 .pb-input:focus { border-color:#38b6ff; }
@@ -1668,7 +1692,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-cat-tab {
   padding:7px 14px;font-size:14px;font-weight:700;letter-spacing:1px;
   cursor:pointer;border:none;background:transparent;color:var(--muted);
-  font-family:'Rajdhani',sans-serif;white-space:nowrap;transition:all .15s;
+  font-family:'IBM Plex Sans',sans-serif;white-space:nowrap;transition:all .15s;
   border-bottom:2px solid transparent;
 }
 .pb-cat-tab:hover { color:var(--text); }
@@ -1725,12 +1749,12 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-inline-input {
   flex:1;min-width:160px;padding:5px 8px;background:var(--surface);
   border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;outline:none;
+  color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:15px;outline:none;
 }
 .pb-inline-input:focus { border-color:#38b6ff; }
 .pb-add-cat-btn {
   padding:4px 10px;font-size:13px;letter-spacing:1px;font-weight:700;
-  font-family:'Rajdhani',sans-serif;cursor:pointer;border-radius:3px;
+  font-family:'IBM Plex Sans',sans-serif;cursor:pointer;border-radius:3px;
   background:transparent;border:1px dashed;transition:all .15s;
 }
 .pb-add-cat-btn:hover { opacity:.8; }
@@ -1751,7 +1775,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-lib-tabs { display:flex;gap:4px;flex:1;flex-wrap:wrap; }
 .pb-lib-tab {
   display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:4px;
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;
   cursor:pointer;border:1px solid var(--border);background:var(--surface2);
   color:var(--muted);transition:all .15s;white-space:nowrap;
 }
@@ -1760,12 +1784,12 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-lib-tab-count { font-size:13px;opacity:.6;background:rgba(255,255,255,.08);border-radius:8px;padding:1px 5px; }
 .pb-lib-tab-name {
   border:none;background:transparent;color:inherit;
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;
   outline:none;cursor:text;min-width:24px;max-width:90px;padding:0;
 }
 .pb-lib-tab-name:focus { border-bottom:1px solid currentColor; }
 .pb-builtin-toggle {
-  padding:6px 12px;border-radius:4px;font-family:'Rajdhani',sans-serif;
+  padding:6px 12px;border-radius:4px;font-family:'IBM Plex Sans',sans-serif;
   font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;
   border:1px solid var(--border);background:transparent;color:var(--muted);
   transition:all .15s;white-space:nowrap;flex-shrink:0;
@@ -1812,7 +1836,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pb-creature-add {
   padding:2px 8px;border-radius:3px;font-size:15px;font-weight:700;
-  font-family:'Rajdhani',sans-serif;letter-spacing:1px;cursor:pointer;
+  font-family:'IBM Plex Sans',sans-serif;letter-spacing:1px;cursor:pointer;
   background:transparent;border:1px solid var(--border);color:var(--muted);
   transition:all .12s;flex-shrink:0;
 }
@@ -1830,12 +1854,12 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-creature-detail-row:last-child { border-bottom:none; }
 .pb-creature-detail-text {
   flex:1;font-size:15px;color:var(--muted);line-height:1.5;
-  font-family:'Rajdhani',sans-serif;font-style:italic;
+  font-family:'IBM Plex Sans',sans-serif;font-style:italic;
 }
 .pb-creature-detail-add {
   flex-shrink:0;padding:3px 10px;border-radius:3px;font-size:14px;font-weight:700;
   letter-spacing:1px;cursor:pointer;background:transparent;
-  font-family:'Rajdhani',sans-serif;border:1px solid;transition:all .12s;
+  font-family:'IBM Plex Sans',sans-serif;border:1px solid;transition:all .12s;
 }
 .pb-creature-detail-add:hover { opacity:.8;background:color-mix(in srgb,currentColor 10%,transparent); }
 
@@ -1895,7 +1919,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   }
   .pb-bottom-bar-expand {
     flex:1;padding:5px 10px;border-radius:4px;border:1px solid var(--border);
-    background:transparent;color:var(--muted);font-family:'Rajdhani',sans-serif;
+    background:transparent;color:var(--muted);font-family:'IBM Plex Sans',sans-serif;
     font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;
     text-align:left;transition:all .15s;
   }
@@ -1906,7 +1930,7 @@ img.bm-thumb-missing { background:var(--surface2); }
     width:100%;min-height:56px;max-height:38vh;overflow-y:auto;
     background:#000;border:1px solid #38b6ff;border-radius:5px;
     padding:10px 12px;box-sizing:border-box;
-    font-family:'Rajdhani',sans-serif;font-size:15px;line-height:1.9;
+    font-family:'IBM Plex Sans',sans-serif;font-size:15px;line-height:1.9;
     color:var(--text);outline:none;word-break:break-word;white-space:pre-wrap;
     cursor:text;
   }
@@ -1923,7 +1947,7 @@ img.bm-thumb-missing { background:var(--surface2); }
     height:32px;padding:0 12px;border-radius:4px;border:1px solid var(--border);
     background:var(--surface2);color:var(--muted);cursor:pointer;
     display:flex;align-items:center;gap:5px;
-    font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;letter-spacing:1px;
+    font-family:'IBM Plex Sans',sans-serif;font-weight:700;font-size:14px;letter-spacing:1px;
     transition:all .15s;
   }
   .pb-bottom-bar-btn:hover { border-color:var(--accent);color:var(--accent); }
@@ -1937,7 +1961,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
 }
 .pb-expand-btn {
-  padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  padding:5px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
   letter-spacing:1px;cursor:pointer;border:none;background:transparent;
   color:var(--muted);transition:all .12s;border-right:1px solid var(--border);
 }
@@ -1951,7 +1975,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   flex-shrink:0;
 }
 .pb-mode-btn {
-  padding:5px 14px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  padding:5px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
   letter-spacing:1px;cursor:pointer;border:none;background:transparent;
   color:var(--muted);transition:all .15s;border-right:1px solid var(--border);
 }
@@ -1976,7 +2000,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 
 
 .pb-creator-btn {
-  padding:8px 16px;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;
+  padding:8px 16px;font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;
   letter-spacing:1px;cursor:pointer;border:1px solid var(--border);
   background:var(--surface2);color:var(--muted);border-radius:4px;
   transition:all .15s;
@@ -1994,7 +2018,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 
 
 .pb-creator-sub {
-  padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  padding:5px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
   letter-spacing:1px;cursor:pointer;border:1px solid var(--border);
   background:transparent;color:var(--muted);border-radius:20px;
   transition:all .15s;
@@ -2025,7 +2049,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;align-items:center;justify-content:center;
   padding:4px 0;cursor:pointer;border:none;background:transparent;
   color:var(--muted);font-size:15px;letter-spacing:1px;
-  font-family:'Rajdhani',sans-serif;font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif;font-weight:700;
   transition:color .15s;border-bottom:1px solid var(--border);
   margin-bottom:3px;padding-bottom:6px;width:100%;
 }
@@ -2040,7 +2064,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-type-nav-btn.hidden-type { opacity:.25;pointer-events:none; }
 .pb-type-nav-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
 .pb-type-nav-label {
-  font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
   letter-spacing:.5px;white-space:nowrap;color:inherit;
   display:none;
 }
@@ -2061,7 +2085,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   width:28px;height:28px;border-radius:4px;cursor:pointer;
   border:none;background:transparent;display:flex;align-items:center;
   justify-content:center;font-size:14px;font-weight:700;
-  font-family:'Rajdhani',sans-serif;letter-spacing:.5px;
+  font-family:'IBM Plex Sans',sans-serif;letter-spacing:.5px;
   transition:all .12s;position:relative;color:var(--muted);
 }
 .pb-type-nav-btn:hover { background:var(--surface2); }
@@ -2105,7 +2129,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   .pb-bottom-bar.peek .pb-bottom-bar-inner { flex-direction:row; align-items:center; }
   .pb-bottom-peek-handle {
     flex:1;text-align:center;cursor:pointer;padding:6px 0;
-    font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;
+    font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:700;
     letter-spacing:2px;color:var(--muted);
     display:none;
   }
@@ -2119,7 +2143,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   background:var(--surface2);
 }
 .pb-mode-filter-btn {
-  padding:8px 16px;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;
+  padding:8px 16px;font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;
   letter-spacing:1px;cursor:pointer;border:none;background:transparent;
   color:var(--muted);transition:all .15s;white-space:nowrap;
   border-bottom:2px solid transparent;
@@ -2151,7 +2175,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-col-name {
   font-size:13px;letter-spacing:2px;color:var(--accent);font-weight:700;flex:1;
 }
-.pb-col-hex { font-size:14px;color:var(--text);font-family:'Rajdhani',sans-serif; }
+.pb-col-hex { font-size:14px;color:var(--text);font-family:'IBM Plex Sans',sans-serif; }
 .pb-colour-preview {
   display:flex;height:20px;border-radius:var(--radius);overflow:hidden;
   border:1px solid var(--border);margin-top:10px;
@@ -2160,7 +2184,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   font-size:14px;color:var(--muted);letter-spacing:.5px;margin-top:6px;line-height:1.5;
 }
 .pb-colour-add-btn {
-  margin-top:10px;width:100%;padding:8px;font-family:'Rajdhani',sans-serif;
+  margin-top:10px;width:100%;padding:8px;font-family:'IBM Plex Sans',sans-serif;
   font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;
   background:color-mix(in srgb,#38b6ff 15%,transparent);
   border:1px solid #38b6ff;color:#38b6ff;border-radius:var(--radius);
@@ -2187,7 +2211,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   background:var(--surface2);gap:8px;flex-wrap:wrap;
 }
 .pbpr-title {
-  font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;color:var(--accent);
+  font-family:'IBM Plex Mono',sans-serif;font-size:15px;letter-spacing:2px;color:var(--accent);
 }
 .pbpr-actions { display:flex;gap:6px;flex-wrap:wrap; }
 .pbpr-list { display:flex;flex-direction:column; }
@@ -2205,14 +2229,14 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pbpr-text-input {
   flex:1;min-width:120px;
   background:var(--surface2);border:1px solid var(--border);border-radius:4px;
-  padding:5px 8px;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;
+  padding:5px 8px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;
   color:var(--text);outline:none;
 }
 .pbpr-text-input:focus { border-color:var(--accent); }
 .pbpr-selects { display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px; }
 .pbpr-select {
   background:var(--surface2);border:1px solid var(--border);border-radius:4px;
-  padding:4px 6px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;
+  padding:4px 6px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;
   color:var(--text);cursor:pointer;outline:none;
 }
 .pbpr-type-dot {
@@ -2224,14 +2248,14 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pbpr-use-existing {
   background:none;border:1px solid var(--border);border-radius:3px;
-  padding:2px 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  padding:2px 8px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;
   letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .1s;
 }
 .pbpr-use-existing:hover { border-color:var(--accent);color:var(--accent); }
 /* Split button and word-split UI */
 .pbpr-split-btn {
   background:none;border:1px solid var(--border);border-radius:3px;
-  padding:2px 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  padding:2px 8px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;
   letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .1s;white-space:nowrap;
 }
 .pbpr-split-btn:hover { border-color:var(--accent);color:var(--accent); }
@@ -2246,7 +2270,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;flex-wrap:wrap;align-items:center;gap:2px;line-height:2;
 }
 .pbpr-split-word {
-  font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;
+  font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;
   color:var(--text);padding:2px 6px;border-radius:3px;
   background:var(--surface);border:1px solid var(--border);
 }
@@ -2267,25 +2291,25 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pbpr-split-confirm {
   background:color-mix(in srgb,var(--accent) 15%,transparent);
   border:1px solid var(--accent);border-radius:3px;
-  padding:4px 12px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;
   letter-spacing:1px;cursor:pointer;color:var(--accent);
 }
 .pbpr-split-cancel {
   background:none;border:1px solid var(--border);border-radius:3px;
-  padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;
   letter-spacing:1px;cursor:pointer;color:var(--muted);
 }
 .pbpr-btn-row { display:flex;gap:6px;align-self:start;padding-top:2px; }
 .pbpr-confirm {
   background:color-mix(in srgb,var(--accent) 15%,transparent);
   border:1px solid var(--accent);border-radius:3px;
-  padding:5px 11px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  padding:5px 11px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;
   letter-spacing:1px;cursor:pointer;color:var(--accent);transition:all .1s;white-space:nowrap;
 }
 .pbpr-confirm:hover { background:color-mix(in srgb,var(--accent) 25%,transparent); }
 .pbpr-dismiss {
   background:none;border:1px solid var(--border);border-radius:3px;
-  padding:5px 8px;font-family:'Rajdhani',sans-serif;font-size:13px;
+  padding:5px 8px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;
   cursor:pointer;color:var(--muted);transition:color .1s;line-height:1;
 }
 .pbpr-dismiss:hover { color:#ff4444; }
@@ -2304,11 +2328,11 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;align-items:flex-start;justify-content:space-between;
   padding:16px 20px;border-bottom:1px solid var(--border);gap:10px;
 }
-.bki-title { font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:var(--accent); }
+.bki-title { font-family:'IBM Plex Mono',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--accent); }
 .bki-sub   { font-size:10px;color:var(--muted);letter-spacing:1.5px;margin-top:2px; }
 .bki-close {
   background:none;border:1px solid var(--border);border-radius:3px;
-  padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;
   letter-spacing:1px;cursor:pointer;color:var(--muted);flex-shrink:0;
 }
 .bki-section { padding:16px 20px;border-bottom:1px solid var(--border); }
@@ -2316,7 +2340,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .bki-textarea {
   width:100%;min-height:160px;background:var(--surface2);
   border:1px solid var(--border);border-radius:4px;
-  padding:10px 12px;font-family:'Rajdhani',sans-serif;font-size:13px;
+  padding:10px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;
   font-weight:500;color:var(--text);outline:none;resize:vertical;
   box-sizing:border-box;line-height:1.6;
 }
@@ -2327,7 +2351,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .bki-sep-label { font-size:11px;color:var(--muted);letter-spacing:.5px;flex-shrink:0; }
 .bki-sep-btn {
   background:var(--surface2);border:1px solid var(--border);border-radius:3px;
-  padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+  padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;
   letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .1s;
 }
 .bki-sep-btn.active, .bki-sep-btn:hover { border-color:var(--accent);color:var(--accent); }
@@ -2350,7 +2374,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .bki-dest-label { font-size:11px;color:var(--muted);letter-spacing:.5px; }
 .bki-dest-select {
   background:var(--surface2);border:1px solid var(--border);border-radius:4px;
-  padding:5px 8px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;
+  padding:5px 8px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;
   color:var(--text);cursor:pointer;outline:none;flex:1;min-width:0;
 }
 .pb-import-card {
@@ -2364,7 +2388,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   background:var(--surface2);
 }
 .pb-import-title {
-  font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--accent);
+  font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:1.5px;color:var(--accent);
 }
 .pb-import-sub { font-size:14px;letter-spacing:2px;color:var(--muted);margin-top:3px; }
 .pb-import-close {
@@ -2387,7 +2411,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-type-picker { display:flex;flex-wrap:wrap;gap:6px; }
 .pb-type-pick-btn {
   display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:4px;
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;
   cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none;
   background: color-mix(in srgb, var(--tc, var(--accent)) 15%, transparent);
   color: var(--tc, var(--accent));
@@ -2402,7 +2426,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-import-textarea {
   width:100%;min-height:100px;max-height:200px;resize:vertical;
   background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:17px;line-height:1.7;
+  color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:17px;line-height:1.7;
   padding:10px 12px;outline:none;
 }
 .pb-import-textarea:focus { border-color:var(--accent); }
@@ -2413,7 +2437,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   padding:12px;
 }
 .pb-annotated {
-  font-family:'Rajdhani',sans-serif;font-size:18px;line-height:2.2;
+  font-family:'IBM Plex Sans',sans-serif;font-size:18px;line-height:2.2;
   color:var(--text);word-break:break-word;user-select:none;-webkit-user-select:none;
 }
 /* Each word token */
@@ -2452,7 +2476,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pb-tagged-item-cat select {
   background:var(--bg);border:1px solid var(--border);border-radius:3px;
-  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;
+  color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:15px;
   padding:2px 6px;outline:none;cursor:pointer;
 }
 .pb-tagged-item-text { flex:1;font-size:15px;font-style:italic;line-height:1.4; }
@@ -2510,7 +2534,7 @@ img.bm-thumb-missing { background:var(--surface2); }
    bmResLabel via .on-light (dark text) / .on-dark (light text). */
 .bm-res-label {
   position:absolute; z-index:4; pointer-events:none;
-  font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700;
+  font-family:'IBM Plex Sans',sans-serif; font-size:11px; font-weight:700;
   letter-spacing:1px; padding:2px 6px; border-radius:3px;
   background:rgba(0,0,0,.0); transition:color .15s ease;
 }
@@ -2545,7 +2569,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .swipe-action-btn {
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   width:70px;padding:8px 4px;gap:4px;cursor:pointer;border:none;
-  font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;
   color:#fff;
 }
 .swipe-action-btn span { font-size:18px; }
@@ -2562,10 +2586,10 @@ img.bm-thumb-missing { background:var(--surface2); }
 @keyframes tourPop { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
 .tour-step-badge {
   font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700;
-  margin-bottom:8px;font-family:'Rajdhani',sans-serif;
+  margin-bottom:8px;font-family:'IBM Plex Sans',sans-serif;
 }
 .tour-title {
-  font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;
+  font-family:'IBM Plex Mono',sans-serif;font-size:20px;letter-spacing:1.5px;
   color:var(--accent);margin-bottom:8px;
 }
 .tour-body {
@@ -2683,7 +2707,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pb-name-chip {
   display:inline-block;padding:3px 9px;border-radius:12px;
-  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:.3px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:.3px;
   cursor:pointer;user-select:none;
   background:color-mix(in srgb,var(--tc,var(--accent)) 10%,transparent);
   color:var(--tc,var(--accent));
@@ -2718,7 +2742,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .pb-swatch-label {
   font-size:11px;font-weight:700;letter-spacing:.2px;color:var(--text);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
-  font-family:'Rajdhani',sans-serif;
+  font-family:'IBM Plex Sans',sans-serif;
 }
 /* ── REFERENCE: compact alpha grid ──────────────────────────────── */
 .pb-ref-grid {
@@ -2726,7 +2750,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pb-ref-chip {
   display:inline-block;padding:3px 10px;border-radius:3px;
-  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:.2px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:.2px;
   cursor:pointer;user-select:none;
   background:color-mix(in srgb,var(--tc,var(--accent)) 10%,transparent);
   color:var(--tc,var(--accent));
@@ -2743,7 +2767,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;align-items:center;gap:14px;width:100%;
   padding:14px 16px;border-radius:6px;border:1px solid var(--border);
   background:var(--surface2);cursor:pointer;text-align:left;
-  font-family:'Rajdhani',sans-serif;color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;color:var(--text);
   transition:all .15s;
 }
 .sync-gate-btn:hover { border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent); }
@@ -2758,7 +2782,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   border:2px dashed var(--border);border-radius:6px;
   padding:28px 20px;text-align:center;cursor:pointer;
   transition:border-color .15s, background .15s;
-  font-family:'Rajdhani',sans-serif;letter-spacing:.5px;
+  font-family:'IBM Plex Sans',sans-serif;letter-spacing:.5px;
 }
 .zip-drop-zone:hover, .zip-drop-zone.drag-over {
   border-color:var(--accent);
@@ -2773,7 +2797,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;align-items:center;gap:7px;padding:8px 16px;
   border-radius:4px;border:1px solid var(--border);
   background:var(--surface2);color:var(--muted);cursor:pointer;
-  font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;
+  font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;
   transition:all .15s;
 }
 .cloud-provider-btn:hover { border-color:var(--accent);color:var(--text); }
@@ -2853,7 +2877,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   background:var(--surface2);flex-shrink:0;
 }
 .modal-title {
-  font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;
+  font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:1.5px;
   color:var(--accent);
 }
 .modal-close {
@@ -2916,7 +2940,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 
 
   background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
-  padding:10px 12px;font-family:'Rajdhani',sans-serif;font-size:16px;
+  padding:10px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:16px;
   line-height:1.7;color:var(--muted);max-height:120px;overflow-y:auto;
   font-style:italic;
 }
@@ -2924,7 +2948,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
 }
 .iter-mode-tab {
-  flex:1;padding:7px 4px;text-align:center;font-family:'Rajdhani',sans-serif;
+  flex:1;padding:7px 4px;text-align:center;font-family:'IBM Plex Sans',sans-serif;
   font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;
   border:none;background:transparent;color:var(--muted);transition:all .15s;
   border-right:1px solid var(--border);
@@ -2950,7 +2974,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden;
 }
 .drive-sort-tab {
-  padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;
   letter-spacing:.5px;cursor:pointer;border:none;background:transparent;
   color:var(--muted);transition:all .12s;border-right:1px solid var(--border);
 }
@@ -3138,8 +3162,8 @@ img.bm-thumb-missing { background:var(--surface2); }
       </div>
     </div>
     <div class="img-modal-footer">
-      <button id="pfiRemoveBtn" onclick="profileImageRemove()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:7px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;">REMOVE</button>
-      <button id="pfiSaveBtn" onclick="profileImageSave()" disabled style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:7px 16px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;opacity:.5;">SET IMAGE</button>
+      <button id="pfiRemoveBtn" onclick="profileImageRemove()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:7px 14px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-weight:700;letter-spacing:1px;">REMOVE</button>
+      <button id="pfiSaveBtn" onclick="profileImageSave()" disabled style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:7px 16px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-weight:700;letter-spacing:1px;opacity:.5;">SET IMAGE</button>
     </div>
   </div>
 </div>
@@ -3173,7 +3197,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   <div style="background:var(--surface);border:1px solid var(--accent);border-radius:4px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:var(--accent);">// STYLE PRESETS</div>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:22px;letter-spacing:1.5px;color:var(--accent);">// STYLE PRESETS</div>
       <button onclick="closeStyleEditor()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:3px 10px;cursor:pointer;font-size:14px;">✕</button>
     </div>
     <!-- Category tabs -->
@@ -3192,15 +3216,15 @@ img.bm-thumb-missing { background:var(--surface2); }
       <div style="display:grid;gap:8px;">
         <div>
           <label style="font-size:11px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">NAME</label>
-          <input id="newPresetName" placeholder="My Custom Style" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;padding:7px 10px;outline:none;">
+          <input id="newPresetName" placeholder="My Custom Style" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:15px;padding:7px 10px;outline:none;">
         </div>
         <div>
           <label style="font-size:11px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">DESCRIPTORS (injected mid-prompt)</label>
-          <textarea id="newPresetAdj" rows="2" placeholder="e.g. watercolour painting, loose brushwork, warm palette" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
+          <textarea id="newPresetAdj" rows="2" placeholder="e.g. watercolour painting, loose brushwork, warm palette" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
         </div>
         <div>
           <label style="font-size:11px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">RENDER SUFFIX (appended at end)</label>
-          <textarea id="newPresetSuffix" rows="2" placeholder="e.g. fine art print, gallery quality, artistic composition" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
+          <textarea id="newPresetSuffix" rows="2" placeholder="e.g. fine art print, gallery quality, artistic composition" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-primary" onclick="saveNewPreset()" style="font-size:12px;padding:8px 16px;">✓ SAVE PRESET</button>
@@ -3321,7 +3345,7 @@ img.bm-thumb-missing { background:var(--surface2); }
     <div class="mode-nav-card">
       <div class="mode-nav-identity">
         <button class="bm-profile-thumb" id="bmProfileThumb" onclick="openProfileImageModal()" title="Change profile image">⊙</button>
-        <button id="bmAccountBtn" onclick="bmAccountClick()" title="Account" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 14px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);transition:all .2s;">ACCOUNT</button>
+        <button id="bmAccountBtn" onclick="bmAccountClick()" title="Account" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 14px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);transition:all .2s;">ACCOUNT</button>
         <div class="mode-nav-balance" id="navBalanceWrap" style="display:none;">
           <span class="bal-label">TOKENS</span>
           <span class="bal-value" id="navTokenBalance">—</span>
@@ -3336,7 +3360,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 <div id="generateOnlyBanner" style="display:none;background:color-mix(in srgb,var(--accent) 8%,transparent);border-bottom:1px solid color-mix(in srgb,var(--accent) 25%,transparent);padding:8px 16px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
   <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;">▶ GENERATE MODE</span>
   <span style="font-size:11px;color:var(--muted);flex:1;">Saving disabled — connect cloud to unlock full mode</span>
-  <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:5px 12px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK FULL MODE</button>
+  <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:5px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK FULL MODE</button>
 </div>
 
 <!-- ═══════════════════════ LIBRARY VIEW ═══════════════════════ -->
@@ -3344,7 +3368,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   <div class="view-inner">
     <header style="margin-bottom:20px;">
       <div class="title-line">
-        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// LIBRARY</h1>
+        <h1 style="font-family:'IBM Plex Mono',sans-serif;font-size:36px;letter-spacing:2px;color:var(--accent);">// LIBRARY</h1>
       </div>
     </header>
 
@@ -3407,7 +3431,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 
     <header>
       <div class="title-line">
-        <h1 id="mainTitle" style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// BEAST MODE</h1>
+        <h1 id="mainTitle" style="font-family:'IBM Plex Mono',sans-serif;font-size:36px;letter-spacing:2px;color:var(--accent);">// BEAST MODE</h1>
         <span class="version">MECH GENERATOR HYBRID ENGINE</span>
       </div>
       <div class="mode-toggle" style="margin-top:14px;">
@@ -3525,7 +3549,7 @@ img.bm-thumb-missing { background:var(--surface2); }
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
               <div id="swatchA" style="width:20px;height:20px;border-radius:2px;border:1px solid var(--border);flex-shrink:0;"></div>
               <div style="font-size:11px;letter-spacing:2px;color:var(--accent);font-weight:700;text-transform:uppercase;" id="colALabel">COLOUR 1</div>
-              <div id="colAHex" style="font-size:12px;color:var(--text);margin-left:auto;font-family:'Rajdhani',sans-serif;">#000000</div>
+              <div id="colAHex" style="font-size:12px;color:var(--text);margin-left:auto;font-family:'IBM Plex Sans',sans-serif;">#000000</div>
             </div>
             <div class="hsl-row"><label class="hsl-lbl">H</label><input type="range" class="hsl-slider" id="colAH" min="0" max="360" value="0" oninput="onHSLChange('A')"><input type="number" class="hsl-input" id="colAHv" min="0" max="360" value="0" oninput="onValueInput('A','H')"><span class="hsl-unit">°</span></div>
             <div class="hsl-row"><label class="hsl-lbl">S</label><input type="range" class="hsl-slider" id="colAS" min="0" max="100" value="0" oninput="onHSLChange('A')"><input type="number" class="hsl-input" id="colASv" min="0" max="100" value="0" oninput="onValueInput('A','S')"><span class="hsl-unit">%</span></div>
@@ -3540,7 +3564,7 @@ img.bm-thumb-missing { background:var(--surface2); }
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
               <div id="swatchB" style="width:20px;height:20px;border-radius:2px;border:1px solid var(--border);flex-shrink:0;"></div>
               <div style="font-size:11px;letter-spacing:2px;color:var(--accent);font-weight:700;text-transform:uppercase;" id="colBLabel">COLOUR 2</div>
-              <div id="colBHex" style="font-size:12px;color:var(--text);margin-left:auto;font-family:'Rajdhani',sans-serif;">#000000</div>
+              <div id="colBHex" style="font-size:12px;color:var(--text);margin-left:auto;font-family:'IBM Plex Sans',sans-serif;">#000000</div>
             </div>
             <div class="hsl-row"><label class="hsl-lbl">H</label><input type="range" class="hsl-slider" id="colBH" min="0" max="360" value="0" oninput="onHSLChange('B')"><input type="number" class="hsl-input" id="colBHv" min="0" max="360" value="0" oninput="onValueInput('B','H')"><span class="hsl-unit">°</span></div>
             <div class="hsl-row"><label class="hsl-lbl">S</label><input type="range" class="hsl-slider" id="colBS" min="0" max="100" value="0" oninput="onHSLChange('B')"><input type="number" class="hsl-input" id="colBSv" min="0" max="100" value="0" oninput="onValueInput('B','S')"><span class="hsl-unit">%</span></div>
@@ -3648,7 +3672,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 <div class="panel" id="promptHistoryPanel" style="display:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div class="panel-title" style="margin-bottom:0;">// RECENT PROMPTS <span style="font-size:10px;color:var(--muted);font-weight:400;letter-spacing:1px;">(last 10)</span></div>
-    <button onclick="clearPromptHistory()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕ CLEAR</button>
+    <button onclick="clearPromptHistory()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕ CLEAR</button>
   </div>
   <div id="promptHistoryList" style="display:flex;flex-direction:column;gap:8px;"></div>
 </div>
@@ -3665,7 +3689,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 <div class="panel" id="genOnlyRecentPanel" style="display:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div class="panel-title" style="margin-bottom:0;">// RECENT PROMPTS <span style="font-size:10px;color:var(--muted);font-weight:400;letter-spacing:1px;">(last 10)</span></div>
-    <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK SAVING</button>
+    <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK SAVING</button>
   </div>
   <div id="genOnlyRecentList" style="display:flex;flex-direction:column;gap:8px;">
     <div style="color:var(--muted);font-size:12px;letter-spacing:.5px;">Generate a prompt to see it here.</div>
@@ -3688,7 +3712,7 @@ img.bm-thumb-missing { background:var(--surface2); }
     </div>
     <textarea id="loadTextarea" placeholder="// Paste a saved prompt here..." style="
       width:100%;height:90px;background:#000;border:1px solid var(--border);border-radius:var(--radius);
-      color:#8ecfb8;font-family:'Rajdhani',sans-serif;font-size:14px;padding:10px;
+      color:#8ecfb8;font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:10px;
       outline:none;resize:vertical;line-height:1.6;
     " oninput="onLoadTextareaInput()"></textarea>
     <input type="file" id="loadFileInput" accept=".txt" style="display:none" onchange="onFileImport(event)">
@@ -3705,7 +3729,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   <div style="background:var(--surface);border:1px solid var(--accent);border-radius:4px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:var(--accent);">// STYLE PRESETS</div>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:22px;letter-spacing:1.5px;color:var(--accent);">// STYLE PRESETS</div>
       <button onclick="closeStyleEditor()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:3px 10px;cursor:pointer;font-size:14px;">✕</button>
     </div>
     <!-- Category tabs -->
@@ -3724,15 +3748,15 @@ img.bm-thumb-missing { background:var(--surface2); }
       <div style="display:grid;gap:8px;">
         <div>
           <label style="font-size:11px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">NAME</label>
-          <input id="newPresetName" placeholder="My Custom Style" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;padding:7px 10px;outline:none;">
+          <input id="newPresetName" placeholder="My Custom Style" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:15px;padding:7px 10px;outline:none;">
         </div>
         <div>
           <label style="font-size:11px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">DESCRIPTORS (injected mid-prompt)</label>
-          <textarea id="newPresetAdj" rows="2" placeholder="e.g. watercolour painting, loose brushwork, warm palette" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
+          <textarea id="newPresetAdj" rows="2" placeholder="e.g. watercolour painting, loose brushwork, warm palette" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
         </div>
         <div>
           <label style="font-size:11px;letter-spacing:2px;color:var(--muted);display:block;margin-bottom:4px;">RENDER SUFFIX (appended at end)</label>
-          <textarea id="newPresetSuffix" rows="2" placeholder="e.g. fine art print, gallery quality, artistic composition" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
+          <textarea id="newPresetSuffix" rows="2" placeholder="e.g. fine art print, gallery quality, artistic composition" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:7px 10px;outline:none;resize:vertical;"></textarea>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-primary" onclick="saveNewPreset()" style="font-size:12px;padding:8px 16px;">✓ SAVE PRESET</button>
@@ -3822,7 +3846,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .up-view-toggle { display:inline-flex; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
 .up-view-btn {
   background:transparent; border:none; border-right:1px solid var(--border);
-  color:var(--muted); font-family:'Rajdhani',sans-serif; font-weight:700;
+  color:var(--muted); font-family:'IBM Plex Sans',sans-serif; font-weight:700;
   font-size:12px; letter-spacing:1.5px; padding:8px 14px; cursor:pointer;
   transition:background .15s, color .15s;
 }
@@ -3850,21 +3874,21 @@ img.bm-thumb-missing { background:var(--surface2); }
 .up-zoom-btn:hover { background:var(--accent); color:#000; }
 .up-zoom-scale {
   position:absolute; top:10px; right:12px; z-index:6;
-  font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
+  font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
   color:#fff; background:rgba(0,0,0,.55); border:1px solid var(--border);
   border-radius:6px; padding:3px 8px; pointer-events:none;
 }
 
 /* Right rail — original + upscale thumbnails (Phase 3 populates #upRail). */
 .up-rail-head, .up-libbar-head {
-  font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:2px;
+  font-family:'IBM Plex Mono',sans-serif; font-size:14px; letter-spacing:2px;
   color:var(--muted); margin-bottom:8px;
 }
 .up-rail { display:flex; flex-direction:column; gap:10px; }
 
 /* Bottom library bar — horizontal scroll, creation order. */
 .up-libbar-head { display:flex; align-items:baseline; justify-content:space-between; }
-.up-libbar-hint { font-family:'Rajdhani',sans-serif; font-size:11px; letter-spacing:1px; color:var(--muted); }
+.up-libbar-hint { font-family:'IBM Plex Sans',sans-serif; font-size:11px; letter-spacing:1px; color:var(--muted); }
 .up-libbar {
   display:flex; gap:8px; overflow-x:auto; overflow-y:hidden;
   padding:6px 2px 6px; scroll-behavior:smooth;
@@ -3983,7 +4007,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .up-rail-tag {
   position:absolute; left:0; right:0; bottom:0;
   display:flex; align-items:baseline; gap:6px;
-  font-family:'Rajdhani',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px;
+  font-family:'IBM Plex Sans',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px;
   color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.78));
   padding:12px 6px 4px; text-align:left; pointer-events:none;
 }
@@ -4004,7 +4028,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 /* Title now lives at the top of the settings panel. */
 .up-settings-title { margin-bottom:14px; }
 .up-settings-title h1 {
-  font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:4px;
+  font-family:'IBM Plex Mono',sans-serif; font-size:30px; letter-spacing:2px;
   color:var(--accent); margin:0; line-height:1;
 }
 .up-settings-title .up-settings-sub {
@@ -4123,7 +4147,7 @@ img.bm-thumb-missing { background:var(--surface2); }
   padding:14px 16px; border-bottom:1px solid var(--border); flex:0 0 auto;
 }
 .up-settings-modal-title {
-  font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:3px; color:var(--accent);
+  font-family:'IBM Plex Mono',sans-serif; font-size:18px; letter-spacing:1.5px; color:var(--accent);
 }
 .up-settings-modal-x {
   background:transparent; border:1px solid var(--border); color:var(--muted);
@@ -4205,7 +4229,7 @@ body.up-settings-modal-open { overflow:hidden; }
 .up-slider-before { z-index:2; }
 .up-slider-label {
   position:absolute; z-index:3; pointer-events:none;
-  font-family:'Bebas Neue','Rajdhani',sans-serif; font-weight:700;
+  font-family:'IBM Plex Mono','IBM Plex Sans',sans-serif; font-weight:700;
   font-size:13px; letter-spacing:2px; text-transform:uppercase; line-height:1;
   color:#fff; background:rgba(8,10,12,.62); padding:5px 10px; border-radius:5px;
   border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(3px);
@@ -4220,7 +4244,7 @@ body.up-settings-modal-open { overflow:hidden; }
 .up-slider-handle { z-index:5; }
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
-.ig-tab { flex:1; padding:7px 6px; font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
+.ig-tab { flex:1; padding:7px 6px; font-family:'IBM Plex Sans',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
 .ig-tab.active { color:var(--accent); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,transparent); }
 .up-libgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; max-height:220px; overflow-y:auto; }
 .up-libgrid img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px; border:2px solid transparent; cursor:pointer; }
@@ -4232,17 +4256,17 @@ body.up-settings-modal-open { overflow:hidden; }
 .up-check { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text); margin-top:10px; cursor:pointer; }
 .up-check input { accent-color:var(--accent); }
 .ig-panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; }
-.ig-label { font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin:14px 0 6px; display:flex; justify-content:space-between; align-items:center; }
+.ig-label { font-family:'IBM Plex Sans',sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin:14px 0 6px; display:flex; justify-content:space-between; align-items:center; }
 .ig-label:first-child { margin-top:0; }
 .ig-select, .ig-input, .ig-textarea {
   width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:4px;
-  color:var(--text, #eee); font-family:'Rajdhani',sans-serif; font-size:14px; padding:8px 10px; box-sizing:border-box;
+  color:var(--text, #eee); font-family:'IBM Plex Sans',sans-serif; font-size:14px; padding:8px 10px; box-sizing:border-box;
 }
 .ig-textarea { min-height:90px; resize:vertical; line-height:1.45; }
 .ig-chips { display:flex; flex-wrap:wrap; gap:6px; }
 .ig-chip {
   background:var(--surface2); border:1px solid var(--border); border-radius:4px; cursor:pointer;
-  font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
+  font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
   color:var(--muted); padding:5px 10px; transition:all .15s;
 }
 .ig-chip:hover { border-color:var(--accent); color:var(--accent); }
@@ -4272,21 +4296,21 @@ body.up-settings-modal-open { overflow:hidden; }
 .ig-card-actions .btn { font-size:10px; padding:4px 8px; }
 .ig-note { font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4; }
 .ig-gate { text-align:center; padding:60px 20px; }
-#igStatus { font-family:'Rajdhani',sans-serif; font-size:12px; letter-spacing:1px; margin-top:10px; min-height:16px; }
+#igStatus { font-family:'IBM Plex Sans',sans-serif; font-size:12px; letter-spacing:1px; margin-top:10px; min-height:16px; }
 </style>
 
 <div class="view" id="viewImagegen">
   <div class="view-inner">
     <header style="margin-bottom:20px;">
       <div class="title-line">
-        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// IMAGE GEN</h1>
+        <h1 style="font-family:'IBM Plex Mono',sans-serif;font-size:36px;letter-spacing:2px;color:var(--accent);">// IMAGE GEN</h1>
       </div>
       <span class="version" style="font-size:11px;color:var(--muted);letter-spacing:2px;">RUNWARE MULTI-MODEL ENGINE</span>
     </header>
 
     <!-- Sign-in gate: server enforces auth on /api/generate; this gives a clean UX. -->
     <div id="igAuthGate" class="ig-panel ig-gate" style="display:none;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--accent);margin-bottom:10px;">SIGN IN TO GENERATE</div>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:1.5px;color:var(--accent);margin-bottom:10px;">SIGN IN TO GENERATE</div>
       <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Image generation runs through your Beast Mode account.<br>Sign in (free) to unlock the multi-model engine.</div>
       <button class="btn btn-primary" onclick="if(typeof openAuthModal==='function')openAuthModal('login')">⊙ SIGN IN / CREATE ACCOUNT</button>
     </div>
@@ -4403,7 +4427,7 @@ body.up-settings-modal-open { overflow:hidden; }
 <div class="view" id="viewUpscaler">
   <div class="view-inner">
     <div id="upAuthGate" class="ig-panel ig-gate" style="display:none;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--accent);margin-bottom:10px;">SIGN IN TO UPSCALE</div>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:1.5px;color:var(--accent);margin-bottom:10px;">SIGN IN TO UPSCALE</div>
       <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Upscaling runs through your Beast Mode account.<br>Sign in (free) to unlock the resolution engine.</div>
       <button class="btn btn-primary" onclick="if(typeof openAuthModal==='function')openAuthModal('login')">⊙ SIGN IN / CREATE ACCOUNT</button>
     </div>
@@ -4604,7 +4628,7 @@ body.up-settings-modal-open { overflow:hidden; }
   <div class="view-inner">
       <header style="margin-bottom:20px;">
         <div class="title-line">
-          <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// SETTINGS</h1>
+          <h1 style="font-family:'IBM Plex Mono',sans-serif;font-size:36px;letter-spacing:2px;color:var(--accent);">// SETTINGS</h1>
         </div>
       </header>
     <div class="settings-grid">
@@ -4786,7 +4810,7 @@ body.up-settings-modal-open { overflow:hidden; }
       <div class="settings-section" style="grid-column:1/-1;" id="settingsTokensSection">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
           <div class="settings-section-title" style="margin-bottom:0;">Tokens</div>
-          <button onclick="bmFetchBalance()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
+          <button onclick="bmFetchBalance()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
         </div>
         <div id="bmTokSignedOut" style="display:none;font-size:12px;color:var(--muted);letter-spacing:.5px;">Sign in to see your token balance and activity.</div>
         <div id="bmTokSignedIn" style="display:none;">
@@ -4800,7 +4824,7 @@ body.up-settings-modal-open { overflow:hidden; }
       <div class="settings-section" style="grid-column:1/-1;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
           <div class="settings-section-title" style="margin-bottom:0;">Particle Usage</div>
-          <button onclick="pbUsageStats={};try{localStorage.removeItem('bm_particle_usage')}catch(e){};pbRenderUsageStats()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕ RESET</button>
+          <button onclick="pbUsageStats={};try{localStorage.removeItem('bm_particle_usage')}catch(e){};pbRenderUsageStats()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕ RESET</button>
         </div>
         <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:14px;">Your most-used particles across all Lab sessions. Top 20 by use count.</div>
         <div id="pbUsageStatsPanel"></div>
@@ -4854,7 +4878,7 @@ body.up-settings-modal-open { overflow:hidden; }
     <!-- Header + mode toggle -->
     <header style="margin-bottom:16px;">
       <div class="title-line">
-        <h1 style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</h1>
+        <h1 style="font-family:'IBM Plex Mono',sans-serif;font-size:36px;letter-spacing:2px;color:var(--accent);">// PROMPT LAB</h1>
         <span class="version" style="align-self:center;">// PARTICLE FORMULA ENGINE</span>
       </div>
       <div style="font-size:13px;letter-spacing:1.5px;color:var(--muted);margin-top:4px;font-style:italic;">Your style, your expertise, your prompt.</div>
@@ -4869,7 +4893,7 @@ body.up-settings-modal-open { overflow:hidden; }
     <div id="pbEditBanner" style="display:none;background:color-mix(in srgb,#38b6ff 12%,transparent);border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:5px;padding:8px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
       <span style="font-size:12px;letter-spacing:1px;color:#38b6ff;font-weight:700;">✎ EDITING:</span>
       <span id="pbEditBannerTitle" style="font-size:12px;color:var(--text);flex:1;"></span>
-      <button onclick="pbCancelEdit()" style="background:none;border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:#38b6ff;">✕ CANCEL EDIT</button>
+      <button onclick="pbCancelEdit()" style="background:none;border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:#38b6ff;">✕ CANCEL EDIT</button>
     </div>
 
     <!-- // ASSEMBLED PROMPT — formula box, buttons below -->
@@ -4877,9 +4901,9 @@ body.up-settings-modal-open { overflow:hidden; }
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
         <div class="pb-section-label" style="margin-bottom:0;">// ASSEMBLED PROMPT</div>
         <div style="display:flex;gap:5px;">
-          <button onclick="pbSurpriseMe()" title="Surprise Me — generate a thematically coherent random prompt" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">⚡ SURPRISE ME</button>
-          <button onclick="pbVoiceToParticle()" title="Voice to Particle — speak your prompt" id="pbVoiceBtn" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🎙 VOICE</button>
-          <button onclick="pbOpenWizard()" title="Prompt Wizard — guided step-by-step builder" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🧙 WIZARD</button>
+          <button onclick="pbSurpriseMe()" title="Surprise Me — generate a thematically coherent random prompt" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">⚡ SURPRISE ME</button>
+          <button onclick="pbVoiceToParticle()" title="Voice to Particle — speak your prompt" id="pbVoiceBtn" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🎙 VOICE</button>
+          <button onclick="pbOpenWizard()" title="Prompt Wizard — guided step-by-step builder" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🧙 WIZARD</button>
         </div>
       </div>
       <div class="pb-formula pb-formula-output" id="pbFormula" contenteditable="true" spellcheck="false"></div>
@@ -4913,7 +4937,7 @@ body.up-settings-modal-open { overflow:hidden; }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
           <div style="font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700;">// PROMPT ANALYSIS</div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <div id="pbAnalyserScore" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--accent);line-height:1;"></div>
+            <div id="pbAnalyserScore" style="font-family:'IBM Plex Mono',sans-serif;font-size:22px;letter-spacing:2px;color:var(--accent);line-height:1;"></div>
             <div id="pbAnalyserStats" style="font-size:10px;color:var(--muted);letter-spacing:.5px;line-height:1.7;"></div>
           </div>
         </div>
@@ -4929,7 +4953,7 @@ body.up-settings-modal-open { overflow:hidden; }
           <div style="font-size:10px;letter-spacing:2px;font-weight:700;color:var(--accent);margin-bottom:5px;">✦ PARTICLE OF THE DAY</div>
           <div id="pbPotdText" style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;"></div>
           <div id="pbPotdMeta" style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;"></div>
-          <button id="pbPotdAddBtn" onclick="pbPotdAdd()" style="padding:4px 10px;border:1px solid var(--accent);border-radius:3px;background:transparent;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">+ ADD TO PROMPT</button>
+          <button id="pbPotdAddBtn" onclick="pbPotdAdd()" style="padding:4px 10px;border:1px solid var(--accent);border-radius:3px;background:transparent;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">+ ADD TO PROMPT</button>
         </div>
         <button onclick="pbPotdDismiss()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;padding:0;line-height:1;flex-shrink:0;">×</button>
       </div>
@@ -5004,7 +5028,7 @@ body.up-settings-modal-open { overflow:hidden; }
         <button class="pb-expand-btn" id="pbCollapseAllBtn" onclick="pbSetAllCollapsed(true)">▲ MINIMISE ALL</button>
       </div>
       <button class="pb-builtin-toggle" id="pbBuiltinToggle" onclick="pbToggleBuiltin()">HIDE BUILT-IN</button>
-      <button id="pbAddPersonalCatBtn" onclick="pcAddCategory()" style="display:none;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 12px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">+ PERSONAL CATEGORY</button>
+      <button id="pbAddPersonalCatBtn" onclick="pcAddCategory()" style="display:none;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 12px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">+ PERSONAL CATEGORY</button>
     </div>
 
     <!-- Particle grid -->
@@ -5166,17 +5190,17 @@ body.up-settings-modal-open { overflow:hidden; }
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;width:100%;max-width:480px;margin:0 auto;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
       <div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:3px;color:var(--accent);">// FORMULA PRESETS</div>
+        <div style="font-family:'IBM Plex Mono',sans-serif;font-size:18px;letter-spacing:1.5px;color:var(--accent);">// FORMULA PRESETS</div>
         <div style="font-size:10px;color:var(--muted);letter-spacing:1.5px;margin-top:2px;">Save &amp; recall named formula states</div>
       </div>
-      <button onclick="pbCloseFormulaPresets()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕</button>
+      <button onclick="pbCloseFormulaPresets()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕</button>
     </div>
     <!-- Save current -->
     <div style="padding:14px 20px;border-bottom:1px solid var(--border);">
       <div style="font-size:10px;color:var(--muted);letter-spacing:1.5px;margin-bottom:8px;">SAVE CURRENT FORMULA AS PRESET</div>
       <div style="display:flex;gap:8px;">
         <input id="pbPresetNameInput" type="text" placeholder="Preset name…" maxlength="40"
-          style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;color:var(--text);outline:none;"
+          style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:600;color:var(--text);outline:none;"
           onkeydown="if(event.key==='Enter')pbSaveFormulaPreset()">
         <button onclick="pbSaveFormulaPreset()" class="btn btn-primary" style="font-size:12px;padding:6px 14px;white-space:nowrap;">+ SAVE</button>
       </div>
@@ -11279,7 +11303,7 @@ function genOnlyRenderRecent() {
     text.textContent = preview
 
     const copyBtn = document.createElement('button')
-    copyBtn.style.cssText = 'background:none;border:1px solid var(--border);border-radius:3px;padding:3px 9px;font-family:\'Rajdhani\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);'
+    copyBtn.style.cssText = 'background:none;border:1px solid var(--border);border-radius:3px;padding:3px 9px;font-family:\'IBM Plex Sans\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);'
     copyBtn.textContent = '⎘ COPY'
     copyBtn.addEventListener('click', () => genOnlyCopy(copyBtn, r.text))
 
@@ -12423,7 +12447,7 @@ function pbRenderLibrary() {
         saveBtn.onclick = () => { if (inp.value.trim()) { pcAddParticle(pcIdx, inp.value.trim()); inp.value = '' } }
         // Rename / delete controls
         const nameInp = document.createElement('input')
-        nameInp.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:4px 8px;font-family:\'Rajdhani\',sans-serif;font-size:12px;color:var(--text);margin-right:6px;flex:1;'
+        nameInp.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:4px 8px;font-family:\'IBM Plex Sans\',sans-serif;font-size:12px;color:var(--text);margin-right:6px;flex:1;'
         nameInp.value = pc.name
         nameInp.title = 'Rename category'
         nameInp.addEventListener('change', () => pcRenameCategory(pcIdx, nameInp.value))
@@ -12599,16 +12623,16 @@ function pbRenderLibrary() {
             <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;line-height:1.8;">
               No favourites yet for this type.
               <br>Star particles using ★ while browsing
-              <button onclick="pbCreatorSetFilter('mine');pbCreatorFavsOn=false;pbCreatorToggleFavs&&null;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">👤 PERSONAL</button>
+              <button onclick="pbCreatorSetFilter('mine');pbCreatorFavsOn=false;pbCreatorToggleFavs&&null;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">👤 PERSONAL</button>
               or
-              <button onclick="pbCreatorSetFilter('builtin');pbCreatorFavsOn=false;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">◈ BUILT-IN</button>
+              <button onclick="pbCreatorSetFilter('builtin');pbCreatorFavsOn=false;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">◈ BUILT-IN</button>
             </div>`
         } else if (isPersonalCreator) {
           empty.innerHTML = `
             <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;line-height:1.8;">
               No personal particles yet for this type.
               <br>
-              <button onclick="pbSetLabMode('editor')" style="margin-top:6px;background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">✏ SWITCH TO EDITOR TO CREATE PARTICLES</button>
+              <button onclick="pbSetLabMode('editor')" style="margin-top:6px;background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">✏ SWITCH TO EDITOR TO CREATE PARTICLES</button>
             </div>`
         } else {
           empty.style.cssText = 'color:var(--muted);font-size:12px;letter-spacing:1px;padding:4px 0;'
@@ -12659,7 +12683,7 @@ function pbRenderLibrary() {
       tuner.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div style="font-size:11px;letter-spacing:3px;color:${t.color};font-weight:700;">🎨 CUSTOM COLOUR MIXER</div>
-          <button onclick="pbOpenPaletteImporter()" style="padding:4px 10px;border:1px solid ${t.color}66;border-radius:3px;background:transparent;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:${t.color};">📷 IMPORT FROM IMAGE</button>
+          <button onclick="pbOpenPaletteImporter()" style="padding:4px 10px;border:1px solid ${t.color}66;border-radius:3px;background:transparent;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:${t.color};">📷 IMPORT FROM IMAGE</button>
         </div>
         <div style="font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;font-weight:700;">BASE PALETTE</div>
         <select id="pbColSel" style="width:100%;margin-bottom:10px;" class="pb-input" onchange="pbOnPaletteChange()">
@@ -13329,7 +13353,7 @@ function pbOrientRender() {
 
   content.innerHTML = `
     <div style="font-size:32px;margin-bottom:12px;">${step.icon}</div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);margin-bottom:10px;">${step.title}</div>
+    <div style="font-family:'IBM Plex Mono',sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);margin-bottom:10px;">${step.title}</div>
     <div style="font-size:13px;color:var(--text);line-height:1.7;letter-spacing:.3px;">${step.body}</div>
   `
 
@@ -13453,7 +13477,7 @@ function pbSetupRender() {
     if (!complete) {
       const showBtn = document.createElement('button')
       showBtn.style.cssText = `flex-shrink:0;padding:3px 8px;border:1px solid var(--border);border-radius:3px;
-        background:transparent;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+        background:transparent;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;
         letter-spacing:1px;cursor:pointer;color:var(--accent);border-color:var(--accent);margin-top:2px;`
       showBtn.textContent = 'SHOW ME'
       showBtn.onclick = () => step.showMe()
@@ -13991,7 +14015,7 @@ function pbWizardRender() {
     `
     sel.innerHTML = `
       <span style="color:${t?.color || 'var(--accent)'};font-size:14px;">✓</span>
-      <span style="font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;color:${t?.color || 'var(--accent)'};flex:1;">${picked.text.length > 60 ? picked.text.slice(0,60)+'…' : picked.text}</span>
+      <span style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:700;color:${t?.color || 'var(--accent)'};flex:1;">${picked.text.length > 60 ? picked.text.slice(0,60)+'…' : picked.text}</span>
       <span style="font-size:10px;color:${t?.color || 'var(--accent)'};opacity:.6;letter-spacing:1px;">SELECTED</span>
     `
     optContainer.appendChild(sel)
@@ -14008,7 +14032,7 @@ function pbWizardRender() {
     const btn = document.createElement('button')
     btn.style.cssText = `
       padding:8px 12px;border-radius:4px;cursor:pointer;text-align:left;width:100%;
-      font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;letter-spacing:.3px;
+      font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:700;letter-spacing:.3px;
       border:1px solid ${isSelected ? (t?.color || 'var(--accent)') : 'var(--border)'};
       background:${isSelected ? `color-mix(in srgb,${t?.color || 'var(--accent)'} 12%,transparent)` : 'transparent'};
       color:${isSelected ? (t?.color || 'var(--accent)') : 'var(--text)'};
@@ -14383,7 +14407,7 @@ function pbAcShow(particles, caretRange) {
   searchInp.className = 'pb-ac-search'
   searchInp.placeholder = 'Search particles…'
   searchInp.autocomplete = 'off'
-  searchInp.style.cssText = 'width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:5px 8px;font-family:\'Rajdhani\',sans-serif;font-size:12px;color:var(--text);outline:none;'
+  searchInp.style.cssText = 'width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:5px 8px;font-family:\'IBM Plex Sans\',sans-serif;font-size:12px;color:var(--text);outline:none;'
   searchInp.addEventListener('mousedown', e => e.stopPropagation())
   searchInp.addEventListener('input', () => {
     const q = searchInp.value.trim().toLowerCase()
@@ -14501,7 +14525,7 @@ function pbAcUpdateFooter() {
   footer.innerHTML = ''
   if (!word) return
   const btn = document.createElement('button')
-  btn.style.cssText = 'width:100%;text-align:left;padding:6px 8px;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:3px;font-family:\'Rajdhani\',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--accent);cursor:pointer;transition:background .1s;'
+  btn.style.cssText = 'width:100%;text-align:left;padding:6px 8px;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:3px;font-family:\'IBM Plex Sans\',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--accent);cursor:pointer;transition:background .1s;'
   btn.innerHTML = `<span style="opacity:.6;margin-right:4px;">+</span> CREATE PARTICLE: <em style="font-style:normal;color:var(--text);">${word}</em>`
   btn.addEventListener('mousedown', e => {
     e.preventDefault()
@@ -14569,7 +14593,7 @@ function pbAcShowSimilarityModal(newText, similar) {
   card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;max-width:440px;width:100%;padding:20px;'
 
   const title = document.createElement('div')
-  title.style.cssText = 'font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:6px;'
+  title.style.cssText = 'font-family:\'IBM Plex Mono\',sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:6px;'
   title.textContent = '// SIMILAR PARTICLES FOUND'
 
   const sub = document.createElement('div')
@@ -14593,7 +14617,7 @@ function pbAcShowSimilarityModal(newText, similar) {
     badge.style.cssText = 'font-size:10px;letter-spacing:1px;font-weight:700;color:var(--muted);'
     badge.textContent = `${pct}% MATCH`
     const useBtn = document.createElement('button')
-    useBtn.style.cssText = 'padding:3px 8px;border:1px solid var(--border);border-radius:3px;font-family:\'Rajdhani\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;background:transparent;color:var(--muted);'
+    useBtn.style.cssText = 'padding:3px 8px;border:1px solid var(--border);border-radius:3px;font-family:\'IBM Plex Sans\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;background:transparent;color:var(--muted);'
     useBtn.textContent = 'USE THIS'
     useBtn.addEventListener('click', () => {
       overlay.remove()
@@ -16524,7 +16548,7 @@ function pbRenderLibBar() {
         const nameInp = document.createElement('input')
         nameInp.value = lib.name
         nameInp.maxLength = 20
-        nameInp.style.cssText = 'background:none;border:none;outline:none;font-family:\'Rajdhani\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--accent);width:100%;cursor:text;'
+        nameInp.style.cssText = 'background:none;border:none;outline:none;font-family:\'IBM Plex Sans\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--accent);width:100%;cursor:text;'
         nameInp.addEventListener('click', e => e.stopPropagation())
         nameInp.addEventListener('mousedown', e => e.stopPropagation())
         nameInp.addEventListener('keydown', e => { if (e.key === 'Enter') nameInp.blur() })
@@ -16535,7 +16559,7 @@ function pbRenderLibBar() {
         nameWrap.appendChild(nameInp)
       } else {
         const nameEl = document.createElement('div')
-        nameEl.style.cssText = 'font-family:\'Rajdhani\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--text);'
+        nameEl.style.cssText = 'font-family:\'IBM Plex Sans\',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--text);'
         nameEl.textContent = lib.name
         nameWrap.appendChild(nameEl)
       }
@@ -19131,7 +19155,7 @@ document.addEventListener('viewSwitched', e => {
 <div id="syncGateModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:var(--accent);line-height:1;">// PROMPT LAB</div>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);line-height:1;">// PROMPT LAB</div>
       <div style="font-size:10px;letter-spacing:2px;color:var(--muted);">YOUR STYLE, YOUR EXPERTISE, YOUR PROMPT.</div>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
@@ -19212,7 +19236,7 @@ document.addEventListener('viewSwitched', e => {
       </button>
       <!-- Skip -->
       <div style="text-align:center;padding-top:4px;">
-        <button onclick="syncGateSkip()" style="background:none;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);text-decoration:underline;padding:6px;">
+        <button onclick="syncGateSkip()" style="background:none;border:none;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);text-decoration:underline;padding:6px;">
           Continue without sync (not recommended)
         </button>
         <div style="font-size:9px;color:var(--muted);opacity:.6;margin-top:4px;line-height:1.6;">
@@ -19227,7 +19251,7 @@ document.addEventListener('viewSwitched', e => {
 <div id="pbOrientModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:460px;width:100%;">
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:4px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:4px;color:var(--accent);">// PROMPT LAB</div>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:2px;color:var(--accent);">// PROMPT LAB</div>
       <div style="font-size:10px;letter-spacing:2px;color:var(--muted);">QUICK ORIENTATION</div>
     </div>
     <div class="modal-body" style="padding-top:0;">
@@ -19246,8 +19270,8 @@ document.addEventListener('viewSwitched', e => {
 <div id="pbSetupPanel" style="display:none;position:fixed;z-index:19000;background:var(--surface);border:1px solid var(--accent);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);width:300px;transition:all .3s;">
   <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
     <div style="display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:var(--accent);">⚙ SETUP</div>
-      <button onclick="pbSetupSkip()" style="background:none;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);padding:2px 6px;">SKIP SETUP</button>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:16px;letter-spacing:1.5px;color:var(--accent);">⚙ SETUP</div>
+      <button onclick="pbSetupSkip()" style="background:none;border:none;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);padding:2px 6px;">SKIP SETUP</button>
     </div>
     <div id="pbSetupProgress" style="height:3px;background:var(--surface2);border-radius:2px;margin-top:8px;">
       <div id="pbSetupProgressBar" style="height:100%;background:var(--accent);border-radius:2px;transition:width .4s;width:0%;"></div>
@@ -19289,7 +19313,7 @@ document.addEventListener('viewSwitched', e => {
 
 <!-- ══════════════════ IMAGE GENERATION (Runware via backend) ══════════════════ -->
 <div id="genImageResult" style="display:none;margin:12px 16px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);">
-  <div id="genImageStatus" style="font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:1px;color:var(--accent);margin-bottom:8px;"></div>
+  <div id="genImageStatus" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;letter-spacing:1px;color:var(--accent);margin-bottom:8px;"></div>
   <img id="genImageImg" src="" alt="" style="display:none;max-width:100%;border-radius:4px;">
   <div id="genImageMeta" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
 </div>
@@ -19673,7 +19697,7 @@ const bmQueue = (() => {
     style.textContent = `
       #bmQueueWidget { position:fixed; right:16px; bottom:16px; width:280px; z-index:9000;
         background:var(--surface,#161616); border:1px solid var(--border,#333); border-radius:12px;
-        box-shadow:0 8px 30px rgba(0,0,0,.45); font-family:'Rajdhani',sans-serif; display:none; overflow:hidden; }
+        box-shadow:0 8px 30px rgba(0,0,0,.45); font-family:'IBM Plex Sans',sans-serif; display:none; overflow:hidden; }
       #bmQueueWidget.open { display:block; }
       #bmQueueWidget .bm-q-head { display:flex; align-items:center; justify-content:space-between;
         padding:9px 12px; border-bottom:1px solid var(--border,#333); cursor:pointer;
@@ -19708,7 +19732,7 @@ const bmQueue = (() => {
       @keyframes bmQspin { to { transform:rotate(360deg); } }
       #bmQueueWidget .bm-q-foot { padding:6px 12px; border-top:1px solid var(--border,#333); text-align:center; }
       #bmQueueWidget .bm-q-foot button { background:none; border:none; color:var(--accent,#7c5cff);
-        font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:1px; font-size:12px; cursor:pointer; }
+        font-family:'IBM Plex Sans',sans-serif; font-weight:700; letter-spacing:1px; font-size:12px; cursor:pointer; }
       /* Full Queue view cards */
       .bm-queue-view-list { display:flex; flex-direction:column; gap:10px; max-width:760px; }
       .bm-queue-empty { color:var(--muted,#999); padding:24px 0; }
@@ -21137,7 +21161,7 @@ function mkDrawOp(ctx,op,cv){
     const p=op.pts[0];
     if(p&&op.text){
       const fs=Math.max(16, Math.round(cv.width/28));
-      ctx.font='700 '+fs+"px 'Rajdhani',sans-serif";
+      ctx.font='700 '+fs+"px 'IBM Plex Sans',sans-serif";
       ctx.textBaseline='top';
       // backing plate for legibility
       const w=ctx.measureText(op.text).width;
@@ -23059,24 +23083,24 @@ try {
 .bm-auth-card {
   background:var(--surface,#141414); border:1px solid var(--accent,#00ffb0);
   border-radius:6px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
-  font-family:'Rajdhani',sans-serif;
+  font-family:'IBM Plex Sans',sans-serif;
 }
 .bm-auth-head {
   display:flex; align-items:center; justify-content:space-between;
   padding:16px 18px; border-bottom:1px solid var(--border,#2a2a2a); background:var(--surface2,#1c1c1c);
 }
-.bm-auth-title { font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:3px; color:var(--accent,#00ffb0); }
+.bm-auth-title { font-family:'IBM Plex Mono',sans-serif; font-size:24px; letter-spacing:1.5px; color:var(--accent,#00ffb0); }
 .bm-auth-x { background:none; border:1px solid var(--border,#2a2a2a); color:var(--muted,#888); border-radius:3px; padding:3px 9px; cursor:pointer; font-size:16px; }
 .bm-auth-body { padding:18px; display:flex; flex-direction:column; gap:12px; }
 .bm-auth-label { font-size:11px; letter-spacing:1.5px; color:var(--muted,#888); text-transform:uppercase; margin-bottom:-6px; }
 .bm-auth-input {
   background:var(--bg,#0d0d0d); border:1px solid var(--border,#2a2a2a); color:var(--text,#eee);
-  border-radius:4px; padding:10px 12px; font-size:14px; font-family:'Rajdhani',sans-serif; width:100%;
+  border-radius:4px; padding:10px 12px; font-size:14px; font-family:'IBM Plex Sans',sans-serif; width:100%;
 }
 .bm-auth-input:focus { outline:none; border-color:var(--accent,#00ffb0); }
 .bm-auth-btn {
   background:var(--accent,#00ffb0); color:#000; border:none; border-radius:4px;
-  padding:11px; font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700; letter-spacing:1.5px;
+  padding:11px; font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:700; letter-spacing:1.5px;
   cursor:pointer; text-transform:uppercase;
 }
 .bm-auth-btn:disabled { opacity:.5; cursor:default; }
@@ -23104,7 +23128,7 @@ try {
     <div class="modal-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
         <div style="font-size:12px;letter-spacing:1px;">BALANCE: <span id="bmUsageBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens</span></div>
-        <button onclick="bmUsageRender(true)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
+        <button onclick="bmUsageRender(true)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">↻ REFRESH</button>
       </div>
       <div id="bmTokActivity" style="max-height:60vh;overflow-y:auto;border-top:1px solid var(--border);"></div>
     </div>

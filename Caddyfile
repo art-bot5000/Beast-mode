@@ -91,7 +91,7 @@ Disallow: /admin
         @manifest path /manifest.json
         header @manifest Cache-Control "public, max-age=3600"
 
-        @assets path *.js *.css
+        @assets path *.js *.css *.woff2
         header @assets Cache-Control "public, max-age=31536000, immutable"
 
         header {
@@ -116,7 +116,7 @@ Disallow: /admin
             #                (https: kept broad for Drive/Dropbox/iNat thumbnails)
             #   frame-src    accounts.google.com, *.dropbox.com → OAuth popups/iframes
             # ────────────────────────────────────────────────────────────
-            Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.runware.ai https://im.runware.ai https://*.r2.dev https://*.googleapis.com https://accounts.google.com https://apis.google.com https://cdnjs.cloudflare.com https://api.dropboxapi.com https://content.dropboxapi.com https://api.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.wikimedia.org; frame-src https://accounts.google.com https://*.dropbox.com https://content.dropboxapi.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+            Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://api.runware.ai https://im.runware.ai https://*.r2.dev https://*.googleapis.com https://accounts.google.com https://apis.google.com https://cdnjs.cloudflare.com https://api.dropboxapi.com https://content.dropboxapi.com https://api.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.wikimedia.org; frame-src https://accounts.google.com https://*.dropbox.com https://content.dropboxapi.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
             Referrer-Policy "strict-origin-when-cross-origin"
             Permissions-Policy "camera=(), microphone=()"
             -Server

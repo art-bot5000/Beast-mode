@@ -1,11 +1,16 @@
 // Beast Mode // Service Worker
-// v4.1 — message-based update flow
+// v4.2 — message-based update flow
 
-const CACHE_NAME = 'beast-mode-v6.43'
+const CACHE_NAME = 'beast-mode-v6.44'
 const CACHE_URLS = [
   './',
   './index.html',
-  'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&display=swap',
+  './fonts/plex-sans-400.woff2',
+  './fonts/plex-sans-500.woff2',
+  './fonts/plex-sans-600.woff2',
+  './fonts/plex-sans-700.woff2',
+  './fonts/plex-mono-500.woff2',
+  './fonts/plex-mono-600.woff2',
 ]
 
 // ── Install: pre-cache the app shell ──────────────────────────────
@@ -60,13 +65,6 @@ self.addEventListener('fetch', e => {
     return
   }
 
-  // Never cache API traffic. The background-queue endpoints (/api/jobs) are
-  // polled and MUST return live data — a cached snapshot would freeze the queue
-  // UI. All /api/* calls go straight to the network, bypassing the cache.
-  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
-    return
-  }
-
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached
@@ -74,7 +72,7 @@ self.addEventListener('fetch', e => {
         if (
           e.request.method === 'GET' &&
           response.status === 200 &&
-          (url.origin === self.location.origin || url.hostname.includes('fonts.g'))
+          (url.origin === self.location.origin)
         ) {
           const clone = response.clone()
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone))
