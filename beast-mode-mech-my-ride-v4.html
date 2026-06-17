@@ -22109,8 +22109,10 @@ function upRenderStageSingle(f) {
   img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f); };
   // imageData may be an authed /api/img URL — a raw src 401s and the stage stays
   // blank (the post-upscale "preview not working" symptom). Route via bmSetImgSrc.
-  if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
-  else { img.src = f.imageData; }
+  // Rehydrated favs have imageData:null + serverImageUrl; fall back to that.
+  const _src = f.imageData || f.serverImageUrl || '';
+  if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, _src); }
+  else { img.src = _src; }
 }
 
 // Before/after slider. Left = the ORIGINAL bytes that were upscaled (pinned
@@ -22130,7 +22132,12 @@ function upRenderStageSlider(upFav) {
   {
     const { original } = upResolveGroup(upFav);
     beforeFav = original || null;
-    if (!beforeSrc && original) { beforeSrc = original.imageData; beforeW = original.outW || null; beforeH = original.outH || null; }
+    // Rehydrated originals carry serverImageUrl with imageData:null — fall back
+    // to it so the "before" layer isn't blank. bmSetImgSrc resolves /api/img.
+    if (!beforeSrc && original) {
+      beforeSrc = original.imageData || original.serverImageUrl || null;
+      beforeW = original.outW || null; beforeH = original.outH || null;
+    }
   }
   if (!beforeSrc && !beforeFav) { upRenderStageSingle(upFav); return; } // no original → just show it
 
@@ -22235,8 +22242,11 @@ function upRenderStageSlider(upFav) {
   // Fall back through the cache/Drive chain if a blob: URL is dead.
   afterImg.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(afterImg, upFav); };
   if (beforeFav) beforeImg.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(beforeImg, beforeFav); };
-  if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(afterImg, upFav.imageData); } else { afterImg.src = upFav.imageData; }
-  const _beforeSrc = beforeSrc || (beforeFav && beforeFav.imageData) || '';
+  // Rehydrated favs have imageData:null + serverImageUrl; bmSetImgSrc resolves
+  // the authed /api/img URL either way, so prefer imageData then fall back.
+  const _afterSrc = upFav.imageData || upFav.serverImageUrl || '';
+  if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(afterImg, _afterSrc); } else { afterImg.src = _afterSrc; }
+  const _beforeSrc = beforeSrc || (beforeFav && (beforeFav.imageData || beforeFav.serverImageUrl)) || '';
   if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(beforeImg, _beforeSrc); } else { beforeImg.src = _beforeSrc; }
 }
 
@@ -22317,7 +22327,19 @@ function upRenderRail(f) {
     cell.className = 'up-rail-item' + (upStageState.selId === fav.id ? ' sel' : '');
     const img = document.createElement('img');
     img.alt = ''; img.loading = 'lazy';
-    if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, fav.imageData); } else { img.src = fav.imageData; }
+    // Resolve via the shared thumb chain (encrypted thumb -> cache -> authed
+    // /api/img -> inline), same as the library grid and bottom bar. A
+    // rehydrated original/upscale has imageData:null + serverImageUrl, so a raw
+    // bmSetImgSrc(fav.imageData) would leave the rail thumb blank. A synthetic
+    // original (_synthOriginal) carries inline bytes and no fav id/keys, so use
+    // its imageData directly.
+    if (fav._synthOriginal && fav.imageData) {
+      img.src = fav.imageData;
+    } else if (typeof bmApplyThumb === 'function') {
+      bmApplyThumb(img, fav);
+    } else if (typeof bmSetImgSrc === 'function') {
+      bmSetImgSrc(img, fav.imageData);
+    } else { img.src = fav.imageData; }
     img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, fav); };
     cell.appendChild(img);
     const tag = document.createElement('div');
