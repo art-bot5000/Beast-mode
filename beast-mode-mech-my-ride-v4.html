@@ -8718,6 +8718,7 @@ async function driveLoadAllPrompts() {
       const driveIds = new Set(loaded.map(f => f.id))
       const localOnly = favourites.filter(f => !driveIds.has(f.id))
       favourites = [...loaded, ...localOnly]
+      if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
       renderFavs()
     }
   } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
@@ -11342,6 +11343,7 @@ function lsSaveAll() {
 function lsRestoreAll() {
   const savedFavs = lsLoad(LS.FAVS)
   if (Array.isArray(savedFavs) && savedFavs.length) favourites = savedFavs
+  if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
 
   const savedPresets = lsLoad(LS.PRESETS)
   if (Array.isArray(savedPresets)) customPresets = savedPresets
@@ -19296,9 +19298,12 @@ const bmQueue = (() => {
             outW = d.w; outH = d.h;
           }
         } catch (e) { /* non-fatal: save without dims */ }
+        const _srcFavId = (meta.srcFavId != null
+          && !(typeof meta.srcFavId === 'string' && meta.srcFavId.indexOf('__orig__') === 0))
+          ? meta.srcFavId : null;
         const upExtra = {
           isUpscale: true,
-          upscaledFromId: (meta.srcFavId != null) ? meta.srcFavId : null,
+          upscaledFromId: _srcFavId,
           upscaleMeta: {
             model: model,
             kind: meta.upKind || null,
@@ -21632,6 +21637,46 @@ const upStageView = { view: 'compare', curUpFav: null, curOrigFav: null };
 
 // Resolve the upscale "group" any favourite belongs to:
 //   { original: fav|null, upscales: fav[] }  (upscales newest-first)
+// One-time, idempotent repair for upscale links that were saved with a
+// synthetic "__orig__<realId>" parent (a placeholder that leaked into persisted
+// data). Strips the prefix back to the real id; if that fav exists, re-links
+// both ways; otherwise clears the bad parent so the upscale is a clean orphan.
+// Also backfills any missing parent.upscaleIds entries for numeric links.
+function bmRepairUpscaleLinks() {
+  if (!Array.isArray(favourites) || !favourites.length) return;
+  const byId = new Map(favourites.filter(x => x && x.id != null).map(x => [x.id, x]));
+  let changed = false;
+  favourites.forEach(f => {
+    if (!f || !f.isUpscale) return;
+    let pid = f.upscaledFromId;
+    // Heal a synthetic "__orig__<id>" parent → the underlying real id.
+    if (typeof pid === 'string' && pid.indexOf('__orig__') === 0) {
+      const realId = Number(pid.slice('__orig__'.length));
+      if (byId.has(realId)) { f.upscaledFromId = realId; pid = realId; }
+      else { f.upscaledFromId = null; pid = null; }
+      changed = true;
+    }
+    // With a valid numeric parent, ensure the reverse link exists.
+    if (pid != null && byId.has(pid)) {
+      const parent = byId.get(pid);
+      if (!Array.isArray(parent.upscaleIds)) { parent.upscaleIds = []; changed = true; }
+      if (!parent.upscaleIds.includes(f.id)) { parent.upscaleIds.push(f.id); changed = true; }
+      if (!parent.hasUpscales) { parent.hasUpscales = true; changed = true; }
+    }
+  });
+  // Drop any dangling child ids a parent lists that no longer exist.
+  favourites.forEach(f => {
+    if (f && Array.isArray(f.upscaleIds)) {
+      const cleaned = f.upscaleIds.filter(id => byId.has(id));
+      if (cleaned.length !== f.upscaleIds.length) { f.upscaleIds = cleaned; changed = true; }
+    }
+  });
+  if (changed) {
+    try { if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites); } catch (e) {}
+  }
+}
+window.bmRepairUpscaleLinks = bmRepairUpscaleLinks;
+
 // An original is a fav with hasUpscales; an upscale points via upscaledFromId.
 function upResolveGroup(f) {
   const all = (typeof favourites !== 'undefined') ? favourites : [];
@@ -21727,7 +21772,14 @@ function upSelectFav(f) {
     // can upscale again from the same starting point.
     if (original) {
       upState.srcData = original.imageData; upState.srcIsUrl = false;
-      upState.srcFavId = original.id;
+      // NEVER arm a synthetic "__orig__…" id as the source — it isn't a real
+      // saved fav, and stamping it onto a new upscale's upscaledFromId breaks
+      // linking (the parent can never be found). For a synthesized original,
+      // point the next upscale at the real selected upscale (f.id) instead, so
+      // the chain stays connected through genuine ids.
+      upState.srcFavId = (original._synthOriginal || (typeof original.id === 'string' && original.id.indexOf('__orig__') === 0))
+        ? f.id
+        : original.id;
       upShowPreview(original.imageData);
     }
   } else {
