@@ -195,14 +195,71 @@ export async function listDocs(
 }
 
 // ── R2 snapshot (offsite backup) ─────────────────────────────────────────────
-// Copy the current ciphertext for one doc to R2. Best-effort: never throws, so a
-// backup failure can't break the primary write path. No-op when R2 is disabled.
+//
+// SELF-DESCRIBING FRAME (IV-in-R2 hardening)
+//   The R2 object is NOT bare ciphertext — it carries its own IV so a restore
+//   can fully reconstruct the KV header even when BOTH the /data volume AND KV
+//   are lost (separate failure domains, but the double-loss case used to leave
+//   undecryptable ciphertext). Layout:
+//     bytes 0..3   magic "BMS1"  (Beast-Mode Snapshot v1)
+//     byte  4      ivLen (number of IV bytes that follow; 12 for AES-GCM)
+//     bytes 5..    base64-decoded IV bytes
+//     then         ciphertext bytes
+//   The IV is not secret (it's already stored plaintext in the KV header and is
+//   useless without the DATA KEY), so framing it costs nothing against the ZK
+//   guarantee.
+const SNAP_MAGIC = new Uint8Array([0x42, 0x4d, 0x53, 0x31]); // "BMS1"
+
+function frameSnapshot(ivB64: string, ct: Uint8Array): Uint8Array {
+  const iv = b64ToBytes(ivB64);
+  if (iv.length === 0 || iv.length > 255) throw new Error("bad iv length for frame");
+  const out = new Uint8Array(4 + 1 + iv.length + ct.length);
+  out.set(SNAP_MAGIC, 0);
+  out[4] = iv.length;
+  out.set(iv, 5);
+  out.set(ct, 5 + iv.length);
+  return out;
+}
+
+// Parse a framed snapshot. Returns null if the bytes aren't a BMS1 frame (e.g.
+// a legacy bare-ciphertext object written before this hardening) so the caller
+// can fall back to the KV-header IV path.
+function unframeSnapshot(buf: Uint8Array): { iv: string; ct: Uint8Array } | null {
+  if (buf.length < 6) return null;
+  for (let i = 0; i < 4; i++) if (buf[i] !== SNAP_MAGIC[i]) return null;
+  const ivLen = buf[4];
+  if (ivLen === 0 || buf.length < 5 + ivLen) return null;
+  const iv = buf.subarray(5, 5 + ivLen);
+  const ct = buf.subarray(5 + ivLen);
+  return { iv: bytesToB64(iv), ct: new Uint8Array(ct) };
+}
+
+// base64 <-> bytes (Deno has atob/btoa globally).
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function bytesToB64(bytes: Uint8Array): string {
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+// Copy the current ciphertext for one doc to R2 as a self-describing frame.
+// Best-effort: never throws, so a backup failure can't break the primary write
+// path. No-op when R2 is disabled.
 export async function snapshotDocToR2(userHash: string, docKey: string): Promise<boolean> {
   try {
     if (!r2Enabled()) return false;
     const doc = await getDoc(userHash, docKey);
     if (!doc) return false;
-    await rehostBytesToR2(doc.ct, "application/octet-stream", r2Key(userHash, docKey));
+    const framed = frameSnapshot(doc.iv, doc.ct);
+    await rehostBytesToR2(framed, "application/octet-stream", r2Key(userHash, docKey));
     return true;
   } catch (e) {
     console.warn("kv-store: R2 snapshot failed", docKey, (e as Error).message);
@@ -222,42 +279,56 @@ export async function snapshotAllToR2(userHash: string): Promise<number> {
 }
 
 // ── R2 restore (recovery) ────────────────────────────────────────────────────
-// Pull a doc's ciphertext back from the R2 snapshot into /data + KV. Used when
-// the volume is lost/reset. Returns true if a snapshot existed and was restored.
-// The IV lives in the ciphertext's KV header, which is ALSO gone if the volume
-// was wiped — so restore can only recover bytes if the header survived (KV is
-// separate from the volume) OR the caller supplies the IV. We restore bytes and
-// keep any existing header; a fuller cross-host recovery is a Phase 3 concern.
+// Pull a doc back from its R2 snapshot into /data + KV. With the self-describing
+// frame, this fully reconstructs the KV header (IV included) even if KV was also
+// lost. For legacy bare-ciphertext objects (no frame) we fall back to the IV in
+// any surviving KV header. Returns true if a snapshot existed and was restored.
 export async function restoreDocFromR2(
   userHash: string,
   docKey: string,
 ): Promise<boolean> {
   docKeySafe(docKey);
   if (!r2Enabled()) return false;
-  const bytes = await getFromR2(r2Key(userHash, docKey));
-  if (!bytes) return false;
+  const raw = await getFromR2(r2Key(userHash, docKey));
+  if (!raw) return false;
+
+  const k = await kv();
+  const prev = await k.get<DocHeader>(["userdoc", userHash, docKey]);
+
+  // Prefer the framed IV; fall back to a surviving KV header for legacy objects.
+  const framed = unframeSnapshot(raw);
+  let iv: string;
+  let ct: Uint8Array;
+  if (framed) {
+    iv = framed.iv;
+    ct = framed.ct;
+  } else if (prev.value?.iv) {
+    iv = prev.value.iv;
+    ct = raw;
+  } else {
+    // No frame and no surviving header → bytes are undecryptable. Refuse rather
+    // than write a doc we can never read back.
+    console.warn("kv-store: restore has no IV (unframed + no KV header)", docKey);
+    return false;
+  }
 
   const dir = userDir(userHash);
   await Deno.mkdir(dir, { recursive: true });
   const path = docPath(userHash, docKey);
   const tmp = `${path}.tmp-${crypto.randomUUID()}`;
   try {
-    await Deno.writeFile(tmp, bytes);
+    await Deno.writeFile(tmp, ct);
     await Deno.rename(tmp, path);
   } catch (e) {
     try { await Deno.remove(tmp); } catch { /* ignore */ }
     throw e;
   }
 
-  // Preserve the existing header if present (keeps the IV); otherwise write a
-  // header WITHOUT an iv is useless for decryption, so we only update byte count
-  // and bump ver when a header already exists.
-  const k = await kv();
-  const prev = await k.get<DocHeader>(["userdoc", userHash, docKey]);
-  if (prev.value) {
-    await k.set(["userdoc", userHash, docKey], {
-      ...prev.value, bytes: bytes.length, updatedAt: Date.now(), ver: prev.value.ver + 1,
-    });
-  }
+  await k.set(["userdoc", userHash, docKey], {
+    iv,
+    bytes: ct.length,
+    updatedAt: Date.now(),
+    ver: (prev.value?.ver ?? 0) + 1,
+  });
   return true;
 }

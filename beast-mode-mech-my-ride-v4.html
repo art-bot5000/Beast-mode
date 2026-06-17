@@ -4674,7 +4674,7 @@ body.up-settings-modal-open { overflow:hidden; }
                 <div style="font-size:12px;color:var(--muted);" id="settingsStatusLine">Connected</div>
               </div>
             </div>
-            <button class="btn btn-ghost" onclick="driveSync()" style="font-size:12px;margin-right:6px;">↻ SYNC NOW</button>
+            <button class="btn btn-ghost" onclick="bmConfirmRestoreFromDrive()" style="font-size:12px;margin-right:6px;" title="Pull prompts &amp; settings from Drive and merge into your library. Your account (Fly) is normally the source of truth — use this only to recover from Drive.">↻ RESTORE FROM DRIVE</button>
             <button class="btn btn-ghost" onclick="driveSignOut()" style="font-size:12px;">SIGN OUT</button>
             <!-- Image backup is OPT-IN: images already persist to your account
                  (/data) by default; this mirrors each new image into Drive too. -->
@@ -4690,6 +4690,8 @@ body.up-settings-modal-open { overflow:hidden; }
               <button class="btn btn-ghost" id="bmDriveMergeBtn" onclick="bmDriveMerge()" style="font-size:12px;">⤓ IMPORT IMAGES FROM DRIVE</button>
               <div id="bmDriveMergeStatus" style="font-size:12px;color:var(--muted);margin-top:8px;display:none;"></div>
               <div style="font-size:11px;color:var(--muted);opacity:0.7;margin-top:6px;">One-time recovery of images saved to your Drive "Beast Mode" folder. Safe to run again — already-imported images are skipped.</div>
+              <button class="btn btn-ghost" id="bmReconcileBtn" onclick="bmReconcileDeadImages()" style="font-size:12px;margin-top:12px;">🧹 CLEAN UP DEAD ENTRIES</button>
+              <div style="font-size:11px;color:var(--muted);opacity:0.7;margin-top:6px;">Remove library entries whose image no longer exists anywhere. You'll see a count and confirm before anything is deleted. Prompt-only entries are never affected.</div>
             </div>
           </div>
           <div id="settingsDriveSignedOut" style="display:block;">
@@ -7700,10 +7702,12 @@ function promptHistoryAdd(promptText, fullText) {
 }
 
 async function promptHistoryCloudSave() {
+  let history = []
+  try { history = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) {}
+  // Fly is the source of truth: persist recent prompts there first.
+  if (typeof bmDocSave === 'function') bmDocSave(BM_DOC_KEYS.PROMPT_HISTORY, history)
   if (!cloudIsConnected()) return
   try {
-    let history = []
-    try { history = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) {}
     const body = JSON.stringify({ history, savedAt: new Date().toISOString() })
     if (driveHistoryId) {
       await cloudPatchFile(driveHistoryId, body)
@@ -8534,7 +8538,33 @@ function onGoogleSignIn(response) {
 }
 
 async function driveOnSignedIn() {
-  setDriveStatus('SYNCING…')
+  // Drive is now an OPTIONAL MIRROR, not the source of truth. Connecting must
+  // NOT re-pull and merge every Drive file — that merge is what resurfaced
+  // phantom/duplicate library entries. Fly (/api/data) is authoritative and was
+  // already loaded at login. From here, saves mirror to Drive going forward;
+  // pulling FROM Drive is an explicit, user-initiated "Restore from Drive"
+  // action only (driveRestoreAll), never automatic on connect.
+  setDriveStatus('✓ CONNECTED — mirroring on', 'ok')
+  updateNavDriveDot()
+  updateLocalWarning()
+  closeSyncGate()
+  setTimeout(pbCheckFirstRun, 800)
+}
+
+// Confirm gate for the "Restore from Drive" button — this merges Drive's older
+// copies into the current (Fly-authoritative) state, so make the intent explicit.
+function bmConfirmRestoreFromDrive() {
+  if (!cloudIsConnected()) { setDriveStatus('Connect Drive first', 'err'); return }
+  const ok = confirm('Restore prompts & settings from Google Drive and merge them into your current library?\n\nYour account is normally the source of truth. Use this only to recover data from Drive.')
+  if (ok) driveRestoreAll()
+}
+
+// Explicit, user-initiated pull from Drive (the old driveOnSignedIn behaviour).
+// Wired to a "Restore from Drive" control. Merges Drive contents into the
+// current library/settings. Only run when the user deliberately asks for it.
+async function driveRestoreAll() {
+  if (!cloudIsConnected()) { setDriveStatus('Connect Drive first', 'err'); return }
+  setDriveStatus('RESTORING FROM DRIVE…')
   await driveCustomPresetsLoad()
   await driveLoadAllPrompts()
   await driveLoadCurrentSettings()
@@ -8545,9 +8575,9 @@ async function driveOnSignedIn() {
   await pcDriveLoad()
   await promptHistoryCloudLoad()
   await pbFormulaPresetsLoad()
-  // Save merged cloud data to localStorage
   lsSaveAll()
-  // Full UI refresh
+  // Push whatever we merged back to Fly so it becomes the source of truth.
+  if (typeof bmDocSaveAll === 'function') await bmDocSaveAll()
   updateNavDriveDot()
   updateLibBadge()
   renderFavs()
@@ -8555,12 +8585,9 @@ async function driveOnSignedIn() {
   renderFolderSidebar()
   if (typeof pbRenderLibBar === 'function') pbRenderLibBar()
   if (currentView === 'settings') renderSettingsView()
-  closeSyncGate()
   updateLocalWarning()
-  setDriveStatus('✓ SYNCED', 'ok')
+  setDriveStatus('✓ RESTORED', 'ok')
   setTimeout(() => { if (cloudIsConnected()) setDriveStatus('✓ CONNECTED', 'ok') }, 4000)
-  // Show orientation + setup wizard on first connection
-  setTimeout(pbCheckFirstRun, 800)
 }
 
 // ── UI HELPERS
@@ -8693,6 +8720,10 @@ async function driveSavePrompt(fav) {
   // Always save to localStorage regardless of cloud state
   if (!fav.versions) fav.versions = [{ text: fav.text, savedAt: fav.createdAt || fav.id, label: 'Original' }]
   lsSave(LS.FAVS, favourites)
+  // Fly is the source of truth: persist the whole prompts doc (best-effort,
+  // async, debounced snapshot). The prompts doc IS the favourites array.
+  if (typeof bmDocSave === 'function') bmDocSave(BM_DOC_KEYS.PROMPTS, favourites)
+  // Drive is an optional mirror — only written when connected.
   if (!cloudIsConnected()) return
   setDriveStatus('SAVING…')
   try {
@@ -11365,6 +11396,9 @@ function lsSaveAll() {
   lsSave(LS.PB_LIBS, pbLibraries)
   lsSave(LS.PB_FAVS, pbFavParticles)
   lsSave(PB_FORMULA_PRESETS_KEY, pbFormulaPresets)
+  // Fly is the source of truth: mirror the same state up (best-effort, async,
+  // never blocks the local save). No-op when locked.
+  if (typeof bmDocSaveAll === 'function') { bmDocSaveAll() }
 }
 
 // Restore entire app state from localStorage
@@ -11403,6 +11437,83 @@ function lsRestoreAll() {
   if (savedSettings) {
     try { applySettings(savedSettings) } catch(e) {}
   }
+}
+
+// ── Fly-primary mirror of lsSaveAll/lsRestoreAll (Phase 3) ──────────
+// Push the SAME in-memory state lsSaveAll persists to localStorage up to the
+// Fly ZK doc store. Best-effort and debounced via bmDocSave's snapshot timer.
+// Only writes when unlocked (bmDocReady); locked sessions stay localStorage-only.
+async function bmDocSaveAll() {
+  if (!bmDocReady()) return
+  await Promise.all([
+    bmDocSave(BM_DOC_KEYS.PROMPTS,         favourites),
+    bmDocSave(BM_DOC_KEYS.CUSTOM_PRESETS,  customPresets),
+    bmDocSave(BM_DOC_KEYS.MODELS,          customModels),
+    bmDocSave(BM_DOC_KEYS.FOLDERS,         libFolders),
+    bmDocSave(BM_DOC_KEYS.PARTICLE_LIBRARIES, pbLibraries),
+    bmDocSave(BM_DOC_KEYS.FAV_PARTICLES,   pbFavParticles),
+    bmDocSave(BM_DOC_KEYS.FORMULA_PRESETS, pbFormulaPresets),
+    bmDocSave(BM_DOC_KEYS.SETTINGS,        (typeof captureSettings === 'function') ? captureSettings() : null),
+    bmDocSave(BM_DOC_KEYS.PERSONAL_PARTICLES, (typeof pcLoad === 'function') ? pcLoad() : null),
+    bmDocSave(BM_DOC_KEYS.PROMPT_HISTORY, (() => { try { return JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]') } catch(e) { return [] } })()),
+  ])
+}
+
+// Pull state from Fly at login and overlay onto the in-memory vars. Fly is the
+// source of truth: when a doc exists server-side it WINS over localStorage. When
+// a doc is absent (404 → null) we keep whatever lsRestoreAll already loaded.
+// Returns true if at least one doc was applied (so the caller can re-render).
+async function bmDocRestoreAll() {
+  if (!bmDocReady()) return false
+  let applied = false
+  const apply = (v, fn) => { if (v !== null && v !== undefined) { fn(v); applied = true } }
+
+  const [prompts, presets, models, folders, libs, favs, fpresets, settings, personalParticles, history] = await Promise.all([
+    bmDocLoad(BM_DOC_KEYS.PROMPTS),
+    bmDocLoad(BM_DOC_KEYS.CUSTOM_PRESETS),
+    bmDocLoad(BM_DOC_KEYS.MODELS),
+    bmDocLoad(BM_DOC_KEYS.FOLDERS),
+    bmDocLoad(BM_DOC_KEYS.PARTICLE_LIBRARIES),
+    bmDocLoad(BM_DOC_KEYS.FAV_PARTICLES),
+    bmDocLoad(BM_DOC_KEYS.FORMULA_PRESETS),
+    bmDocLoad(BM_DOC_KEYS.SETTINGS),
+    bmDocLoad(BM_DOC_KEYS.PERSONAL_PARTICLES),
+    bmDocLoad(BM_DOC_KEYS.PROMPT_HISTORY),
+  ])
+
+  apply(prompts,  v => { if (Array.isArray(v)) favourites = v })
+  apply(presets,  v => { if (Array.isArray(v)) customPresets = v })
+  apply(models,   v => { if (Array.isArray(v)) customModels = v })
+  apply(folders,  v => { if (Array.isArray(v)) libFolders = v })
+  apply(libs,     v => {
+    if (Array.isArray(v)) v.forEach((saved, i) => {
+      if (i < pbLibraries.length) {
+        pbLibraries[i].name = saved.name || pbLibraries[i].name
+        pbLibraries[i].particles = Array.isArray(saved.particles) ? saved.particles.filter(p => !p.builtin) : []
+      }
+    })
+  })
+  apply(favs,     v => { if (v && typeof v === 'object') pbFavParticles = v })
+  apply(fpresets, v => { if (Array.isArray(v)) pbFormulaPresets = v })
+  apply(settings, v => { try { applySettings(v) } catch(e) {} })
+  // Stragglers that live under their own localStorage keys (not lsSaveAll vars):
+  apply(personalParticles, v => {
+    if (Array.isArray(v) && typeof PC_STORAGE_KEY !== 'undefined') {
+      localStorage.setItem(PC_STORAGE_KEY, JSON.stringify(v))
+    }
+  })
+  apply(history, v => {
+    if (Array.isArray(v) && typeof PROMPT_HISTORY_KEY !== 'undefined') {
+      localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(v))
+      if (typeof promptHistoryRender === 'function') promptHistoryRender()
+    }
+  })
+
+  if (applied) {
+    if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks()
+    lsSaveAll() // keep localStorage in step with what Fly gave us
+  }
+  return applied
 }
 
 // Patch all mutation points to auto-save to localStorage ──────────
@@ -11666,6 +11777,8 @@ function pcSave(cats) {
 function pcGetAll() { return pcLoad() }
 
 async function pcDriveSync() {
+  // Fly is the source of truth: persist personal categories there first.
+  if (typeof bmDocSave === 'function') bmDocSave(BM_DOC_KEYS.PERSONAL_PARTICLES, pcLoad())
   if (!cloudIsConnected()) return
   try {
     const body = JSON.stringify({ personalCats: pcLoad(), savedAt: new Date().toISOString() })
@@ -15446,15 +15559,22 @@ function bkiImportAll() {
       versions: [{ text: promptText, savedAt: now + i, label: 'Imported' }],
       imageData: null,
       particles: null,
+      // Imported prompt-only entries (e.g. from the pre-image-gen app) carry no
+      // image and never should — render with NO preview slot (Phase 1 wiring),
+      // not the "add reference image" placeholder.
+      noPreview: true,
       needsProcessing: true,
       createdAt: now + i,
       updatedAt: now + i,
     }
     favourites.unshift(fav)
-    driveSavePrompt(fav)
   })
 
+  // Persist to Fly (source of truth) in ONE write, then mirror to Drive if
+  // connected — rather than a per-prompt Drive round-trip.
   lsSave(LS.FAVS, favourites)
+  if (typeof bmDocSave === 'function') bmDocSave(BM_DOC_KEYS.PROMPTS, favourites)
+  if (cloudIsConnected()) { favourites.slice(0, prompts.length).forEach(f => driveSavePrompt(f)) }
   updateLibBadge()
   renderFavs()
   renderLibrary()
@@ -20148,6 +20268,131 @@ function bmThumbLocked(fav) {
   return !(sess && sess.dataKey);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// bmDoc — Fly-primary, zero-knowledge document store (Phase 2/3).
+//
+// Source of truth for the NON-IMAGE data classes (prompts, settings, particles,
+// styles, recent, folders, models, formula-presets, fav-particles). Each doc is
+// AES-GCM-encrypted in the browser with the account DATA KEY — the SAME
+// primitive as the encrypted thumbnails — then PUT to /api/data/<docKey>. The
+// server stores opaque ciphertext + IV; it never sees plaintext.
+//
+// Drive is demoted to an OPTIONAL MIRROR: bmDocSave writes Fly first, then
+// mirrors to Drive only if connected. Drive is NOT read on connect anymore
+// (that merge is what surfaced phantom entries); a read from Drive is now an
+// explicit "Restore from Drive" action.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// docKey allowlist mirrors the server's ALLOWED_DOC_KEYS in kv-store.ts.
+const BM_DOC_KEYS = {
+  PROMPTS: 'prompts',
+  SETTINGS: 'settings',
+  CUSTOM_PRESETS: 'custom-presets',
+  PROMPT_HISTORY: 'prompt-history',
+  FOLDERS: 'folders',
+  MODELS: 'models',
+  PERSONAL_PARTICLES: 'personal-particles',
+  PARTICLE_LIBRARIES: 'particle-libraries',
+  FAV_PARTICLES: 'fav-particles',
+  FORMULA_PRESETS: 'formula-presets',
+  STYLES: 'styles',
+};
+
+// True when we have a session token AND the DATA KEY (i.e. unlocked). Doc
+// save/load both require the key — without it we can neither encrypt nor
+// decrypt, so callers fall back to localStorage only.
+function bmDocReady() {
+  const s = window.bmSession;
+  return !!(s && s.sessionToken && s.dataKey);
+}
+
+// Encrypt + PUT one doc to Fly. `obj` is any JSON-serialisable value. Returns
+// true on success. Best-effort: never throws (callers keep their local copy).
+async function bmDocSave(docKey, obj) {
+  try {
+    if (!bmDocReady()) return false; // locked → localStorage only, no remote write
+    const sess = window.bmSession;
+    const plain = new TextEncoder().encode(JSON.stringify(obj));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ctBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sess.dataKey, plain);
+    const res = await fetch('/api/data/' + encodeURIComponent(docKey), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sess.sessionToken },
+      body: JSON.stringify({ iv: _b64FromBytes(iv), ct: _b64FromBytes(new Uint8Array(ctBuf)) }),
+    });
+    if (!res.ok) return false;
+    bmScheduleSnapshot(); // debounced offsite backup
+    return true;
+  } catch (e) { return false; }
+}
+
+// GET + decrypt one doc from Fly. Returns the parsed object, or null when
+// absent / locked / on any failure (caller falls back to localStorage).
+async function bmDocLoad(docKey) {
+  try {
+    if (!bmDocReady()) return null;
+    const sess = window.bmSession;
+    const res = await fetch('/api/data/' + encodeURIComponent(docKey), {
+      headers: { 'Authorization': 'Bearer ' + sess.sessionToken },
+    });
+    if (res.status === 404) return null; // no doc yet
+    if (!res.ok) return null;
+    const pd = await res.json().catch(() => null);
+    if (!pd || !pd.iv || !pd.ct) return null;
+    const iv = _bytesFromB64(pd.iv);
+    const ct = _bytesFromB64(pd.ct);
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sess.dataKey, ct);
+    return JSON.parse(new TextDecoder().decode(plainBuf));
+  } catch (e) { return null; }
+}
+
+// List the server-side doc index (docKey + ver + updatedAt, no ciphertext).
+async function bmDocList() {
+  try {
+    if (!bmDocReady()) return [];
+    const sess = window.bmSession;
+    const res = await fetch('/api/data', { headers: { 'Authorization': 'Bearer ' + sess.sessionToken } });
+    if (!res.ok) return [];
+    const pd = await res.json().catch(() => null);
+    return (pd && Array.isArray(pd.docs)) ? pd.docs : [];
+  } catch (e) { return []; }
+}
+
+// Restore one doc from its R2 snapshot into Fly (recovery). Returns true if a
+// snapshot existed and was restored server-side.
+async function bmDocRestoreFromR2(docKey) {
+  try {
+    if (!bmDocReady()) return false;
+    const sess = window.bmSession;
+    const res = await fetch('/api/data/' + encodeURIComponent(docKey) + '/restore', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + sess.sessionToken },
+    });
+    if (!res.ok) return false;
+    const pd = await res.json().catch(() => ({}));
+    return !!pd.restored;
+  } catch (e) { return false; }
+}
+
+// ── Debounced R2 snapshot (decision 2: periodic, all-docs, NOT write-through) ─
+let _bmSnapTimer = null;
+function bmScheduleSnapshot() {
+  if (_bmSnapTimer) clearTimeout(_bmSnapTimer);
+  _bmSnapTimer = setTimeout(() => { _bmSnapTimer = null; bmSnapshotNow(); }, 90000); // 90s after last write
+}
+async function bmSnapshotNow() {
+  try {
+    if (!bmDocReady()) return;
+    const sess = window.bmSession;
+    await fetch('/api/data/snapshot', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + sess.sessionToken }, keepalive: true,
+    });
+  } catch (e) { /* best-effort */ }
+}
+// Flush a pending snapshot on logout / tab close so a backup isn't lost.
+window.addEventListener('beforeunload', () => {
+  if (_bmSnapTimer) { clearTimeout(_bmSnapTimer); _bmSnapTimer = null; bmSnapshotNow(); }
+});
+
 // Resolve the best thumbnail source for an <img>, async. Order:
 //   encrypted R2 thumb (if unlocked) -> local IndexedDB cache -> fav.imageData.
 // Sets the element's src when resolved; applies a lock placeholder when an
@@ -23248,8 +23493,26 @@ function setSession({ emailHash, email, dataKey, sessionToken }) {
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email } }));
   // DATA KEY just became available — refresh any locked thumbnail placeholders.
   if (dataKey && typeof bmThumbsOnUnlock === 'function') bmThumbsOnUnlock();
+  // DATA KEY available → pull authoritative state from Fly (source of truth) and
+  // overlay it onto whatever localStorage already loaded, then re-render. Fly
+  // wins where a doc exists; absent docs leave the local copy intact.
+  if (dataKey && typeof bmDocRestoreAll === 'function') {
+    bmDocRestoreAll().then((applied) => {
+      if (!applied) return;
+      try {
+        if (typeof renderFavs === 'function') renderFavs();
+        if (typeof renderLibrary === 'function') renderLibrary();
+        if (typeof renderFolderSidebar === 'function') renderFolderSidebar();
+        if (typeof updateLibBadge === 'function') updateLibBadge();
+        if (typeof pbRenderLibBar === 'function') pbRenderLibBar();
+        if (typeof currentView !== 'undefined' && currentView === 'settings' && typeof renderSettingsView === 'function') renderSettingsView();
+      } catch (e) {}
+    });
+  }
 }
 window.bmSignOut = () => {
+  // Flush any pending offsite backup before we drop the session token.
+  if (typeof bmSnapshotNow === 'function') { try { bmSnapshotNow(); } catch (e) {} }
   window.bmSession = null;
   try { localStorage.removeItem('bm_app_session'); } catch (e) {}
   // Drop decrypted thumbnail object URLs (they belong to this session's key).
@@ -23775,6 +24038,73 @@ async function bmFetchServerImage(serverImageUrl) {
     return URL.createObjectURL(blob);
   } catch (e) { return null; }
 }
+
+// ── Dead test-gen reconcile (Phase 3) ────────────────────────────────────────
+// A fav that CLAIMS an image (imageData/serverImageUrl/thumbKey/driveImageId)
+// but whose bytes are gone everywhere (Fly 404, no inline data, no Drive copy)
+// is a dead test-generation reference. Per the agreed policy these are DELETED
+// entirely (not converted to prompt-only). This is destructive, so it is only
+// ever run from an explicit user action and reports a count to confirm first.
+//
+// A fav with NO image claim at all is a legitimate prompt-only entry and is
+// never touched here. Locked favs (encrypted thumb, no DATA KEY) are SKIPPED —
+// we can't tell if their bytes exist while locked, so we never delete them.
+async function bmFindDeadImageFavs() {
+  const dead = [];
+  for (const f of favourites) {
+    if (f.noPreview) continue;                        // prompt-only: keep
+    const claimsImage = !!(f.imageData || f.serverImageUrl || f.thumbKey || f.driveImageId);
+    if (!claimsImage) continue;                       // no image claim: keep
+    if (typeof bmThumbLocked === 'function' && bmThumbLocked(f)) continue; // locked: skip
+
+    // 1) Inline data URI that isn't an /api/img pointer → still present.
+    if (typeof f.imageData === 'string' && f.imageData && f.imageData.indexOf('/api/img/') !== 0) continue;
+    // 2) Local cache hit → present.
+    if (typeof bmGetCachedImage === 'function') {
+      const cached = await bmGetCachedImage(f.id);
+      if (cached) continue;
+    }
+    // 3) Fly /data (authed) → present.
+    const serverUrl = f.serverImageUrl
+      || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : null);
+    if (serverUrl) {
+      const fromServer = await bmFetchServerImage(serverUrl);
+      if (fromServer) { try { URL.revokeObjectURL(fromServer); } catch (e) {} continue; }
+    }
+    // 4) Drive copy → present.
+    if (f.driveImageId && typeof driveFetchImageBlob === 'function') {
+      const fromDrive = await driveFetchImageBlob(f.driveImageId);
+      if (fromDrive) continue;
+    }
+    // Resolved nowhere → dead.
+    dead.push(f);
+  }
+  return dead;
+}
+
+// Run the reconcile end-to-end with a confirm gate. Returns the number deleted.
+async function bmReconcileDeadImages() {
+  if (!bmDocReady()) { alert('Sign in and unlock first.'); return 0; }
+  const dead = await bmFindDeadImageFavs();
+  if (!dead.length) { pbPasteToast('No dead image entries found'); return 0; }
+  const ok = confirm(`${dead.length} library entr${dead.length === 1 ? 'y has' : 'ies have'} an image that no longer exists anywhere.\n\nDelete ${dead.length === 1 ? 'it' : 'them'} permanently? Prompt-only entries are not affected.`);
+  if (!ok) return 0;
+  const deadIds = new Set(dead.map(f => f.id));
+  favourites = favourites.filter(f => !deadIds.has(f.id));
+  // Best-effort: drop their Drive prompt files too, if connected.
+  if (cloudIsConnected() && typeof driveDeletePrompt === 'function') {
+    for (const id of deadIds) { try { await driveDeletePrompt(id); } catch (e) {} }
+  }
+  lsSave(LS.FAVS, favourites);
+  if (typeof bmDocSave === 'function') await bmDocSave(BM_DOC_KEYS.PROMPTS, favourites);
+  if (typeof renderFavs === 'function') renderFavs();
+  if (typeof renderLibrary === 'function') renderLibrary();
+  if (typeof updateLibBadge === 'function') updateLibBadge();
+  pbPasteToast(`${dead.length} dead entr${dead.length === 1 ? 'y' : 'ies'} deleted`);
+  return dead.length;
+}
+window.bmReconcileDeadImages = bmReconcileDeadImages;
+
 
 // Set an <img>'s src from a generation/upscale result URL. CRITICAL: result URLs
 // are now /api/img/<favId> (the /data store), which need the session bearer
