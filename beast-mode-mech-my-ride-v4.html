@@ -21638,79 +21638,67 @@ function upResolveGroup(f) {
   if (!f) return { original: null, upscales: [] };
   const byId = new Map(all.filter(x => x && x.id != null).map(x => [x.id, x]));
 
-  // Resolve the parent of any fav: forward link (child.upscaledFromId) first,
-  // then reverse link (some parent lists this id in upscaleIds).
-  const parentOf = (node) => {
-    if (!node || !node.isUpscale) return null;
-    let p = (node.upscaledFromId != null) ? byId.get(node.upscaledFromId) : null;
-    if (!p) p = all.find(x => x && Array.isArray(x.upscaleIds) && x.upscaleIds.includes(node.id));
-    return p || null;
+  // Treat upscale links as an UNDIRECTED graph and gather the whole connected
+  // component reachable from f. Links are inconsistent across favs (some carry
+  // child→parent `upscaledFromId`, some carry parent→children `upscaleIds`, and
+  // they don't always agree), so directional walks lose members. Collecting the
+  // component over BOTH directions unites the entire set from ANY starting node.
+  const neighbours = (node) => {
+    const out = [];
+    if (!node) return out;
+    // child → parent
+    if (node.upscaledFromId != null && byId.has(node.upscaledFromId)) out.push(byId.get(node.upscaledFromId));
+    // parent → declared children
+    if (Array.isArray(node.upscaleIds)) node.upscaleIds.forEach(id => { if (byId.has(id)) out.push(byId.get(id)); });
+    // reverse of both: anyone pointing at me, or listing me as a child
+    all.forEach(x => {
+      if (!x || x.id === node.id) return;
+      if (x.upscaledFromId === node.id) out.push(x);
+      if (Array.isArray(x.upscaleIds) && x.upscaleIds.includes(node.id)) out.push(x);
+    });
+    return out;
   };
 
-  // Walk UP to the root (a non-upscale, or the topmost upscale we can reach).
-  let root = f;
-  const seenUp = new Set();
-  while (root && root.isUpscale && !seenUp.has(root.id)) {
-    seenUp.add(root.id);
-    const p = parentOf(root);
-    if (!p || p.id === root.id) break;
-    root = p;
+  const component = new Map();
+  const stack = [f];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || node.id == null || component.has(node.id)) continue;
+    component.set(node.id, node);
+    neighbours(node).forEach(n => { if (n && n.id != null && !component.has(n.id)) stack.push(n); });
   }
 
-  // If the root is itself an orphan upscale (its source was an ad-hoc upload/URL
-  // never saved as a fav), synthesize an original from the pinned source bytes.
-  let original = root;
-  let synthExtra = null;
-  if (original && original.isUpscale) {
-    if (original.srcImageData) {
-      synthExtra = original; // the orphan upscale becomes a child of the synth
+  const members = Array.from(component.values());
+  // The original is the single non-upscale member, if any.
+  let original = members.find(x => x && !x.isUpscale) || null;
+  const upscales = members.filter(x => x && x.isUpscale);
+
+  // Orphan case: no saved original in the component (source was an ad-hoc
+  // upload/URL). Synthesize one from the pinned source bytes of the earliest
+  // upscale that carries them, so the rail + slider can show a "before".
+  if (!original && upscales.length) {
+    const withSrc = upscales.find(u => u && u.srcImageData);
+    if (withSrc) {
       original = {
-        id: '__orig__' + original.id,
-        imageData: original.srcImageData,
-        outW: original.srcW || null,
-        outH: original.srcH || null,
+        id: '__orig__' + withSrc.id,
+        imageData: withSrc.srcImageData,
+        outW: withSrc.srcW || null,
+        outH: withSrc.srcH || null,
         isUpscale: false,
         _synthOriginal: true,
         title: 'Original',
       };
-    } else {
-      return { original: null, upscales: [] };
     }
   }
-  if (!original) return { original: null, upscales: [] };
+  if (!original && !upscales.length) return { original: null, upscales: [] };
 
-  // Collect ALL descendants transitively (upscales, and upscales of upscales).
-  // BFS from the root over both link directions so the whole tree unites no
-  // matter which member was selected.
-  const collected = new Map();
-  const queue = [original.id];
-  // For a synthesized original, seed the queue with the orphan upscale's id so
-  // its own descendants are gathered too.
-  if (synthExtra) { collected.set(synthExtra.id, synthExtra); queue.push(synthExtra.id); }
-  const visited = new Set();
-  while (queue.length) {
-    const pid = queue.shift();
-    if (visited.has(pid)) continue;
-    visited.add(pid);
-    const parentNode = byId.get(pid) || (synthExtra && pid === synthExtra.id ? synthExtra : null);
-    const childIds = new Set();
-    // Reverse: this node's declared children.
-    if (parentNode && Array.isArray(parentNode.upscaleIds)) parentNode.upscaleIds.forEach(id => childIds.add(id));
-    // Forward: any fav pointing back to this node.
-    all.forEach(x => { if (x && x.isUpscale && x.upscaledFromId === pid) childIds.add(x.id); });
-    childIds.forEach(cid => {
-      const child = byId.get(cid);
-      if (child && child.isUpscale && !collected.has(cid)) { collected.set(cid, child); queue.push(cid); }
-    });
-  }
-
-  // Order upscales oldest→newest (by saved timestamp if present, else id).
-  const ups = Array.from(collected.values()).sort((a, b) => {
+  // Order upscales oldest→newest (saved timestamp if present, else id).
+  upscales.sort((a, b) => {
     const ta = a.savedAt || a.createdAt || a.id || 0;
     const tb = b.savedAt || b.createdAt || b.id || 0;
     return (ta > tb) ? 1 : (ta < tb) ? -1 : 0;
   });
-  return { original, upscales: ups };
+  return { original, upscales };
 }
 
 // Central selection handler. Non-upscale → single preview + arm as source.
@@ -21887,16 +21875,25 @@ function upRenderStageSlider(upFav) {
   // before-overlay clip and the Original/Upscale labels are all bounded to the
   // image, and the divider can't run past the image edges.
   const aw = upFav.outW || beforeW || 0, ah = upFav.outH || beforeH || 0;
-  if (aw > 0 && ah > 0) {
-    slider.style.aspectRatio = aw + ' / ' + ah;
-    slider.style.width = 'auto';
-    slider.style.height = 'auto';
-    slider.style.maxWidth = '100%';
-    slider.style.maxHeight = '100%';
-  } else {
-    slider.style.width = '100%';
-    slider.style.height = '100%';
-  }
+  // Size the slider to the fitted image rectangle in PIXELS, measured from the
+  // host. CSS aspect-ratio inside a flex host collapsed to zero height (blank
+  // compare); explicit px is deterministic. Re-fit on resize via upFitSlider().
+  const fitSlider = () => {
+    const hb = host.getBoundingClientRect();
+    const HW = hb.width || host.clientWidth || 0;
+    const HH = hb.height || host.clientHeight || 0;
+    if (!HW || !HH || !aw || !ah) {
+      slider.style.width = '100%'; slider.style.height = '100%';
+      return;
+    }
+    const scale = Math.min(HW / aw, HH / ah);
+    const w = Math.max(1, Math.round(aw * scale));
+    const h = Math.max(1, Math.round(ah * scale));
+    slider.style.width = w + 'px';
+    slider.style.height = h + 'px';
+  };
+  slider.style.position = 'relative';
+  fitSlider();
   // After (upscaled) fills the base layer; res bottom-right.
   const afterWrap = document.createElement('div');
   afterWrap.className = 'up-slider-after';
@@ -21932,6 +21929,15 @@ function upRenderStageSlider(upFav) {
   afterWrap.appendChild(handle);
   slider.appendChild(afterWrap);
   host.appendChild(slider);
+  // Re-measure now it's in the DOM (first fit ran before layout), and keep it
+  // fitted on window resize until this slider is replaced/removed.
+  fitSlider();
+  requestAnimationFrame(fitSlider);
+  const _onResize = () => {
+    if (!slider.isConnected) { window.removeEventListener('resize', _onResize); return; }
+    fitSlider();
+  };
+  window.addEventListener('resize', _onResize);
   // Mount into the zoom controller (fall back to a measured size if dims absent).
   if (aw > 0 && ah > 0) upZoomMount(aw, ah);
   else afterImg.addEventListener('load', () => upZoomMount(afterImg.naturalWidth, afterImg.naturalHeight), { once: true });
