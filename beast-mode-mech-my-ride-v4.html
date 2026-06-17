@@ -21664,6 +21664,64 @@ function bmRepairUpscaleLinks() {
       if (!parent.hasUpscales) { parent.hasUpscales = true; changed = true; }
     }
   });
+  // Materialize a REAL original for orphan groups. An orphan group is one whose
+  // root is an upscale with no saved parent (source was an ad-hoc upload/URL).
+  // We promote its pinned source bytes (srcImageData) into a genuine original
+  // fav so it shows in the bottom bar, is selectable, and appears in the rail
+  // with its upscales below. Idempotent: skips roots that already have a real
+  // (non-upscale) parent, and reuses one materialized original per source.
+  const roots = favourites.filter(f =>
+    f && f.isUpscale && (f.upscaledFromId == null || !byId.has(f.upscaledFromId)) && f.srcImageData
+  );
+  const madeForSrc = new Map(); // srcImageData → new original id (dedupe within a run)
+  roots.forEach(root => {
+    // If some other upscale in this run already created an original for the same
+    // pinned bytes, reuse it (covers two orphan roots sharing one source).
+    let origId = madeForSrc.get(root.srcImageData);
+    if (origId == null) {
+      // Reuse a previously-materialized original if one matching these bytes
+      // already exists in favourites (so a second load doesn't duplicate it).
+      const existing = favourites.find(x => x && x._fromOrphanSrc && x.imageData === root.srcImageData);
+      if (existing) { origId = existing.id; }
+      else {
+        const newId = Date.now() + Math.floor(Math.random() * 1000);
+        const orig = {
+          id: newId,
+          title: 'Original',
+          model: root.model || '',
+          rating: 0, starred: false, folderId: null,
+          versions: [],
+          imageData: root.srcImageData,
+          serverImageUrl: null,
+          createdAt: (root.createdAt || root.id || Date.now()) - 1,
+          updatedAt: Date.now(),
+          savedAt: (root.savedAt || root.createdAt || root.id || Date.now()) - 1,
+          particles: null,
+          isUpscale: false,
+          hasUpscales: true,
+          upscaleIds: [],
+          outW: root.srcW || null,
+          outH: root.srcH || null,
+          _fromOrphanSrc: true, // marks a migration-created original
+        };
+        favourites.push(orig);
+        byId.set(newId, orig);
+        origId = newId;
+      }
+      madeForSrc.set(root.srcImageData, origId);
+      changed = true;
+    }
+    // Re-point this root upscale at the materialized original (both directions).
+    const orig = byId.get(origId);
+    if (orig) {
+      root.upscaledFromId = origId;
+      if (!Array.isArray(orig.upscaleIds)) orig.upscaleIds = [];
+      if (!orig.upscaleIds.includes(root.id)) orig.upscaleIds.push(root.id);
+      orig.hasUpscales = true;
+      changed = true;
+    }
+  });
+
   // Drop any dangling child ids a parent lists that no longer exist.
   favourites.forEach(f => {
     if (f && Array.isArray(f.upscaleIds)) {
