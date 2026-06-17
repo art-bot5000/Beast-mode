@@ -1176,6 +1176,12 @@ body.bm-queue-modal-open { overflow:hidden; }
 .lib-card-image-ph .ph-label { font-size:13px;letter-spacing:2px; }
 /* Encrypted thumb with no DATA KEY yet: SVG lock src on a muted tile. */
 img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%; }
+/* Prompt-only card (e.g. imported pre-image-gen prompt): no preview region at
+   all. The body sits flush against the card top edge. */
+.lib-card-noimg .lib-card-body { border-top:none; }
+/* Dead image reference settled by bmApplyThumb — render as an empty muted tile,
+   no broken-image glyph, no flicker. */
+img.bm-thumb-missing { background:var(--surface2); }
 
 /* Body */
 .lib-card-body { padding:14px;flex:1;display:flex;flex-direction:column;gap:9px; }
@@ -9584,7 +9590,14 @@ function buildLibCard(f) {
   card.id = 'libCard_' + f.id
 
   // ── Image ──────────────────────────────────────────────────
-  if (f.imageData || f.thumbKey || f.serverImageUrl) {
+  // Prompt-only entries (e.g. imported from the pre-image-gen app) carry no
+  // image and never should — render NO preview slot and NO "add reference"
+  // affordance. Distinct from an image-capable fav that simply hasn't had an
+  // image attached yet (that still gets the placeholder below).
+  if (f.noPreview) {
+    card.classList.add('lib-card-noimg')
+    // fall through to body; no image element, no placeholder
+  } else if (f.imageData || f.thumbKey || f.serverImageUrl) {
     const img = document.createElement('img')
     img.className = 'lib-card-image'
     // Do NOT pre-assign an /api/img URL — it needs the auth header, so a raw
@@ -20174,7 +20187,18 @@ async function bmApplyThumb(imgEl, fav) {
     imgEl.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="%23888" stroke-width="1.6"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
     );
+    return;
   }
+  // 5) Every real source exhausted and the fav is NOT locked -> the bytes are
+  // gone (dead test-gen reference). Settle into the terminal "unavailable" state
+  // HERE and disarm onerror, so the <img> can't ping-pong between a transient
+  // broken state and bmImageFallback's retry — that race is the login-time
+  // "flashing broken icon". Phase 3 deletes these entries outright.
+  imgEl.onerror = null;
+  imgEl.removeAttribute('src');
+  imgEl.classList.add('bm-thumb-missing');
+  imgEl.style.opacity = '0.25';
+  imgEl.title = 'Image no longer available';
 }
 
 // Open the FULL-SIZE image (not the thumb) in the lightbox. Resolves via the
