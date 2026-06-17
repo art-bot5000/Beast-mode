@@ -9677,8 +9677,9 @@ function buildLibCard(f) {
   tags.className = 'lib-card-tags'
   const presetName = (getPreset(f.preset)?.name || f.preset || 'DEFAULT').toUpperCase()
   const folder = f.folderId ? libFolders.find(x => x.id === f.folderId) : null
+  const modeName = (f.mode || 'image')
   tags.innerHTML = `
-    <span class="lib-tag mode-${f.mode}">${f.mode.toUpperCase()}</span>
+    <span class="lib-tag mode-${modeName}">${modeName.toUpperCase()}</span>
     <span class="lib-tag tag-style">${presetName}</span>
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${f.model}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
@@ -21617,11 +21618,8 @@ function upRenderLibBar() {
     const img = document.createElement('img');
     img.alt = f.title || ''; img.loading = 'lazy';
     img.dataset.favId = f.id;
-    // Use the small encrypted thumbnail (fast) rather than the full image — the
-    // bottom bar is a dense strip of many images. bmApplyThumb prefers
-    // thumbKey → local cache → durable copy; the full image is only fetched when
-    // the item is clicked (upSelectFav → stage render). Fall back to the direct
-    // source if the thumb pipeline isn't available.
+    // Load the small encrypted thumbnail (fast) via bmApplyThumb; the full image
+    // is only fetched when the item is clicked into the stage (upSelectFav).
     if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, f); }
     else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
     else { img.src = f.imageData; }
@@ -21711,9 +21709,11 @@ function bmRepairUpscaleLinks() {
           title: 'Original',
           text: 'Uploaded original',
           promptOnly: 'Uploaded original',
+          mode: 'image',
+          preset: 'default',
           model: root.model || '',
           rating: 0, starred: false, folderId: null,
-          versions: [],
+          versions: [{ text: 'Uploaded original', savedAt: Date.now(), label: 'Original' }],
           imageData: root.srcImageData,
           serverImageUrl: null,
           createdAt: (root.createdAt || root.id || Date.now()) - 1,
@@ -21751,12 +21751,19 @@ function bmRepairUpscaleLinks() {
     }
   });
 
-  // Backfill prompt fields on any materialized original from an earlier run
-  // (older ones lacked text/promptOnly, which crashed renderFavs at .slice()).
+  // Backfill required fields on any materialized original from an earlier run.
+  // Older ones were created without text/promptOnly/mode/preset/versions, which
+  // crashed renderFavs (.slice) and buildLibCard (.toUpperCase) and blanked the
+  // whole Library. Make every materialized original a complete, well-formed fav.
   favourites.forEach(o => {
-    if (o && o._fromOrphanSrc) {
-      if (o.text == null) { o.text = 'Uploaded original'; changed = true; }
-      if (o.promptOnly == null) { o.promptOnly = 'Uploaded original'; changed = true; }
+    if (!o || !o._fromOrphanSrc) return;
+    if (o.text == null) { o.text = 'Uploaded original'; changed = true; }
+    if (o.promptOnly == null) { o.promptOnly = 'Uploaded original'; changed = true; }
+    if (o.mode == null) { o.mode = 'image'; changed = true; }
+    if (o.preset == null) { o.preset = 'default'; changed = true; }
+    if (!Array.isArray(o.versions) || !o.versions.length) {
+      o.versions = [{ text: o.text || 'Uploaded original', savedAt: o.savedAt || Date.now(), label: 'Original' }];
+      changed = true;
     }
   });
 
