@@ -7968,8 +7968,9 @@ function renderFavs(){
     return
   }
   list.innerHTML = favourites.map(f => {
-    const display = (f.promptOnly || f.text).slice(0,180)
-    const ellipsis = (f.promptOnly || f.text).length > 180 ? '…' : ''
+    const _src = (f.promptOnly || f.text || '')
+    const display = _src.slice(0,180)
+    const ellipsis = _src.length > 180 ? '…' : ''
     return `
     <div class="fav-item">
       <span class="fav-tag">${f.mode.toUpperCase()}</span>
@@ -21615,7 +21616,15 @@ function upRenderLibBar() {
     cell.dataset.favId = f.id;
     const img = document.createElement('img');
     img.alt = f.title || ''; img.loading = 'lazy';
-    if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); } else { img.src = f.imageData; }
+    img.dataset.favId = f.id;
+    // Use the small encrypted thumbnail (fast) rather than the full image — the
+    // bottom bar is a dense strip of many images. bmApplyThumb prefers
+    // thumbKey → local cache → durable copy; the full image is only fetched when
+    // the item is clicked (upSelectFav → stage render). Fall back to the direct
+    // source if the thumb pipeline isn't available.
+    if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, f); }
+    else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
+    else { img.src = f.imageData; }
     cell.appendChild(img);
     if (f.isUpscale) {
       const up = document.createElement('div');
@@ -21700,6 +21709,8 @@ function bmRepairUpscaleLinks() {
         const orig = {
           id: newId,
           title: 'Original',
+          text: 'Uploaded original',
+          promptOnly: 'Uploaded original',
           model: root.model || '',
           rating: 0, starred: false, folderId: null,
           versions: [],
@@ -21737,6 +21748,15 @@ function bmRepairUpscaleLinks() {
       if (!orig.upscaleIds.includes(root.id)) orig.upscaleIds.push(root.id);
       orig.hasUpscales = true;
       changed = true;
+    }
+  });
+
+  // Backfill prompt fields on any materialized original from an earlier run
+  // (older ones lacked text/promptOnly, which crashed renderFavs at .slice()).
+  favourites.forEach(o => {
+    if (o && o._fromOrphanSrc) {
+      if (o.text == null) { o.text = 'Uploaded original'; changed = true; }
+      if (o.promptOnly == null) { o.promptOnly = 'Uploaded original'; changed = true; }
     }
   });
 
