@@ -20150,6 +20150,72 @@ function bmThumbsOnUnlock() {
   if (typeof renderFavs === 'function') renderFavs();
   const um = document.getElementById('bmUsageModal');
   if (um && um.style.display !== 'none' && typeof bmUsageRender === 'function') bmUsageRender(true);
+  // DATA KEY is now present — backfill any favourites that never got an
+  // encrypted thumbnail (saved while locked, before the thumb pipeline existed,
+  // or synced from Drive). Fire-and-forget; self-throttles.
+  if (typeof bmThumbSweep === 'function') bmThumbSweep();
+}
+
+// Eager background thumbnail backfill. Walks every favourite that has image
+// content but no encrypted thumb and generates one, so both the library grid
+// and the upscaler bottom-bar picker render fast compressed thumbs instead of
+// fetching full-size images (the "big upscales load slowly" symptom). Sources
+// from Fly.io /data (R2-backed) and the local cache ONLY — never Drive, which
+// is now an optional user backup. Sequential + throttled so a large library
+// can't saturate the network or pin the main thread during canvas encode.
+let _bmThumbSweeping = false;
+const _bmSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function bmThumbSweep() {
+  if (_bmThumbSweeping) return;
+  const sess = window.bmSession;
+  if (!sess || !sess.sessionToken || !sess.dataKey) return; // need DATA KEY to encrypt
+  if (typeof favourites === 'undefined') return;
+  _bmThumbSweeping = true;
+  try {
+    const targets = favourites.filter((f) => f && f.imageData && !f.thumbKey);
+    if (!targets.length) return;
+    let made = 0;
+    for (const f of targets) {
+      // Bail if the session went away mid-sweep (sign-out / lock).
+      const s = window.bmSession;
+      if (!s || !s.sessionToken || !s.dataKey) break;
+      // Resolve a source WITHOUT touching Drive: cache -> server -> inline data.
+      let src = null;
+      if (typeof bmGetCachedImage === 'function') {
+        try { src = await bmGetCachedImage(f.id); } catch (e) { src = null; }
+      }
+      if (!src) {
+        const serverUrl = f.serverImageUrl
+          || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : null);
+        if (serverUrl && typeof bmFetchServerImage === 'function') {
+          try { src = await bmFetchServerImage(serverUrl); } catch (e) { src = null; }
+        }
+      }
+      if (!src && f.imageData && !(typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0)) {
+        src = f.imageData; // inline data: URL
+      }
+      if (!src) { await _bmSleep(60); continue; } // nothing Fly/R2/cache-resolvable; skip
+      // bmThumbUpload sets thumbKey/thumbIv/thumbMime, lsSaves and driveSavePrompts.
+      try { await bmThumbUpload(f, src); } catch (e) { /* best-effort */ }
+      if (f.thumbKey) {
+        made++;
+        // Periodically refresh open surfaces so thumbs appear progressively.
+        if (made % 8 === 0) {
+          if (typeof renderFavs === 'function') renderFavs();
+          if (typeof currentView !== 'undefined' && currentView === 'upscaler'
+              && typeof upRenderLibBar === 'function') upRenderLibBar();
+        }
+      }
+      await _bmSleep(150); // throttle
+    }
+    if (made) {
+      if (typeof renderFavs === 'function') renderFavs();
+      if (typeof currentView !== 'undefined' && currentView === 'upscaler'
+          && typeof upRenderLibBar === 'function') upRenderLibBar();
+    }
+  } finally {
+    _bmThumbSweeping = false;
+  }
 }
 
 // against runware.ai/docs (June 2026). Dimension pairs for preset models MUST
@@ -23725,7 +23791,9 @@ async function bmImageFallback(imgEl, fav) {
     if (fromDrive) { imgEl.src = fromDrive; return }
   }
   imgEl.style.opacity = '0.25'
-  imgEl.title = 'Image no longer available — connect Google Drive to keep all images'
+  imgEl.title = (typeof driveBackupEnabled === 'function' && driveBackupEnabled())
+    ? 'Image no longer available — try reconnecting Google Drive'
+    : 'Image unavailable'
 }
 </script>
 
