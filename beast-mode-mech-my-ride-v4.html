@@ -3894,6 +3894,10 @@ img.bm-thumb-locked { background:var(--surface2);object-fit:contain;padding:18%;
   background:var(--accent,#00ffb0); border-radius:3px;
   box-shadow:0 1px 3px rgba(0,0,0,.5); pointer-events:none;
 }
+/* Uploaded-original marker — distinct from the accent upscale badge. */
+.up-libbar-thumb .up-libbar-upl {
+  background:#1f6feb; color:#fff; font-weight:700;
+}
 .up-libbar-empty { color:var(--muted); font-size:12px; padding:10px 2px; }
 
 /* Small screens: single column, areas stack in reading order. */
@@ -21616,9 +21620,17 @@ function upRenderLibBar() {
     if (f.isUpscale) {
       const up = document.createElement('div');
       up.className = 'up-libbar-up';
-      up.textContent = '\u2726'; // ✦
+      up.textContent = '\u2726'; // ✦ upscale marker
       up.title = 'Upscaled image';
       cell.appendChild(up);
+    } else if (f._fromOrphanSrc || f._uploadedOriginal) {
+      // Distinct marker for an uploaded/source original (the "before" an upscale
+      // was made from) so it reads differently from an upscale in the bar.
+      const upl = document.createElement('div');
+      upl.className = 'up-libbar-up up-libbar-upl';
+      upl.textContent = '\u2191'; // ↑ upload marker
+      upl.title = 'Uploaded original';
+      cell.appendChild(upl);
     }
     cell.onclick = () => { upSelectFav(f); };
     bar.appendChild(cell);
@@ -21702,9 +21714,15 @@ function bmRepairUpscaleLinks() {
           upscaleIds: [],
           outW: root.srcW || null,
           outH: root.srcH || null,
-          _fromOrphanSrc: true, // marks a migration-created original
+          _fromOrphanSrc: true,      // marks a migration-created original
+          _uploadedOriginal: true,   // shows the upload marker in the bar
         };
-        favourites.push(orig);
+        // Insert just BEFORE the root upscale so it sits next to its group in
+        // the (array-ordered) bottom bar, rather than being appended to the far
+        // end where it scrolls off-screen.
+        const rootIdx = favourites.indexOf(root);
+        if (rootIdx >= 0) favourites.splice(rootIdx, 0, orig);
+        else favourites.push(orig);
         byId.set(newId, orig);
         origId = newId;
       }
@@ -21720,6 +21738,23 @@ function bmRepairUpscaleLinks() {
       orig.hasUpscales = true;
       changed = true;
     }
+  });
+
+  // Reposition any materialized original (this run or a prior one) to sit just
+  // before its root upscale in the array, so it appears next to its group in the
+  // bottom bar instead of stranded at the far (oldest) end.
+  favourites.filter(o => o && o._fromOrphanSrc).forEach(orig => {
+    const childId = Array.isArray(orig.upscaleIds) ? orig.upscaleIds[0] : null;
+    if (childId == null) return;
+    const child = byId.get(childId);
+    if (!child) return;
+    const oi = favourites.indexOf(orig);
+    const ci = favourites.indexOf(child);
+    if (oi < 0 || ci < 0 || oi === ci - 1) return; // already adjacent (before child)
+    favourites.splice(oi, 1);
+    const newCi = favourites.indexOf(child); // recompute after removal
+    favourites.splice(newCi, 0, orig);
+    changed = true;
   });
 
   // Drop any dangling child ids a parent lists that no longer exist.
@@ -21775,6 +21810,14 @@ function upResolveGroup(f) {
   // The original is the single non-upscale member, if any.
   let original = members.find(x => x && !x.isUpscale) || null;
   const upscales = members.filter(x => x && x.isUpscale);
+
+  if (typeof window !== 'undefined' && window.BM_DEBUG_GROUP) {
+    try {
+      console.log('[upResolveGroup] from', f && f.id, '→ component:',
+        members.map(m => ({ id: m.id, isUpscale: !!m.isUpscale, parent: m.upscaledFromId, kids: m.upscaleIds })),
+        '| original:', original && original.id, '| upscales:', upscales.map(u => u.id));
+    } catch (e) {}
+  }
 
   // Orphan case: no saved original in the component (source was an ad-hoc
   // upload/URL). Synthesize one from the pinned source bytes of the earliest
