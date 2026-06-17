@@ -4676,6 +4676,15 @@ body.up-settings-modal-open { overflow:hidden; }
               <input type="checkbox" id="bmDriveBackupToggle" onchange="setDriveBackupEnabled(this.checked)" style="width:16px;height:16px;cursor:pointer;">
               <span>Also back up new images to Google Drive <span style="opacity:0.7;">(optional — your images are already saved to your account)</span></span>
             </label>
+            <!-- One-time recovery: pull images that were saved to the Drive
+                 "Beast Mode" folder (before images persisted to your account)
+                 back into your account storage, so they show in the library and
+                 upscaler again. Server-side; safe to run more than once. -->
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+              <button class="btn btn-ghost" id="bmDriveMergeBtn" onclick="bmDriveMerge()" style="font-size:12px;">⤓ IMPORT IMAGES FROM DRIVE</button>
+              <div id="bmDriveMergeStatus" style="font-size:12px;color:var(--muted);margin-top:8px;display:none;"></div>
+              <div style="font-size:11px;color:var(--muted);opacity:0.7;margin-top:6px;">One-time recovery of images saved to your Drive "Beast Mode" folder. Safe to run again — already-imported images are skipped.</div>
+            </div>
           </div>
           <div id="settingsDriveSignedOut" style="display:block;">
             <div id="settingsDriveStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
@@ -19749,6 +19758,63 @@ window.addEventListener('bm-auth-changed', (e) => {
     try { bmSyncLibraryFromManifest(); } catch (_) {}
   }
 });
+
+// One-time recovery: ask the SERVER to pull every image from the user's visible
+// "Beast Mode" Drive folder into durable /data storage. Server-side because the
+// server holds the durable Drive refresh token — no in-app Drive login needed.
+// Idempotent (already-stored favIds are skipped). On success we re-sync the
+// library manifest so the recovered images appear immediately in the grid and
+// the upscaler bottom bar.
+async function bmDriveMerge() {
+  const btn = document.getElementById('bmDriveMergeBtn');
+  const status = document.getElementById('bmDriveMergeStatus');
+  const setStatus = (msg) => { if (status) { status.style.display = 'block'; status.textContent = msg; } };
+  const tok = window.bmSession && window.bmSession.sessionToken;
+  if (!tok) { setStatus('Sign in first to import from Drive.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '⤓ IMPORTING…'; }
+  setStatus('Contacting Google Drive and importing — this can take a moment for large libraries…');
+  try {
+    const res = await fetch('/oauth/google/merge', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + tok },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (data && data.code === 'not_connected') {
+        setStatus('Google Drive isn\u2019t connected on the server. Connect Drive (the redirect flow) once, then try again.');
+      } else if (data && data.code === 'not_configured') {
+        setStatus('Drive import isn\u2019t available right now (server not configured).');
+      } else {
+        setStatus('Import failed: ' + ((data && data.error) || ('HTTP ' + res.status)) + '. Please try again.');
+      }
+      return;
+    }
+    if (data.folderFound === false) {
+      setStatus('No \u201CBeast Mode\u201D folder was found in your Drive — nothing to import.');
+      return;
+    }
+    const merged = data.merged || 0, skipped = data.skipped || 0, failed = data.failed || 0, found = data.found || 0;
+    let msg = 'Imported ' + merged + ' image' + (merged === 1 ? '' : 's') + ' from Drive';
+    if (skipped) msg += ' \u00B7 ' + skipped + ' already in your account';
+    if (failed) msg += ' \u00B7 ' + failed + ' could not be read';
+    msg += ' (' + found + ' file' + (found === 1 ? '' : 's') + ' scanned).';
+    setStatus(msg);
+    // Pull the new images into the library + upscaler without a reload.
+    if (merged && typeof bmSyncLibraryFromManifest === 'function') {
+      try { await bmSyncLibraryFromManifest(); } catch (_) {}
+      if (typeof renderFavs === 'function') renderFavs();
+      if (typeof currentView !== 'undefined' && currentView === 'upscaler'
+          && typeof upRenderLibBar === 'function') upRenderLibBar();
+      // Generate thumbnails for the freshly-imported images if unlocked.
+      if (typeof bmThumbSweep === 'function') { try { bmThumbSweep(); } catch (_) {} }
+    }
+  } catch (e) {
+    setStatus('Import failed: ' + (e && e.message ? e.message : 'network error') + '. Please try again.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '\u2913 IMPORT IMAGES FROM DRIVE'; }
+  }
+}
+window.bmDriveMerge = bmDriveMerge;
 // Also attempt a start on load if a session is already present (page refresh).
 if (typeof window !== 'undefined') {
   window.addEventListener('DOMContentLoaded', () => {

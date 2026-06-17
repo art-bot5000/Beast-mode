@@ -29,6 +29,7 @@
 // that Drive content is the "portable zone", not the zero-knowledge zone.
 
 import { kv, verifySessionToken } from "./auth.ts";
+import { storeImage, listManifest } from "./data-store.ts";
 
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
@@ -152,16 +153,17 @@ async function oauthCallback(url: URL): Promise<Response> {
   return back("connected");
 }
 
-// ── token: mint a fresh access token from the stored refresh token ───────────
-async function oauthToken(req: Request): Promise<Response> {
-  const emailHash = await bearerUser(req);
-  if (!emailHash) return json({ error: "Sign in first", code: "auth_required" }, 401);
-
+// ── helper: mint a fresh access token from a user's stored refresh token ──────
+// Shared by /token and the one-time /merge. Returns the access token, or an
+// error shape. Cleans up the stored record on invalid_grant (user revoked).
+async function mintAccessToken(
+  emailHash: string,
+): Promise<{ token: string; email?: string } | { error: string; code: string; status: number }> {
   const rec = await kv.get<GDriveRecord>(["gdrive", emailHash]);
-  if (!rec.value) return json({ error: "Google Drive not connected", code: "not_connected" }, 404);
+  if (!rec.value) return { error: "Google Drive not connected", code: "not_connected", status: 404 };
 
   const secret = clientSecret();
-  if (!secret) return json({ error: "Not configured", code: "not_configured" }, 503);
+  if (!secret) return { error: "Not configured", code: "not_configured", status: 503 };
 
   try {
     const res = await fetch(GOOGLE_TOKEN, {
@@ -176,22 +178,26 @@ async function oauthToken(req: Request): Promise<Response> {
     });
     const tok = await res.json();
     if (!res.ok) {
-      // invalid_grant = user revoked access in their Google account; clean up.
       if (tok.error === "invalid_grant") {
         await kv.delete(["gdrive", emailHash]);
-        return json({ error: "Drive access was revoked — reconnect", code: "not_connected" }, 404);
+        return { error: "Drive access was revoked — reconnect", code: "not_connected", status: 404 };
       }
       throw new Error(JSON.stringify(tok).slice(0, 200));
     }
-    return json({
-      accessToken: tok.access_token,
-      expiresIn: tok.expires_in,
-      email: rec.value.email,
-    });
+    return { token: tok.access_token as string, email: rec.value.email };
   } catch (e) {
     console.error("Token refresh failed:", (e as Error).message);
-    return json({ error: "Token refresh failed", code: "upstream" }, 502);
+    return { error: "Token refresh failed", code: "upstream", status: 502 };
   }
+}
+
+// ── token: mint a fresh access token from the stored refresh token ───────────
+async function oauthToken(req: Request): Promise<Response> {
+  const emailHash = await bearerUser(req);
+  if (!emailHash) return json({ error: "Sign in first", code: "auth_required" }, 401);
+  const r = await mintAccessToken(emailHash);
+  if ("error" in r) return json({ error: r.error, code: r.code }, r.status);
+  return json({ accessToken: r.token, email: r.email });
 }
 
 // ── disconnect: forget + best-effort revoke ──────────────────────────────────
@@ -208,12 +214,129 @@ async function oauthDisconnect(req: Request): Promise<Response> {
   return json({ ok: true });
 }
 
-// ── Router ────────────────────────────────────────────────────────────────────
+// ── one-time merge: pull every image from the visible "Beast Mode" Drive folder
+// into the durable Fly /data store, so the library no longer relies on Drive.
+//
+// Why server-side: the server already holds the user's refresh token (durable
+// connect flow), so it can mint a token and read the app-created folder under
+// drive.file scope — no in-app Drive login required. Idempotent: any favId
+// already present in the Fly manifest is SKIPPED, so it's safe to run twice.
+//
+// Filename contract: images were uploaded as `beast-mode-<favId>.jpg` (and
+// `beast-mode-<favId>-markup.jpg`). We parse the favId from the name so the
+// merged copy keeps its ORIGINAL identity — preserving upscale linkage (ids in
+// upscaledFromId / upscaleIds) and createdAt ordering. Files whose names don't
+// match are skipped (not Beast-Mode-generated).
+const DRIVE_FILES_API = "https://www.googleapis.com/drive/v3/files";
+const FAVID_RE = /beast-mode-(\d{8,20})(?:-[a-z0-9]+)?\.(jpe?g|png|webp)$/i;
+
+async function oauthMerge(req: Request): Promise<Response> {
+  const emailHash = await bearerUser(req);
+  if (!emailHash) return json({ error: "Sign in first", code: "auth_required" }, 401);
+
+  const minted = await mintAccessToken(emailHash);
+  if ("error" in minted) return json({ error: minted.error, code: minted.code }, minted.status);
+  const accessToken = minted.token;
+  const authHdr = { Authorization: `Bearer ${accessToken}` };
+
+  // Existing Fly favIds — skip these so the merge never duplicates.
+  const existing = new Set<string>();
+  try {
+    for (const m of await listManifest(emailHash)) existing.add(String(m.favId));
+  } catch { /* empty store is fine */ }
+
+  // 1) Locate the "Beast Mode" folder (created by this app, so drive.file sees it).
+  let folderId: string | null = null;
+  try {
+    const q = encodeURIComponent(
+      "mimeType='application/vnd.google-apps.folder' and name='Beast Mode' and trashed=false",
+    );
+    const res = await fetch(`${DRIVE_FILES_API}?q=${q}&fields=files(id,name)&pageSize=10`, { headers: authHdr });
+    if (!res.ok) {
+      const t = await res.text();
+      console.error("merge: folder lookup failed", res.status, t.slice(0, 200));
+      return json({ error: "Drive folder lookup failed", code: "upstream" }, 502);
+    }
+    const data = await res.json();
+    const files = Array.isArray(data.files) ? data.files : [];
+    if (files.length) folderId = files[0].id;
+  } catch (e) {
+    console.error("merge: folder lookup error", (e as Error).message);
+    return json({ error: "Drive folder lookup error", code: "upstream" }, 502);
+  }
+  if (!folderId) {
+    return json({ ok: true, folderFound: false, found: 0, merged: 0, skipped: 0, failed: 0, note: "No 'Beast Mode' folder found in Drive." });
+  }
+
+  // 2) Page through every image file in the folder.
+  const driveFiles: Array<{ id: string; name: string }> = [];
+  let pageToken: string | undefined;
+  try {
+    do {
+      const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+      // Build the URL manually so the Drive query operators aren't double-encoded.
+      let urlStr = `${DRIVE_FILES_API}?q=${q}&fields=${encodeURIComponent("nextPageToken,files(id,name,mimeType)")}&pageSize=100`;
+      if (pageToken) urlStr += `&pageToken=${encodeURIComponent(pageToken)}`;
+      const res = await fetch(urlStr, { headers: authHdr });
+      if (!res.ok) {
+        const t = await res.text();
+        console.error("merge: list failed", res.status, t.slice(0, 200));
+        return json({ error: "Drive file list failed", code: "upstream" }, 502);
+      }
+      const data = await res.json();
+      for (const f of (Array.isArray(data.files) ? data.files : [])) {
+        if (f && f.id && f.name) driveFiles.push({ id: f.id, name: f.name });
+      }
+      pageToken = data.nextPageToken || undefined;
+    } while (pageToken);
+  } catch (e) {
+    console.error("merge: list error", (e as Error).message);
+    return json({ error: "Drive file list error", code: "upstream" }, 502);
+  }
+
+  // 3) For each file: parse favId, skip if already stored, else download + store.
+  let merged = 0, skipped = 0, failed = 0, unmatched = 0;
+  for (const f of driveFiles) {
+    const m = FAVID_RE.exec(f.name);
+    if (!m) { unmatched++; continue; }
+    const favId = m[1];
+    if (existing.has(favId)) { skipped++; continue; }
+    try {
+      const dl = await fetch(`${DRIVE_FILES_API}/${f.id}?alt=media`, { headers: authHdr });
+      if (!dl.ok) { failed++; continue; }
+      const ct = dl.headers.get("content-type") || "";
+      const buf = new Uint8Array(await dl.arrayBuffer());
+      // Guard: refuse anything that isn't a real image (Drive can hand back HTML
+      // error bodies on transient failures).
+      if (!/^image\//i.test(ct) || buf.length < 512) { failed++; continue; }
+      const mime = ct.split(";")[0].trim();
+      // Preserve original creation order: the favId IS a Date.now() timestamp.
+      const createdAt = Number(favId) || undefined;
+      await storeImage(emailHash, favId, buf, mime, createdAt);
+      existing.add(favId); // in case the folder has dup names for one favId
+      merged++;
+    } catch (e) {
+      console.error("merge: store failed for", f.name, (e as Error).message);
+      failed++;
+    }
+  }
+
+  return json({
+    ok: true,
+    folderFound: true,
+    found: driveFiles.length,
+    merged,
+    skipped,
+    failed,
+    unmatched,
+  });
+}
 export async function handleOAuth(req: Request, url: URL): Promise<Response | null> {
   const path = url.pathname;
   if (path === "/oauth/google/start" && req.method === "POST") return oauthStart(req);
   if (path === "/oauth/google/callback" && req.method === "GET") return oauthCallback(url);
   if (path === "/oauth/google/token" && req.method === "POST") return oauthToken(req);
+  if (path === "/oauth/google/merge" && req.method === "POST") return oauthMerge(req);
   if (path === "/oauth/google/disconnect" && req.method === "POST") return oauthDisconnect(req);
   return null;
 }

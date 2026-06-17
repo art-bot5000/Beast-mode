@@ -145,6 +145,7 @@ export async function storeImage(
   favId: string,
   bytes: Uint8Array,
   mime: string,
+  createdAt?: number,
 ): Promise<string> {
   const id = favIdSafe(favId);
   const ext = extSafe(mime.split("/")[1]);
@@ -183,7 +184,7 @@ export async function storeImage(
     throw e;
   }
 
-  const meta: ImgMeta = { ext, bytes: bytes.length, mime, createdAt: Date.now() };
+  const meta: ImgMeta = { ext, bytes: bytes.length, mime, createdAt: (typeof createdAt === "number" && createdAt > 0) ? createdAt : Date.now() };
   await (await kv()).set(["imgmeta", userHash, id], meta);
   await addUsage(userHash, bytes.length);
 
