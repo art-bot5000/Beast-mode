@@ -1,7 +1,7 @@
 // Beast Mode // Service Worker
 // v4.2 — message-based update flow
 
-const CACHE_NAME = 'beast-mode-v6.45'
+const CACHE_NAME = 'beast-mode-v6.46'
 const CACHE_URLS = [
   './',
   './index.html',
@@ -63,6 +63,15 @@ self.addEventListener('fetch', e => {
     'wikimedia.org',
   ]
   if (passthrough.some(h => url.hostname.includes(h))) {
+    return
+  }
+
+  // Never intercept non-GET requests (POST/PUT/DELETE — job creation, auth,
+  // token ledger) or ANY /api/ endpoint. Cache-first on these served stale
+  // job/balance responses and made new jobs appear to vanish from the queue.
+  // All dynamic data lives under /api/ (jobs, tokens/balance, manifest, data,
+  // thumbs, upscalers…); the SW only handles the static app shell + assets.
+  if (e.request.method !== 'GET' || url.pathname.startsWith('/api/')) {
     return
   }
 
