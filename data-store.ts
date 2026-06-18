@@ -160,6 +160,7 @@ export async function storeImage(
   bytes: Uint8Array,
   mime: string,
   createdAt?: number,
+  extraMeta?: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string },
 ): Promise<string> {
   const id = favIdSafe(favId);
   const ext = extSafe(mime.split("/")[1]);
@@ -199,6 +200,21 @@ export async function storeImage(
   }
 
   const meta: ImgMeta = { ext, bytes: bytes.length, mime, createdAt: (typeof createdAt === "number" && createdAt > 0) ? createdAt : Date.now() };
+  // Durable grouping/dimension metadata written WITH the image — no separate
+  // request to race or lose. This is the canonical persistence point for
+  // lineage; the client never needs a second call for it to survive a relogin.
+  if (extraMeta) {
+    if (extraMeta.isUpscale === true) meta.isUpscale = true;
+    if (typeof extraMeta.upscaledFromId === "string" && extraMeta.upscaledFromId) {
+      try { meta.upscaledFromId = favIdSafe(extraMeta.upscaledFromId); } catch { /* ignore bad parent id */ }
+    }
+    if (typeof extraMeta.outW === "number" && extraMeta.outW > 0) meta.outW = Math.round(extraMeta.outW);
+    if (typeof extraMeta.outH === "number" && extraMeta.outH > 0) meta.outH = Math.round(extraMeta.outH);
+    if (typeof extraMeta.upMp === "number" && extraMeta.upMp > 0) meta.upMp = extraMeta.upMp;
+    if (typeof extraMeta.upFactor === "number" && extraMeta.upFactor > 0) meta.upFactor = extraMeta.upFactor;
+    if (typeof extraMeta.upModel === "string" && extraMeta.upModel) meta.upModel = extraMeta.upModel;
+    if (typeof extraMeta.lineage === "string" && extraMeta.lineage) meta.lineage = extraMeta.lineage;
+  }
   await (await kv()).set(["imgmeta", userHash, id], meta);
   await addUsage(userHash, bytes.length);
 

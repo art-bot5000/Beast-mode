@@ -221,8 +221,19 @@ async function runGenerateHeld(
         } else {
           continue; // nothing to store
         }
-        img.url = await storeImage(userHash, favId, bytes, mime);
+        // Each image in a batch is an independent original → its OWN fresh
+        // lineage root (a shared body.lineage would wrongly merge a batch into
+        // one group). Upscales (single image, real parent) use the client value
+        // via the upscale path instead.
+        const genLineage = "g" + favId + Math.floor(Math.random() * 1296).toString(36);
+        const _imgDim = img as { width?: number; height?: number };
+        img.url = await storeImage(userHash, favId, bytes, mime, undefined, {
+          lineage: genLineage,
+          outW: typeof _imgDim.width === "number" ? _imgDim.width : (typeof body.width === "number" ? body.width as number : undefined),
+          outH: typeof _imgDim.height === "number" ? _imgDim.height : (typeof body.height === "number" ? body.height as number : undefined),
+        });
         img.favId = favId;
+        (img as { lineage?: string }).lineage = genLineage; // echo back so client uses the SAME root
         delete img.b64; delete img.mimeType;
       } catch (e) {
         // SOFT-DEGRADE (house pattern): on quota/disk failure keep the image
@@ -313,8 +324,18 @@ async function runUpscaleHeld(
           mime = res.headers.get("content-type") || "image/jpeg";
           bytes = new Uint8Array(await res.arrayBuffer());
         }
-        out.url = await storeImage(userHash, favId, bytes, mime);
+        out.url = await storeImage(userHash, favId, bytes, mime, undefined, {
+          isUpscale: true,
+          lineage: typeof body.lineage === "string" ? body.lineage as string : undefined,
+          upscaledFromId: typeof body.upscaledFromId === "string" ? body.upscaledFromId as string : undefined,
+          outW: typeof body.outW === "number" ? body.outW as number : undefined,
+          outH: typeof body.outH === "number" ? body.outH as number : undefined,
+          upMp: typeof body.targetMegapixels === "number" ? body.targetMegapixels as number : undefined,
+          upFactor: typeof body.upscaleFactor === "number" ? body.upscaleFactor as number : undefined,
+          upModel: upModel,
+        });
         out.favId = favId;
+        (out as { lineage?: string }).lineage = typeof body.lineage === "string" ? body.lineage as string : undefined;
         delete out.b64;
       } catch (e) {
         if (out.b64) { out.url = `data:image/png;base64,${out.b64}`; delete out.b64; }
@@ -838,18 +859,24 @@ async function handler(req: Request): Promise<Response> {
     if (!favId) return json({ error: "Missing favId.", code: "bad_request" }, 400);
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch { /* empty body → no-op patch */ }
-    const ok = await patchImageMeta(userHash, favId, {
-      isUpscale: typeof body.isUpscale === "boolean" ? body.isUpscale : undefined,
-      upscaledFromId: (typeof body.upscaledFromId === "string" || body.upscaledFromId === null)
-        ? (body.upscaledFromId as string | null) : undefined,
-      outW: typeof body.outW === "number" ? body.outW : undefined,
-      outH: typeof body.outH === "number" ? body.outH : undefined,
-      upMp: typeof body.upMp === "number" ? body.upMp : undefined,
-      upFactor: typeof body.upFactor === "number" ? body.upFactor : undefined,
-      upModel: typeof body.upModel === "string" ? body.upModel : undefined,
-      lineage: typeof body.lineage === "string" ? body.lineage : undefined,
-    });
-    return json({ ok, patched: ok });
+    try {
+      const ok = await patchImageMeta(userHash, favId, {
+        isUpscale: typeof body.isUpscale === "boolean" ? body.isUpscale : undefined,
+        upscaledFromId: (typeof body.upscaledFromId === "string" || body.upscaledFromId === null)
+          ? (body.upscaledFromId as string | null) : undefined,
+        outW: typeof body.outW === "number" ? body.outW : undefined,
+        outH: typeof body.outH === "number" ? body.outH : undefined,
+        upMp: typeof body.upMp === "number" ? body.upMp : undefined,
+        upFactor: typeof body.upFactor === "number" ? body.upFactor : undefined,
+        upModel: typeof body.upModel === "string" ? body.upModel : undefined,
+        lineage: typeof body.lineage === "string" ? body.lineage : undefined,
+      });
+      return json({ ok, patched: ok });
+    } catch (e) {
+      // Never 500 on a bad/non-numeric favId (favIdSafe throws) — this is a
+      // best-effort backstop, so a failure here must be soft.
+      return json({ ok: false, patched: false, note: (e as Error).message }, 200);
+    }
   }
 
   // ── Per-user storage meter (used + cap), for the library "storage" UI and
