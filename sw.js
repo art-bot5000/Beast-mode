@@ -1,7 +1,7 @@
 // Beast Mode // Service Worker
 // v4.2 — message-based update flow
 
-const CACHE_NAME = 'beast-mode-v6.44'
+const CACHE_NAME = 'beast-mode-v6.45'
 const CACHE_URLS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const CACHE_URLS = [
   './fonts/plex-sans-700.woff2',
   './fonts/plex-mono-500.woff2',
   './fonts/plex-mono-600.woff2',
+  './fonts/tabler-icons.woff2',
 ]
 
 // ── Install: pre-cache the app shell ──────────────────────────────
