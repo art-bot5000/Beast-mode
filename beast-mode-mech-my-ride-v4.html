@@ -20127,19 +20127,39 @@ async function bmSyncLibraryFromManifest() {
   if (!tok) return;
   _bmManifestSyncing = true;
   try {
+    // Wait for the authoritative ZK library restore to finish first (if one is
+    // in flight). This guarantees favourites already holds the real entries —
+    // including upscales with their metadata — so the id-dedup below preserves
+    // them instead of pushing a plain placeholder that would shadow them.
+    if (window.__bmDocRestorePromise && typeof window.__bmDocRestorePromise.then === 'function') {
+      try { await window.__bmDocRestorePromise; } catch (_) {}
+    }
     const res = await fetch('/api/manifest', { headers: { 'Authorization': 'Bearer ' + tok } });
     if (!res.ok) return;
     const data = await res.json().catch(() => ({}));
     const images = Array.isArray(data.images) ? data.images : [];
     if (!images.length) return;
     if (typeof favourites === 'undefined') return;
-    // Index existing favourites by their server URL so we never duplicate.
+    // Index existing favourites by BOTH server URL and id. Deduping on
+    // serverImageUrl alone missed ZK-doc entries that carry the image inline (or
+    // with serverImageUrl unset) — the manifest then pushed a PLAIN duplicate by
+    // id, which shadowed the richer entry (stripping isUpscale / upscaledFromId /
+    // upscaleMeta) and, once saved back to the ZK doc, permanently lost the
+    // upscale links. Matching on id closes that vector: an image the library
+    // already knows about (from the authoritative ZK doc) is NEVER replaced by a
+    // bare placeholder here.
     const have = new Set();
-    for (const f of favourites) { if (f && f.serverImageUrl) have.add(f.serverImageUrl); }
+    const haveIds = new Set();
+    for (const f of favourites) {
+      if (!f) continue;
+      if (f.serverImageUrl) have.add(f.serverImageUrl);
+      if (f.id != null) haveIds.add(Number(f.id));
+    }
     let added = 0;
     for (const m of images) {
       const url = '/api/img/' + m.favId;
-      if (have.has(url)) continue;
+      const mid = Number(m.favId);
+      if (have.has(url) || (Number.isFinite(mid) && haveIds.has(mid))) continue;
       // Lightweight placeholder fav — bmApplyThumb lazy-loads the bytes. Prompt
       // text isn't here (it lives in the ZK store / Drive-synced prompt files);
       // a re-hydrated image shows with no prompt until that side syncs, which is
@@ -24034,7 +24054,12 @@ function setSession({ emailHash, email, dataKey, sessionToken }) {
   // overlay it onto whatever localStorage already loaded, then re-render. Fly
   // wins where a doc exists; absent docs leave the local copy intact.
   if (dataKey && typeof bmDocRestoreAll === 'function') {
-    bmDocRestoreAll().then((applied) => {
+    // Expose the in-flight restore so bmSyncLibraryFromManifest can AWAIT it
+    // before reading favourites — otherwise the manifest sync races the ZK
+    // restore, wins, and shadows the authoritative entries (the upscale-loss
+    // bug). With this, the manifest only ever adds images the ZK doc lacks.
+    window.__bmDocRestorePromise = bmDocRestoreAll();
+    window.__bmDocRestorePromise.then((applied) => {
       if (!applied) return;
       try {
         if (typeof renderFavs === 'function') renderFavs();
