@@ -4372,6 +4372,14 @@ body.up-settings-modal-open { overflow:hidden; }
 }
 .ig-stage img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
 .ig-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:30px 20px; line-height:1.6; }
+.ig-stage-clear {
+  position:absolute; top:8px; right:8px; z-index:4;
+  font-family:'IBM Plex Sans',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px;
+  color:#fff; background:rgba(8,10,12,.62); border:1px solid var(--border);
+  border-radius:6px; padding:5px 9px; cursor:pointer; line-height:1;
+  backdrop-filter:blur(3px); transition:color .15s, border-color .15s, background .15s;
+}
+.ig-stage-clear:hover { color:var(--accent); border-color:var(--accent); }
 
 /* Right rail — generated result thumbnails (newest first). */
 .ig-rail-head { font-family:'IBM Plex Mono',sans-serif; font-size:14px; letter-spacing:2px; color:var(--muted); margin-bottom:8px; }
@@ -4599,6 +4607,7 @@ body.up-settings-modal-open { overflow:hidden; }
             Generated images appear here.<br>They auto-save to your Library and cloud.
           </div>
           <img id="igStageImg" alt="" style="display:none;">
+          <button type="button" class="ig-stage-clear" id="igStageClearBtn" title="Clear preview" aria-label="Clear preview" onclick="igStageClear()" style="display:none;">✕ CLEAR</button>
         </div>
       </div>
 
@@ -21722,7 +21731,12 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   if (typeof bmSetImgSrc === 'function') {
     bmSetImgSrc(img, image.url).then((resolved) => { if (resolved) _openUrl = resolved; });
   } else { img.src = image.url; }
-  img.onclick = () => window.open(_openUrl, '_blank', 'noopener');
+  // Single-click loads the result into the large center stage; double-click
+  // opens it full-size in a new tab.
+  img.style.cursor = 'pointer';
+  img.title = 'Click to preview · double-click to open';
+  img.onclick = () => { if (typeof igStageShow === 'function') igStageShow(image.url); };
+  img.ondblclick = () => window.open(_openUrl, '_blank', 'noopener');
 
   const meta = document.createElement('div');
   meta.className = 'ig-card-meta';
@@ -21734,6 +21748,14 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
 
   const actions = document.createElement('div');
   actions.className = 'ig-card-actions';
+
+  // Open full-size in a new tab (single-click on the image now previews instead).
+  const open = document.createElement('button');
+  open.className = 'btn btn-ghost';
+  open.textContent = '\u2922';
+  open.title = 'Open full size in a new tab';
+  open.onclick = () => window.open(_openUrl, '_blank', 'noopener');
+  actions.appendChild(open);
 
   const dl = document.createElement('button');
   dl.className = 'btn btn-ghost';
@@ -21802,16 +21824,23 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
 function igStageShow(url) {
   const img = document.getElementById('igStageImg');
   const empty = document.getElementById('igStageEmpty');
+  const clear = document.getElementById('igStageClearBtn');
   if (!img) return;
-  const apply = (resolved) => { img.src = resolved || url; img.style.display = 'block'; if (empty) empty.style.display = 'none'; };
+  const apply = (resolved) => {
+    img.src = resolved || url; img.style.display = 'block';
+    if (empty) empty.style.display = 'none';
+    if (clear) clear.style.display = 'block';
+  };
   if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, url).then(r => apply(r)).catch(() => apply(null)); }
   else { apply(null); }
 }
 function igStageClear() {
   const img = document.getElementById('igStageImg');
   const empty = document.getElementById('igStageEmpty');
+  const clear = document.getElementById('igStageClearBtn');
   if (img) { img.src = ''; img.style.display = 'none'; }
   if (empty) empty.style.display = 'block';
+  if (clear) clear.style.display = 'none';
 }
 
 // Bottom-bar pin/minimise state (parallels upLibState; own LS key + body
