@@ -24079,7 +24079,15 @@ async function upResolveInputImage(src) {
 
 async function bmFetchImageBlob(src) {
   try {
-    const res = await fetch(src)
+    // /api/img/<id> is Bearer-authed — a bare fetch (no header) 401s. Attach the
+    // session token for our own image endpoint; everything else fetches plain.
+    let opts;
+    if (typeof src === 'string' && src.indexOf('/api/img/') === 0) {
+      const tok = (window.bmSession && window.bmSession.sessionToken) || null;
+      if (!tok) { console.warn('[bm] image fetch skipped (no session) for', String(src).slice(0, 100)); return null }
+      opts = { headers: { 'Authorization': 'Bearer ' + tok } };
+    }
+    const res = await fetch(src, opts)
     if (!res.ok) { console.warn('[bm] image fetch HTTP ' + res.status + ' for', String(src).slice(0, 100)); return null }
     const blob = await res.blob()
     if (!/^image\//.test(blob.type || '') || blob.size < 1024) {
