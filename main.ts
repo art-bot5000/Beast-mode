@@ -67,7 +67,7 @@ import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
 import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
-import { storeImage, readImage, userUsage, listManifest, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
+import { storeImage, readImage, userUsage, listManifest, patchImageMeta, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
 import {
   putDoc, getDoc, deleteDoc, listDocs, isAllowedDocKey,
   snapshotAllToR2, snapshotDocToR2, restoreDocFromR2, dataDocsEnabled,
@@ -821,6 +821,34 @@ async function handler(req: Request): Promise<Response> {
     const userHash = await verifySessionToken(token);
     if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
     return json({ images: await listManifest(userHash) });
+  }
+
+  // ── Register durable upscale linkage + dimensions onto an existing image.
+  // The client posts this after saving an upscale (it knows the parent favId,
+  // output dims, and upscale model — the server's storeImage path does not).
+  // This is what lets the login manifest rebuild upscale groups and report
+  // correct resolutions even when the client's ZK library doc is unavailable.
+  // Session-gated; the favId namespace is per-user so a user can only patch
+  // their own images. No-op if the image doesn't exist for this user.
+  if (path.startsWith("/api/imgmeta/") && req.method === "POST") {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+    const favId = path.slice("/api/imgmeta/".length);
+    if (!favId) return json({ error: "Missing favId.", code: "bad_request" }, 400);
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch { /* empty body → no-op patch */ }
+    const ok = await patchImageMeta(userHash, favId, {
+      isUpscale: typeof body.isUpscale === "boolean" ? body.isUpscale : undefined,
+      upscaledFromId: (typeof body.upscaledFromId === "string" || body.upscaledFromId === null)
+        ? (body.upscaledFromId as string | null) : undefined,
+      outW: typeof body.outW === "number" ? body.outW : undefined,
+      outH: typeof body.outH === "number" ? body.outH : undefined,
+      upMp: typeof body.upMp === "number" ? body.upMp : undefined,
+      upFactor: typeof body.upFactor === "number" ? body.upFactor : undefined,
+      upModel: typeof body.upModel === "string" ? body.upModel : undefined,
+    });
+    return json({ ok, patched: ok });
   }
 
   // ── Per-user storage meter (used + cap), for the library "storage" UI and

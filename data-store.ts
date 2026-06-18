@@ -52,6 +52,19 @@ interface ImgMeta {
   bytes: number;
   mime: string;
   createdAt: number;
+  // Durable upscale linkage + dimensions. These let the login manifest rebuild
+  // upscale groups (original ↔ upscales ↔ upscales-of-upscales) and report
+  // correct resolutions even when the client's ZK library doc is unavailable or
+  // was overwritten — closing the class of bug where rehydration produced plain,
+  // ungrouped entries with wrong (thumbnail) dimensions. All optional; absent on
+  // plain generated images. Registered by the client via POST /api/imgmeta/<id>.
+  isUpscale?: boolean;
+  upscaledFromId?: string;  // parent favId (string form, matches /api/img/<id>)
+  outW?: number;
+  outH?: number;
+  upMp?: number;            // megapixel-target upscalers (P-Image)
+  upFactor?: number;        // diffusion upscalers (Clarity / SD Latent)
+  upModel?: string;         // upscaler model id, for the rail tag
 }
 
 // ── boot probe ───────────────────────────────────────────────────────────────
@@ -242,11 +255,53 @@ async function globalUsageBytes(): Promise<number> {
 // ── manifest for login re-hydration ──────────────────────────────────────────
 // Returns the lightweight index the client uses to rebuild its library on
 // login: favId + metadata, NO bytes. The client lazy-loads bytes via /api/img.
-export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number }>> {
+export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string }>> {
   const items = await listMeta(userHash);
   return items
-    .map((x) => ({ favId: x.favId, ext: x.meta.ext, bytes: x.meta.bytes, mime: x.meta.mime, createdAt: x.meta.createdAt }))
+    .map((x) => {
+      const m = x.meta;
+      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string } =
+        { favId: x.favId, ext: m.ext, bytes: m.bytes, mime: m.mime, createdAt: m.createdAt };
+      // Only attach upscale fields that are actually set, to keep the manifest lean.
+      if (m.isUpscale) base.isUpscale = true;
+      if (m.upscaledFromId != null) base.upscaledFromId = m.upscaledFromId;
+      if (typeof m.outW === "number") base.outW = m.outW;
+      if (typeof m.outH === "number") base.outH = m.outH;
+      if (typeof m.upMp === "number") base.upMp = m.upMp;
+      if (typeof m.upFactor === "number") base.upFactor = m.upFactor;
+      if (m.upModel) base.upModel = m.upModel;
+      return base;
+    })
     .sort((a, b) => b.createdAt - a.createdAt); // newest first, matches library order
+}
+
+// ── patch upscale linkage/dims onto an existing image's metadata ─────────────
+// The client knows the upscale graph (which favId came from which) and the
+// output dimensions; the server's image record is created without them (the
+// generate/upscale handler has no parent-favId concept). This lets the client
+// register that metadata after a save, so the login manifest can rebuild groups
+// + resolutions durably. Merges onto the existing ImgMeta; no-op if the image
+// doesn't exist for this user. Only known fields are accepted.
+export async function patchImageMeta(
+  userHash: string,
+  favId: string,
+  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string },
+): Promise<boolean> {
+  const id = favIdSafe(favId);
+  const k = await kv();
+  const cur = await k.get<ImgMeta>(["imgmeta", userHash, id]);
+  if (!cur.value) return false;
+  const next: ImgMeta = { ...cur.value };
+  if (typeof patch.isUpscale === "boolean") next.isUpscale = patch.isUpscale;
+  if (patch.upscaledFromId === null) { delete next.upscaledFromId; }
+  else if (typeof patch.upscaledFromId === "string" && patch.upscaledFromId) next.upscaledFromId = favIdSafe(patch.upscaledFromId);
+  if (typeof patch.outW === "number" && patch.outW > 0) next.outW = Math.round(patch.outW);
+  if (typeof patch.outH === "number" && patch.outH > 0) next.outH = Math.round(patch.outH);
+  if (typeof patch.upMp === "number" && patch.upMp > 0) next.upMp = patch.upMp;
+  if (typeof patch.upFactor === "number" && patch.upFactor > 0) next.upFactor = patch.upFactor;
+  if (typeof patch.upModel === "string" && patch.upModel) next.upModel = patch.upModel;
+  await k.set(["imgmeta", userHash, id], next);
+  return true;
 }
 
 // ── job input blobs ───────────────────────────────────────────────────────────

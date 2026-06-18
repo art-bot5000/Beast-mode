@@ -19714,6 +19714,22 @@ const bmQueue = (() => {
           tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged), upExtra);
         if (savedFav && savedFav.id != null) job.savedFavId = savedFav.id;
         if (savedFav && savedFav.id != null) jobFav[job.id] = savedFav.id;
+        // Durably register this upscale's linkage + dims on the SERVER image
+        // record, so the login manifest can rebuild the group (original ↔
+        // upscales ↔ upscales-of-upscales) and report correct resolutions even
+        // if the client's ZK library doc is ever lost. Fire-and-forget; the ZK
+        // doc remains the primary store, this is the durable backstop.
+        if (savedFav && savedFav.id != null && typeof bmRegisterUpscaleMeta === 'function') {
+          bmRegisterUpscaleMeta(savedFav.id, {
+            isUpscale: true,
+            upscaledFromId: (_srcFavId != null) ? String(_srcFavId) : null,
+            outW: outW || null,
+            outH: outH || null,
+            upMp: (meta.upMp != null) ? meta.upMp : null,
+            upFactor: (meta.upFactor != null) ? meta.upFactor : null,
+            upModel: model || null,
+          });
+        }
       }
     }
     if (typeof tokens.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(tokens.balance);
@@ -20120,6 +20136,25 @@ window.addEventListener('bm-auth-changed', (e) => {
 // display via bmApplyThumb -> bmFetchServerImage. This is what makes "sign in
 // anywhere and your images are there" work: the durable store is /data, and a
 // fresh device rebuilds its library list from this manifest.
+// Durably register an upscale's linkage + dimensions on the server image record
+// (POST /api/imgmeta/<favId>). The ZK library doc remains the primary store;
+// this is the backstop that lets bmSyncLibraryFromManifest rebuild groups and
+// resolutions on a fresh device / after a ZK-doc loss. Fire-and-forget: a
+// failure here never blocks the save (the ZK doc still has the data).
+async function bmRegisterUpscaleMeta(favId, patch) {
+  try {
+    const tok = window.bmSession && window.bmSession.sessionToken;
+    if (!tok || favId == null) return;
+    await fetch('/api/imgmeta/' + encodeURIComponent(String(favId)), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify(patch || {}),
+      keepalive: true,
+    });
+  } catch (e) { /* best-effort durable backstop */ }
+}
+window.bmRegisterUpscaleMeta = bmRegisterUpscaleMeta;
+
 let _bmManifestSyncing = false;
 async function bmSyncLibraryFromManifest() {
   if (_bmManifestSyncing) return;
@@ -20164,7 +20199,7 @@ async function bmSyncLibraryFromManifest() {
       // text isn't here (it lives in the ZK store / Drive-synced prompt files);
       // a re-hydrated image shows with no prompt until that side syncs, which is
       // correct: the at-rest image record deliberately carries no prompt.
-      favourites.push({
+      const fav = {
         id: Number(m.favId) || Date.now(),
         text: '', promptOnly: '', mode: '', preset: '',
         title: '', model: '', rating: 0, starred: false, folderId: null,
@@ -20174,7 +20209,25 @@ async function bmSyncLibraryFromManifest() {
         createdAt: m.createdAt || Date.now(),
         updatedAt: m.createdAt || Date.now(),
         rehydrated: true,
-      });
+      };
+      // Durable upscale linkage + dimensions (registered via /api/imgmeta). This
+      // is what lets rehydration rebuild upscale GROUPS (original ↔ upscales ↔
+      // upscales-of-upscales) and report correct resolutions even when the ZK
+      // library doc is unavailable — the root fix for the recurring "rail shows
+      // no upscales / wrong resolution" regression.
+      if (m.isUpscale) {
+        fav.isUpscale = true;
+        fav.upscaledFromId = (m.upscaledFromId != null) ? Number(m.upscaledFromId) : null;
+        fav.upscaleMeta = {
+          model: m.upModel || '',
+          kind: (m.upMp != null) ? 'megapixels' : ((m.upFactor != null) ? 'factor' : null),
+          factor: (m.upFactor != null) ? m.upFactor : null,
+          mp: (m.upMp != null) ? m.upMp : null,
+        };
+      }
+      if (typeof m.outW === 'number') fav.outW = m.outW;
+      if (typeof m.outH === 'number') fav.outH = m.outH;
+      favourites.push(fav);
       added++;
     }
     if (added) {
