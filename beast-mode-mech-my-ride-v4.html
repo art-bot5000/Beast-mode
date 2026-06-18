@@ -9810,7 +9810,7 @@ function buildLibCard(f) {
   tags.innerHTML = `
     <span class="lib-tag mode-${modeName}">${modeName.toUpperCase()}</span>
     <span class="lib-tag tag-style">${presetName}</span>
-    ${f.model ? `<span class="lib-tag tag-model">🤖 ${f.model}</span>` : ''}
+    ${f.model ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || f.model) : f.model}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
     ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
@@ -19278,7 +19278,7 @@ document.addEventListener('viewSwitched', e => {
       <button class="sync-gate-btn sync-gate-btn-secondary" onclick="syncGateGenerateOnly()" style="border-color:color-mix(in srgb,var(--accent) 25%,transparent);">
         <span class="sync-gate-icon" style="background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-size:20px;"><i class="ti ti-player-play"></i></span>
         <div>
-          <div style="font-weight:700;letter-spacing:.5px;color:var(--accent);">Generate Mode Only</div>
+          <div style="font-weight:700;letter-spacing:.5px;color:var(--accent);">Prompt Library/Prompt creation modes only</div>
           <div style="font-size:10px;opacity:.7;margin-top:2px;line-height:1.5;">No account needed. Generate prompts instantly.<br>Last 10 shown — save to cloud anytime.</div>
         </div>
       </button>
@@ -21809,6 +21809,22 @@ function upInit() {
 function upModel() {
   return upState.models.find(m => m.id === upState.modelId) || upState.models[0] || null;
 }
+
+// Map a raw Runware upscaler code (as stored on a library entry's model field)
+// to its friendly label. Prefers the live /api/upscalers list; falls back to a
+// static map so names resolve even before that list is fetched.
+const UPSCALER_LABELS = {
+  'prunaai:p-image@upscale': 'P-Image Upscale',
+  'runware:500@1': 'Clarity',
+  'runware:502@1': 'Stable Diffusion Latent Upscaler',
+};
+function bmUpscalerLabel(code) {
+  if (!code) return code;
+  const live = (upState.models || []).find(m => m.id === code);
+  if (live && live.label) return live.label;
+  return UPSCALER_LABELS[code] || code;
+}
+window.bmUpscalerLabel = bmUpscalerLabel;
 
 function upBuildModelSelect() {
   const sel = document.getElementById('upModel');
