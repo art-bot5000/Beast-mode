@@ -19902,6 +19902,39 @@ window.addEventListener('bm-auth-changed', (e) => {
   else bmQueue.stop();
 });
 
+// ── LAND-ON-MODE THUMB RACE FIX ──────────────────────────────────────────────
+// On a fresh load/refresh the active mode (Library or Upscaler) renders its
+// thumbnails ONCE, before the session token + dataKey are ready and before
+// favourites are hydrated — so bmApplyThumb can't decrypt/authed-fetch and the
+// thumbs settle into "unavailable". Switching modes re-renders after readiness,
+// which is why a manual mode bounce "fixes" it. Here we re-render the CURRENT
+// mode as soon as the session is ready (and again after hydration), so landing
+// directly on either mode shows images without the bounce. Newest-first so the
+// most recent thumbnails resolve first.
+function bmRefreshCurrentModeThumbs() {
+  try {
+    // Keep favourites in newest-first order so render + sweep resolve newest first.
+    if (typeof favourites !== 'undefined' && Array.isArray(favourites)) {
+      favourites.sort((a, b) => ((b && (b.createdAt || b.id)) || 0) - ((a && (a.createdAt || a.id)) || 0));
+    }
+    const v = (typeof currentView !== 'undefined') ? currentView : null;
+    if (v === 'library' && typeof renderFavs === 'function') renderFavs();
+    if (v === 'upscaler' && typeof upRenderLibBar === 'function') upRenderLibBar();
+    // Kick the background thumb generator (it self-guards on session/dataKey).
+    if (typeof bmThumbSweep === 'function') { try { bmThumbSweep(); } catch (_) {} }
+  } catch (_) {}
+}
+window.bmRefreshCurrentModeThumbs = bmRefreshCurrentModeThumbs;
+window.addEventListener('bm-auth-changed', (e) => {
+  if (e.detail && e.detail.signedIn) {
+    // Session just became ready — re-render the mode the user actually landed on.
+    // A short defer lets hydration/manifest sync populate favourites first; a
+    // second pass catches late-arriving rehydrated entries.
+    setTimeout(bmRefreshCurrentModeThumbs, 0);
+    setTimeout(bmRefreshCurrentModeThumbs, 600);
+  }
+});
+
 // ── LIBRARY SYNC ON LOGIN ────────────────────────────────────────────────────
 // Pull the server's image manifest (favId + metadata, no bytes) and merge any
 // images this device doesn't already have into the library. Bytes lazy-load on
@@ -20522,6 +20555,8 @@ async function bmApplyThumb(imgEl, fav) {
 // last-known hosted URL. Keeps "open = full quality" even though the grid now
 // shows a small encrypted thumb.
 async function bmOpenFull(fav) {
+  // Clicked image takes loading priority over the background thumb sweep.
+  if (typeof bmThumbPriority === 'function') bmThumbPriority();
   try {
     if (typeof bmGetCachedImage === 'function') {
       const cached = await bmGetCachedImage(fav.id);
@@ -20571,6 +20606,13 @@ function bmThumbsOnUnlock() {
 // can't saturate the network or pin the main thread during canvas encode.
 let _bmThumbSweeping = false;
 const _bmSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Click priority: when the user selects/opens a thumbnail we want its full image
+// to load now, not queue behind the background sweep. A click bumps this
+// timestamp; the sweep yields (longer sleeps) while it's in the future, so the
+// clicked image's authed fetch isn't competing with batch thumbnail generation.
+let _bmThumbPriorityUntil = 0;
+function bmThumbPriority(ms) { _bmThumbPriorityUntil = Date.now() + (ms || 2500); }
+window.bmThumbPriority = bmThumbPriority;
 async function bmThumbSweep() {
   if (_bmThumbSweeping) return;
   const sess = window.bmSession;
@@ -20579,12 +20621,24 @@ async function bmThumbSweep() {
   _bmThumbSweeping = true;
   try {
     const targets = favourites.filter((f) => f && f.imageData && !f.thumbKey);
+    // Newest-first: the most recently created images get their thumbnails
+    // generated first, so a user landing on Library/Upscaler sees their latest
+    // work resolve immediately rather than waiting through the back-catalogue.
+    targets.sort((a, b) => ((b.createdAt || b.id) || 0) - ((a.createdAt || a.id) || 0));
     if (!targets.length) return;
     let made = 0;
     for (const f of targets) {
       // Bail if the session went away mid-sweep (sign-out / lock).
       const s = window.bmSession;
       if (!s || !s.sessionToken || !s.dataKey) break;
+      // Yield to a user click: if a thumbnail was just selected/opened, pause
+      // the batch so the clicked image's full-size fetch has the bandwidth.
+      while (Date.now() < _bmThumbPriorityUntil) {
+        const remaining = _bmThumbPriorityUntil - Date.now();
+        await _bmSleep(Math.min(300, Math.max(50, remaining)));
+        const s2 = window.bmSession;
+        if (!s2 || !s2.sessionToken || !s2.dataKey) break;
+      }
       // Resolve a source WITHOUT touching Drive: cache -> server -> inline data.
       let src = null;
       if (typeof bmGetCachedImage === 'function') {
@@ -22356,6 +22410,8 @@ function upResolveGroup(f) {
 // Upscale → before/after slider + arm its ORIGINAL as the re-upscale source.
 async function upSelectFav(f) {
   if (!f) return;
+  // Clicked image takes loading priority over the background thumb sweep.
+  if (typeof bmThumbPriority === 'function') bmThumbPriority();
   // Ad-hoc (uploaded / URL) sources aren't saved favs — re-show them as such
   // rather than treating the synthetic id as a real library id.
   if (f._adhoc) { upShowAdHocSource(f.imageData); return; }
