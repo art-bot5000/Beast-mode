@@ -22615,6 +22615,27 @@ function bmRepairUpscaleLinks() {
   );
   const madeForSrc = new Map(); // srcImageData → new original id (dedupe within a run)
   roots.forEach(root => {
+    // HEAL-BY-URL: orphans created from a generated/library image (the Image Gen
+    // "Upscale" path before the favId-link fix, or any case where the source
+    // fetch failed) have srcImageData pinned as a raw "/api/img/<realId>" URL —
+    // the real original already exists in the library under <realId>. Link the
+    // upscale straight to that existing fav (both directions) instead of
+    // materializing a duplicate original. This is the precise repair for the
+    // "rail doesn't group originals + upscales" regression.
+    const srcUrlMatch = (typeof root.srcImageData === 'string')
+      ? root.srcImageData.match(/\/api\/img\/(\d+)/) : null;
+    if (srcUrlMatch) {
+      const realId = Number(srcUrlMatch[1]);
+      const realOrig = byId.get(realId);
+      if (realOrig && realOrig.id !== root.id) {
+        root.upscaledFromId = realId;
+        if (!Array.isArray(realOrig.upscaleIds)) realOrig.upscaleIds = [];
+        if (!realOrig.upscaleIds.includes(root.id)) realOrig.upscaleIds.push(root.id);
+        realOrig.hasUpscales = true;
+        changed = true;
+        return; // linked to the real original — no materialization needed
+      }
+    }
     // If some other upscale in this run already created an original for the same
     // pinned bytes, reuse it (covers two orphan roots sharing one source).
     let origId = madeForSrc.get(root.srcImageData);
