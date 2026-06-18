@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Prompt Lab // Generator // Library</title>
+<meta name="description" content="Beast Mode — an AI image generation and upscaling studio with a prompt builder, multi-provider rendering, and a durable library of saved favourites.">
 <!-- ── PWA ──────────────────────────────────────────────────────── -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -258,7 +259,7 @@ body.theme-rust    { --accent:#c0614a; --accent2:#8c3d2a; }
 body.theme-moss    { --accent:#7a9e5e; --accent2:#50723a; }
 :root {
   --text: #d4dde6;
-  --muted: #4a5a68;
+  --muted: #7a8d9e;
   --radius: 3px;
 }
 /* preset-* accent classes removed — interface colour controlled via Settings */
@@ -4341,7 +4342,7 @@ body.up-settings-modal-open { overflow:hidden; }
 #igStatus { font-family:'IBM Plex Sans',sans-serif; font-size:12px; letter-spacing:1px; margin-top:10px; min-height:16px; }
 </style>
 
-<div class="view" id="viewImagegen">
+<div class="view" id="viewImagegen" role="main">
   <div class="view-inner">
     <header style="margin-bottom:20px;">
       <div class="title-line">
@@ -4374,7 +4375,7 @@ body.up-settings-modal-open { overflow:hidden; }
       <!-- ── Controls column ─────────────────────────────────────────────── -->
       <div class="ig-panel">
         <div class="ig-label">MODEL</div>
-        <select class="ig-select" id="igModel" onchange="igModelChanged()"></select>
+        <select class="ig-select" id="igModel" aria-label="Image model" onchange="igModelChanged()"></select>
         <div class="ig-note" id="igModelNote"></div>
 
         <div class="ig-label">PROMPT
@@ -4416,7 +4417,7 @@ body.up-settings-modal-open { overflow:hidden; }
           </div>
           <div style="width:90px;">
             <div class="ig-label" style="margin-top:0;">COUNT</div>
-            <select class="ig-select" id="igCount">
+            <select class="ig-select" id="igCount" aria-label="Number of images">
               <option value="1">1</option><option value="2">2</option>
               <option value="3">3</option><option value="4">4</option>
             </select>
