@@ -1168,6 +1168,7 @@ body.bm-queue-modal-open { overflow:hidden; }
      vertical space. (Desktop has no top bar, so they stay there.) */
   .view > .view-inner > header > .title-line,
   #viewUpscaler .up-settings-title,
+  #viewImagegen .up-settings-title,
   #viewQueue .view-title { display:none; }
   /* Collapse the now-empty header margins so nothing leaves a gap. */
   .view > .view-inner > header:empty,
@@ -4494,12 +4495,6 @@ body.up-settings-modal-open { overflow:hidden; }
 
 <div class="view" id="viewImagegen" role="main">
   <div class="view-inner">
-    <header style="margin-bottom:20px;">
-      <div class="title-line">
-        <h1 style="font-family:'IBM Plex Mono',sans-serif;font-size:36px;letter-spacing:2px;color:var(--accent);">// IMAGE GEN</h1>
-      </div>
-      <span class="version" style="font-size:11px;color:var(--muted);letter-spacing:2px;">RUNWARE MULTI-MODEL ENGINE</span>
-    </header>
 
     <!-- Sign-in gate: server enforces auth on /api/generate; this gives a clean UX. -->
     <div id="igAuthGate" class="ig-panel ig-gate" style="display:none;">
@@ -4524,6 +4519,10 @@ body.up-settings-modal-open { overflow:hidden; }
     <div id="igMain" class="ig-layout-v2" style="display:none;">
       <!-- ── Settings column (far-left) ──────────────────────────────────── -->
       <div class="ig-area-settings ig-panel">
+        <div class="up-settings-title">
+          <h1>// IMAGE GEN</h1>
+          <span class="up-settings-sub">RUNWARE MULTI-MODEL ENGINE</span>
+        </div>
         <div class="ig-label">MODEL</div>
         <select class="ig-select" id="igModel" aria-label="Image model" onchange="igModelChanged()"></select>
         <div class="ig-note" id="igModelNote"></div>
@@ -21770,8 +21769,14 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   up.title = 'Upscale this image';
   up.onclick = () => {
     if (typeof switchView === 'function') switchView('upscaler');
+    // Recover the library favId from the result URL (/api/img/<favId>) so the
+    // resulting upscale links to its original via upscaledFromId — otherwise it
+    // saves as an orphan and never groups under the original in the rail.
+    let upFavId = null;
+    const mu = (typeof image.url === 'string') ? image.url.match(/\/api\/img\/(\d+)/) : null;
+    if (mu) upFavId = Number(mu[1]);
     setTimeout(() => {
-      if (typeof upLoadExternalImage === 'function') upLoadExternalImage(image.url, null);
+      if (typeof upLoadExternalImage === 'function') upLoadExternalImage(image.url, upFavId);
     }, 0);
   };
   actions.appendChild(up);
