@@ -22939,7 +22939,34 @@ function bmBackfillLineage() {
   if (!all.length) return false;
   const byId = new Map(all.filter(x => x && x.id != null).map(x => [Number(x.id), x]));
   let changed = false;
-  // Pass 1: originals + already-lineaged stay; assign roots to lineage-less originals.
+  const _toPersist = []; // {id, lineage} parents whose root we recovered → write to server
+
+  // Pass 0 (NEW, must run FIRST): an original that has NO lineage but whose
+  // UPSCALE already carries one must ADOPT that upscale's root — otherwise the
+  // next pass would mint the original a fresh, different root and the two would
+  // never group. This is the exact "upscale saved its lineage on refresh but the
+  // original shows no children" case. Walk children → adopt their root upward.
+  // Iterate to convergence so a chain (a → a-1 → a-1-1) settles.
+  let p0 = 0, prog0 = true;
+  while (prog0 && p0++ < 8) {
+    prog0 = false;
+    for (const f of all) {
+      if (!f || !f.isUpscale || typeof f.lineage !== 'string' || !f.lineage) continue;
+      const parent = (f.upscaledFromId != null) ? byId.get(Number(f.upscaledFromId)) : null;
+      if (!parent) continue;
+      if (typeof parent.lineage === 'string' && parent.lineage) continue; // parent already set
+      // Parent adopts the child's ROOT (parent is the root holder).
+      const root = bmLineageRoot(f.lineage);
+      if (root) {
+        parent.lineage = root;
+        changed = true; prog0 = true;
+        if (Number.isFinite(Number(parent.id))) _toPersist.push({ id: parent.id, lineage: root });
+      }
+    }
+  }
+
+  // Pass 1: assign fresh roots to lineage-less ORIGINALS (now only the genuine
+  // ones — any original that had a lineaged child was handled in Pass 0).
   for (const f of all) {
     if (!f || typeof f.lineage === 'string' && f.lineage) continue;
     if (!f.isUpscale) { f.lineage = bmNewLineageRoot(); changed = true; }
@@ -22965,6 +22992,15 @@ function bmBackfillLineage() {
   for (const f of all) {
     if (!f || (typeof f.lineage === 'string' && f.lineage)) continue;
     f.lineage = bmNewLineageRoot(); changed = true;
+  }
+
+  // Durably persist any parent roots we recovered in Pass 0, so the original's
+  // server record carries the root and the group survives the NEXT refresh too
+  // (one-time self-heal for images upscaled before the write-with-image fix).
+  if (_toPersist.length && typeof bmRegisterUpscaleMeta === 'function') {
+    for (const p of _toPersist) {
+      try { bmRegisterUpscaleMeta(p.id, { lineage: p.lineage }); } catch (_) {}
+    }
   }
   return changed;
 }
@@ -23279,7 +23315,7 @@ function upRenderStageSlider(upFav) {
   // afterWrap (inset:0) == the rendered image rectangle — so the handle line,
   // before-overlay clip and the Original/Upscale labels are all bounded to the
   // image, and the divider can't run past the image edges.
-  const aw = upFav.outW || beforeW || 0, ah = upFav.outH || beforeH || 0;
+  let aw = upFav.outW || beforeW || 0, ah = upFav.outH || beforeH || 0;
   // Size the slider to the fitted image rectangle in PIXELS, measured from the
   // host. CSS aspect-ratio inside a flex host collapsed to zero height (blank
   // compare); explicit px is deterministic. Re-fit on resize via upFitSlider().
@@ -23356,6 +23392,23 @@ function upRenderStageSlider(upFav) {
 
   beforeImg.addEventListener('load', () => beforeImg.classList.add('is-loaded'), { once: true });
   afterImg.addEventListener('load', () => afterImg.classList.add('is-loaded'), { once: true });
+  // STRETCH FIX: if stored dims were absent (aw/ah == 0) fitSlider stretches the
+  // box to fill the host. Once the real image decodes, adopt its natural pixel
+  // dimensions and re-fit so the box takes the correct aspect ratio. This is the
+  // intermittent "stretched until I switch away and back" case — now self-heals
+  // on load without needing a manual view switch.
+  const _adoptDimsAndFit = (el) => {
+    if ((!aw || !ah) && el && el.naturalWidth && el.naturalHeight) {
+      aw = el.naturalWidth; ah = el.naturalHeight;
+      fitSlider();
+      // Persist measured dims onto the fav so future opens are correct immediately.
+      try { if (upFav && (!upFav.outW || !upFav.outH)) { upFav.outW = aw; upFav.outH = ah; } } catch (_) {}
+    }
+  };
+  if (afterImg.complete && afterImg.naturalWidth) _adoptDimsAndFit(afterImg);
+  else afterImg.addEventListener('load', () => _adoptDimsAndFit(afterImg), { once: true });
+  // Fall back to the BEFORE image's dims if the after image somehow lacks them.
+  beforeImg.addEventListener('load', () => _adoptDimsAndFit(beforeImg), { once: true });
 
   // Drag interaction (pointer events cover mouse + touch). Measure against the
   // image box (afterWrap), not the full slider, so the handle tracks the cursor.
@@ -23713,6 +23766,15 @@ async function upRun() {
         body.lineage = bmNextChildLineage(parentFav.lineage);
       }
       body.upscaledFromId = String(upState.srcFavId);
+      // CRITICAL: persist the PARENT's root to its server record too. Otherwise a
+      // pre-existing original (no stored lineage) keeps its root only in memory;
+      // after a refresh it reloads with no lineage while its upscale reloads with
+      // "root-N", the roots no longer match, and the original can't find its
+      // children. Writing the parent's root here keeps both sides on one root.
+      if (typeof parentFav.lineage === 'string' && parentFav.lineage
+          && Number.isFinite(Number(parentFav.id)) && typeof bmRegisterUpscaleMeta === 'function') {
+        try { bmRegisterUpscaleMeta(parentFav.id, { lineage: parentFav.lineage }); } catch (_) {}
+      }
     }
     if (typeof bmNewLineageRoot === 'function' && !body.lineage) body.lineage = bmNewLineageRoot();
     if (Number.isFinite(upState.outW)) body.outW = upState.outW;
