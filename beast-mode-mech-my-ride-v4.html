@@ -4344,6 +4344,144 @@ body.up-settings-modal-open { overflow:hidden; }
 .ig-note { font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4; }
 .ig-gate { text-align:center; padding:60px 20px; }
 #igStatus { font-family:'IBM Plex Sans',sans-serif; font-size:12px; letter-spacing:1px; margin-top:10px; min-height:16px; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   IMAGE GEN — Upscaler-mirror layout (large screens only). Settings pushed
+   far-left, large center preview, results rail on the right, fixed bottom
+   scrolling library/timeline bar. Below 901px the existing single-column
+   behaviour is preserved (areas stack in source order). Uses its OWN
+   ig-sticky / ig-lib-pinned / ig-lib-min body classes + --ig-libbar-h var
+   so it never collides with the Upscaler's up-* state classes.
+   ══════════════════════════════════════════════════════════════════════ */
+#igMain.ig-layout-v2 {
+  display:grid; gap:18px; align-items:start;
+  grid-template-columns:1fr;
+  grid-template-areas:"settings" "center" "rail" "library";
+}
+#igMain .ig-area-settings { grid-area:settings; align-self:stretch; }
+#igMain .ig-area-center   { grid-area:center; min-width:0; }
+#igMain .ig-area-rail     { grid-area:rail; min-width:0; }
+#igMain .ig-area-library  { grid-area:library; min-width:0; }
+
+/* Center preview stage — large single preview of the most recent / selected
+   result. Empty state doubles as guidance. */
+.ig-stage {
+  position:relative; background:#000; border:1px solid var(--border);
+  border-radius:10px; min-height:360px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+}
+.ig-stage img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
+.ig-stage-empty { color:var(--muted); font-size:13px; text-align:center; padding:30px 20px; line-height:1.6; }
+
+/* Right rail — generated result thumbnails (newest first). */
+.ig-rail-head { font-family:'IBM Plex Mono',sans-serif; font-size:14px; letter-spacing:2px; color:var(--muted); margin-bottom:8px; }
+.ig-rail { display:flex; flex-direction:column; gap:12px; }
+.ig-rail-empty { color:var(--muted); font-size:12px; line-height:1.5; padding:18px 4px; }
+
+/* Bottom library/timeline bar — horizontal scroll. Reuses the up-libbar*
+   visual classes for thumbs/+; here we add the ig wrappers. */
+.ig-libbar-head { font-family:'IBM Plex Mono',sans-serif; font-size:14px; letter-spacing:2px; color:var(--muted); margin-bottom:8px; display:flex; align-items:baseline; justify-content:space-between; }
+.ig-libbar-hint { font-family:'IBM Plex Sans',sans-serif; font-size:11px; letter-spacing:1px; color:var(--muted); }
+.ig-libbar {
+  display:flex; gap:8px; overflow-x:auto; overflow-y:hidden;
+  padding:6px 2px; scroll-behavior:smooth;
+  scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+}
+.ig-libbar::-webkit-scrollbar { height:6px; }
+.ig-libbar::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.ig-libbar::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+.ig-libbar::-webkit-scrollbar-track { background:transparent; }
+.ig-libbar-thumb {
+  position:relative; flex:0 0 auto; width:84px; height:84px;
+  border-radius:6px; border:2px solid transparent; overflow:hidden;
+  cursor:pointer; background:#000;
+}
+.ig-libbar-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.ig-libbar-thumb.sel { border-color:var(--accent); }
+.ig-libbar-thumb .ig-libbar-selnum {
+  position:absolute; left:4px; bottom:4px;
+  display:flex; align-items:center; justify-content:center;
+  min-width:16px; height:16px; padding:0 4px;
+  font-size:10px; font-weight:700; line-height:1; color:#000;
+  background:var(--accent,#caff00); border-radius:3px;
+  box-shadow:0 1px 3px rgba(0,0,0,.5); pointer-events:none;
+}
+.ig-libbar-new {
+  flex:0 0 auto; width:84px; height:84px;
+  display:flex; align-items:center; justify-content:center;
+  background:transparent; border:1.5px dashed var(--border); border-radius:6px;
+  color:var(--muted); font-size:30px; font-weight:300; line-height:1; cursor:pointer;
+  transition:color .15s, border-color .15s, background .15s;
+}
+.ig-libbar-new:hover { color:var(--accent); border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); }
+.ig-libbar-empty { color:var(--muted); font-size:12px; padding:10px 2px; }
+/* Timeline mode (non-i2i models): thumbs are non-selectable, show a subtle
+   read-only cue instead of the selection ring. */
+#igMain.ig-timeline .ig-libbar-thumb { cursor:default; }
+#igMain.ig-timeline .ig-libbar-thumb.sel { border-color:transparent; }
+
+/* ── Large-screen (≥901px): far-left settings, full-height columns, fixed
+      bottom bar — mirrors the Upscaler. ──────────────────────────────── */
+@media (min-width: 901px) {
+  #viewImagegen .view-inner { max-width:none; margin:0; padding:16px 24px 0 24px; }
+
+  #igMain.ig-layout-v2 {
+    grid-template-areas:"settings center rail";
+    grid-template-columns:360px minmax(0,1fr) 150px;
+    grid-template-rows:auto; padding-bottom:0; height:calc(100vh - 16px);
+    align-items:start;
+  }
+  #viewImagegen .ig-area-settings {
+    align-self:stretch; height:calc(100vh - 16px);
+    overflow-y:auto; min-height:0;
+    scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+  }
+  #viewImagegen .ig-area-settings::-webkit-scrollbar { width:6px; }
+  #viewImagegen .ig-area-settings::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  #viewImagegen .ig-area-rail {
+    align-self:stretch; height:calc(100vh - 16px);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  #viewImagegen .ig-rail {
+    flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding-right:4px;
+    scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+  }
+  #viewImagegen .ig-rail::-webkit-scrollbar { width:6px; }
+  #viewImagegen .ig-rail::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  #viewImagegen .ig-area-center { display:block; align-self:start; padding-top:0; }
+
+  #viewImagegen .ig-stage {
+    height:calc(100vh - 32px - var(--ig-libbar-h, 140px));
+    min-height:0; max-height:none;
+  }
+
+  /* Fixed bottom library bar. */
+  #viewImagegen .ig-area-library {
+    position:fixed; left:var(--mode-nav-w-collapsed); right:0; bottom:0;
+    z-index:150; background:var(--bg,#0d0d0d);
+    border-top:1px solid var(--border); padding:6px 14px 8px;
+    box-shadow:0 -6px 18px rgba(0,0,0,.45);
+    transition:transform .18s ease;
+  }
+  body.ig-lib-pinned { --ig-libbar-h:160px; }
+  body.ig-lib-min    { --ig-libbar-h:34px; }
+  body.ig-lib-min #viewImagegen .ig-area-library {
+    transform:translateY(calc(100% - 34px));
+  }
+  body.ig-lib-min #viewImagegen .ig-area-library:hover {
+    transform:translateY(0); box-shadow:0 -10px 28px rgba(0,0,0,.6);
+  }
+
+  /* Queue widget rides above the bar, like the Upscaler. */
+  body.ig-sticky #bmQueueWidget { z-index:140; }
+  body.ig-sticky.ig-lib-pinned #bmQueueWidget { bottom:170px; }
+  body.ig-sticky.ig-lib-min    #bmQueueWidget { bottom:44px; }
+
+  #viewImagegen .ig-libbar-head {
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;
+  }
+}
 </style>
 
 <div class="view" id="viewImagegen" role="main">
@@ -4375,9 +4513,9 @@ body.up-settings-modal-open { overflow:hidden; }
       <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="switchView('settings')">⊙ SETTINGS</button>
     </div>
 
-    <div id="igMain" class="ig-layout" style="display:none;">
-      <!-- ── Controls column ─────────────────────────────────────────────── -->
-      <div class="ig-panel">
+    <div id="igMain" class="ig-layout-v2" style="display:none;">
+      <!-- ── Settings column (far-left) ──────────────────────────────────── -->
+      <div class="ig-area-settings ig-panel">
         <div class="ig-label">MODEL</div>
         <select class="ig-select" id="igModel" aria-label="Image model" onchange="igModelChanged()"></select>
         <div class="ig-note" id="igModelNote"></div>
@@ -4454,12 +4592,39 @@ body.up-settings-modal-open { overflow:hidden; }
         <div id="igStatus"></div>
       </div>
 
-      <!-- ── Results column ──────────────────────────────────────────────── -->
-      <div>
-        <div class="ig-results" id="igResults"></div>
-        <div id="igEmpty" class="ig-panel ig-gate" style="color:var(--muted);font-size:13px;">
-          Generated images appear here.<br>They auto-save to your Library and cloud.
+      <!-- ── Center: large preview of the most recent / selected result ──── -->
+      <div class="ig-area-center">
+        <div class="ig-stage" id="igStage">
+          <div class="ig-stage-empty" id="igStageEmpty">
+            Generated images appear here.<br>They auto-save to your Library and cloud.
+          </div>
+          <img id="igStageImg" alt="" style="display:none;">
         </div>
+      </div>
+
+      <!-- ── Right: generated results rail (newest first) ────────────────── -->
+      <div class="ig-area-rail">
+        <div class="ig-rail-head">RESULTS</div>
+        <div class="ig-rail" id="igResults"></div>
+        <div id="igEmpty" class="ig-rail-empty">Generated images appear here.</div>
+      </div>
+
+      <!-- ── Bottom: library / timeline bar ──────────────────────────────
+           i2i models  → multi-select up to maxRefs (selection syncs to
+                         igState.refs alongside the inline dropzone).
+           non-i2i     → read-only timeline, newest-left.
+           Wiring lives in igRenderLibBar(). -->
+      <div class="ig-area-library" id="igLibArea">
+        <div class="ig-libbar-head">
+          <span class="ig-libbar-hint" id="igLibBarHint"></span>
+          <div class="up-libbar-ctrls">
+            <button type="button" class="up-libbar-btn" id="igLibPinBtn" title="Pin open" onclick="igLibTogglePin()" aria-label="Pin library bar">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.4 2.6a1 1 0 0 0-1.7.7v.6L8.9 8.2l-2.8.5a1 1 0 0 0-.5 1.7l3 3-4.3 4.3a1 1 0 1 0 1.4 1.4L10 14.8l3 3a1 1 0 0 0 1.7-.5l.5-2.8 4.3-3.8h.6a1 1 0 0 0 .7-1.7l-6.4-6.6z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="ig-libbar" id="igLibBar"></div>
+        <div class="ig-libbar-empty" id="igLibBarEmpty" style="display:none;">No saved images yet — generate one to start your timeline, or upload a reference on the left.</div>
       </div>
     </div>
   </div>
@@ -9103,6 +9268,14 @@ function switchView(view, pushState = true) {
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
   if (view === 'upscaler' && typeof upInit === 'function') upInit()
   document.body.classList.toggle('up-sticky', view === 'upscaler')
+  // Image Gen mirrors the Upscaler's fixed bottom-bar layout (own ig-* classes).
+  document.body.classList.toggle('ig-sticky', view === 'imagegen')
+  if (view === 'imagegen') {
+    if (typeof igLibApplyState === 'function') igLibApplyState()
+    if (typeof igRenderLibBar === 'function') igRenderLibBar()
+  } else {
+    document.body.classList.remove('ig-lib-pinned', 'ig-lib-min')
+  }
   if (view !== 'upscaler') {
     document.body.classList.remove('up-lib-pinned', 'up-lib-min')
     if (typeof upCloseSettingsModal === 'function') upCloseSettingsModal()
@@ -11444,6 +11617,7 @@ const LS = {
   PB_FAVS:   'bm_state_pb_favs',
   SETTINGS:  'bm_state_settings',
   UP_LIBBAR: 'bm_state_up_libbar',
+  IG_LIBBAR: 'bm_state_ig_libbar',
   DRIVE_BACKUP: 'bm_state_drive_backup',
 }
 
@@ -21058,6 +21232,7 @@ function igRenderAll() {
   igRenderQualityChips();
   igRenderSpeedChips();
   igRenderRefs();
+  if (typeof igRenderLibBar === 'function') igRenderLibBar();
 }
 
 function igChip(label, active, onclick, title) {
@@ -21607,7 +21782,174 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   card.appendChild(meta);
   card.appendChild(actions);
   grid.prepend(card);
+
+  // Mirror the newest result into the large center stage.
+  if (typeof igStageShow === 'function') igStageShow(image.url);
+  // Refresh the bottom timeline/library bar (new image saved to library).
+  if (typeof igRenderLibBar === 'function') igRenderLibBar();
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// IMAGE GEN — Upscaler-mirror layout helpers (center stage, bottom bar)
+// Built this session as the layout shell + selection wiring. The bottom bar
+// mirrors the library newest-left. For i2i models it multi-selects up to
+// maxRefs, syncing picks into igState.refs (the SAME array the inline
+// dropzone and igGenerate already use). For non-i2i models it is a read-only
+// timeline.
+// ═══════════════════════════════════════════════════════════════════
+
+// Show an image large in the center preview stage.
+function igStageShow(url) {
+  const img = document.getElementById('igStageImg');
+  const empty = document.getElementById('igStageEmpty');
+  if (!img) return;
+  const apply = (resolved) => { img.src = resolved || url; img.style.display = 'block'; if (empty) empty.style.display = 'none'; };
+  if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, url).then(r => apply(r)).catch(() => apply(null)); }
+  else { apply(null); }
+}
+function igStageClear() {
+  const img = document.getElementById('igStageImg');
+  const empty = document.getElementById('igStageEmpty');
+  if (img) { img.src = ''; img.style.display = 'none'; }
+  if (empty) empty.style.display = 'block';
+}
+
+// Bottom-bar pin/minimise state (parallels upLibState; own LS key + body
+// classes so it never collides with the Upscaler's up-* state).
+const igLibState = { pinned: true, loaded: false };
+function igLibLoadState() {
+  if (igLibState.loaded) return;
+  igLibState.loaded = true;
+  try {
+    const saved = (typeof lsLoad === 'function') ? lsLoad(LS.IG_LIBBAR, null) : null;
+    if (saved && typeof saved.pinned === 'boolean') igLibState.pinned = saved.pinned;
+  } catch (e) {}
+}
+function igLibSaveState() {
+  try { if (typeof lsSave === 'function') lsSave(LS.IG_LIBBAR, { pinned: igLibState.pinned }); } catch (e) {}
+}
+function igLibApplyState() {
+  igLibLoadState();
+  const b = document.body;
+  b.classList.toggle('ig-lib-pinned', igLibState.pinned);
+  b.classList.toggle('ig-lib-min', !igLibState.pinned);
+  const pinBtn = document.getElementById('igLibPinBtn');
+  if (pinBtn) {
+    pinBtn.classList.toggle('on', igLibState.pinned);
+    pinBtn.title = igLibState.pinned ? 'Unpin (free / minimise)' : 'Pin open';
+  }
+}
+function igLibTogglePin() {
+  igLibState.pinned = !igLibState.pinned;
+  igLibSaveState();
+  igLibApplyState();
+}
+window.igLibTogglePin = igLibTogglePin;
+
+// Is a given library favourite currently selected as a reference? Selection is
+// tracked on igState.refs entries by favId (added when picked from the bar).
+function igRefIndexForFav(favId) {
+  return igState.refs.findIndex(r => r && r.favId === favId);
+}
+
+// Toggle a library image as a reference (i2i models only). Mirrors the inline
+// dropzone limit logic; pushes { data, favId } so the existing igGenerate
+// payload (refs.map(r => r.data)) works unchanged.
+function igLibToggleRef(f) {
+  const m = igModel();
+  if (!m.i2i) return; // timeline mode: non-selectable
+  const existing = igRefIndexForFav(f.id);
+  if (existing >= 0) { igRemoveRef(existing); return; }
+  if (igState.refs.length >= (m.maxRefs || 1)) {
+    igStatus('\u2717 Reference limit reached for this model (' + (m.maxRefs || 1) + ').', true);
+    return;
+  }
+  // Resolve the full image for this favourite, then add as a ref.
+  const addData = (data) => {
+    if (!data) { igStatus('\u2717 Could not load that image.', true); return; }
+    if (igState.refs.length >= (m.maxRefs || 1)) return;
+    igState.refs.push({ data, favId: f.id });
+    igRenderAll();
+    igRenderLibBar();
+  };
+  // Prefer inline data; else resolve the authed server URL to real bytes via
+  // the shared resolver (same path the Upscaler uses on pick), then cache.
+  if (f.imageData && !(typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0)) { addData(f.imageData); return; }
+  const serverUrl = f.serverImageUrl
+    || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : ('/api/img/' + f.id));
+  if (typeof upResolveInputImage === 'function') {
+    upResolveInputImage(serverUrl).then(addData).catch(() => addData(null));
+  } else if (typeof bmGetCachedImage === 'function') {
+    bmGetCachedImage(f.id).then(addData).catch(() => addData(null));
+  } else { addData(f.imageData || null); }
+}
+
+// Render the bottom bar. Newest-left. i2i → selectable refs; else timeline.
+function igRenderLibBar() {
+  const bar = document.getElementById('igLibBar');
+  const empty = document.getElementById('igLibBarEmpty');
+  const hint = document.getElementById('igLibBarHint');
+  const main = document.getElementById('igMain');
+  if (!bar) return;
+  const m = igModel();
+  const i2i = !!(m && m.i2i);
+  if (main) main.classList.toggle('ig-timeline', !i2i);
+  bar.innerHTML = '';
+
+  // "+ New" button — far-left, opens the existing reference file picker (i2i)
+  // so newly uploaded images join the selection. On non-i2i models it's a
+  // no-op hint (timeline is read-only), so we hide it there.
+  if (i2i) {
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'ig-libbar-new';
+    plus.title = 'Upload a new reference image';
+    plus.setAttribute('aria-label', 'Upload reference');
+    plus.textContent = '+';
+    plus.onclick = () => { const fi = document.getElementById('igRefFile'); if (fi) fi.click(); };
+    bar.appendChild(plus);
+  }
+
+  // Library images that actually have a picture (same predicate as buildLibCard
+  // / upRenderLibBar). favourites is newest-first already.
+  const withImg = (typeof favourites !== 'undefined' ? favourites : [])
+    .filter(f => f && (f.imageData || f.thumbKey || f.serverImageUrl));
+
+  if (!withImg.length) {
+    if (empty) empty.style.display = 'block';
+    if (hint) hint.textContent = i2i ? 'Select up to ' + (m.maxRefs || 1) + ' reference' + ((m.maxRefs || 1) === 1 ? '' : 's') : '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  if (hint) {
+    hint.textContent = i2i
+      ? (igState.refs.length + ' / ' + (m.maxRefs || 1) + ' selected')
+      : (withImg.length + ' image' + (withImg.length === 1 ? '' : 's') + ' \u00B7 timeline');
+  }
+
+  withImg.forEach(f => {
+    const cell = document.createElement('div');
+    const selIdx = i2i ? igRefIndexForFav(f.id) : -1;
+    cell.className = 'ig-libbar-thumb' + (selIdx >= 0 ? ' sel' : '');
+    cell.dataset.favId = f.id;
+    const img = document.createElement('img');
+    img.alt = f.title || ''; img.loading = 'lazy'; img.dataset.favId = f.id;
+    if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, f); }
+    else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
+    else { img.src = f.imageData; }
+    cell.appendChild(img);
+    if (i2i && selIdx >= 0) {
+      const num = document.createElement('div');
+      num.className = 'ig-libbar-selnum';
+      num.textContent = String(selIdx + 1);
+      cell.appendChild(num);
+    }
+    if (i2i) { cell.onclick = () => igLibToggleRef(f); }
+    else { cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id)); }
+    bar.appendChild(cell);
+  });
+}
+window.igRenderLibBar = igRenderLibBar;
 
 // Download a favourite's image, resolving a dead blob: URL via the cache/Drive
 // fallback chain first so the download doesn't fail silently.
