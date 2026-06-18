@@ -65,6 +65,7 @@ interface ImgMeta {
   upMp?: number;            // megapixel-target upscalers (P-Image)
   upFactor?: number;        // diffusion upscalers (Clarity / SD Latent)
   upModel?: string;         // upscaler model id, for the rail tag
+  lineage?: string;         // hardened grouping code (e.g. "k7m2x9", "k7m2x9-1-2")
 }
 
 // ── boot probe ───────────────────────────────────────────────────────────────
@@ -255,12 +256,12 @@ async function globalUsageBytes(): Promise<number> {
 // ── manifest for login re-hydration ──────────────────────────────────────────
 // Returns the lightweight index the client uses to rebuild its library on
 // login: favId + metadata, NO bytes. The client lazy-loads bytes via /api/img.
-export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string }>> {
+export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string }>> {
   const items = await listMeta(userHash);
   return items
     .map((x) => {
       const m = x.meta;
-      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string } =
+      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string } =
         { favId: x.favId, ext: m.ext, bytes: m.bytes, mime: m.mime, createdAt: m.createdAt };
       // Only attach upscale fields that are actually set, to keep the manifest lean.
       if (m.isUpscale) base.isUpscale = true;
@@ -270,6 +271,7 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
       if (typeof m.upMp === "number") base.upMp = m.upMp;
       if (typeof m.upFactor === "number") base.upFactor = m.upFactor;
       if (m.upModel) base.upModel = m.upModel;
+      if (m.lineage) base.lineage = m.lineage;
       return base;
     })
     .sort((a, b) => b.createdAt - a.createdAt); // newest first, matches library order
@@ -285,7 +287,7 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
 export async function patchImageMeta(
   userHash: string,
   favId: string,
-  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string },
+  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string },
 ): Promise<boolean> {
   const id = favIdSafe(favId);
   const k = await kv();
@@ -300,6 +302,7 @@ export async function patchImageMeta(
   if (typeof patch.upMp === "number" && patch.upMp > 0) next.upMp = patch.upMp;
   if (typeof patch.upFactor === "number" && patch.upFactor > 0) next.upFactor = patch.upFactor;
   if (typeof patch.upModel === "string" && patch.upModel) next.upModel = patch.upModel;
+  if (typeof patch.lineage === "string" && patch.lineage) next.lineage = patch.lineage;
   await k.set(["imgmeta", userHash, id], next);
   return true;
 }

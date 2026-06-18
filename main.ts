@@ -847,6 +847,7 @@ async function handler(req: Request): Promise<Response> {
       upMp: typeof body.upMp === "number" ? body.upMp : undefined,
       upFactor: typeof body.upFactor === "number" ? body.upFactor : undefined,
       upModel: typeof body.upModel === "string" ? body.upModel : undefined,
+      lineage: typeof body.lineage === "string" ? body.lineage : undefined,
     });
     return json({ ok, patched: ok });
   }
