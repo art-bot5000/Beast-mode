@@ -4206,6 +4206,76 @@ img.bm-thumb-missing { background:var(--surface2); }
 .up-settings-modal-foot { padding:12px 16px 16px; border-top:1px solid var(--border); flex:0 0 auto; }
 body.up-settings-modal-open { overflow:hidden; }
 
+/* ══ MOBILE GROUP (upscale-set) modal ════════════════════════════════
+   Opened by swipe-up / long-press on the enlarged selected thumbnail in
+   the mobile bottom bar. Mirrors the desktop rail's group (upResolveGroup):
+   original + every connected upscale. Tapping a thumb loads it into the
+   preview; each thumb carries res + download + native-fullscreen. */
+.up-group-modal { display:none; }
+.up-group-modal.open {
+  display:flex; position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,.62); backdrop-filter:blur(3px);
+  align-items:flex-end; justify-content:center;
+}
+.up-group-modal-inner {
+  width:100%; max-width:640px; max-height:82vh; display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px 14px 0 0; box-shadow:0 -10px 40px rgba(0,0,0,.6);
+}
+.up-group-modal-grip {
+  flex:0 0 auto; width:42px; height:4px; border-radius:2px;
+  background:var(--border); margin:8px auto 2px;
+}
+.up-group-modal-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 16px 12px; border-bottom:1px solid var(--border); flex:0 0 auto;
+}
+.up-group-modal-title {
+  font-family:'IBM Plex Mono',sans-serif; font-size:16px; letter-spacing:1.5px; color:var(--accent);
+}
+.up-group-modal-x {
+  background:transparent; border:1px solid var(--border); color:var(--muted);
+  border-radius:6px; width:32px; height:30px; font-size:15px; cursor:pointer; line-height:1;
+}
+.up-group-modal-x:hover { color:var(--accent); border-color:var(--accent); }
+.up-group-modal-body {
+  padding:14px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  overflow-y:auto; flex:1 1 auto; -webkit-overflow-scrolling:touch;
+  display:flex; flex-direction:column; gap:12px;
+}
+.up-group-item {
+  position:relative; border:2px solid transparent; border-radius:10px;
+  overflow:hidden; background:#000; cursor:pointer;
+}
+.up-group-item.sel { border-color:var(--accent); }
+.up-group-item > img {
+  display:block; width:100%; max-height:46vh; object-fit:contain; background:transparent;
+}
+.up-group-item-tag {
+  position:absolute; top:8px; left:8px;
+  display:flex; gap:6px; align-items:center; pointer-events:none;
+  font-family:'IBM Plex Mono',sans-serif; font-size:11px; letter-spacing:1px;
+}
+.up-group-item-kind {
+  color:#000; background:var(--accent,#caff00); padding:3px 7px; border-radius:4px; font-weight:700;
+}
+.up-group-item-dims {
+  color:#fff; background:rgba(8,10,12,.7); padding:3px 7px; border-radius:4px;
+  border:1px solid rgba(255,255,255,.14);
+}
+.up-group-item-acts {
+  position:absolute; bottom:8px; right:8px; display:flex; gap:6px;
+}
+.up-group-act {
+  display:flex; align-items:center; justify-content:center;
+  width:34px; height:34px; border-radius:7px; cursor:pointer;
+  color:#fff; background:rgba(8,10,12,.72); border:1px solid rgba(255,255,255,.16);
+  font-size:16px; line-height:1; backdrop-filter:blur(2px);
+}
+.up-group-act:hover { color:var(--accent); border-color:var(--accent); }
+.up-group-modal-empty { color:var(--muted); font-size:13px; padding:18px 2px; }
+body.up-group-modal-open { overflow:hidden; }
+
 @media (max-width: 900px) {
   /* Single column already set by the base .up-layout small-screen rule. The
      library row is removed from the grid flow because the bar is fixed. */
@@ -4241,12 +4311,10 @@ body.up-settings-modal-open { overflow:hidden; }
     border:1px solid var(--border); border-radius:10px;
   }
 
-  /* Results: original always on top, then upscales in chronological order,
-     scrolling vertically below the preview. (upRenderRail builds them in
-     creation order; original is first.) */
-  #viewUpscaler .up-area-rail { align-self:start; margin-top:12px; }
-  #viewUpscaler .up-rail { display:flex; flex-direction:column; gap:12px; }
-  #viewUpscaler .up-rail-item img { max-height:none; width:100%; }
+  /* The vertical results rail is retired on mobile — the connected upscale
+     set is reached by swipe-up / long-press on the enlarged selected thumb
+     in the bottom bar, which opens #upGroupModal instead. */
+  #viewUpscaler .up-area-rail { display:none; }
 
   /* Sticky bottom library bar — fixed, full width inside the content column. */
   :root { --up-libbar-h-mob:96px; }
@@ -4258,9 +4326,18 @@ body.up-settings-modal-open { overflow:hidden; }
   }
   #viewUpscaler .up-libbar-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
   #viewUpscaler .up-libbar-ctrls { display:none; }  /* no pin/min control on mobile */
-  #viewUpscaler .up-libbar { padding:4px 0; }
-  #viewUpscaler .up-libbar-thumb { width:64px; height:64px; }
+  /* Align thumbs to the bottom so the taller selected one grows upward into
+     the bar without nudging its neighbours' baseline. */
+  #viewUpscaler .up-libbar { padding:4px 0; align-items:flex-end; }
+  #viewUpscaler .up-libbar-thumb { width:64px; height:64px; transition:width .16s ease, height .16s ease; }
   #viewUpscaler .up-libbar-new { width:64px; height:64px; font-size:26px; }
+  /* Selected thumb scales vertically to fill the bar height (and a touch
+     wider), cueing that it's the active image and swipe/hold target. */
+  #viewUpscaler .up-libbar-thumb.sel { width:84px; height:84px; }
+  #viewUpscaler .up-libbar-thumb.sel::after {
+    content:''; position:absolute; left:0; right:0; bottom:0; height:3px;
+    background:var(--accent); border-radius:0 0 4px 4px; pointer-events:none;
+  }
 
   /* Queue widget rides above the fixed bar on mobile. */
   body.up-sticky #bmQueueWidget { bottom:calc(var(--up-libbar-h-mob,96px) + 8px); }
@@ -4824,6 +4901,22 @@ body.up-settings-modal-open { overflow:hidden; }
     <div class="up-settings-modal-foot">
       <button class="btn btn-primary" type="button" style="width:100%;padding:12px;letter-spacing:2px;" onclick="upCloseSettingsModal()">DONE</button>
     </div>
+  </div>
+</div>
+
+<!-- Mobile upscaler GROUP modal. Opened by swipe-up / long-press on the
+     enlarged selected thumbnail in the bottom bar. upRenderGroupModal()
+     populates #upGroupModalBody from upResolveGroup() — original + every
+     connected upscale. Each item: tap-to-load, resolution, download,
+     native fullscreen. -->
+<div class="up-group-modal" id="upGroupModal" onclick="if(event.target===this)upCloseGroupModal()">
+  <div class="up-group-modal-inner">
+    <div class="up-group-modal-grip"></div>
+    <div class="up-group-modal-head">
+      <span class="up-group-modal-title">// UPSCALE SET</span>
+      <button class="up-group-modal-x" type="button" onclick="upCloseGroupModal()" aria-label="Close">✕</button>
+    </div>
+    <div class="up-group-modal-body" id="upGroupModalBody"></div>
   </div>
 </div>
 
@@ -22690,8 +22783,145 @@ function upRenderLibBar() {
       cell.appendChild(upl);
     }
     cell.onclick = () => { upSelectFav(f); };
+    // Mobile: the SELECTED (enlarged) thumb is the gesture target for opening
+    // the connected-upscale group modal — swipe-up OR long-press. A plain tap
+    // still selects (handled above); the gesture handlers guard against firing
+    // on a simple tap by tracking movement / hold duration.
+    if (upState.srcFavId === f.id) upAttachThumbGestures(cell, f);
     bar.appendChild(cell);
   });
+}
+
+// Attach swipe-up + long-press recognisers to a selected bottom-bar thumb.
+// Either gesture opens the group modal for that fav. Idempotent per element.
+function upAttachThumbGestures(cell, fav) {
+  if (!cell || cell._upGestured) return;
+  cell._upGestured = true;
+  let startX = 0, startY = 0, moved = false, holdTimer = null, fired = false;
+  const SWIPE_UP = 28;   // px upward to count as a swipe
+  const SLOP = 16;       // px horizontal tolerance before we call it a scroll
+  const HOLD_MS = 450;   // long-press threshold
+  const clearHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } };
+  const open = () => {
+    if (fired) return; fired = true; clearHold();
+    if (typeof upOpenGroupModal === 'function') upOpenGroupModal(fav);
+  };
+  cell.addEventListener('touchstart', (e) => {
+    const t = e.touches && e.touches[0]; if (!t) return;
+    startX = t.clientX; startY = t.clientY; moved = false; fired = false;
+    clearHold();
+    holdTimer = setTimeout(open, HOLD_MS);
+  }, { passive: true });
+  cell.addEventListener('touchmove', (e) => {
+    const t = e.touches && e.touches[0]; if (!t) return;
+    const dx = t.clientX - startX, dy = t.clientY - startY;
+    if (Math.abs(dx) > SLOP || Math.abs(dy) > SLOP) { moved = true; clearHold(); }
+    if (dy <= -SWIPE_UP && Math.abs(dx) < Math.abs(dy)) open();
+  }, { passive: true });
+  cell.addEventListener('touchend', () => { clearHold(); }, { passive: true });
+  cell.addEventListener('touchcancel', () => { clearHold(); }, { passive: true });
+  // Desktop parity (and trackpad testing): long-press via mouse + context menu.
+  cell.addEventListener('contextmenu', (e) => { e.preventDefault(); open(); });
+}
+
+// ── Mobile group (upscale-set) modal ─────────────────────────────────────────
+// Populated from upResolveGroup(fav): original + every connected upscale. A lone
+// image with no upscales still opens, showing just itself. Tapping a thumb loads
+// it into the preview (upSelectFav) and closes the modal.
+function upOpenGroupModal(fav) {
+  const modal = document.getElementById('upGroupModal');
+  if (!modal || !fav) return;
+  upRenderGroupModal(fav);
+  modal.classList.add('open');
+  document.body.classList.add('up-group-modal-open');
+}
+function upCloseGroupModal() {
+  const modal = document.getElementById('upGroupModal');
+  if (modal) modal.classList.remove('open');
+  document.body.classList.remove('up-group-modal-open');
+}
+function upRenderGroupModal(fav) {
+  const body = document.getElementById('upGroupModalBody');
+  if (!body) return;
+  body.innerHTML = '';
+  const grp = (typeof upResolveGroup === 'function')
+    ? upResolveGroup(fav) : { original: null, upscales: [] };
+  const items = [];
+  if (grp.original) items.push({ fav: grp.original, kind: 'original' });
+  const sortedUps = (grp.upscales || []).slice().sort((a, b) => {
+    const ak = (a.createdAt != null ? a.createdAt : a.id) || 0;
+    const bk = (b.createdAt != null ? b.createdAt : b.id) || 0;
+    return bk - ak;
+  });
+  sortedUps.forEach(u => items.push({ fav: u, kind: 'upscale' }));
+  // Lone image (no resolvable group): show just the selected fav.
+  if (!items.length) {
+    items.push({ fav, kind: (fav.isUpscale ? 'upscale' : 'original') });
+  }
+  items.forEach(({ fav: it, kind }) => {
+    const cell = document.createElement('div');
+    cell.className = 'up-group-item' + (upStageState.selId === it.id ? ' sel' : '');
+    const img = document.createElement('img');
+    img.alt = ''; img.loading = 'lazy';
+    if (it._synthOriginal && it.imageData) { img.src = it.imageData; }
+    else if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, it); }
+    else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, it.imageData); }
+    else { img.src = it.imageData; }
+    img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, it); };
+    cell.appendChild(img);
+
+    // Kind + resolution tag (top-left).
+    const tag = document.createElement('div');
+    tag.className = 'up-group-item-tag';
+    let label, dims = '';
+    if (kind === 'original') {
+      label = 'ORIGINAL';
+      if (it.outW && it.outH) dims = it.outW + '\u00D7' + it.outH;
+    } else {
+      const m = it.upscaleMeta || {};
+      label = m.mp ? (m.mp + 'MP') : (m.factor ? (m.factor + '\u00D7') : 'UPSCALE');
+      if (it.outW && it.outH) dims = it.outW + '\u00D7' + it.outH;
+    }
+    tag.innerHTML = '<span class="up-group-item-kind">' + label + '</span>' +
+      (dims ? ('<span class="up-group-item-dims">' + dims + '</span>') : '');
+    cell.appendChild(tag);
+    // Backfill resolution from natural size when not stored.
+    if (!dims) {
+      img.addEventListener('load', () => {
+        if (img.naturalWidth && img.naturalHeight && !tag.querySelector('.up-group-item-dims')) {
+          const dimsEl = document.createElement('span');
+          dimsEl.className = 'up-group-item-dims';
+          dimsEl.textContent = img.naturalWidth + '\u00D7' + img.naturalHeight;
+          tag.appendChild(dimsEl);
+        }
+      }, { once: true });
+    }
+
+    // Action buttons (bottom-right): download + native fullscreen.
+    const acts = document.createElement('div');
+    acts.className = 'up-group-item-acts';
+    const dl = document.createElement('button');
+    dl.type = 'button'; dl.className = 'up-group-act'; dl.title = 'Download';
+    dl.innerHTML = '&#x2193;';
+    dl.onclick = (e) => { e.stopPropagation(); if (typeof upDownloadFav === 'function') upDownloadFav(it); };
+    acts.appendChild(dl);
+    const fs = document.createElement('button');
+    fs.type = 'button'; fs.className = 'up-group-act'; fs.title = 'Fullscreen';
+    fs.innerHTML = '&#x26F6;';
+    fs.onclick = (e) => { e.stopPropagation(); upFullscreenImg(img); };
+    acts.appendChild(fs);
+    cell.appendChild(acts);
+
+    // Tap the thumb (not an action button) → load into the preview + close.
+    cell.onclick = () => { if (typeof upSelectFav === 'function') upSelectFav(it); upCloseGroupModal(); };
+    body.appendChild(cell);
+  });
+}
+// Native fullscreen on the tapped image element (falls back to webkit prefix).
+function upFullscreenImg(img) {
+  if (!img) return;
+  const req = img.requestFullscreen || img.webkitRequestFullscreen || img.webkitEnterFullscreen;
+  if (req) { try { req.call(img); } catch (e) {} }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -23139,10 +23369,15 @@ async function upSelectFav(f) {
     }
   }
   upStageState.selId = f.id;
-  // Sync bottom-bar highlight.
+  // Sync bottom-bar highlight + arm the swipe-up/long-press gesture on the
+  // newly-enlarged selected thumb (selection toggles .sel in place without a
+  // full upRenderLibBar, so the gesture must be wired here too — idempotent).
   const bar = document.getElementById('upLibBar');
-  if (bar) bar.querySelectorAll('.up-libbar-thumb').forEach(x =>
-    x.classList.toggle('sel', x.dataset.favId == f.id));
+  if (bar) bar.querySelectorAll('.up-libbar-thumb').forEach(x => {
+    const isSel = x.dataset.favId == f.id;
+    x.classList.toggle('sel', isSel);
+    if (isSel && typeof upAttachThumbGestures === 'function') upAttachThumbGestures(x, f);
+  });
 
   if (f.isUpscale) {
     const { original } = upResolveGroup(f);
