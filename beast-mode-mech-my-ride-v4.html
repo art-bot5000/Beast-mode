@@ -19692,7 +19692,12 @@ const bmQueue = (() => {
                   (job.result.image && job.result.image.url);
       if (url) {
         const im = document.createElement('img');
-        im.className = 'bm-q-thumb'; im.src = url; im.loading = 'lazy';
+        im.className = 'bm-q-thumb'; im.loading = 'lazy';
+        // url is an /api/img/<favId> URL (Bearer-authed) — a raw <img src> 401s
+        // because the browser can't send the auth header on an image load.
+        // Route through bmSetImgSrc, which fetches it authed and swaps in a
+        // blob: URL (and passes non-/api/img URLs straight through).
+        if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(im, url); } else { im.src = url; }
         card.appendChild(im);
       }
     }

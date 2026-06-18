@@ -1,7 +1,7 @@
 // Beast Mode // Service Worker
 // v4.2 — message-based update flow
 
-const CACHE_NAME = 'beast-mode-v6.46'
+const CACHE_NAME = 'beast-mode-v6.47'
 const CACHE_URLS = [
   './',
   './index.html',
@@ -67,10 +67,12 @@ self.addEventListener('fetch', e => {
   }
 
   // Never intercept non-GET requests (POST/PUT/DELETE — job creation, auth,
-  // token ledger) or ANY /api/ endpoint. Cache-first on these served stale
-  // job/balance responses and made new jobs appear to vanish from the queue.
-  // All dynamic data lives under /api/ (jobs, tokens/balance, manifest, data,
-  // thumbs, upscalers…); the SW only handles the static app shell + assets.
+  // token ledger) or ANY /api/ endpoint. /api/* is Bearer-header authed
+  // (incl. /api/img/<id>); a raw SW fetch carries no header, so it can't be
+  // cached here anyway, and cache-first on mutable endpoints served stale job/
+  // balance data. The SW only handles the static app shell + assets; all /api/
+  // traffic goes direct to network (image bytes are fetched authed in-app and
+  // cached as blobs by bmCacheImage / IndexedDB, not by the SW).
   if (e.request.method !== 'GET' || url.pathname.startsWith('/api/')) {
     return
   }
