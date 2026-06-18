@@ -9014,6 +9014,7 @@ async function driveLoadAllPrompts() {
       const localOnly = favourites.filter(f => !driveIds.has(f.id))
       favourites = [...loaded, ...localOnly]
       if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
+      if (typeof bmBackfillLineage === 'function') bmBackfillLineage();
       renderFavs()
     }
   } catch(e) { setDriveStatus('✗ LOAD FAILED','err') }
@@ -11668,6 +11669,7 @@ function lsRestoreAll() {
   const savedFavs = lsLoad(LS.FAVS)
   if (Array.isArray(savedFavs) && savedFavs.length) favourites = savedFavs
   if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
+  if (typeof bmBackfillLineage === 'function') bmBackfillLineage();
 
   const savedPresets = lsLoad(LS.PRESETS)
   if (Array.isArray(savedPresets)) customPresets = savedPresets
@@ -11773,6 +11775,7 @@ async function bmDocRestoreAll() {
 
   if (applied) {
     if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks()
+    if (typeof bmBackfillLineage === 'function') bmBackfillLineage()
     lsSaveAll() // keep localStorage in step with what Fly gave us
   }
   return applied
@@ -19728,6 +19731,7 @@ const bmQueue = (() => {
             upMp: (meta.upMp != null) ? meta.upMp : null,
             upFactor: (meta.upFactor != null) ? meta.upFactor : null,
             upModel: model || null,
+            lineage: savedFav.lineage || null,
           });
         }
       }
@@ -20227,6 +20231,7 @@ async function bmSyncLibraryFromManifest() {
       }
       if (typeof m.outW === 'number') fav.outW = m.outW;
       if (typeof m.outH === 'number') fav.outH = m.outH;
+      if (typeof m.lineage === 'string' && m.lineage) fav.lineage = m.lineage;
       favourites.push(fav);
       added++;
     }
@@ -20447,11 +20452,43 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       upscaleMeta: (extra && extra.upscaleMeta) ? extra.upscaleMeta : null,
       outW: (extra && typeof extra.outW === 'number') ? extra.outW : null,
       outH: (extra && typeof extra.outH === 'number') ? extra.outH : null,
+      // ── Lineage code (hardened grouping) ───────────────────────────────────
+      // Assigned below after the object exists (needs parent lookup).
+      lineage: null,
       // Pinned input for the before/after slider — the exact bytes upscaled.
       srcImageData: (extra && extra.srcImageData) ? extra.srcImageData : null,
       srcW: (extra && typeof extra.srcW === 'number') ? extra.srcW : null,
       srcH: (extra && typeof extra.srcH === 'number') ? extra.srcH : null,
     };
+    // Assign lineage: an upscale extends its parent's lineage (k7m2x9 → k7m2x9-1
+    // → k7m2x9-1-1…); an original (or an upscale whose parent has no lineage yet)
+    // gets a fresh root. This is the durable, desync-proof grouping key.
+    try {
+      if (fav.isUpscale && fav.upscaledFromId != null && typeof favourites !== 'undefined') {
+        const parent = favourites.find(x => x && Number(x.id) === Number(fav.upscaledFromId));
+        if (parent) {
+          if (!(typeof parent.lineage === 'string' && parent.lineage)) {
+            parent.lineage = bmNewLineageRoot();
+          }
+          fav.lineage = bmNextChildLineage(parent.lineage);
+        }
+      }
+      if (!fav.lineage) fav.lineage = bmNewLineageRoot();
+    } catch (_) { if (!fav.lineage) fav.lineage = bmNewLineageRoot(); }
+    // Durably register lineage (+ upscale fields for upscales) on the SERVER
+    // image record so the group reforms by lineage root after a cache clear /
+    // fresh device, independent of the ZK doc. Fire-and-forget. Originals
+    // register lineage only; upscales also register their linkage above.
+    try {
+      if (fav.id != null && typeof bmRegisterUpscaleMeta === 'function') {
+        bmRegisterUpscaleMeta(fav.id, {
+          lineage: fav.lineage || null,
+          isUpscale: !!fav.isUpscale,
+          outW: (typeof fav.outW === 'number') ? fav.outW : null,
+          outH: (typeof fav.outH === 'number') ? fav.outH : null,
+        });
+      }
+    } catch (_) {}
     if (typeof favourites !== 'undefined') {
       favourites.unshift(fav);
       if (typeof renderFavs === 'function') renderFavs();
@@ -22813,10 +22850,140 @@ function bmRepairUpscaleLinks() {
 window.bmRepairUpscaleLinks = bmRepairUpscaleLinks;
 
 // An original is a fav with hasUpscales; an upscale points via upscaledFromId.
+// ── Lineage codes: hardened upscale grouping ─────────────────────────────────
+// Every image carries a `lineage` string. An original gets a fresh random root
+// (e.g. "k7m2x9"). Each upscale extends its PARENT's lineage with "-<n>", where
+// n is the next unused child index under that parent: first upscale of k7m2x9 is
+// "k7m2x9-1", second "k7m2x9-2"; an upscale of k7m2x9-1 is "k7m2x9-1-1", etc.
+//
+// Why this is robust where pointers weren't: the relationship is INTRINSIC to
+// the id string, not a separate field that must be kept in sync. Grouping is a
+// pure prefix match on the root token — it cannot desync, cannot break on a
+// string/number id mismatch, needs no repair migration, and survives a ZK-doc
+// loss as long as the lineage rides the durable manifest. 100 nested upscales
+// all carry their full ancestry in the code.
+function bmLineageRoot(lineage) {
+  if (typeof lineage !== 'string' || !lineage) return null;
+  const dash = lineage.indexOf('-');
+  return dash === -1 ? lineage : lineage.slice(0, dash);
+}
+function bmLineageIsOriginal(lineage) {
+  return typeof lineage === 'string' && lineage.length > 0 && lineage.indexOf('-') === -1;
+}
+function bmLineageParent(lineage) {
+  if (typeof lineage !== 'string') return null;
+  const dash = lineage.lastIndexOf('-');
+  return dash === -1 ? null : lineage.slice(0, dash);
+}
+function bmNewLineageRoot() {
+  // 8 base36 chars from crypto if available; collision-checked against existing.
+  const gen = () => {
+    let s = '';
+    try {
+      const a = new Uint32Array(2);
+      (crypto || window.crypto).getRandomValues(a);
+      s = (a[0].toString(36) + a[1].toString(36)).replace(/[^a-z0-9]/g, '').slice(0, 8);
+    } catch (_) {}
+    if (s.length < 6) s = (Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 8);
+    return s;
+  };
+  const all = (typeof favourites !== 'undefined') ? favourites : [];
+  const used = new Set(all.map(f => f && bmLineageRoot(f.lineage)).filter(Boolean));
+  let r = gen(); let guard = 0;
+  while (used.has(r) && guard++ < 12) r = gen();
+  return r;
+}
+// Next child lineage for a given parent fav: parent.lineage + "-" + nextIndex,
+// where nextIndex is one past the highest existing child index of that parent.
+function bmNextChildLineage(parentLineage) {
+  if (typeof parentLineage !== 'string' || !parentLineage) return null;
+  const all = (typeof favourites !== 'undefined') ? favourites : [];
+  const prefix = parentLineage + '-';
+  let max = 0;
+  for (const f of all) {
+    if (!f || typeof f.lineage !== 'string') continue;
+    if (f.lineage.indexOf(prefix) !== 0) continue;
+    // direct child only: the segment after prefix must have no further dash
+    const rest = f.lineage.slice(prefix.length);
+    if (rest.indexOf('-') !== -1) continue;
+    const n = parseInt(rest, 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return prefix + (max + 1);
+}
+// Ensure every fav has a lineage. Originals (no isUpscale) get a fresh root.
+// Upscales try to inherit from their declared parent (upscaledFromId) when that
+// parent has a lineage; otherwise they become their own root (best effort — a
+// historically orphaned upscale with no recoverable parent stands alone). Idempotent.
+function bmBackfillLineage() {
+  const all = (typeof favourites !== 'undefined') ? favourites : [];
+  if (!all.length) return false;
+  const byId = new Map(all.filter(x => x && x.id != null).map(x => [Number(x.id), x]));
+  let changed = false;
+  // Pass 1: originals + already-lineaged stay; assign roots to lineage-less originals.
+  for (const f of all) {
+    if (!f || typeof f.lineage === 'string' && f.lineage) continue;
+    if (!f.isUpscale) { f.lineage = bmNewLineageRoot(); changed = true; }
+  }
+  // Pass 2: upscales inherit from parent lineage if available (may need several
+  // passes for chains, so loop until stable or capped).
+  let pass = 0;
+  let progressed = true;
+  while (progressed && pass++ < 8) {
+    progressed = false;
+    for (const f of all) {
+      if (!f || (typeof f.lineage === 'string' && f.lineage)) continue;
+      if (!f.isUpscale) continue;
+      const parent = (f.upscaledFromId != null) ? byId.get(Number(f.upscaledFromId)) : null;
+      if (parent && typeof parent.lineage === 'string' && parent.lineage) {
+        f.lineage = bmNextChildLineage(parent.lineage);
+        changed = true; progressed = true;
+      }
+    }
+  }
+  // Pass 3: any remaining lineage-less upscale (orphan, no recoverable parent) →
+  // own root, so it at least groups consistently with its own future upscales.
+  for (const f of all) {
+    if (!f || (typeof f.lineage === 'string' && f.lineage)) continue;
+    f.lineage = bmNewLineageRoot(); changed = true;
+  }
+  return changed;
+}
+window.bmBackfillLineage = bmBackfillLineage;
+
 function upResolveGroup(f) {
   const all = (typeof favourites !== 'undefined') ? favourites : [];
   if (!f) return { original: null, upscales: [] };
   const byId = new Map(all.filter(x => x && x.id != null).map(x => [x.id, x]));
+
+  // ── Lineage fast path (preferred) ──────────────────────────────────────────
+  // When the starting fav carries a lineage code, the whole group is simply
+  // every fav sharing the same lineage ROOT. This is a pure string match — no
+  // pointer matching, no id-type coercion, no repair dependency. Falls through
+  // to the legacy pointer traversal only when lineage is absent (mid-migration).
+  if (f.lineage && bmLineageRoot(f.lineage)) {
+    const root = bmLineageRoot(f.lineage);
+    const fam = all.filter(x => x && x.lineage && bmLineageRoot(x.lineage) === root);
+    if (fam.length) {
+      const original = fam.find(x => bmLineageIsOriginal(x.lineage)) || null;
+      const upscales = fam.filter(x => !bmLineageIsOriginal(x.lineage));
+      if (typeof window !== 'undefined' && window.BM_DEBUG_GROUP) {
+        try { console.log('[upResolveGroup:lineage] root', root, '→', fam.map(m => m.lineage)); } catch (e) {}
+      }
+      // Orphan case: family has only upscales (source was ad-hoc/historical) —
+      // synthesize a "before" original from pinned bytes, same as legacy path.
+      if (!original && upscales.length) {
+        const withSrc = upscales.find(u => u && u.srcImageData);
+        if (withSrc) {
+          return { original: {
+            id: '__orig__' + withSrc.id, _synthOriginal: true,
+            imageData: withSrc.srcImageData, outW: withSrc.srcW || null, outH: withSrc.srcH || null,
+          }, upscales };
+        }
+      }
+      return { original, upscales };
+    }
+  }
 
   // Treat upscale links as an UNDIRECTED graph and gather the whole connected
   // component reachable from f. Links are inconsistent across favs (some carry
