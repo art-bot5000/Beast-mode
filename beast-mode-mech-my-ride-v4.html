@@ -19673,8 +19673,16 @@ const bmQueue = (() => {
       images.forEach(im => {
         const pristine = (typeof im.url === 'string' && im.url.startsWith('data:')) ? im.url : null;
         if (typeof autoSaveGeneratedImage === 'function') {
+          // Reconcile to the SERVER's favId (embedded in /api/img/<id>) and use
+          // the server-minted lineage, so client grouping shares the server's id
+          // space and survives a relogin. This is the fix for the id-mismatch
+          // that silently dropped all linkage.
+          let srvFavId = null;
+          const mu = (typeof im.url === 'string') ? im.url.match(/\/api\/img\/(\d+)/) : null;
+          if (mu) srvFavId = Number(mu[1]);
           const savedFav = autoSaveGeneratedImage(prompt, fullText, im.url, model, pristine,
-            tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged));
+            tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged),
+            { serverFavId: srvFavId, lineage: (typeof im.lineage === 'string' ? im.lineage : null) });
           // Link the job to the first saved library entry so a queue-card tap
           // can jump straight to it.
           if (savedFav && savedFav.id != null && job.savedFavId == null) job.savedFavId = savedFav.id;
@@ -19697,8 +19705,16 @@ const bmQueue = (() => {
         const _srcFavId = (meta.srcFavId != null
           && !(typeof meta.srcFavId === 'string' && meta.srcFavId.indexOf('__orig__') === 0))
           ? meta.srcFavId : null;
+        // Reconcile to the SERVER favId (from /api/img/<id>) and use the
+        // server-stored lineage, so the upscale shares the server id space and
+        // its grouping survives a relogin.
+        let _srvFavId = null;
+        const _mu = (typeof im.url === 'string') ? im.url.match(/\/api\/img\/(\d+)/) : null;
+        if (_mu) _srvFavId = Number(_mu[1]);
         const upExtra = {
           isUpscale: true,
+          serverFavId: _srvFavId,
+          lineage: (typeof im.lineage === 'string' ? im.lineage : null),
           upscaledFromId: _srcFavId,
           upscaleMeta: {
             model: model,
@@ -20425,7 +20441,7 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       promptOnly: prompt,
       mode: typeof currentMode !== 'undefined' ? currentMode : '',
       preset: typeof currentPreset !== 'undefined' ? currentPreset : '',
-      id: Date.now(),
+      id: (extra && extra.serverFavId != null && Number.isFinite(Number(extra.serverFavId))) ? Number(extra.serverFavId) : Date.now(),
       title: '',
       model: model || GEN_IMAGE_MODEL,
       rating: 0,
@@ -20460,11 +20476,14 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       srcW: (extra && typeof extra.srcW === 'number') ? extra.srcW : null,
       srcH: (extra && typeof extra.srcH === 'number') ? extra.srcH : null,
     };
-    // Assign lineage: an upscale extends its parent's lineage (k7m2x9 → k7m2x9-1
-    // → k7m2x9-1-1…); an original (or an upscale whose parent has no lineage yet)
-    // gets a fresh root. This is the durable, desync-proof grouping key.
+    // Assign lineage. PREFER the server-provided lineage (extra.lineage) — the
+    // server is the source of truth and writes it WITH the image, so it survives
+    // a relogin. Only fall back to client-side derivation when the server didn't
+    // supply one (e.g. soft-degraded inline image with no durable store).
     try {
-      if (fav.isUpscale && fav.upscaledFromId != null && typeof favourites !== 'undefined') {
+      if (extra && typeof extra.lineage === 'string' && extra.lineage) {
+        fav.lineage = extra.lineage;
+      } else if (fav.isUpscale && fav.upscaledFromId != null && typeof favourites !== 'undefined') {
         const parent = favourites.find(x => x && Number(x.id) === Number(fav.upscaledFromId));
         if (parent) {
           if (!(typeof parent.lineage === 'string' && parent.lineage)) {
@@ -23679,6 +23698,26 @@ async function upRun() {
     if (Number.isFinite(sd) && sd >= 0) body.seed = sd;
     if (m.sampler && Number.isFinite(m.sampler.strength)) body.strength = m.sampler.strength;
   }
+
+  // Compute the durable grouping fields and send them in the BODY so the server
+  // writes them WITH the upscale image (no separate, race-prone registration).
+  // Child lineage = parent.lineage + "-N". Resolve the parent fav from srcFavId.
+  try {
+    const parentFav = (upState.srcFavId != null && typeof favourites !== 'undefined')
+      ? favourites.find(x => x && Number(x.id) === Number(upState.srcFavId)) : null;
+    if (parentFav) {
+      if (!(typeof parentFav.lineage === 'string' && parentFav.lineage) && typeof bmNewLineageRoot === 'function') {
+        parentFav.lineage = bmNewLineageRoot();
+      }
+      if (typeof parentFav.lineage === 'string' && parentFav.lineage && typeof bmNextChildLineage === 'function') {
+        body.lineage = bmNextChildLineage(parentFav.lineage);
+      }
+      body.upscaledFromId = String(upState.srcFavId);
+    }
+    if (typeof bmNewLineageRoot === 'function' && !body.lineage) body.lineage = bmNewLineageRoot();
+    if (Number.isFinite(upState.outW)) body.outW = upState.outW;
+    if (Number.isFinite(upState.outH)) body.outH = upState.outH;
+  } catch (_) {}
 
   upState.busy = true;
   const btn = document.getElementById('upRunBtn');
