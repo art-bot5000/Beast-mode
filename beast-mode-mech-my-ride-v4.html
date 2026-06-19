@@ -4532,13 +4532,67 @@ body.up-group-modal-open { overflow:hidden; }
 .ig-libbar-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .ig-libbar-thumb.sel { border-color:var(--accent); }
 .ig-libbar-thumb .ig-libbar-selnum {
-  position:absolute; left:4px; bottom:4px;
+  position:absolute; left:4px; top:4px;
   display:flex; align-items:center; justify-content:center;
   min-width:16px; height:16px; padding:0 4px;
   font-size:10px; font-weight:700; line-height:1; color:#000;
   background:var(--accent,#caff00); border-radius:3px;
   box-shadow:0 1px 3px rgba(0,0,0,.5); pointer-events:none;
 }
+/* Tickbox (bottom-right) — toggles i2i reference selection. The rest of the
+   thumb opens the family view, so the tick is the ONLY selection affordance. */
+.ig-libbar-tick {
+  position:absolute; right:4px; bottom:4px;
+  width:20px; height:20px; padding:0; cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.7); border-radius:4px;
+  background:rgba(8,10,12,.55); backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center;
+  transition:background .12s, border-color .12s;
+}
+.ig-libbar-tick::after { content:''; width:9px; height:9px; border-radius:2px; background:transparent; }
+.ig-libbar-tick:hover { border-color:var(--accent); }
+.ig-libbar-tick.checked { background:var(--accent); border-color:var(--accent); }
+.ig-libbar-tick.checked::after {
+  content:'\2713'; width:auto; height:auto; background:transparent;
+  color:#000; font-size:13px; font-weight:800; line-height:1;
+}
+/* Small dot cueing a generated image has an i2i source set to open. */
+.ig-libbar-famdot {
+  position:absolute; right:6px; top:6px; width:7px; height:7px; border-radius:50%;
+  background:var(--accent,#caff00); box-shadow:0 0 0 2px rgba(8,10,12,.6); pointer-events:none;
+}
+/* ── Family view (bottom-bar takeover) ── */
+.ig-fam-btn {
+  flex:0 0 auto; height:84px; padding:0 14px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'IBM Plex Mono',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
+  border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--muted);
+  transition:color .15s, border-color .15s, background .15s; white-space:nowrap;
+}
+.ig-fam-btn:hover { color:var(--accent); border-color:var(--accent); }
+.ig-fam-restore { color:#000; background:var(--accent,#caff00); border-color:transparent; }
+.ig-fam-restore:hover { color:#000; filter:brightness(1.08); }
+.ig-fam-output {
+  position:relative; flex:0 0 auto; width:84px; height:84px;
+  border-radius:6px; border:2px solid var(--accent); overflow:hidden; background:#000;
+}
+.ig-fam-output img { width:100%; height:100%; object-fit:cover; display:block; }
+.ig-fam-output-tag {
+  position:absolute; left:0; top:0; padding:2px 5px; font-size:9px; font-weight:800; letter-spacing:1px;
+  color:#000; background:var(--accent,#caff00); border-radius:0 0 4px 0; pointer-events:none;
+}
+.ig-fam-use {
+  position:absolute; right:3px; bottom:3px; padding:2px 5px; cursor:pointer;
+  font-family:'IBM Plex Mono',sans-serif; font-size:9px; font-weight:700; letter-spacing:.5px;
+  color:#fff; background:rgba(8,10,12,.72); border:1px solid rgba(255,255,255,.2); border-radius:4px;
+}
+.ig-fam-use:hover { color:var(--accent); border-color:var(--accent); }
+.ig-fam-divider { flex:0 0 auto; width:1px; align-self:stretch; margin:6px 4px; background:var(--border); }
+.ig-fam-missing {
+  display:flex; align-items:center; justify-content:center; cursor:default;
+  border-style:dashed !important; border-color:var(--border) !important; background:rgba(255,255,255,.03);
+}
+.ig-fam-missing span { font-size:9px; letter-spacing:1px; color:var(--muted); text-transform:uppercase; }
 .ig-libbar-new {
   flex:0 0 auto; width:84px; height:84px;
   display:flex; align-items:center; justify-content:center;
@@ -9159,6 +9213,7 @@ async function driveLoadAllPrompts() {
       const localOnly = favourites.filter(f => !driveIds.has(f.id))
       favourites = [...loaded, ...localOnly]
       if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
+      if (typeof bmRepairFamilyLinks === 'function') bmRepairFamilyLinks();
       if (typeof bmBackfillLineage === 'function') bmBackfillLineage();
       renderFavs()
     }
@@ -11814,6 +11869,7 @@ function lsRestoreAll() {
   const savedFavs = lsLoad(LS.FAVS)
   if (Array.isArray(savedFavs) && savedFavs.length) favourites = savedFavs
   if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
+  if (typeof bmRepairFamilyLinks === 'function') bmRepairFamilyLinks();
   if (typeof bmBackfillLineage === 'function') bmBackfillLineage();
 
   const savedPresets = lsLoad(LS.PRESETS)
@@ -11920,6 +11976,7 @@ async function bmDocRestoreAll() {
 
   if (applied) {
     if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks()
+    if (typeof bmRepairFamilyLinks === 'function') bmRepairFamilyLinks()
     if (typeof bmBackfillLineage === 'function') bmBackfillLineage()
     lsSaveAll() // keep localStorage in step with what Fly gave us
   }
@@ -19827,7 +19884,9 @@ const bmQueue = (() => {
           if (mu) srvFavId = Number(mu[1]);
           const savedFav = autoSaveGeneratedImage(prompt, fullText, im.url, model, pristine,
             tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged),
-            { serverFavId: srvFavId, lineage: (typeof im.lineage === 'string' ? im.lineage : null) });
+            { serverFavId: srvFavId, lineage: (typeof im.lineage === 'string' ? im.lineage : null),
+              familySrcIds: Array.isArray(meta.srcFavIds) ? meta.srcFavIds : null,
+              igSettings: meta.igSettings || null });
           // Link the job to the first saved library entry so a queue-card tap
           // can jump straight to it.
           if (savedFav && savedFav.id != null && job.savedFavId == null) job.savedFavId = savedFav.id;
@@ -20393,6 +20452,16 @@ async function bmSyncLibraryFromManifest() {
       if (typeof m.outW === 'number') fav.outW = m.outW;
       if (typeof m.outH === 'number') fav.outH = m.outH;
       if (typeof m.lineage === 'string' && m.lineage) fav.lineage = m.lineage;
+      // i2i family reform: a generated output carries its familyCode + the source
+      // favIds; a source image carries the families it belongs to. These let the
+      // family view + bottom-bar open-family work on a fresh device.
+      if (typeof m.familyCode === 'string' && m.familyCode) fav.familyCode = m.familyCode;
+      if (Array.isArray(m.familySrcIds) && m.familySrcIds.length) {
+        fav.familySrcIds = m.familySrcIds.map(Number).filter(n => Number.isFinite(n));
+      }
+      if (Array.isArray(m.familyCodes) && m.familyCodes.length) {
+        fav.familyCodes = m.familyCodes.filter(c => typeof c === 'string' && c);
+      }
       favourites.push(fav);
       added++;
     }
@@ -20620,6 +20689,16 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       srcImageData: (extra && extra.srcImageData) ? extra.srcImageData : null,
       srcW: (extra && typeof extra.srcW === 'number') ? extra.srcW : null,
       srcH: (extra && typeof extra.srcH === 'number') ? extra.srcH : null,
+      // ── i2i family (image-to-image grouping) ───────────────────────────────
+      // On a GENERATED output made via i2i: familyCode is assigned below and
+      // familySrcIds is the set of LIBRARY source favIds. igSettings is a
+      // snapshot of the gen recipe for the family-view Restore button. All null
+      // on plain / text-to-image generations.
+      familyCode: null,
+      familySrcIds: (extra && Array.isArray(extra.familySrcIds) && extra.familySrcIds.length)
+        ? Array.from(new Set(extra.familySrcIds.map(Number).filter(n => Number.isFinite(n)))).slice(0, 64)
+        : null,
+      igSettings: (extra && extra.igSettings && typeof extra.igSettings === 'object') ? extra.igSettings : null,
     };
     // Assign lineage. PREFER the server-provided lineage (extra.lineage) — the
     // server is the source of truth and writes it WITH the image, so it survives
@@ -20672,6 +20751,41 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
           srcFav.updatedAt = Date.now();
           if (typeof driveSavePrompt === 'function') driveSavePrompt(srcFav);
         }
+      }
+      // ── i2i FAMILY: mint a code for this output + stamp every library source ──
+      // Mirrors the upscale two-way stamping, but many-to-many: the output keeps
+      // familySrcIds, and each source appends this family's code to its
+      // familyCodes list (deduped, FIFO-capped at 100 — oldest dropped). Each
+      // source is also registered server-side (familyCodesAppend) so families
+      // reform cross-device from the login manifest.
+      if (fav.familySrcIds && fav.familySrcIds.length) {
+        try {
+          const code = bmNewFamilyCode();
+          fav.familyCode = code;
+          for (const sid of fav.familySrcIds) {
+            const src = favourites.find(x => x && Number(x.id) === Number(sid));
+            if (!src) continue;
+            if (!Array.isArray(src.familyCodes)) src.familyCodes = [];
+            if (!src.familyCodes.includes(code)) {
+              src.familyCodes.push(code);
+              if (src.familyCodes.length > 100) src.familyCodes.shift(); // FIFO cap
+              src.updatedAt = Date.now();
+              if (typeof driveSavePrompt === 'function') driveSavePrompt(src);
+              // Durable cross-device membership.
+              if (src.id != null && typeof bmRegisterUpscaleMeta === 'function') {
+                bmRegisterUpscaleMeta(src.id, { familyCodesAppend: [code] });
+              }
+            }
+          }
+          // Register the OUTPUT's own family code + sources durably.
+          if (fav.id != null && typeof bmRegisterUpscaleMeta === 'function') {
+            bmRegisterUpscaleMeta(fav.id, {
+              familyCode: code,
+              familySrcIds: fav.familySrcIds.map(String),
+            });
+          }
+          if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+        } catch (_) { /* family stamping is best-effort, never blocks the save */ }
       }
       // Durable copies: the image is ALREADY permanently stored on our /data
       // volume (autoSaveGeneratedImage receives its /api/img/<id> URL as
@@ -21472,6 +21586,9 @@ function igInit() {
 
 function igModelChanged() {
   igState.modelId = document.getElementById('igModel').value;
+  // Leaving the current model drops any open family takeover (its sources may be
+  // irrelevant to the new model, and non-i2i models have no families).
+  if (typeof igFamily !== 'undefined' && igFamily.open) { igFamily.open = false; igFamily.outputId = null; }
   const m = igModel();
   // Reset res tier + AR if not valid for the new model.
   const tiers = Object.keys(m.dims);
@@ -21877,6 +21994,51 @@ function igFlashSentToQueue(btn) {
   }, 1600);
 }
 
+// Snapshot the current Image-Gen recipe so a family's generated output can be
+// restored later (prompt/model/AR/res/quality/speed/seed/steps/cfg/negative).
+// Stored as fav.igSettings. Reading the form inputs directly avoids depending on
+// transient igState for the input-backed fields.
+function igCaptureSettings(promptOverride) {
+  const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+  return {
+    v: 1,
+    modelId: igState.modelId,
+    ar: igState.ar,
+    res: igState.res,
+    quality: igState.quality,
+    speed: igState.speed,
+    prompt: (typeof promptOverride === 'string') ? promptOverride : (val('igPrompt') || '').trim(),
+    negative: (val('igNegative') || '').trim(),
+    seed: (val('igSeed') || '').trim(),
+    steps: (val('igSteps') || '').trim(),
+    cfg: (val('igCfg') || '').trim(),
+  };
+}
+// Re-apply a captured recipe to igState + the form, then re-render the controls.
+// Tolerant of partial/legacy snapshots. Returns true if a model was applied.
+function igApplySettings(s) {
+  if (!s || typeof s !== 'object') return false;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+  if (typeof s.modelId === 'string' && IG_MODELS.some(m => m.id === s.modelId)) igState.modelId = s.modelId;
+  const modelSel = document.getElementById('igModel'); if (modelSel) modelSel.value = igState.modelId;
+  if (typeof s.res === 'string') igState.res = s.res;
+  if (typeof s.ar === 'string') igState.ar = s.ar;
+  if (typeof s.quality === 'string') igState.quality = s.quality;
+  if (typeof s.speed === 'string') igState.speed = s.speed;
+  // Normalise res/ar against the model's dimension table + seed sampler
+  // defaults FIRST (igModelChanged also re-renders the dependent controls)…
+  if (typeof igModelChanged === 'function') igModelChanged();
+  // …THEN write the input-backed fields so the restored values win over the
+  // model's defaults (steps/cfg) rather than being clobbered by them.
+  if (typeof s.prompt === 'string') setVal('igPrompt', s.prompt);
+  setVal('igNegative', s.negative || '');
+  setVal('igSeed', s.seed || '');
+  if (s.steps) setVal('igSteps', s.steps);
+  if (s.cfg) setVal('igCfg', s.cfg);
+  if (typeof igRenderAll === 'function') igRenderAll();
+  return true;
+}
+
 async function igGenerate() {
   if (igState.busy) return;
   const m = igModel();
@@ -21929,7 +22091,20 @@ async function igGenerate() {
   igStatus('\u25CC GENERATING\u2026 (' + m.label + ')', false);
 
   try {
-    const r = await bmQueue.enqueueGenerate(body, { prompt, fullText: '', model: m.id });
+    // i2i family capture: record the LIBRARY source images (refs with a favId;
+    // fresh uploads are ignored) plus a settings snapshot so the generated
+    // output can later restore the exact recipe. Threaded through the queue meta
+    // → drain → autoSaveGeneratedImage(extra).
+    const srcFavIds = (m.i2i && Array.isArray(igState.refs))
+      ? igState.refs.map(r => r && r.favId).filter(id => id != null).map(Number)
+      : [];
+    const dedupSrcIds = Array.from(new Set(srcFavIds));
+    const igSettings = (typeof igCaptureSettings === 'function') ? igCaptureSettings(prompt) : null;
+    const r = await bmQueue.enqueueGenerate(body, {
+      prompt, fullText: '', model: m.id,
+      srcFavIds: dedupSrcIds,
+      igSettings,
+    });
     if (!r.ok) {
       if (r.code === 'auth_required') {
         if (typeof openAuthModal === 'function') openAuthModal('login');
@@ -22199,6 +22374,8 @@ function igRenderLibBar() {
   const hint = document.getElementById('igLibBarHint');
   const main = document.getElementById('igMain');
   if (!bar) return;
+  // When a family is open, the bar is taken over by that output's source set.
+  if (igFamily.open) { igRenderFamilyBar(); return; }
   const m = igModel();
   const i2i = !!(m && m.i2i);
   if (main) main.classList.toggle('ig-timeline', !i2i);
@@ -22225,13 +22402,13 @@ function igRenderLibBar() {
 
   if (!withImg.length) {
     if (empty) empty.style.display = 'block';
-    if (hint) hint.textContent = i2i ? 'Select up to ' + (m.maxRefs || 1) + ' reference' + ((m.maxRefs || 1) === 1 ? '' : 's') : '';
+    if (hint) hint.textContent = i2i ? 'Tick to select up to ' + (m.maxRefs || 1) + ' reference' + ((m.maxRefs || 1) === 1 ? '' : 's') : '';
     return;
   }
   if (empty) empty.style.display = 'none';
   if (hint) {
     hint.textContent = i2i
-      ? (igState.refs.length + ' / ' + (m.maxRefs || 1) + ' selected')
+      ? (igState.refs.length + ' / ' + (m.maxRefs || 1) + ' selected \u00B7 tap image for its source set')
       : (withImg.length + ' image' + (withImg.length === 1 ? '' : 's') + ' \u00B7 timeline');
   }
 
@@ -22246,18 +22423,232 @@ function igRenderLibBar() {
     else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
     else { img.src = f.imageData; }
     cell.appendChild(img);
+    // Selection order badge moves to TOP-LEFT so it never collides with the
+    // bottom-right tickbox.
     if (i2i && selIdx >= 0) {
       const num = document.createElement('div');
       num.className = 'ig-libbar-selnum';
       num.textContent = String(selIdx + 1);
       cell.appendChild(num);
     }
-    if (i2i) { cell.onclick = () => igLibToggleRef(f); }
-    else { cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id)); }
+    // A small "family" dot cues that this generated image has a source set to
+    // open (purely informational; code itself stays internal).
+    if (i2i && f.familyCode) {
+      const fam = document.createElement('div');
+      fam.className = 'ig-libbar-famdot';
+      fam.title = 'Made with image-to-image — tap to see its sources';
+      cell.appendChild(fam);
+    }
+    if (i2i) {
+      // Tickbox (bottom-right) toggles i2i ref selection.
+      const tick = document.createElement('button');
+      tick.type = 'button';
+      tick.className = 'ig-libbar-tick' + (selIdx >= 0 ? ' checked' : '');
+      tick.title = (selIdx >= 0) ? 'Deselect reference' : 'Select as reference';
+      tick.setAttribute('role', 'checkbox');
+      tick.setAttribute('aria-checked', selIdx >= 0 ? 'true' : 'false');
+      tick.onclick = (e) => { e.stopPropagation(); igLibToggleRef(f); };
+      cell.appendChild(tick);
+      // Tapping the rest of the thumb OPENS the image's family (its i2i sources)
+      // if it has one; otherwise falls back to a preview.
+      cell.onclick = () => {
+        if (f.familyCode) igOpenFamilyForOutput(f);
+        else igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
+      };
+    } else {
+      cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
+    }
     bar.appendChild(cell);
   });
 }
 window.igRenderLibBar = igRenderLibBar;
+
+// ── i2i FAMILY VIEW ──────────────────────────────────────────────────────────
+// Clicking a generated i2i image in the bottom bar opens its "family": the bar
+// is taken over by that output's SOURCE images (pinned output shown separately),
+// with Restore (re-apply recipe + re-select sources) and Close.
+const igFamily = { open: false, outputId: null };
+
+function igOpenFamilyForOutput(outputFav) {
+  if (!outputFav || !outputFav.familyCode) return;
+  igFamily.open = true;
+  igFamily.outputId = outputFav.id;
+  igRenderFamilyBar();
+}
+function igCloseFamily() {
+  igFamily.open = false;
+  igFamily.outputId = null;
+  igRenderLibBar();
+}
+window.igCloseFamily = igCloseFamily;
+
+// Resolve the output fav + its sources (existing vs missing) for the family view.
+function igResolveFamily() {
+  const all = (typeof favourites !== 'undefined') ? favourites : [];
+  const output = all.find(f => f && Number(f.id) === Number(igFamily.outputId)) || null;
+  const srcIds = (output && Array.isArray(output.familySrcIds)) ? output.familySrcIds : [];
+  const sources = [];
+  let missing = 0;
+  for (const sid of srcIds) {
+    const src = all.find(f => f && Number(f.id) === Number(sid));
+    if (src) sources.push(src); else missing++;
+  }
+  return { output, sources, missing, total: srcIds.length };
+}
+
+function igRenderFamilyBar() {
+  const bar = document.getElementById('igLibBar');
+  const empty = document.getElementById('igLibBarEmpty');
+  const hint = document.getElementById('igLibBarHint');
+  if (!bar) return;
+  if (empty) empty.style.display = 'none';
+  bar.innerHTML = '';
+  const m = igModel();
+  const { output, sources, missing, total } = igResolveFamily();
+  if (!output) { igCloseFamily(); return; }
+
+  if (hint) {
+    hint.textContent = 'Source set \u00B7 ' + sources.length + ' of ' + total + ' still in library'
+      + (missing ? (' \u00B7 ' + missing + ' removed') : '');
+  }
+
+  // Close (✕) — far left, returns the normal library bar.
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'ig-fam-btn ig-fam-close';
+  close.title = 'Close source set';
+  close.innerHTML = '\u2715';
+  close.onclick = () => igCloseFamily();
+  bar.appendChild(close);
+
+  // Restore — re-apply the generation recipe + re-select available sources.
+  const restore = document.createElement('button');
+  restore.type = 'button';
+  restore.className = 'ig-fam-btn ig-fam-restore';
+  restore.title = 'Restore this image\u2019s settings and source images';
+  restore.innerHTML = '\u21BA RESTORE';
+  restore.onclick = () => igRestoreFamily();
+  bar.appendChild(restore);
+
+  // Pinned OUTPUT — the generated result, highlighted + labelled, with a quick
+  // "use as ref" affordance (Q5).
+  const outWrap = document.createElement('div');
+  outWrap.className = 'ig-fam-output';
+  const outImg = document.createElement('img');
+  outImg.alt = ''; outImg.loading = 'lazy';
+  if (typeof bmApplyThumb === 'function') bmApplyThumb(outImg, output);
+  else outImg.src = output.imageData || ('/api/img/' + output.id);
+  outWrap.appendChild(outImg);
+  const outTag = document.createElement('div');
+  outTag.className = 'ig-fam-output-tag';
+  outTag.textContent = 'RESULT';
+  outWrap.appendChild(outTag);
+  // "use this output as a new ref" button (Q5) — only meaningful on i2i models.
+  if (m && m.i2i) {
+    const useBtn = document.createElement('button');
+    useBtn.type = 'button';
+    useBtn.className = 'ig-fam-use';
+    useBtn.title = 'Use this result as a reference';
+    useBtn.innerHTML = '+ REF';
+    useBtn.onclick = (e) => { e.stopPropagation(); igLibToggleRef(output); };
+    outWrap.appendChild(useBtn);
+  }
+  bar.appendChild(outWrap);
+
+  // Divider.
+  const div = document.createElement('div');
+  div.className = 'ig-fam-divider';
+  bar.appendChild(div);
+
+  // SOURCE thumbs. Tapping a source toggles it as a ref for the next generation
+  // (Q2). Removed sources render as a greyed placeholder.
+  const presentIds = new Set(sources.map(s => Number(s.id)));
+  const srcIds = Array.isArray(output.familySrcIds) ? output.familySrcIds : [];
+  srcIds.forEach(sid => {
+    if (presentIds.has(Number(sid))) {
+      const f = sources.find(s => Number(s.id) === Number(sid));
+      const cell = document.createElement('div');
+      const selIdx = (m && m.i2i) ? igRefIndexForFav(f.id) : -1;
+      cell.className = 'ig-libbar-thumb' + (selIdx >= 0 ? ' sel' : '');
+      const img = document.createElement('img');
+      img.alt = f.title || ''; img.loading = 'lazy';
+      if (typeof bmApplyThumb === 'function') bmApplyThumb(img, f);
+      else img.src = f.imageData || ('/api/img/' + f.id);
+      cell.appendChild(img);
+      if (selIdx >= 0) {
+        const num = document.createElement('div');
+        num.className = 'ig-libbar-selnum';
+        num.textContent = String(selIdx + 1);
+        cell.appendChild(num);
+      }
+      if (m && m.i2i) {
+        const tick = document.createElement('button');
+        tick.type = 'button';
+        tick.className = 'ig-libbar-tick' + (selIdx >= 0 ? ' checked' : '');
+        tick.title = (selIdx >= 0) ? 'Deselect reference' : 'Select as reference';
+        tick.onclick = (e) => { e.stopPropagation(); igLibToggleRef(f); };
+        cell.appendChild(tick);
+        cell.onclick = () => igLibToggleRef(f); // Q2: tap source → toggle ref
+      } else {
+        cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
+      }
+      bar.appendChild(cell);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'ig-libbar-thumb ig-fam-missing';
+      ph.title = 'This source image is no longer in the library';
+      ph.innerHTML = '<span>removed</span>';
+      bar.appendChild(ph);
+    }
+  });
+}
+
+// Restore the family's generation recipe + re-select still-present sources.
+function igRestoreFamily() {
+  const { output, sources, missing, total } = igResolveFamily();
+  if (!output) return;
+  // Settings: prefer the captured igSettings snapshot; fall back to the prompt
+  // text on the fav if older generations lack the snapshot.
+  let appliedSettings = false;
+  if (output.igSettings && typeof igApplySettings === 'function') {
+    appliedSettings = igApplySettings(output.igSettings);
+  } else if (typeof igApplySettings === 'function') {
+    appliedSettings = igApplySettings({ prompt: output.promptOnly || '' });
+  }
+  // Clear current refs, then re-add available sources up to the model's limit.
+  const m = igModel();
+  igState.refs = [];
+  const limit = (m && m.maxRefs) ? m.maxRefs : 1;
+  let added = 0, truncated = 0;
+  const addNext = (i) => {
+    if (i >= sources.length) { finish(); return; }
+    if (added >= limit) { truncated = sources.length - added; finish(); return; }
+    const f = sources[i];
+    const onData = (data) => {
+      if (data && added < limit) { igState.refs.push({ data, favId: f.id }); added++; }
+      addNext(i + 1);
+    };
+    if (f.imageData && !(typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0)) { onData(f.imageData); return; }
+    const serverUrl = f.serverImageUrl
+      || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : ('/api/img/' + f.id));
+    if (typeof upResolveInputImage === 'function') upResolveInputImage(serverUrl).then(onData).catch(() => onData(null));
+    else if (typeof bmGetCachedImage === 'function') bmGetCachedImage(f.id).then(onData).catch(() => onData(null));
+    else onData(f.imageData || null);
+  };
+  const finish = () => {
+    igCloseFamily();
+    if (typeof igRenderAll === 'function') igRenderAll();
+    // Status: note what was/wasn't restored.
+    const bits = [];
+    bits.push('Restored ' + added + ' of ' + total + ' source' + (total === 1 ? '' : 's'));
+    if (missing) bits.push(missing + ' removed');
+    if (truncated) bits.push(truncated + ' over model limit');
+    if (!appliedSettings) bits.push('settings unavailable');
+    if (typeof igStatus === 'function') igStatus('\u2713 ' + bits.join(' \u00B7 '), false);
+  };
+  // Only i2i models take refs; on a non-i2i model just restore settings.
+  if (m && m.i2i) addNext(0); else finish();
+}
 
 // Download a favourite's image, resolving a dead blob: URL via the cache/Drive
 // fallback chain first so the download doesn't fail silently.
@@ -23150,6 +23541,46 @@ function bmRepairUpscaleLinks() {
 }
 window.bmRepairUpscaleLinks = bmRepairUpscaleLinks;
 
+// Idempotent i2i family repair (mirrors bmRepairUpscaleLinks). Runs on load:
+//  • dedupes + FIFO-caps each source's familyCodes at 100,
+//  • back-stamps membership from any generated output's familySrcIds whose
+//    sources are missing the code (covers a server-registration lag or a load
+//    where the source's manifest entry arrived before the output's),
+//  • never prunes familySrcIds (the family view reports missing sources by live
+//    lookup, so the original id list must be preserved).
+function bmRepairFamilyLinks() {
+  if (!Array.isArray(favourites) || !favourites.length) return;
+  const byId = new Map(favourites.filter(x => x && x.id != null).map(x => [Number(x.id), x]));
+  let changed = false;
+  favourites.forEach(out => {
+    if (!out || !out.familyCode || !Array.isArray(out.familySrcIds)) return;
+    out.familySrcIds.forEach(sid => {
+      const src = byId.get(Number(sid));
+      if (!src) return;
+      if (!Array.isArray(src.familyCodes)) { src.familyCodes = []; changed = true; }
+      if (!src.familyCodes.includes(out.familyCode)) {
+        src.familyCodes.push(out.familyCode);
+        changed = true;
+      }
+    });
+  });
+  // Dedupe + FIFO-cap every familyCodes array.
+  favourites.forEach(f => {
+    if (!f || !Array.isArray(f.familyCodes) || !f.familyCodes.length) return;
+    const seen = new Set();
+    const cleaned = [];
+    for (const c of f.familyCodes) { if (typeof c === 'string' && c && !seen.has(c)) { seen.add(c); cleaned.push(c); } }
+    const capped = cleaned.length > 100 ? cleaned.slice(cleaned.length - 100) : cleaned;
+    if (capped.length !== f.familyCodes.length || capped.some((c, i) => c !== f.familyCodes[i])) {
+      f.familyCodes = capped; changed = true;
+    }
+  });
+  if (changed) {
+    try { if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites); } catch (e) {}
+  }
+}
+window.bmRepairFamilyLinks = bmRepairFamilyLinks;
+
 // An original is a fav with hasUpscales; an upscale points via upscaledFromId.
 // ── Lineage codes: hardened upscale grouping ─────────────────────────────────
 // Every image carries a `lineage` string. An original gets a fresh random root
@@ -23212,7 +23643,49 @@ function bmNextChildLineage(parentLineage) {
   }
   return prefix + (max + 1);
 }
-// Ensure every fav has a lineage. Originals (no isUpscale) get a fresh root.
+// i2i FAMILY code: a fresh collision-checked root + an ALPHABETIC suffix
+// ("-A", "-B", … "-AA"), deliberately distinct from upscale numeric children
+// ("-1", "-2") so the two grouping systems never collide and are visually
+// self-distinguishing. Each generated i2i output gets its own family code; the
+// root is checked against BOTH lineage roots and existing family roots.
+function bmAlphaSuffix(n) {
+  // 0→A, 1→B, … 25→Z, 26→AA, 27→AB … (bijective base-26, uppercase).
+  let s = '';
+  n = n + 1;
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function bmFamilyRoot(code) {
+  // The root portion of a family code (everything before the last "-A" suffix).
+  if (typeof code !== 'string' || !code) return null;
+  const m = code.match(/^([a-z0-9]+)-[A-Z]+$/);
+  return m ? m[1] : null;
+}
+function bmNewFamilyCode() {
+  const gen = () => {
+    let s = '';
+    try {
+      const a = new Uint32Array(2);
+      (crypto || window.crypto).getRandomValues(a);
+      s = (a[0].toString(36) + a[1].toString(36)).replace(/[^a-z0-9]/g, '').slice(0, 8);
+    } catch (_) {}
+    if (s.length < 6) s = (Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 8);
+    return s;
+  };
+  const all = (typeof favourites !== 'undefined') ? favourites : [];
+  // Avoid both lineage roots and existing family roots.
+  const used = new Set();
+  for (const f of all) {
+    if (!f) continue;
+    const lr = (typeof bmLineageRoot === 'function') ? bmLineageRoot(f.lineage) : null;
+    if (lr) used.add(lr);
+    const fr = bmFamilyRoot(f.familyCode);
+    if (fr) used.add(fr);
+  }
+  let r = gen(); let guard = 0;
+  while (used.has(r) && guard++ < 12) r = gen();
+  return r + '-' + bmAlphaSuffix(0); // fresh root ⇒ always "-A"
+}
 // Upscales try to inherit from their declared parent (upscaledFromId) when that
 // parent has a lineage; otherwise they become their own root (best effort — a
 // historically orphaned upscale with no recoverable parent stands alone). Idempotent.
