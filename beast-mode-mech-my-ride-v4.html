@@ -3906,13 +3906,14 @@ img.bm-thumb-missing { background:var(--surface2); }
   display:none !important;
 }
 
-/* Zoom controls (bottom-centre) + scale indicator (top-right). */
-.up-zoom-ctrls {
+/* Zoom dock (bottom-centre): %-scale readout stacked above the control row. */
+.up-zoom-dock {
   position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
-  display:flex; gap:6px; z-index:6;
-  background:rgba(0,0,0,.55); border:1px solid var(--border); border-radius:8px; padding:4px;
-  backdrop-filter:blur(4px);
+  display:flex; flex-direction:column; align-items:center; gap:5px; z-index:6;
+  background:rgba(0,0,0,.55); border:1px solid var(--border); border-radius:10px;
+  padding:6px 8px; backdrop-filter:blur(4px);
 }
+.up-zoom-row { display:flex; gap:6px; align-items:center; }
 .up-zoom-btn {
   width:30px; height:28px; border:none; border-radius:5px; cursor:pointer;
   background:transparent; color:#eee; font-size:16px; line-height:1;
@@ -3920,12 +3921,23 @@ img.bm-thumb-missing { background:var(--surface2); }
   transition:background .15s, color .15s;
 }
 .up-zoom-btn:hover { background:var(--accent); color:#000; }
-.up-zoom-scale {
-  position:absolute; top:10px; right:12px; z-index:6;
-  font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
-  color:#fff; background:rgba(0,0,0,.55); border:1px solid var(--border);
-  border-radius:6px; padding:3px 8px; pointer-events:none;
+.up-zoom-fit {
+  min-width:46px; height:28px; padding:0 8px; border-radius:5px; cursor:pointer;
+  background:transparent; border:1px solid var(--border); color:#eee;
+  font-family:'IBM Plex Mono','IBM Plex Sans',sans-serif; font-size:11px; font-weight:700;
+  letter-spacing:1px; line-height:1; margin-left:2px;
+  transition:background .15s, color .15s, border-color .15s;
 }
+.up-zoom-fit:hover { color:var(--accent); border-color:var(--accent); }
+.up-zoom-fit.actual { background:var(--accent); color:#000; border-color:var(--accent); }
+.up-zoom-scale {
+  font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
+  color:#fff; pointer-events:none; line-height:1;
+}
+/* When actual-size (100%) mode is active the inner can overflow the viewport and
+   is draggable to pan. */
+.up-zoom-inner.is-pannable { cursor:grab; }
+.up-zoom-inner.is-pannable.is-grabbing { cursor:grabbing; }
 
 /* Right rail — original + upscale thumbnails (Phase 3 populates #upRail). */
 .up-rail-head, .up-libbar-head {
@@ -4070,6 +4082,16 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .up-rail-item:hover .up-rail-dl { opacity:1; }
 .up-rail-dl:hover { background:var(--accent); color:#000; border-color:var(--accent); }
+/* Fullscreen button — sits just left of the download button, same reveal-on-hover. */
+.up-rail-fs {
+  position:absolute; right:33px; bottom:5px; z-index:3;
+  width:24px; height:24px; border-radius:5px; cursor:pointer;
+  border:1px solid rgba(255,255,255,.25); background:rgba(0,0,0,.55); color:#fff;
+  font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .15s, background .15s, color .15s;
+}
+.up-rail-item:hover .up-rail-fs { opacity:1; }
+.up-rail-fs:hover { background:var(--accent); color:#000; border-color:var(--accent); }
 
 /* ══ UPSCALER LAYOUT (Phase 5: title-in-panel, full-height preview,
       minimise/pin library bar) ═══════════════════════════════════════ */
@@ -4359,13 +4381,29 @@ body.up-group-modal-open { overflow:hidden; }
   color:#fff; background:rgba(8,10,12,.62); padding:5px 10px; border-radius:5px;
   border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(3px);
   box-shadow:0 2px 8px rgba(0,0,0,.4);
-  transform-origin:top left;
+  transform-origin:top left; transition:opacity .15s ease;
 }
+/* Banner auto-hide: when the divider reaches an edge the now-fully-covered
+   side's label fades out (set by setPos in upRenderStageSlider). */
+.up-slider-label.is-hidden { opacity:0; }
 .up-slider-label-orig { top:10px; left:10px; }          /* Original — top-left */
 .up-slider-label-up {
   bottom:10px; right:10px; transform-origin:bottom right;
   color:#000; background:var(--accent,#caff00); border-color:transparent; /* Upscale — accent */
 }
+/* Fit⇄100% toggle, pinned just ABOVE the Upscale banner (bottom-right). Counter-
+   scales with zoom so it stays a constant on-screen size. */
+.up-slider-fit {
+  position:absolute; right:10px; bottom:42px; z-index:6;
+  min-width:46px; height:26px; padding:0 9px; border-radius:5px; cursor:pointer;
+  background:rgba(8,10,12,.72); border:1px solid rgba(255,255,255,.18); color:#fff;
+  font-family:'IBM Plex Mono','IBM Plex Sans',sans-serif; font-size:11px; font-weight:700;
+  letter-spacing:1px; line-height:1; backdrop-filter:blur(3px);
+  transform-origin:bottom right; transition:background .15s, color .15s, border-color .15s;
+}
+.up-slider-fit:hover { color:var(--accent); border-color:var(--accent); }
+.up-slider-fit.actual { background:var(--accent); color:#000; border-color:var(--accent); }
+#upZoomInner .up-slider-fit { transform:scale(var(--up-zoom-inv, 1)); }
 .up-slider-handle { z-index:5; }
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
@@ -4837,11 +4875,17 @@ body.up-group-modal-open { overflow:hidden; }
               <div class="ig-note">Paste a direct link to an image (jpg/png/webp).</div>
             </div>
           </div>
-          <div class="up-zoom-scale" id="upZoomScale" style="display:none;">100%</div>
-          <div class="up-zoom-ctrls" id="upZoomCtrls" style="display:none;">
-            <button type="button" class="up-zoom-btn" title="Zoom out" onclick="upZoomBy(-1)">&minus;</button>
-            <button type="button" class="up-zoom-btn" title="Reset" onclick="upZoomReset()">&#x21BA;</button>
-            <button type="button" class="up-zoom-btn" title="Zoom in" onclick="upZoomBy(1)">+</button>
+          <!-- Zoom dock (bottom-centre): live %-scale readout sits ABOVE the
+               −/reset/+ row, with a Fit⇄100% toggle alongside. 100% snaps the
+               preview to true pixel-for-pixel; Fit returns to fitted view. -->
+          <div class="up-zoom-dock" id="upZoomCtrls" style="display:none;">
+            <div class="up-zoom-scale" id="upZoomScale">100%</div>
+            <div class="up-zoom-row">
+              <button type="button" class="up-zoom-btn" title="Zoom out" onclick="upZoomBy(-1)">&minus;</button>
+              <button type="button" class="up-zoom-btn" title="Reset to fit" onclick="upZoomReset()">&#x21BA;</button>
+              <button type="button" class="up-zoom-btn" title="Zoom in" onclick="upZoomBy(1)">+</button>
+              <button type="button" class="up-zoom-fit" id="upZoomFitBtn" title="Toggle 100% / Fit" onclick="upZoomToggleActual()">100%</button>
+            </div>
           </div>
         </div>
 
@@ -23415,52 +23459,75 @@ async function upSelectFav(f) {
 // Single image in the center stage with a top-left resolution overlay whose
 // text colour adapts to the underlying corner brightness.
 // ── Preview zoom/pan controller ─────────────────────────────────────────────
-// The stage is a fixed viewport (fits screen); content lives in #upZoomInner
-// and is scaled via transform. The indicator shows TRUE pixel scale
-// (rendered px / natural px). Fit = the scale at which the content fits the
-// viewport; zoom in/out steps relative to that.
-// ── Preview zoom (clean rebuild) ────────────────────────────────────────────
-// CSS does the FITTING: the content uses max-width/height:100% inside the
-// viewport, so it always fits and shows whole. JS only applies a zoom MULTIPLIER
-// (--up-zoom, default 1 = fitted) and reports the true pixel scale. No landmark
-// measuring, no viewport resizing → no feedback loop.
-const upZoom = { natW: 0, natH: 0, zoom: 1, hasContent: false };
+// The stage is a fixed viewport; content lives in #upZoomInner and is scaled
+// via a transform MULTIPLIER (--up-zoom) applied on top of the CSS-fitted size.
+//   • Fit mode  → zoom multiplies the fitted size; +/- step around 1 (= fitted).
+//   • Actual(100%) → the multiplier is computed so rendered px == natural px,
+//     i.e. true pixel-for-pixel; the inner may overflow and can be PANNED.
+// The % readout always reports the measured true scale (rendered px / natural).
+const upZoom = { natW: 0, natH: 0, zoom: 1, hasContent: false, mode: 'fit', panX: 0, panY: 0 };
 
 function upZoomMount(natW, natH) {
   upZoom.natW = natW || 0; upZoom.natH = natH || 0;
   upZoom.hasContent = !!(natW && natH);
   upZoom.zoom = 1;                 // reset to fitted on every new image
+  upZoom.mode = 'fit';             // always re-open fitted
+  upZoom.panX = 0; upZoom.panY = 0;
   upZoomApply();
   // Update the % once the fitted render size is known (after layout/paint).
   requestAnimationFrame(() => upZoomUpdatePct());
+}
+// Measure the fitted (zoom-independent) rendered width of the visible image, so
+// actual-size can solve for the multiplier that yields true pixels.
+function upZoomFittedW() {
+  const inner = document.getElementById('upZoomInner');
+  if (!inner) return 0;
+  const measured = inner.querySelector('.up-stage-img img, .up-slider');
+  if (!measured) return 0;
+  const renderedW = measured.getBoundingClientRect().width; // includes current zoom
+  const z = upZoom.zoom > 0 ? upZoom.zoom : 1;
+  return renderedW / z; // back out the multiplier → fitted width
 }
 function upZoomApply() {
   const inner = document.getElementById('upZoomInner');
   const scaleEl = document.getElementById('upZoomScale');
   const ctrls = document.getElementById('upZoomCtrls');
   if (!inner) return;
-  // Compare mode is a fixed fit-to-screen view — zoom is disabled there so the
-  // slider never CSS-scales (which pixelated the bitmap). Hide the controls and
-  // pin zoom to 1.
-  const isCompare = (typeof upStageView !== 'undefined' && upStageView.view === 'compare');
-  if (isCompare) upZoom.zoom = 1;
-  const show = upZoom.hasContent && !isCompare;
-  if (scaleEl) scaleEl.style.display = show ? '' : 'none';
+  // Controls show whenever there's content (compare included — actual-size and
+  // panning now work in every view).
+  const show = upZoom.hasContent;
   if (ctrls) ctrls.style.display = show ? '' : 'none';
-  // Zoom multiplier only. transform-origin centre keeps it centred.
+  // Pan only makes sense once zoomed past fit; gate the grab cursor + offset.
+  const pannable = upZoom.hasContent && upZoom.zoom > 1.001;
+  inner.classList.toggle('is-pannable', pannable);
+  if (!pannable) { upZoom.panX = 0; upZoom.panY = 0; }
+  // Compose translate (pan) + scale (zoom). transform-origin centre.
   inner.style.setProperty('--up-zoom', upZoom.zoom);
-  inner.style.transform = 'scale(' + upZoom.zoom + ')';
+  inner.style.transform =
+    'translate(' + upZoom.panX + 'px,' + upZoom.panY + 'px) scale(' + upZoom.zoom + ')';
+  upZoomSyncFitBtns();
   upZoomUpdatePct();
 }
-// True pixel scale = (fitted rendered width × zoom) / natural width. The fitted
-// rendered width is read from the actual image/slider box (post-CSS-fit).
+function upZoomSyncFitBtns() {
+  const isActual = (upZoom.mode === 'actual');
+  const dockBtn = document.getElementById('upZoomFitBtn');
+  if (dockBtn) {
+    dockBtn.textContent = isActual ? 'FIT' : '100%';
+    dockBtn.classList.toggle('actual', isActual);
+  }
+  // The in-slider compare toggle (rebuilt per slider render) mirrors the state.
+  const compBtn = document.getElementById('upSliderFitBtn');
+  if (compBtn) {
+    compBtn.textContent = isActual ? '< FIT >' : '100%';
+    compBtn.classList.toggle('actual', isActual);
+  }
+}
+// True pixel scale = rendered px / natural px, measured post-CSS-fit & zoom.
 function upZoomUpdatePct() {
   const scaleEl = document.getElementById('upZoomScale');
   if (!scaleEl || !upZoom.hasContent || !upZoom.natW) return;
   const inner = document.getElementById('upZoomInner');
   if (!inner) return;
-  // Measure the actual rendered image (single preview) or slider box, not the
-  // full-bleed wrapper, so the % reflects the visible image size.
   const measured = inner.querySelector('.up-stage-img img, .up-slider');
   if (!measured) return;
   const renderedW = measured.getBoundingClientRect().width; // includes zoom
@@ -23470,15 +23537,73 @@ function upZoomUpdatePct() {
   const invv = upZoom.zoom > 0 ? (1 / upZoom.zoom) : 1;
   inner.style.setProperty('--up-zoom-inv', invv);
 }
+// Solve for the multiplier that makes rendered px == natural px (true 100%).
+function upZoomActualMultiplier() {
+  const fittedW = upZoomFittedW();
+  if (!fittedW || !upZoom.natW) return 1;
+  return upZoom.natW / fittedW;
+}
 function upZoomBy(dir) {
   if (!upZoom.hasContent) return;
-  // Zoom is disabled in compare mode (fixed fit-to-screen).
-  if (typeof upStageView !== 'undefined' && upStageView.view === 'compare') return;
+  // Manual stepping drops out of actual-size into free (fit-relative) zoom.
+  upZoom.mode = 'fit';
   const factor = dir > 0 ? 1.25 : 0.8;
   upZoom.zoom = Math.max(0.25, Math.min(8, upZoom.zoom * factor));
   upZoomApply();
 }
-function upZoomReset() { upZoom.zoom = 1; upZoomApply(); requestAnimationFrame(() => upZoomUpdatePct()); }
+function upZoomReset() {
+  upZoom.mode = 'fit'; upZoom.zoom = 1; upZoom.panX = 0; upZoom.panY = 0;
+  upZoomApply(); requestAnimationFrame(() => upZoomUpdatePct());
+}
+// Toggle between true 100% (pixel-for-pixel, pannable) and fitted view.
+function upZoomToggleActual() {
+  if (!upZoom.hasContent) return;
+  if (upZoom.mode === 'actual') { upZoomReset(); return; }
+  upZoom.mode = 'actual';
+  upZoom.panX = 0; upZoom.panY = 0;
+  // Apply once at fit to get a clean fittedW measurement, then solve & re-apply.
+  upZoom.zoom = 1; upZoomApply();
+  requestAnimationFrame(() => {
+    upZoom.zoom = Math.max(0.25, Math.min(16, upZoomActualMultiplier()));
+    upZoomApply();
+    requestAnimationFrame(() => upZoomUpdatePct());
+  });
+}
+window.upZoomToggleActual = upZoomToggleActual;
+
+// ── Drag-to-pan (active whenever zoomed past fit) ────────────────────────────
+(function upInitPan() {
+  let panning = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  const innerId = 'upZoomInner';
+  const getInner = () => document.getElementById(innerId);
+  const down = (e) => {
+    const inner = getInner();
+    if (!inner || !inner.classList.contains('is-pannable')) return;
+    // Don't hijack the compare slider handle/grip drags.
+    if (e.target && (e.target.closest('.up-slider-handle') || e.target.closest('.up-slider-fit') || e.target.closest('.up-zoom-dock'))) return;
+    panning = true; sx = e.clientX; sy = e.clientY; ox = upZoom.panX; oy = upZoom.panY;
+    inner.classList.add('is-grabbing');
+    try { inner.setPointerCapture(e.pointerId); } catch (_) {}
+  };
+  const move = (e) => {
+    if (!panning) return;
+    upZoom.panX = ox + (e.clientX - sx);
+    upZoom.panY = oy + (e.clientY - sy);
+    const inner = getInner();
+    if (inner) inner.style.transform =
+      'translate(' + upZoom.panX + 'px,' + upZoom.panY + 'px) scale(' + upZoom.zoom + ')';
+  };
+  const up = () => {
+    if (!panning) return;
+    panning = false;
+    const inner = getInner();
+    if (inner) inner.classList.remove('is-grabbing');
+  };
+  document.addEventListener('pointerdown', down);
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+})();
 
 // On window resize the % may change (fitted size changes); recompute it.
 window.addEventListener('resize', () => {
@@ -23498,8 +23623,10 @@ function upRenderStageSingle(f) {
   wrap.appendChild(img);
   host.appendChild(wrap);
   const paint = (w, h) => {
-    if (w && h && typeof bmResLabel === 'function')
-      bmResLabel(wrap, img, w + '\u00D7' + h, 'tl', 'upStageResTL');
+    // Resolution label removed from the single/original stage view by request —
+    // the live %-scale readout in the zoom dock conveys size now. We still need
+    // the natural dims for the zoom controller, so paint() only forwards them.
+    void w; void h;
   };
   const mount = (w, h) => { upZoomMount(w, h); };
   // Prefer stored dims; else measure on load.
@@ -23596,12 +23723,23 @@ function upRenderStageSlider(upFav) {
   lblUp.className = 'up-slider-label up-slider-label-up';
   lblUp.textContent = 'Upscale';
 
+  // Fit ⇄ 100% toggle, pinned just above the Upscale banner. Mirrors the dock
+  // toggle and drives the same actual-size controller so both stay in sync.
+  const fitBtn = document.createElement('button');
+  fitBtn.type = 'button';
+  fitBtn.className = 'up-slider-fit' + (upZoom.mode === 'actual' ? ' actual' : '');
+  fitBtn.id = 'upSliderFitBtn';
+  fitBtn.textContent = (upZoom.mode === 'actual') ? '< FIT >' : '100%';
+  fitBtn.title = 'Toggle 100% / Fit';
+  fitBtn.onclick = (e) => { e.stopPropagation(); upZoomToggleActual(); };
+
   // Everything that must hug the IMAGE rectangle lives inside afterWrap (the
   // in-flow image sizer), so the handle line, before overlay and labels are
   // bounded to the image — never the full preview area.
   afterWrap.appendChild(beforeWrap);
   afterWrap.appendChild(lblOrig);
   afterWrap.appendChild(lblUp);
+  afterWrap.appendChild(fitBtn);
   afterWrap.appendChild(handle);
   slider.appendChild(afterWrap);
   host.appendChild(slider);
@@ -23622,6 +23760,12 @@ function upRenderStageSlider(upFav) {
     pct = Math.max(0, Math.min(100, pct));
     beforeWrap.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
     handle.style.left = pct + '%';
+    // Banner auto-hide (per spec): the before/original layer is clipped from the
+    // left, so at far-LEFT (pct→0) the original is gone → hide the ORIGINAL
+    // banner; at far-RIGHT (pct→100) the original fully covers → hide the
+    // UPSCALE banner. Small epsilon so it triggers right at the edges.
+    lblOrig.classList.toggle('is-hidden', pct <= 0.5);
+    lblUp.classList.toggle('is-hidden', pct >= 99.5);
   };
   setPos(50);
 
@@ -23775,17 +23919,29 @@ function upRenderRail(f) {
     tag.innerHTML = '<span class="up-rail-kind">' + label + '</span>' +
       (dims ? ('<span class="up-rail-dims">' + dims + '</span>') : '');
     cell.appendChild(tag);
-    // If dimensions aren't stored (e.g. originals), fill them from natural size.
+    // RESOLUTION FIX: when stored dims are absent we must NOT read them from the
+    // rail's <img> — that element shows the small encrypted THUMBNAIL, so its
+    // naturalWidth/Height is the thumb size (the "2× 199×256" bug). Instead probe
+    // the FULL-RESOLUTION source in a detached Image, measure its true pixels,
+    // write the dims into the tag, and cache them back onto the fav so future
+    // renders are instant and correct.
     if (!dims) {
-      img.addEventListener('load', () => {
-        if (img.naturalWidth && img.naturalHeight) {
-          const d = img.naturalWidth + '\u00D7' + img.naturalHeight;
-          const dimsEl = document.createElement('span');
-          dimsEl.className = 'up-rail-dims'; dimsEl.textContent = d;
-          if (!tag.querySelector('.up-rail-dims')) tag.appendChild(dimsEl);
-        }
-      }, { once: true });
+      upMeasureFavDims(fav).then((d) => {
+        if (!d || !d.w || !d.h) return;
+        if (tag.querySelector('.up-rail-dims')) return;
+        const dimsEl = document.createElement('span');
+        dimsEl.className = 'up-rail-dims';
+        dimsEl.textContent = d.w + '\u00D7' + d.h;
+        tag.appendChild(dimsEl);
+      }).catch(() => {});
     }
+    // Fullscreen button (bottom-right, left of download). Opens the full-res
+    // image element in native fullscreen.
+    const fs = document.createElement('button');
+    fs.className = 'up-rail-fs'; fs.type = 'button'; fs.title = 'Fullscreen';
+    fs.innerHTML = '&#x26F6;';
+    fs.onclick = (e) => { e.stopPropagation(); upFullscreenFav(fav); };
+    cell.appendChild(fs);
     // Download button (bottom-right). Resolves the best available source for
     // the fav before downloading (handles dead blob: URLs via the cache chain).
     const dl = document.createElement('button');
@@ -23796,6 +23952,65 @@ function upRenderRail(f) {
     cell.onclick = () => upSelectFav(fav);
     rail.appendChild(cell);
   });
+}
+
+// Resolve the TRUE pixel dimensions of a fav, preferring stored dims, then
+// upscale metadata, then a one-time full-resolution probe (cached back onto the
+// fav). Never measures the thumbnail. Returns { w, h } or null.
+const _upDimsProbeCache = new Map();
+async function upMeasureFavDims(fav) {
+  if (!fav) return null;
+  if (fav.outW && fav.outH) return { w: fav.outW, h: fav.outH };
+  // Synthetic originals carry srcW/srcH from the upscale they were rebuilt from.
+  if (fav._synthOriginal && fav.srcW && fav.srcH) return { w: fav.srcW, h: fav.srcH };
+  const key = (fav.id != null) ? String(fav.id) : (fav.serverImageUrl || fav.imageData || '');
+  if (!key) return null;
+  if (_upDimsProbeCache.has(key)) return _upDimsProbeCache.get(key);
+  const p = (async () => {
+    // Resolve a full-resolution source (NOT a thumbnail). Rehydrated favs expose
+    // serverImageUrl / an /api/img URL; bmSetImgSrc-style resolution gives bytes.
+    let src = fav.imageData || fav.serverImageUrl || null;
+    if (src && typeof src === 'string' && src.indexOf('/api/img/') === 0 && typeof upResolveInputImage === 'function') {
+      const resolved = await upResolveInputImage(src);
+      if (resolved) src = resolved;
+    } else if (!src && typeof bmGetCachedImage === 'function' && fav.id != null) {
+      try { const c = await bmGetCachedImage(fav.id); if (c) src = c; } catch (_) {}
+    }
+    if (!src) return null;
+    const dims = await new Promise((res) => {
+      const im = new Image();
+      im.onload = () => res((im.naturalWidth && im.naturalHeight) ? { w: im.naturalWidth, h: im.naturalHeight } : null);
+      im.onerror = () => res(null);
+      im.src = src;
+    });
+    if (dims) { try { fav.outW = dims.w; fav.outH = dims.h; } catch (_) {} }
+    return dims;
+  })();
+  _upDimsProbeCache.set(key, p);
+  return p;
+}
+
+// Open a fav's FULL-RESOLUTION image in native fullscreen. Resolves the best
+// source (handles authed /api/img + dead blob fallbacks), loads it into a
+// detached <img>, then requests fullscreen on it.
+async function upFullscreenFav(fav) {
+  if (!fav) return;
+  let src = fav.imageData || fav.serverImageUrl || null;
+  if (src && typeof src === 'string' && src.indexOf('/api/img/') === 0 && typeof upResolveInputImage === 'function') {
+    const resolved = await upResolveInputImage(src);
+    if (resolved) src = resolved;
+  }
+  if (!src && typeof bmGetCachedImage === 'function' && fav.id != null) {
+    try { const c = await bmGetCachedImage(fav.id); if (c) src = c; } catch (_) {}
+  }
+  if (!src) return;
+  const img = new Image();
+  img.src = src;
+  img.style.maxWidth = '100vw'; img.style.maxHeight = '100vh';
+  img.style.objectFit = 'contain'; img.style.background = '#000';
+  const open = () => { if (typeof upFullscreenImg === 'function') upFullscreenImg(img); };
+  if (img.complete && img.naturalWidth) open();
+  else img.addEventListener('load', open, { once: true });
 }
 
 function upUrlChanged() {
@@ -23835,9 +24050,10 @@ function upClearSource(keepUrlText) {
   if (inner) inner.innerHTML = '';
   const empty = document.getElementById('upStageEmpty');
   if (empty) empty.style.display = '';
-  const scale = document.getElementById('upZoomScale'); if (scale) scale.style.display = 'none';
+  // The %-scale readout is a child of the dock now; hiding the dock hides it.
+  // (Individually hiding the scale would leave a stale display:none on it.)
   const ctrls = document.getElementById('upZoomCtrls'); if (ctrls) ctrls.style.display = 'none';
-  upZoom.hasContent = false; upZoom.zoom = 1;
+  upZoom.hasContent = false; upZoom.zoom = 1; upZoom.mode = 'fit'; upZoom.panX = 0; upZoom.panY = 0;
   if (typeof upRenderToolbar === 'function') upRenderToolbar();
   // Drop bottom-bar highlight.
   const bar = document.getElementById('upLibBar');
