@@ -3930,10 +3930,6 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .up-zoom-fit:hover { color:var(--accent); border-color:var(--accent); }
 .up-zoom-fit.actual { background:var(--accent); color:#000; border-color:var(--accent); }
-.up-zoom-scale {
-  font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:700; letter-spacing:1px;
-  color:#fff; pointer-events:none; line-height:1;
-}
 /* When actual-size (100%) mode is active the inner can overflow the viewport and
    is draggable to pan. */
 .up-zoom-inner.is-pannable { cursor:grab; }
@@ -4041,21 +4037,9 @@ img.bm-thumb-missing { background:var(--surface2); }
   position:absolute; inset:0; width:100%; height:100%; object-fit:fill;
   display:block; background:transparent;
 }
-.up-slider-handle {
-  position:absolute; top:0; bottom:0; left:50%; width:0; z-index:5;
-  transform:translateX(-50%); cursor:ew-resize; touch-action:none;
-}
-.up-slider-line { position:absolute; top:0; bottom:0; left:50%; width:2px; transform:translateX(-50%); background:var(--accent,#00ffb0); box-shadow:0 0 6px rgba(0,0,0,.6); }
-.up-slider-grip {
-  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-  width:30px; height:30px; border-radius:50%; background:var(--accent,#00ffb0);
-  color:#000; display:flex; align-items:center; justify-content:center;
-  font-size:15px; font-weight:700; box-shadow:0 1px 6px rgba(0,0,0,.5); cursor:ew-resize;
-}
-/* Keep the grip + handle line a constant on-screen size regardless of preview
-   zoom (the stage scales via transform; counter-scale by 1/zoom). */
-#upZoomInner .up-slider-grip { transform:translate(-50%,-50%) scale(var(--up-zoom-inv, 1)); }
-#upZoomInner .up-slider-line { transform:translateX(-50%) scaleX(var(--up-zoom-inv, 1)); transform-origin:center; }
+/* (Slider handle/line/grip styles now live in the screen-space overlay block
+   below — they were moved out of #upZoomInner so the divider stays pixel-sharp
+   at every zoom level instead of being rasterised by the zoom transform.) */
 
 /* Right rail items. */
 .up-rail-item {
@@ -4372,39 +4356,66 @@ body.up-group-modal-open { overflow:hidden; }
 .up-rail-empty { color:var(--muted); font-size:12px; line-height:1.5; padding:18px 4px; }
 
 /* Slider layering: AFTER (upscaled) is the base; BEFORE (original) overlays it,
-   clipped by the handle. Corner labels sit above both; the handle/line top. */
+   clipped by the divider. The Original banner lives INSIDE the before layer so
+   the same clip wipes it; the Upscale banner lives in a complementary right-clip
+   wrapper. The handle + fit button live in a SCREEN-SPACE overlay (sharp, never
+   transform-scaled). */
 .up-slider-before { z-index:2; }
+/* Right-side clip wrapper: holds the Upscale banner, revealed only over the
+   upscaled region (clip set by setPos as the complement of the before clip). */
+.up-slider-upclip { position:absolute; inset:0; z-index:2; pointer-events:none; }
 .up-slider-label {
   position:absolute; z-index:3; pointer-events:none;
+  display:inline-flex; align-items:center; gap:7px;
   font-family:'IBM Plex Mono','IBM Plex Sans',sans-serif; font-weight:700;
   font-size:13px; letter-spacing:2px; text-transform:uppercase; line-height:1;
   color:#fff; background:rgba(8,10,12,.62); padding:5px 10px; border-radius:5px;
   border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(3px);
   box-shadow:0 2px 8px rgba(0,0,0,.4);
-  transform-origin:top left; transition:opacity .15s ease;
 }
-/* Banner auto-hide: when the divider reaches an edge the now-fully-covered
-   side's label fades out (set by setPos in upRenderStageSlider). */
-.up-slider-label.is-hidden { opacity:0; }
 .up-slider-label-orig { top:10px; left:10px; }          /* Original — top-left */
 .up-slider-label-up {
-  bottom:10px; right:10px; transform-origin:bottom right;
+  bottom:10px; right:10px;
   color:#000; background:var(--accent,#caff00); border-color:transparent; /* Upscale — accent */
 }
-/* Fit⇄100% toggle, pinned just ABOVE the Upscale banner (bottom-right). Counter-
-   scales with zoom so it stays a constant on-screen size. */
+/* Live scale % chip riding alongside each banner name. */
+.up-slider-pct {
+  font-size:11px; font-weight:700; letter-spacing:1px;
+  padding:1px 5px; border-radius:3px;
+}
+.up-slider-label-orig .up-slider-pct { color:#fff; background:rgba(255,255,255,.16); }
+.up-slider-label-up .up-slider-pct { color:#000; background:rgba(0,0,0,.18); }
+
+/* ── Screen-space slider overlay (handle + fit) — outside the zoom transform ── */
+.up-slider-overlay { position:absolute; inset:0; z-index:7; pointer-events:none; }
+.up-slider-overlay .up-slider-handle,
+.up-slider-overlay .up-slider-fit { pointer-events:auto; }
+/* Handle is positioned in px by JS (left/top/height) against the stage; it is a
+   thin column carrying the divider line + drag grip, always pixel-sharp. */
+.up-slider-handle {
+  position:absolute; width:0; z-index:7; cursor:ew-resize; touch-action:none;
+}
+.up-slider-line {
+  position:absolute; top:0; bottom:0; left:0; width:2px; transform:translateX(-50%);
+  background:var(--accent,#00ffb0); box-shadow:0 0 6px rgba(0,0,0,.6);
+}
+.up-slider-grip {
+  position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+  width:30px; height:30px; border-radius:50%; background:var(--accent,#00ffb0);
+  color:#000; display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:700; box-shadow:0 1px 6px rgba(0,0,0,.5); cursor:ew-resize;
+}
+/* Fit⇄100% toggle, positioned in px by JS just above the Upscale banner. */
 .up-slider-fit {
-  position:absolute; right:10px; bottom:42px; z-index:6;
+  position:absolute; z-index:7;
   min-width:46px; height:26px; padding:0 9px; border-radius:5px; cursor:pointer;
   background:rgba(8,10,12,.72); border:1px solid rgba(255,255,255,.18); color:#fff;
   font-family:'IBM Plex Mono','IBM Plex Sans',sans-serif; font-size:11px; font-weight:700;
   letter-spacing:1px; line-height:1; backdrop-filter:blur(3px);
-  transform-origin:bottom right; transition:background .15s, color .15s, border-color .15s;
+  transition:background .15s, color .15s, border-color .15s;
 }
 .up-slider-fit:hover { color:var(--accent); border-color:var(--accent); }
 .up-slider-fit.actual { background:var(--accent); color:#000; border-color:var(--accent); }
-#upZoomInner .up-slider-fit { transform:scale(var(--up-zoom-inv, 1)); }
-.up-slider-handle { z-index:5; }
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
 .ig-tab { flex:1; padding:7px 6px; font-family:'IBM Plex Sans',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
@@ -4879,12 +4890,11 @@ body.up-group-modal-open { overflow:hidden; }
                −/reset/+ row, with a Fit⇄100% toggle alongside. 100% snaps the
                preview to true pixel-for-pixel; Fit returns to fitted view. -->
           <div class="up-zoom-dock" id="upZoomCtrls" style="display:none;">
-            <div class="up-zoom-scale" id="upZoomScale">100%</div>
             <div class="up-zoom-row">
               <button type="button" class="up-zoom-btn" title="Zoom out" onclick="upZoomBy(-1)">&minus;</button>
               <button type="button" class="up-zoom-btn" title="Reset to fit" onclick="upZoomReset()">&#x21BA;</button>
               <button type="button" class="up-zoom-btn" title="Zoom in" onclick="upZoomBy(1)">+</button>
-              <button type="button" class="up-zoom-fit" id="upZoomFitBtn" title="Toggle 100% / Fit" onclick="upZoomToggleActual()">100%</button>
+              <button type="button" class="up-zoom-fit" id="upZoomFitBtn" title="Toggle Fit / 100%" onclick="upZoomToggleActual()">FIT</button>
             </div>
           </div>
         </div>
@@ -23465,7 +23475,7 @@ async function upSelectFav(f) {
 //   • Actual(100%) → the multiplier is computed so rendered px == natural px,
 //     i.e. true pixel-for-pixel; the inner may overflow and can be PANNED.
 // The % readout always reports the measured true scale (rendered px / natural).
-const upZoom = { natW: 0, natH: 0, zoom: 1, hasContent: false, mode: 'fit', panX: 0, panY: 0 };
+const upZoom = { natW: 0, natH: 0, beforeNatW: 0, zoom: 1, hasContent: false, mode: 'fit', panX: 0, panY: 0 };
 
 function upZoomMount(natW, natH) {
   upZoom.natW = natW || 0; upZoom.natH = natH || 0;
@@ -23473,6 +23483,10 @@ function upZoomMount(natW, natH) {
   upZoom.zoom = 1;                 // reset to fitted on every new image
   upZoom.mode = 'fit';             // always re-open fitted
   upZoom.panX = 0; upZoom.panY = 0;
+  // beforeNatW is only meaningful in compare; the slider render (re)sets it just
+  // before/after calling mount. Clear it here so a stale value never leaks into
+  // single-image views.
+  upZoom.beforeNatW = 0;
   upZoomApply();
   // Update the % once the fitted render size is known (after layout/paint).
   requestAnimationFrame(() => upZoomUpdatePct());
@@ -23507,33 +23521,51 @@ function upZoomApply() {
     'translate(' + upZoom.panX + 'px,' + upZoom.panY + 'px) scale(' + upZoom.zoom + ')';
   upZoomSyncFitBtns();
   upZoomUpdatePct();
+  // Keep the compare handle/fit-button overlay aligned to the (now transformed)
+  // image rectangle. No-op outside compare.
+  if (typeof window._upSliderSyncOverlay === 'function') {
+    requestAnimationFrame(() => { try { window._upSliderSyncOverlay(); } catch (_) {} });
+  }
 }
 function upZoomSyncFitBtns() {
   const isActual = (upZoom.mode === 'actual');
+  // Label reflects the CURRENT mode: 'FIT' when fitted, '100%' when actual-size.
   const dockBtn = document.getElementById('upZoomFitBtn');
   if (dockBtn) {
-    dockBtn.textContent = isActual ? 'FIT' : '100%';
+    dockBtn.textContent = isActual ? '100%' : 'FIT';
     dockBtn.classList.toggle('actual', isActual);
   }
-  // The in-slider compare toggle (rebuilt per slider render) mirrors the state.
   const compBtn = document.getElementById('upSliderFitBtn');
   if (compBtn) {
-    compBtn.textContent = isActual ? '< FIT >' : '100%';
+    compBtn.textContent = isActual ? '100%' : 'FIT';
     compBtn.classList.toggle('actual', isActual);
   }
 }
 // True pixel scale = rendered px / natural px, measured post-CSS-fit & zoom.
+// In compare mode this drives the two in-banner readouts (original scale under
+// the Original banner, upscale scale at the Upscale corner). The dock readout
+// was removed, so single views simply have no % chip — the FIT/100% button and
+// the zoom steps convey state there.
 function upZoomUpdatePct() {
-  const scaleEl = document.getElementById('upZoomScale');
-  if (!scaleEl || !upZoom.hasContent || !upZoom.natW) return;
+  if (!upZoom.hasContent || !upZoom.natW) return;
   const inner = document.getElementById('upZoomInner');
   if (!inner) return;
   const measured = inner.querySelector('.up-stage-img img, .up-slider');
   if (!measured) return;
   const renderedW = measured.getBoundingClientRect().width; // includes zoom
   if (!renderedW) return;
-  const pct = Math.round((renderedW / upZoom.natW) * 100);
-  scaleEl.textContent = pct + '%';
+  // Upscale (or single-image) true scale.
+  const upPct = Math.round((renderedW / upZoom.natW) * 100);
+  const pctUpEl = document.getElementById('upSliderPctUp');
+  if (pctUpEl) pctUpEl.textContent = upPct + '%';
+  // Original true scale: same on-screen box, but measured against the ORIGINAL's
+  // natural width (set during slider render). Smaller source ⇒ larger % at the
+  // same on-screen size, which is correct (it's being shown more magnified).
+  const pctOrigEl = document.getElementById('upSliderPctOrig');
+  if (pctOrigEl && upZoom.beforeNatW) {
+    const origPct = Math.round((renderedW / upZoom.beforeNatW) * 100);
+    pctOrigEl.textContent = origPct + '%';
+  }
   const invv = upZoom.zoom > 0 ? (1 / upZoom.zoom) : 1;
   inner.style.setProperty('--up-zoom-inv', invv);
 }
@@ -23579,8 +23611,8 @@ window.upZoomToggleActual = upZoomToggleActual;
   const down = (e) => {
     const inner = getInner();
     if (!inner || !inner.classList.contains('is-pannable')) return;
-    // Don't hijack the compare slider handle/grip drags.
-    if (e.target && (e.target.closest('.up-slider-handle') || e.target.closest('.up-slider-fit') || e.target.closest('.up-zoom-dock'))) return;
+    // Don't hijack the compare slider handle / fit button / zoom dock.
+    if (e.target && (e.target.closest('.up-slider-overlay') || e.target.closest('.up-slider-handle') || e.target.closest('.up-slider-fit') || e.target.closest('.up-zoom-dock'))) return;
     panning = true; sx = e.clientX; sy = e.clientY; ox = upZoom.panX; oy = upZoom.panY;
     inner.classList.add('is-grabbing');
     try { inner.setPointerCapture(e.pointerId); } catch (_) {}
@@ -23592,6 +23624,8 @@ window.upZoomToggleActual = upZoomToggleActual;
     const inner = getInner();
     if (inner) inner.style.transform =
       'translate(' + upZoom.panX + 'px,' + upZoom.panY + 'px) scale(' + upZoom.zoom + ')';
+    // Keep the compare handle overlay glued to the panned image rect.
+    if (typeof window._upSliderSyncOverlay === 'function') { try { window._upSliderSyncOverlay(); } catch (_) {} }
   };
   const up = () => {
     if (!panning) return;
@@ -23610,10 +23644,22 @@ window.addEventListener('resize', () => {
   if (document.body.classList.contains('up-sticky') && upZoom.hasContent) upZoomUpdatePct();
 });
 
+// Remove the compare slider's screen-space handle/fit overlay and drop the
+// overlay-sync hook so single views don't keep re-aligning a dead node.
+function upRemoveSliderOverlay() {
+  const ov = document.getElementById('upSliderOverlay');
+  if (ov) ov.remove();
+  try { if (window._upSliderSyncOverlay) window._upSliderSyncOverlay = null; } catch (_) {}
+}
+
 function upRenderStageSingle(f) {
   const host = document.getElementById('upZoomInner');
   if (!host) return;
   host.innerHTML = '';
+  // The compare handle/fit overlay lives in #upStage (outside the zoom host), so
+  // host.innerHTML clears don't remove it — drop it explicitly when leaving the
+  // slider for a single image.
+  upRemoveSliderOverlay();
   const empty = document.getElementById('upStageEmpty');
   if (empty) empty.style.display = 'none';
   const wrap = document.createElement('div');
@@ -23709,38 +23755,63 @@ function upRenderStageSlider(upFav) {
   const beforeImg = document.createElement('img');
   beforeImg.alt = 'original';
   beforeWrap.appendChild(beforeImg);
-  // Handle.
-  const handle = document.createElement('div');
-  handle.className = 'up-slider-handle';
-  handle.innerHTML = '<div class="up-slider-line"></div><div class="up-slider-grip">\u2194</div>';
 
-  // Simple corner labels: "Original" top-left, "Upscale" bottom-right — both
-  // bounded to the image. (Resolution + verbose labels removed by request.)
+  // ── Banners + live scale %, clipped WITH their image layer ────────────────
+  // The Original banner + its % live INSIDE beforeWrap, so the same divider
+  // clip-path that wipes the original image also wipes its banner — i.e. the
+  // slider hides only the portion it has passed (no extreme-only toggling).
   const lblOrig = document.createElement('div');
   lblOrig.className = 'up-slider-label up-slider-label-orig';
-  lblOrig.textContent = 'Original';
+  lblOrig.innerHTML = '<span class="up-slider-name">ORIGINAL</span>' +
+    '<span class="up-slider-pct" id="upSliderPctOrig"></span>';
+  beforeWrap.appendChild(lblOrig);
+
+  // The Upscale banner + its % live in a RIGHT-side clip wrapper (complement of
+  // the before clip), so they're only visible over the upscaled region and the
+  // divider wipes them as it sweeps right.
+  const upClip = document.createElement('div');
+  upClip.className = 'up-slider-upclip';
   const lblUp = document.createElement('div');
   lblUp.className = 'up-slider-label up-slider-label-up';
-  lblUp.textContent = 'Upscale';
+  lblUp.innerHTML = '<span class="up-slider-name">UPSCALE</span>' +
+    '<span class="up-slider-pct" id="upSliderPctUp"></span>';
+  upClip.appendChild(lblUp);
 
   // Fit ⇄ 100% toggle, pinned just above the Upscale banner. Mirrors the dock
   // toggle and drives the same actual-size controller so both stay in sync.
+  // It lives in the screen-space overlay (below) so it stays sharp + fixed-size.
   const fitBtn = document.createElement('button');
   fitBtn.type = 'button';
   fitBtn.className = 'up-slider-fit' + (upZoom.mode === 'actual' ? ' actual' : '');
   fitBtn.id = 'upSliderFitBtn';
-  fitBtn.textContent = (upZoom.mode === 'actual') ? '< FIT >' : '100%';
-  fitBtn.title = 'Toggle 100% / Fit';
+  fitBtn.textContent = (upZoom.mode === 'actual') ? '100%' : 'FIT';
+  fitBtn.title = 'Toggle Fit / 100%';
   fitBtn.onclick = (e) => { e.stopPropagation(); upZoomToggleActual(); };
 
+  // ── Handle (line + grip): SCREEN-SPACE overlay, OUTSIDE the zoom transform ──
+  // Putting the handle inside #upZoomInner meant transform:scale() rasterised it
+  // blurry and the counter-scale hack pinned it in place. Instead it lives in an
+  // overlay layered over the stage; its screen position is derived from the
+  // slider's live bounding rect after every zoom/pan/drag/resize, so it stays
+  // pixel-sharp and tracks the divider exactly at any zoom.
+  const stageEl = document.getElementById('upStage');
+  let overlay = document.getElementById('upSliderOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.className = 'up-slider-overlay';
+  overlay.id = 'upSliderOverlay';
+  const handle = document.createElement('div');
+  handle.className = 'up-slider-handle';
+  handle.innerHTML = '<div class="up-slider-line"></div><div class="up-slider-grip">\u2194</div>';
+  overlay.appendChild(handle);
+  overlay.appendChild(fitBtn);
+  if (stageEl) stageEl.appendChild(overlay);
+
   // Everything that must hug the IMAGE rectangle lives inside afterWrap (the
-  // in-flow image sizer), so the handle line, before overlay and labels are
-  // bounded to the image — never the full preview area.
+  // in-flow image sizer): the before overlay (with the original banner) and the
+  // upscale clip (with the upscale banner). The handle is in the overlay above.
   afterWrap.appendChild(beforeWrap);
-  afterWrap.appendChild(lblOrig);
-  afterWrap.appendChild(lblUp);
-  afterWrap.appendChild(fitBtn);
-  afterWrap.appendChild(handle);
+  afterWrap.appendChild(upClip);
   slider.appendChild(afterWrap);
   host.appendChild(slider);
   // Re-measure now it's in the DOM (first fit ran before layout), and keep it
@@ -23755,17 +23826,56 @@ function upRenderStageSlider(upFav) {
   // Mount into the zoom controller (fall back to a measured size if dims absent).
   if (aw > 0 && ah > 0) upZoomMount(aw, ah);
   else afterImg.addEventListener('load', () => upZoomMount(afterImg.naturalWidth, afterImg.naturalHeight), { once: true });
+  // Record the ORIGINAL's natural width for the original-scale % (mount clears
+  // it, so set it after). Refined once the before image decodes if dims were
+  // absent up front.
+  upZoom.beforeNatW = beforeW || 0;
+  beforeImg.addEventListener('load', () => {
+    if (!upZoom.beforeNatW && beforeImg.naturalWidth) {
+      upZoom.beforeNatW = beforeImg.naturalWidth;
+      upZoomUpdatePct();
+    }
+  }, { once: true });
+
+  // Current divider position (0–100), kept so zoom/pan can re-sync the overlay.
+  let curPct = 50;
+
+  // Position the screen-space handle + fit button over the live image rectangle.
+  // afterWrap's bounding rect already reflects the zoom transform + pan, so the
+  // handle tracks the divider at any zoom while staying pixel-sharp (it is NOT
+  // inside the transformed layer).
+  const syncOverlay = () => {
+    if (!overlay.isConnected || !stageEl) return;
+    const sb = stageEl.getBoundingClientRect();
+    const ib = afterWrap.getBoundingClientRect();
+    if (!ib.width || !ib.height) return;
+    // Clamp the visible handle span to the part of the image inside the stage so
+    // the line doesn't run into the letterbox/overflow area.
+    const top = Math.max(ib.top, sb.top) - sb.top;
+    const bottom = Math.min(ib.bottom, sb.bottom) - sb.top;
+    const x = (ib.left - sb.left) + (curPct / 100) * ib.width;
+    handle.style.left = x + 'px';
+    handle.style.top = top + 'px';
+    handle.style.height = Math.max(0, bottom - top) + 'px';
+    // Fit button sits just above the Upscale banner corner (bottom-right of the
+    // visible image rect, clamped into the stage).
+    const right = Math.min(ib.right, sb.right) - sb.left;
+    fitBtn.style.right = (sb.width - right + 10) + 'px';
+    fitBtn.style.bottom = (sb.bottom - Math.min(ib.bottom, sb.bottom) + 44) + 'px';
+  };
+  // Expose so the zoom controller + pan handler can keep the overlay aligned.
+  window._upSliderSyncOverlay = syncOverlay;
 
   const setPos = (pct) => {
     pct = Math.max(0, Math.min(100, pct));
+    curPct = pct;
+    // Original (before) layer: visible from the LEFT edge to the divider.
     beforeWrap.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
-    handle.style.left = pct + '%';
-    // Banner auto-hide (per spec): the before/original layer is clipped from the
-    // left, so at far-LEFT (pct→0) the original is gone → hide the ORIGINAL
-    // banner; at far-RIGHT (pct→100) the original fully covers → hide the
-    // UPSCALE banner. Small epsilon so it triggers right at the edges.
-    lblOrig.classList.toggle('is-hidden', pct <= 0.5);
-    lblUp.classList.toggle('is-hidden', pct >= 99.5);
+    // Upscale clip wrapper: visible from the divider to the RIGHT edge (the
+    // complement), so the upscale banner only shows over the upscaled region and
+    // the slider wipes only the portion it has passed.
+    upClip.style.clipPath = 'inset(0 0 0 ' + pct + '%)';
+    syncOverlay();
   };
   setPos(50);
 
@@ -23782,25 +23892,37 @@ function upRenderStageSlider(upFav) {
       fitSlider();
       // Persist measured dims onto the fav so future opens are correct immediately.
       try { if (upFav && (!upFav.outW || !upFav.outH)) { upFav.outW = aw; upFav.outH = ah; } } catch (_) {}
+      syncOverlay();
     }
   };
   if (afterImg.complete && afterImg.naturalWidth) _adoptDimsAndFit(afterImg);
   else afterImg.addEventListener('load', () => _adoptDimsAndFit(afterImg), { once: true });
   // Fall back to the BEFORE image's dims if the after image somehow lacks them.
   beforeImg.addEventListener('load', () => _adoptDimsAndFit(beforeImg), { once: true });
+  // Keep the overlay aligned through layout settling + window resize.
+  requestAnimationFrame(syncOverlay);
+  const _ovResize = () => {
+    if (!overlay.isConnected) { window.removeEventListener('resize', _ovResize); return; }
+    syncOverlay();
+  };
+  window.addEventListener('resize', _ovResize);
 
-  // Drag interaction (pointer events cover mouse + touch). Measure against the
-  // image box (afterWrap), not the full slider, so the handle tracks the cursor.
+  // Drag interaction (pointer events cover mouse + touch). Measure clientX
+  // against the LIVE image box (afterWrap), which reflects zoom + pan, so the
+  // divider follows the cursor 1:1 at any zoom.
   let dragging = false;
   const rectPct = (clientX) => {
     const r = afterWrap.getBoundingClientRect();
+    if (!r.width) return curPct;
     return ((clientX - r.left) / r.width) * 100;
   };
   const onMove = (e) => { if (dragging) setPos(rectPct(e.clientX)); };
-  handle.addEventListener('pointerdown', (e) => { dragging = true; handle.setPointerCapture(e.pointerId); });
+  handle.addEventListener('pointerdown', (e) => { dragging = true; try { handle.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); });
   handle.addEventListener('pointermove', onMove);
   handle.addEventListener('pointerup', () => { dragging = false; });
-  afterWrap.addEventListener('click', (e) => { if (e.target === handle || handle.contains(e.target)) return; setPos(rectPct(e.clientX)); });
+  handle.addEventListener('pointercancel', () => { dragging = false; });
+  // Click-to-jump on the image (ignore clicks that originate on the handle).
+  afterWrap.addEventListener('click', (e) => { setPos(rectPct(e.clientX)); });
 
   // Fall back through the cache/Drive chain if a blob: URL is dead.
   afterImg.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(afterImg, upFav); };
@@ -24048,6 +24170,7 @@ function upClearSource(keepUrlText) {
   upStageView.curUpFav = null; upStageView.curOrigFav = null; upStageView.view = 'compare';
   const inner = document.getElementById('upZoomInner');
   if (inner) inner.innerHTML = '';
+  if (typeof upRemoveSliderOverlay === 'function') upRemoveSliderOverlay();
   const empty = document.getElementById('upStageEmpty');
   if (empty) empty.style.display = '';
   // The %-scale readout is a child of the dock now; hiding the dock hides it.
