@@ -3909,7 +3909,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 /* Zoom dock (bottom-centre): %-scale readout stacked above the control row. */
 .up-zoom-dock {
   position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
-  display:flex; flex-direction:column; align-items:center; gap:5px; z-index:6;
+  display:flex; flex-direction:column; align-items:center; gap:5px; z-index:8;
   background:rgba(0,0,0,.55); border:1px solid var(--border); border-radius:10px;
   padding:6px 8px; backdrop-filter:blur(4px);
 }
@@ -4050,13 +4050,15 @@ img.bm-thumb-missing { background:var(--surface2); }
 .up-rail-item img { width:100%; max-height:200px; object-fit:contain; display:block; background:transparent; }
 .up-rail-tag {
   position:absolute; left:0; right:0; bottom:0;
-  display:flex; align-items:baseline; gap:6px;
+  display:flex; flex-direction:column; align-items:flex-start; gap:2px;
   font-family:'IBM Plex Sans',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px;
   color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.78));
-  padding:12px 6px 4px; text-align:left; pointer-events:none;
+  padding:14px 6px 5px; text-align:left; pointer-events:none;
 }
-.up-rail-kind { color:var(--accent); }
-.up-rail-dims { color:#fff; font-weight:600; letter-spacing:.5px; }
+.up-rail-kind { color:var(--accent); line-height:1.1; }
+/* Resolution sits on the bottom line; reserve room on the right so the
+   fullscreen + download buttons (bottom-right) never cover it. */
+.up-rail-dims { color:#fff; font-weight:600; letter-spacing:.5px; line-height:1.1; padding-right:58px; }
 .up-rail-dl {
   position:absolute; right:5px; bottom:5px; z-index:3;
   width:24px; height:24px; border-radius:5px; cursor:pointer;
@@ -4076,6 +4078,14 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .up-rail-item:hover .up-rail-fs { opacity:1; }
 .up-rail-fs:hover { background:var(--accent); color:#000; border-color:var(--accent); }
+/* Fullscreen viewer overlay. Doubles as the native-fullscreen target AND the
+   in-app fallback when the native API is blocked (e.g. iOS Safari). */
+.up-fs-overlay {
+  position:fixed; inset:0; z-index:9999; background:#000;
+  display:flex; align-items:center; justify-content:center; cursor:zoom-out;
+}
+.up-fs-overlay:fullscreen { width:100vw; height:100vh; }
+.up-fs-img { max-width:100vw; max-height:100vh; object-fit:contain; display:block; }
 
 /* ══ UPSCALER LAYOUT (Phase 5: title-in-panel, full-height preview,
       minimise/pin library bar) ═══════════════════════════════════════ */
@@ -4386,10 +4396,9 @@ body.up-group-modal-open { overflow:hidden; }
 .up-slider-label-orig .up-slider-pct { color:#fff; background:rgba(255,255,255,.16); }
 .up-slider-label-up .up-slider-pct { color:#000; background:rgba(0,0,0,.18); }
 
-/* ── Screen-space slider overlay (handle + fit) — outside the zoom transform ── */
+/* ── Screen-space slider overlay (handle only) — outside the zoom transform ── */
 .up-slider-overlay { position:absolute; inset:0; z-index:7; pointer-events:none; }
-.up-slider-overlay .up-slider-handle,
-.up-slider-overlay .up-slider-fit { pointer-events:auto; }
+.up-slider-overlay .up-slider-handle { pointer-events:auto; }
 /* Handle is positioned in px by JS (left/top/height) against the stage; it is a
    thin column carrying the divider line + drag grip, always pixel-sharp. */
 .up-slider-handle {
@@ -4405,17 +4414,6 @@ body.up-group-modal-open { overflow:hidden; }
   color:#000; display:flex; align-items:center; justify-content:center;
   font-size:15px; font-weight:700; box-shadow:0 1px 6px rgba(0,0,0,.5); cursor:ew-resize;
 }
-/* Fit⇄100% toggle, positioned in px by JS just above the Upscale banner. */
-.up-slider-fit {
-  position:absolute; z-index:7;
-  min-width:46px; height:26px; padding:0 9px; border-radius:5px; cursor:pointer;
-  background:rgba(8,10,12,.72); border:1px solid rgba(255,255,255,.18); color:#fff;
-  font-family:'IBM Plex Mono','IBM Plex Sans',sans-serif; font-size:11px; font-weight:700;
-  letter-spacing:1px; line-height:1; backdrop-filter:blur(3px);
-  transition:background .15s, color .15s, border-color .15s;
-}
-.up-slider-fit:hover { color:var(--accent); border-color:var(--accent); }
-.up-slider-fit.actual { background:var(--accent); color:#000; border-color:var(--accent); }
 /* Upscaler-specific controls (reuse .ig-* for everything else). */
 .ig-tabs { display:flex; gap:6px; margin-bottom:10px; }
 .ig-tab { flex:1; padding:7px 6px; font-family:'IBM Plex Sans',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--muted); background:transparent; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
@@ -23535,11 +23533,6 @@ function upZoomSyncFitBtns() {
     dockBtn.textContent = isActual ? '100%' : 'FIT';
     dockBtn.classList.toggle('actual', isActual);
   }
-  const compBtn = document.getElementById('upSliderFitBtn');
-  if (compBtn) {
-    compBtn.textContent = isActual ? '100%' : 'FIT';
-    compBtn.classList.toggle('actual', isActual);
-  }
 }
 // True pixel scale = rendered px / natural px, measured post-CSS-fit & zoom.
 // In compare mode this drives the two in-banner readouts (original scale under
@@ -23612,7 +23605,7 @@ window.upZoomToggleActual = upZoomToggleActual;
     const inner = getInner();
     if (!inner || !inner.classList.contains('is-pannable')) return;
     // Don't hijack the compare slider handle / fit button / zoom dock.
-    if (e.target && (e.target.closest('.up-slider-overlay') || e.target.closest('.up-slider-handle') || e.target.closest('.up-slider-fit') || e.target.closest('.up-zoom-dock'))) return;
+    if (e.target && (e.target.closest('.up-slider-overlay') || e.target.closest('.up-slider-handle') || e.target.closest('.up-zoom-dock'))) return;
     panning = true; sx = e.clientX; sy = e.clientY; ox = upZoom.panX; oy = upZoom.panY;
     inner.classList.add('is-grabbing');
     try { inner.setPointerCapture(e.pointerId); } catch (_) {}
@@ -23778,22 +23771,14 @@ function upRenderStageSlider(upFav) {
   upClip.appendChild(lblUp);
 
   // Fit ⇄ 100% toggle, pinned just above the Upscale banner. Mirrors the dock
-  // toggle and drives the same actual-size controller so both stay in sync.
-  // It lives in the screen-space overlay (below) so it stays sharp + fixed-size.
-  const fitBtn = document.createElement('button');
-  fitBtn.type = 'button';
-  fitBtn.className = 'up-slider-fit' + (upZoom.mode === 'actual' ? ' actual' : '');
-  fitBtn.id = 'upSliderFitBtn';
-  fitBtn.textContent = (upZoom.mode === 'actual') ? '100%' : 'FIT';
-  fitBtn.title = 'Toggle Fit / 100%';
-  fitBtn.onclick = (e) => { e.stopPropagation(); upZoomToggleActual(); };
-
   // ── Handle (line + grip): SCREEN-SPACE overlay, OUTSIDE the zoom transform ──
   // Putting the handle inside #upZoomInner meant transform:scale() rasterised it
   // blurry and the counter-scale hack pinned it in place. Instead it lives in an
   // overlay layered over the stage; its screen position is derived from the
   // slider's live bounding rect after every zoom/pan/drag/resize, so it stays
   // pixel-sharp and tracks the divider exactly at any zoom.
+  // (The Fit/100% toggle is NOT duplicated here — the zoom dock's button is the
+  // single control for it.)
   const stageEl = document.getElementById('upStage');
   let overlay = document.getElementById('upSliderOverlay');
   if (overlay) overlay.remove();
@@ -23804,7 +23789,6 @@ function upRenderStageSlider(upFav) {
   handle.className = 'up-slider-handle';
   handle.innerHTML = '<div class="up-slider-line"></div><div class="up-slider-grip">\u2194</div>';
   overlay.appendChild(handle);
-  overlay.appendChild(fitBtn);
   if (stageEl) stageEl.appendChild(overlay);
 
   // Everything that must hug the IMAGE rectangle lives inside afterWrap (the
@@ -23857,11 +23841,6 @@ function upRenderStageSlider(upFav) {
     handle.style.left = x + 'px';
     handle.style.top = top + 'px';
     handle.style.height = Math.max(0, bottom - top) + 'px';
-    // Fit button sits just above the Upscale banner corner (bottom-right of the
-    // visible image rect, clamped into the stage).
-    const right = Math.min(ib.right, sb.right) - sb.left;
-    fitBtn.style.right = (sb.width - right + 10) + 'px';
-    fitBtn.style.bottom = (sb.bottom - Math.min(ib.bottom, sb.bottom) + 44) + 'px';
   };
   // Expose so the zoom controller + pan handler can keep the overlay aligned.
   window._upSliderSyncOverlay = syncOverlay;
@@ -24126,13 +24105,44 @@ async function upFullscreenFav(fav) {
     try { const c = await bmGetCachedImage(fav.id); if (c) src = c; } catch (_) {}
   }
   if (!src) return;
-  const img = new Image();
+  // A detached <img> can't enter fullscreen (the element must be in the
+  // document), which is why the rail button did nothing on desktop. Build a real
+  // overlay node, attach it, then request fullscreen on THAT. If the native API
+  // is unavailable/!blocked (e.g. iOS Safari), the overlay itself acts as an
+  // in-app full-bleed viewer. Click anywhere or press Esc to close.
+  const ov = document.createElement('div');
+  ov.className = 'up-fs-overlay';
+  const img = document.createElement('img');
+  img.className = 'up-fs-img';
+  img.alt = fav.title || '';
   img.src = src;
-  img.style.maxWidth = '100vw'; img.style.maxHeight = '100vh';
-  img.style.objectFit = 'contain'; img.style.background = '#000';
-  const open = () => { if (typeof upFullscreenImg === 'function') upFullscreenImg(img); };
-  if (img.complete && img.naturalWidth) open();
-  else img.addEventListener('load', open, { once: true });
+  ov.appendChild(img);
+  document.body.appendChild(ov);
+
+  const onFsChange = () => {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) cleanup();
+  };
+  const cleanup = () => {
+    document.removeEventListener('fullscreenchange', onFsChange);
+    document.removeEventListener('webkitfullscreenchange', onFsChange);
+    document.removeEventListener('keydown', onKey);
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl === ov) {
+      try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (_) {}
+    }
+    if (ov.parentNode) ov.parentNode.removeChild(ov);
+  };
+  const onKey = (e) => { if (e.key === 'Escape') cleanup(); };
+  ov.addEventListener('click', cleanup);
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  const req = ov.requestFullscreen || ov.webkitRequestFullscreen;
+  if (req) { try { req.call(ov); } catch (_) { /* overlay still shows as in-app viewer */ } }
+  // If native fullscreen isn't granted, the overlay's fixed full-viewport CSS
+  // already provides the full-screen experience as a fallback.
 }
 
 function upUrlChanged() {
