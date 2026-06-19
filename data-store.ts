@@ -66,6 +66,29 @@ interface ImgMeta {
   upFactor?: number;        // diffusion upscalers (Clarity / SD Latent)
   upModel?: string;         // upscaler model id, for the rail tag
   lineage?: string;         // hardened grouping code (e.g. "k7m2x9", "k7m2x9-1-2")
+  // ── i2i families ──────────────────────────────────────────────────────────
+  // Image-Gen image-to-image grouping. Distinct from `lineage` (upscale trees,
+  // single-parent) because families are MANY-to-MANY: one generated output is
+  // built from N library source images, and one source image can belong to many
+  // families. Family codes are alphabetic-suffixed (e.g. "k7m2x9-A") to avoid
+  // confusion with upscale numeric children ("k7m2x9-1"). All optional; absent
+  // on non-i2i images.
+  familyCode?: string;      // on a GENERATED output: its own family code
+  familySrcIds?: string[];  // on a GENERATED output: the library source favIds
+  familyCodes?: string[];   // on a SOURCE image: families it belongs to (cap 100)
+}
+
+// Hard cap on how many families a single source image records (FIFO — oldest
+// dropped first so the newest family is always retained).
+const FAMILY_CODES_CAP = 100;
+
+// Dedupe a list preserving order, then keep only the last `cap` entries (FIFO:
+// oldest dropped). Used to merge family-code memberships without unbounded growth.
+function dedupeTail(arr: string[], cap: number): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of arr) { if (!seen.has(v)) { seen.add(v); out.push(v); } }
+  return out.length > cap ? out.slice(out.length - cap) : out;
 }
 
 // ── boot probe ───────────────────────────────────────────────────────────────
@@ -160,7 +183,7 @@ export async function storeImage(
   bytes: Uint8Array,
   mime: string,
   createdAt?: number,
-  extraMeta?: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string },
+  extraMeta?: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[] },
 ): Promise<string> {
   const id = favIdSafe(favId);
   const ext = extSafe(mime.split("/")[1]);
@@ -214,6 +237,16 @@ export async function storeImage(
     if (typeof extraMeta.upFactor === "number" && extraMeta.upFactor > 0) meta.upFactor = extraMeta.upFactor;
     if (typeof extraMeta.upModel === "string" && extraMeta.upModel) meta.upModel = extraMeta.upModel;
     if (typeof extraMeta.lineage === "string" && extraMeta.lineage) meta.lineage = extraMeta.lineage;
+    // i2i family fields (generated output carries familyCode + familySrcIds;
+    // a source image carries familyCodes). Sanitised + capped.
+    if (typeof extraMeta.familyCode === "string" && extraMeta.familyCode) meta.familyCode = extraMeta.familyCode;
+    if (Array.isArray(extraMeta.familySrcIds) && extraMeta.familySrcIds.length) {
+      meta.familySrcIds = extraMeta.familySrcIds
+        .filter((s) => typeof s === "string" && s).slice(0, 64);
+    }
+    if (Array.isArray(extraMeta.familyCodes) && extraMeta.familyCodes.length) {
+      meta.familyCodes = dedupeTail(extraMeta.familyCodes.filter((s) => typeof s === "string" && s), FAMILY_CODES_CAP);
+    }
   }
   await (await kv()).set(["imgmeta", userHash, id], meta);
   await addUsage(userHash, bytes.length);
@@ -272,12 +305,12 @@ async function globalUsageBytes(): Promise<number> {
 // ── manifest for login re-hydration ──────────────────────────────────────────
 // Returns the lightweight index the client uses to rebuild its library on
 // login: favId + metadata, NO bytes. The client lazy-loads bytes via /api/img.
-export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string }>> {
+export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[] }>> {
   const items = await listMeta(userHash);
   return items
     .map((x) => {
       const m = x.meta;
-      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string } =
+      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[] } =
         { favId: x.favId, ext: m.ext, bytes: m.bytes, mime: m.mime, createdAt: m.createdAt };
       // Only attach upscale fields that are actually set, to keep the manifest lean.
       if (m.isUpscale) base.isUpscale = true;
@@ -288,6 +321,10 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
       if (typeof m.upFactor === "number") base.upFactor = m.upFactor;
       if (m.upModel) base.upModel = m.upModel;
       if (m.lineage) base.lineage = m.lineage;
+      // i2i family fields — let the login manifest reform families cross-device.
+      if (m.familyCode) base.familyCode = m.familyCode;
+      if (Array.isArray(m.familySrcIds) && m.familySrcIds.length) base.familySrcIds = m.familySrcIds;
+      if (Array.isArray(m.familyCodes) && m.familyCodes.length) base.familyCodes = m.familyCodes;
       return base;
     })
     .sort((a, b) => b.createdAt - a.createdAt); // newest first, matches library order
@@ -303,7 +340,7 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
 export async function patchImageMeta(
   userHash: string,
   favId: string,
-  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string },
+  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodesAppend?: string[] },
 ): Promise<boolean> {
   const id = favIdSafe(favId);
   const k = await kv();
@@ -319,6 +356,18 @@ export async function patchImageMeta(
   if (typeof patch.upFactor === "number" && patch.upFactor > 0) next.upFactor = patch.upFactor;
   if (typeof patch.upModel === "string" && patch.upModel) next.upModel = patch.upModel;
   if (typeof patch.lineage === "string" && patch.lineage) next.lineage = patch.lineage;
+  // i2i family: the OUTPUT records its own code + sources; a SOURCE appends the
+  // new code to its membership list (merge + FIFO cap, so concurrent registers
+  // from a batch accumulate rather than clobber).
+  if (typeof patch.familyCode === "string" && patch.familyCode) next.familyCode = patch.familyCode;
+  if (Array.isArray(patch.familySrcIds) && patch.familySrcIds.length) {
+    next.familySrcIds = patch.familySrcIds.filter((s) => typeof s === "string" && s).slice(0, 64);
+  }
+  if (Array.isArray(patch.familyCodesAppend) && patch.familyCodesAppend.length) {
+    const merged = (Array.isArray(next.familyCodes) ? next.familyCodes : [])
+      .concat(patch.familyCodesAppend.filter((s) => typeof s === "string" && s));
+    next.familyCodes = dedupeTail(merged, FAMILY_CODES_CAP);
+  }
   await k.set(["imgmeta", userHash, id], next);
   return true;
 }

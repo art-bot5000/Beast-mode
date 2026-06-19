@@ -870,6 +870,13 @@ async function handler(req: Request): Promise<Response> {
         upFactor: typeof body.upFactor === "number" ? body.upFactor : undefined,
         upModel: typeof body.upModel === "string" ? body.upModel : undefined,
         lineage: typeof body.lineage === "string" ? body.lineage : undefined,
+        // i2i families: output records familyCode + familySrcIds; a source image
+        // appends to its membership via familyCodesAppend (merge + FIFO cap).
+        familyCode: typeof body.familyCode === "string" ? body.familyCode : undefined,
+        familySrcIds: Array.isArray(body.familySrcIds)
+          ? (body.familySrcIds as unknown[]).filter((s) => typeof s === "string") as string[] : undefined,
+        familyCodesAppend: Array.isArray(body.familyCodesAppend)
+          ? (body.familyCodesAppend as unknown[]).filter((s) => typeof s === "string") as string[] : undefined,
       });
       return json({ ok, patched: ok });
     } catch (e) {
