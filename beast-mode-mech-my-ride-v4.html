@@ -8516,11 +8516,61 @@ function exportAll(){
   }
 }
 
+// RESTORE — dual function depending on what the favourite is:
+//   1. A GENERATED IMAGE (carries an igSettings recipe, or is an image with no
+//      restorable prompt-settings block): switch to IMAGE GEN and re-apply the
+//      generation settings (model, dimensions, prompt, seed, steps, etc.).
+//   2. A BEAST MODE prompt (saved from the Builder — carries a particle
+//      structure): restore the particle formula into the BUILDER.
+//   3. A PROMPT LAB prompt (carries a ---SETTINGS--- block, no particles):
+//      apply the settings and put the clean prompt back in PROMPT LAB.
 function restoreFav(id) {
   const f = favourites.find(x => x.id === id)
   if (!f) return
+
+  // ── 1. Generated image → Image Gen mode ──────────────────────────────────
+  // Prefer the captured igSettings recipe. Treat any fav that has igSettings as
+  // image-gen-restorable. (A plain uploaded image with neither igSettings nor a
+  // settings block falls through to the prompt paths below.)
+  if (f.igSettings && typeof f.igSettings === 'object') {
+    switchView('imagegen')
+    const applyIg = () => {
+      if (typeof igApplySettings === 'function') igApplySettings(f.igSettings)
+      if (typeof igStatus === 'function') igStatus('\u2713 Restored generation settings', false)
+    }
+    // igInit (run by switchView) is idempotent; defer so the controls exist.
+    if (typeof igState !== 'undefined' && igState.inited) applyIg()
+    else setTimeout(applyIg, 120)
+    return
+  }
+
+  // ── 2. Beast Mode (Builder) prompt → Builder ──────────────────────────────
+  // A particle structure means this prompt was composed in the Builder; restore
+  // the formula there rather than into Prompt Lab's plain output box.
+  if (f.particles && f.particles.length) {
+    switchView('builder')
+    const loadFormula = () => {
+      if (typeof pbEndReplace === 'function') pbEndReplace()
+      const promptText = (f.promptOnly || f.text || '')
+        .replace(/\[.*?\]\s*/, '').replace(/---SETTINGS---[\s\S]*/, '').trim()
+      if (typeof pbBuildFormulaFromMixed === 'function') {
+        pbFormula = pbBuildFormulaFromMixed(promptText, f.particles)
+      } else {
+        pbFormula = [{ uid: (typeof pbNextUid !== 'undefined' ? pbNextUid++ : 0), isText: true, text: promptText }]
+      }
+      if (typeof pbRenderLibrary === 'function') pbRenderLibrary()
+      if (typeof pbRenderFormula === 'function') pbRenderFormula()
+      if (typeof pbUpdateBottomBar === 'function') pbUpdateBottomBar()
+    }
+    if (typeof pbInitDone !== 'undefined' && pbInitDone) loadFormula()
+    else setTimeout(loadFormula, 400)
+    return
+  }
+
+  // ── 3. Prompt Lab prompt → Prompt Lab (generator) ─────────────────────────
   const s = extractSettings(f.text)
   const out = document.getElementById('output')
+  switchView('generator')
 
   if (s) {
     // Full restore: apply all settings and show clean prompt
@@ -10296,7 +10346,7 @@ function buildLibCard(f) {
   const actions = document.createElement('div')
   actions.className = 'lib-card-actions'
   const actionDefs = [
-    { label:'⬆ RESTORE',  cls:'', fn: () => { restoreFav(f.id); switchView('generator') } },
+    { label:'⬆ RESTORE',  cls:'', fn: () => { restoreFav(f.id) } },
     { label:'⎘ COPY',     cls:'', fn: () => copyFav(f.id) },
     { label:'✎ EDIT IN LAB', cls:'', fn: () => editInPromptLab(f), title:'Open and edit in Prompt Lab' },
     { label:'⟳ ITERATE',  cls:'', fn: () => openIterate(f.id), title:'Generate variants by swapping a particle' },
@@ -10336,29 +10386,76 @@ function sendToUpscaler(f) {
   }, 0)
 }
 
-// Open a library image in the vector image editor (markup). On apply, store the
-// annotated result as a new version on the same favourite.
+// Open a library image in the vector image editor (markup). On apply, the
+// annotated result is saved as a SEPARATE new favourite — the original is never
+// overwritten. The new file is linked to the original (sibling lineage +
+// markupOfId back-reference) so the two group together in the library, and it
+// carries its own version-history entry recording the markup.
 function markupFav(f) {
   if (!f || !f.imageData) return
   if (typeof mkOpen !== 'function') return
   mkOpen(f.imageData, result => {
     if (!result || !result.image) return
-    f.imageData = result.image
-    f.updatedAt = Date.now()
-    f.versions = f.versions || []
-    f.versions.push({
-      text: f.text || '', savedAt: Date.now(),
-      label: 'Markup' + (result.colours && result.colours.length ? ' · ' + result.colours.join(', ') : ''),
-      image: result.image,
-    })
-    if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites)
-    if (typeof driveSavePrompt === 'function') driveSavePrompt(f)
-    if (typeof bmCacheImage === 'function') bmCacheImage(f.id, result.image)
-    if (typeof bmThumbUpload === 'function') bmThumbUpload(f, result.image)
-    if (typeof driveUploadImage === 'function') {
-      driveUploadImage(result.image, 'beast-mode-' + f.id + '-markup.jpg').catch(() => {})
+
+    const colourLabel = (result.colours && result.colours.length)
+      ? ' · ' + result.colours.join(', ') : ''
+    const now = Date.now()
+
+    // Lineage: hang the markup off the SAME family as the original so they
+    // group together. Ensure the original has a lineage root, then take the
+    // next child code; fall back to a fresh root if helpers are unavailable.
+    let lineage = null
+    try {
+      if (typeof bmNewLineageRoot === 'function' && typeof bmNextChildLineage === 'function') {
+        if (!(typeof f.lineage === 'string' && f.lineage)) f.lineage = bmNewLineageRoot()
+        lineage = bmNextChildLineage(f.lineage) || bmNewLineageRoot()
+      }
+    } catch (_) { lineage = null }
+
+    const baseTitle = f.title || (typeof buildAutoTitle === 'function' ? buildAutoTitle(f) : '') || 'Untitled'
+    const newFav = {
+      text: f.text || '',
+      promptOnly: f.promptOnly || '',
+      mode: f.mode || '',
+      preset: f.preset || '',
+      id: now,
+      title: (baseTitle ? baseTitle + ' · Markup' : 'Markup'),
+      model: f.model || '',
+      rating: 0,
+      starred: false,
+      folderId: f.folderId != null ? f.folderId : null,
+      // Version history starts with the markup as its Original, plus a labelled
+      // Markup entry so the colour annotations are recorded on the new file.
+      versions: [
+        { text: f.text || '', savedAt: now, label: 'Original', image: result.image },
+        { text: f.text || '', savedAt: now, label: 'Markup' + colourLabel, image: result.image },
+      ],
+      imageData: result.image,
+      createdAt: now,
+      updatedAt: now,
+      particles: f.particles || null,
+      // Carry over the gen recipe so the markup file's RESTORE still routes to
+      // Image Gen with the original settings.
+      igSettings: f.igSettings || null,
+      lineage,
+      // Back-reference to the source image this markup was derived from.
+      markupOfId: f.id,
     }
-    renderLibrary()
+
+    if (typeof favourites !== 'undefined') favourites.unshift(newFav)
+    if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites)
+    if (typeof driveSavePrompt === 'function') driveSavePrompt(newFav)
+    if (typeof bmCacheImage === 'function') bmCacheImage(newFav.id, result.image)
+    if (typeof bmThumbUpload === 'function') bmThumbUpload(newFav, result.image)
+    if (typeof driveUploadImage === 'function') {
+      driveUploadImage(result.image, 'beast-mode-' + newFav.id + '-markup.jpg').catch(() => {})
+    }
+    if (typeof updateLibBadge === 'function') updateLibBadge()
+    if (typeof renderLibrary === 'function') renderLibrary()
+    if (typeof setDriveStatus === 'function') {
+      setDriveStatus('✓ MARKUP SAVED AS NEW FILE', 'ok')
+      setTimeout(() => setDriveStatus('✓ SYNCED', 'ok'), 2500)
+    }
   })
 }
 
@@ -19853,11 +19950,14 @@ const bmQueue = (() => {
     render();
 
     // Stop polling once nothing is outstanding (no queued/running, nothing
-    // un-drained). It restarts on the next enqueue or sign-in.
-    const active = data.jobs.some(j =>
-      j.status === 'queued' || j.status === 'running' ||
-      (j.status === 'done' && !j.delivered));
+    // un-drained). It restarts on the next enqueue or sign-in. While work is
+    // outstanding, keep the cadence snappy; the moment it settles we stop.
+    const busy = data.jobs.some(j =>
+      j.status === 'queued' || j.status === 'running');
+    const active = busy ||
+      data.jobs.some(j => j.status === 'done' && !j.delivered);
     if (!active) stop();
+    else reschedule(busy);
   }
 
   // Save a finished job's image(s) into the library via the existing pipeline,
@@ -19963,19 +20063,48 @@ const bmQueue = (() => {
   }
 
   async function dismiss(jobId) {
-    try { await api('/api/jobs/' + jobId, { method: 'DELETE' }); } catch { /* ignore */ }
+    // Server now handles terminal dismiss AND in-flight cancel (abort + refund)
+    // on the same DELETE. Optimistically drop it locally; the next poll
+    // reconciles (a 'cancelling' running job briefly shows failed, then clears).
+    try {
+      const { data } = await api('/api/jobs/' + jobId, { method: 'DELETE' });
+      if (data && typeof data.balance === 'number' && typeof bmTokenBalanceSet === 'function') {
+        bmTokenBalanceSet(data.balance);
+      }
+    } catch { /* ignore — poll will reconcile */ }
     lastJobs = lastJobs.filter(j => j.id !== jobId);
+    render();
+    start(); // ensure we keep polling so a 'cancelling' job's refund/clear lands
+  }
+
+  // Clear all terminal (done/failed) jobs — the "Clear" button. In-flight jobs
+  // are left running. Optimistically prunes locally, then re-polls.
+  async function clearAll() {
+    try { await api('/api/jobs/clear', { method: 'POST' }); } catch { /* ignore */ }
+    lastJobs = lastJobs.filter(j => j.status === 'queued' || j.status === 'running');
     render();
     poll();
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
+  // Poll faster while work is in-flight (snappier "done" → drain → show), and
+  // back off when idle to spare the server. reschedule() is called after every
+  // poll() so the cadence tracks the current state.
+  const POLL_BUSY_MS = 1500;
+  const POLL_IDLE_MS = 3000;
+  let pollMs = POLL_BUSY_MS;
+  function reschedule(busy) {
+    const next = busy ? POLL_BUSY_MS : POLL_IDLE_MS;
+    if (next === pollMs && timer) return; // no change
+    pollMs = next;
+    if (timer) { clearInterval(timer); timer = setInterval(poll, pollMs); }
+  }
   function start() {
     if (!authed()) return;
     if (polling) return;
     polling = true;
     poll();                                   // immediate first pass
-    timer = setInterval(poll, 3000);
+    timer = setInterval(poll, pollMs);
   }
   function stop() {
     polling = false;
@@ -20126,22 +20255,75 @@ const bmQueue = (() => {
       x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Dismiss';
       x.onclick = (e) => { e.stopPropagation(); dismiss(job.id); };
       card.appendChild(x);
-    } else if (job.status === 'queued') {
+    } else if (job.status === 'queued' || job.status === 'running') {
+      // Server now cancels in-flight jobs (aborts the provider call + refunds
+      // the hold), so both queued and running get a working cancel control.
       const x = document.createElement('button');
-      x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Cancel & remove';
-      x.onclick = (e) => { e.stopPropagation(); dismiss(job.id); };
+      x.className = 'bm-q-dismiss'; x.textContent = '✕';
+      x.title = (job.status === 'queued') ? 'Cancel & remove' : 'Cancel (refunds tokens)';
+      x.onclick = (e) => {
+        e.stopPropagation();
+        if (job.status === 'running' &&
+            !(typeof confirm === 'function' && confirm('Cancel this running job? Tokens are refunded.'))) return;
+        dismiss(job.id);
+      };
       card.appendChild(x);
     }
     return card;
   }
 
-  // Render the job list into an arbitrary container (full view or modal body).
+  // Render the job list into an arbitrary container (full view or modal body),
+  // split into an "Active" section (queued/running) and a "History" section
+  // (done/failed, newest first, capped server-side at 50). The History header
+  // carries a Clear button when there's anything to clear.
   function renderInto(list, empty) {
     if (!list) return;
-    Array.from(list.querySelectorAll('.bm-q-card')).forEach(n => n.remove());
+    // Wipe any previously-rendered cards/sections (keep the empty placeholder).
+    Array.from(list.querySelectorAll('.bm-q-card, .bm-q-section')).forEach(n => n.remove());
     if (!lastJobs.length) { if (empty) empty.style.display = ''; return; }
     if (empty) empty.style.display = 'none';
-    lastJobs.forEach(job => list.appendChild(buildCard(job)));
+
+    const active = lastJobs.filter(j => j.status === 'queued' || j.status === 'running');
+    const history = lastJobs.filter(j => j.status === 'done' || j.status === 'failed');
+
+    if (active.length) {
+      const sec = document.createElement('div');
+      sec.className = 'bm-q-section';
+      const hd = document.createElement('div');
+      hd.className = 'bm-q-section-head';
+      hd.innerHTML = '<span class="bm-q-section-title">ACTIVE</span>' +
+                     '<span class="bm-q-section-count">' + active.length + '</span>';
+      sec.appendChild(hd);
+      active.forEach(job => sec.appendChild(buildCard(job)));
+      list.appendChild(sec);
+    }
+
+    if (history.length) {
+      const sec = document.createElement('div');
+      sec.className = 'bm-q-section';
+      const hd = document.createElement('div');
+      hd.className = 'bm-q-section-head';
+      const title = document.createElement('span');
+      title.className = 'bm-q-section-title';
+      title.textContent = 'HISTORY';
+      const cnt = document.createElement('span');
+      cnt.className = 'bm-q-section-count';
+      cnt.textContent = String(history.length);
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'bm-q-clear-btn';
+      clearBtn.textContent = 'CLEAR';
+      clearBtn.title = 'Remove all finished jobs from the queue';
+      clearBtn.onclick = (e) => { e.stopPropagation(); clearAll(); };
+      hd.appendChild(title); hd.appendChild(cnt);
+      const spacer = document.createElement('span');
+      spacer.style.flex = '1';
+      hd.appendChild(spacer);
+      hd.appendChild(clearBtn);
+      sec.appendChild(hd);
+      history.forEach(job => sec.appendChild(buildCard(job)));
+      list.appendChild(sec);
+    }
   }
 
   function renderView() {
@@ -20214,6 +20396,19 @@ const bmQueue = (() => {
       .bm-q-dismiss:hover { color:#f85149; }
       .bm-q-card.q-running { border-color:color-mix(in srgb,var(--accent,#7c5cff) 50%,var(--border,#333)); }
       .bm-q-card.q-failed { border-color:color-mix(in srgb,#f85149 40%,var(--border,#333)); }
+      /* Active / History section grouping */
+      .bm-q-section { display:flex; flex-direction:column; gap:10px; }
+      .bm-q-section + .bm-q-section { margin-top:18px; }
+      .bm-q-section-head { display:flex; align-items:center; gap:8px; padding:0 2px 2px; }
+      .bm-q-section-title { font-family:'IBM Plex Mono',monospace; font-weight:700; letter-spacing:1.5px;
+        font-size:12px; color:var(--muted,#999); }
+      .bm-q-section-count { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700;
+        color:var(--accent,#7c5cff); background:color-mix(in srgb,var(--accent,#7c5cff) 14%,transparent);
+        border-radius:999px; padding:1px 8px; }
+      .bm-q-clear-btn { background:none; border:1px solid var(--border,#333); color:var(--muted,#999);
+        font-family:'IBM Plex Mono',monospace; font-weight:700; letter-spacing:1px; font-size:11px;
+        cursor:pointer; padding:3px 12px; border-radius:6px; transition:color .15s,border-color .15s; }
+      .bm-q-clear-btn:hover { color:#f85149; border-color:color-mix(in srgb,#f85149 50%,var(--border,#333)); }
     `;
     document.head.appendChild(style);
 
@@ -20247,7 +20442,7 @@ const bmQueue = (() => {
 
   return {
     enqueueGenerate, enqueueUpscale, onJob,
-    start, stop, resume, poll, render, renderView, renderInto, dismiss,
+    start, stop, resume, poll, render, renderView, renderInto, dismiss, clearAll,
     favIdFor,
     get jobs() { return lastJobs; },
   };
