@@ -148,7 +148,10 @@ export async function enqueueJob(args: {
   return job;
 }
 
-/** List a user's jobs, newest first. Drops expired done/failed records lazily. */
+/** List a user's jobs, newest first. Drops expired done/failed records lazily,
+ *  and caps retained terminal (done/failed) history at the newest HISTORY_CAP
+ *  so the queue can't grow without bound. In-flight jobs are never capped. */
+const HISTORY_CAP = 50;
 export async function listJobs(userHash: string): Promise<JobRecord[]> {
   const out: JobRecord[] = [];
   const now = Date.now();
@@ -163,7 +166,23 @@ export async function listJobs(userHash: string): Promise<JobRecord[]> {
     out.push(j);
   }
   out.sort((a, b) => b.createdAt - a.createdAt);
-  return out;
+  // Enforce the history cap: keep all in-flight jobs, but trim terminal jobs
+  // beyond the newest HISTORY_CAP (GC the overflow). Sorted newest-first, so we
+  // count terminal records as we go and drop the tail.
+  let terminalSeen = 0;
+  const kept: JobRecord[] = [];
+  for (const j of out) {
+    const terminal = (j.status === "done" || j.status === "failed");
+    if (terminal) {
+      terminalSeen++;
+      if (terminalSeen > HISTORY_CAP) {
+        kv.delete(["job", userHash, j.id]).catch(() => {});
+        continue;
+      }
+    }
+    kept.push(j);
+  }
+  return kept;
 }
 
 export async function getJob(userHash: string, jobId: string): Promise<JobRecord | null> {
@@ -235,6 +254,63 @@ export async function markDelivered(userHash: string, jobId: string): Promise<bo
 /** Let the user dismiss a failed/done job from their queue explicitly. */
 export async function deleteJob(userHash: string, jobId: string): Promise<void> {
   await kv.delete(["job", userHash, jobId]);
+}
+
+/** Cancel a QUEUED job before a worker lane claims it. Flips it to "failed"
+ *  (code: "cancelled") and drops its queue pointer so no lane runs it. The
+ *  token hold is refunded by the caller (main.ts) — jobs.ts deliberately
+ *  doesn't import the ledger. Returns false if the job isn't queued (e.g. a
+ *  lane already claimed it; the running-job path in main.ts handles that). */
+export async function cancelQueuedJob(userHash: string, jobId: string): Promise<boolean> {
+  const res = await kv.get<JobRecord>(["job", userHash, jobId]);
+  const job = res.value;
+  if (!job || job.status !== "queued") return false;
+  const now = Date.now();
+  const failed: JobRecord = {
+    ...job, status: "failed", updatedAt: now, finishedAt: now,
+    error: { message: "Cancelled before it started.", code: "cancelled" },
+  };
+  // CAS so we don't clobber a claim that lands in the same instant.
+  const ok = await kv.atomic().check(res).set(["job", userHash, jobId], failed).commit();
+  if (!ok.ok) return false;
+  // Best-effort: remove the FIFO pointer so claimNextJob() doesn't waste a scan.
+  // claimNextJob() also self-heals (it skips non-queued jobs), so a miss is fine.
+  for await (const e of kv.list<{ userHash: string; jobId: string }>({ prefix: ["job_queue"] })) {
+    if (e.value && e.value.jobId === jobId) { await kv.delete(e.key); break; }
+  }
+  return true;
+}
+
+/** Mark a RUNNING job as failed/cancelled once its provider call has been
+ *  aborted (the abort itself happens in main.ts via the AbortController
+ *  registry; runJob's own catch will also failJob it, so this is the explicit
+ *  path for when the abort needs the record updated immediately). */
+export async function markCancelled(userHash: string, jobId: string): Promise<boolean> {
+  const res = await kv.get<JobRecord>(["job", userHash, jobId]);
+  const job = res.value;
+  if (!job || (job.status !== "running" && job.status !== "queued")) return false;
+  const now = Date.now();
+  const failed: JobRecord = {
+    ...job, status: "failed", updatedAt: now, finishedAt: now,
+    error: { message: "Cancelled.", code: "cancelled" },
+  };
+  await kv.set(["job", userHash, jobId], failed);
+  return true;
+}
+
+/** Remove ALL terminal (done/failed) jobs for a user — the "Clear" button.
+ *  In-flight jobs (queued/running) are left untouched. Returns the count
+ *  removed. */
+export async function clearTerminalJobs(userHash: string): Promise<number> {
+  let removed = 0;
+  for await (const e of kv.list<JobRecord>({ prefix: ["job", userHash] })) {
+    const j = e.value;
+    if (j && (j.status === "done" || j.status === "failed")) {
+      await kv.delete(e.key);
+      removed++;
+    }
+  }
+  return removed;
 }
 
 /** Boot recovery: any job left "running" by a crash/restart is flipped back to
