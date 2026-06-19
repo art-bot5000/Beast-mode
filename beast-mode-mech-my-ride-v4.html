@@ -20762,6 +20762,7 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
         try {
           const code = bmNewFamilyCode();
           fav.familyCode = code;
+          try { console.debug('[i2i-family] minted', { outputId: fav.id, code, familySrcIds: fav.familySrcIds }); } catch (_) {}
           for (const sid of fav.familySrcIds) {
             const src = favourites.find(x => x && Number(x.id) === Number(sid));
             if (!src) continue;
@@ -22100,6 +22101,10 @@ async function igGenerate() {
       : [];
     const dedupSrcIds = Array.from(new Set(srcFavIds));
     const igSettings = (typeof igCaptureSettings === 'function') ? igCaptureSettings(prompt) : null;
+    try {
+      const withId = Array.isArray(igState.refs) ? igState.refs.filter(r => r && r.favId != null).length : 0;
+      console.debug('[i2i-family] capture', { i2i: !!m.i2i, refs: (igState.refs || []).length, refsWithFavId: withId, srcFavIds: dedupSrcIds });
+    } catch (_) {}
     const r = await bmQueue.enqueueGenerate(body, {
       prompt, fullText: '', model: m.id,
       srcFavIds: dedupSrcIds,
@@ -22433,7 +22438,7 @@ function igRenderLibBar() {
     }
     // A small "family" dot cues that this generated image has a source set to
     // open (purely informational; code itself stays internal).
-    if (i2i && f.familyCode) {
+    if (i2i && igFavHasFamily(f)) {
       const fam = document.createElement('div');
       fam.className = 'ig-libbar-famdot';
       fam.title = 'Made with image-to-image — tap to see its sources';
@@ -22450,9 +22455,11 @@ function igRenderLibBar() {
       tick.onclick = (e) => { e.stopPropagation(); igLibToggleRef(f); };
       cell.appendChild(tick);
       // Tapping the rest of the thumb OPENS the image's family (its i2i sources)
-      // if it has one; otherwise falls back to a preview.
+      // if it has one; otherwise falls back to a preview. We accept EITHER a
+      // familyCode OR a non-empty familySrcIds — the view only needs the source
+      // id list, so an output whose code didn't persist is still openable.
       cell.onclick = () => {
-        if (f.familyCode) igOpenFamilyForOutput(f);
+        if (igFavHasFamily(f)) igOpenFamilyForOutput(f);
         else igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
       };
     } else {
@@ -22469,8 +22476,15 @@ window.igRenderLibBar = igRenderLibBar;
 // with Restore (re-apply recipe + re-select sources) and Close.
 const igFamily = { open: false, outputId: null };
 
+// An image is "openable as a family" if it carries a source-id list (and/or a
+// family code). We key on familySrcIds because the view renders from it; the
+// code is only an internal grouping tag.
+function igFavHasFamily(f) {
+  return !!(f && ((Array.isArray(f.familySrcIds) && f.familySrcIds.length) || f.familyCode));
+}
+
 function igOpenFamilyForOutput(outputFav) {
-  if (!outputFav || !outputFav.familyCode) return;
+  if (!igFavHasFamily(outputFav)) return;
   igFamily.open = true;
   igFamily.outputId = outputFav.id;
   igRenderFamilyBar();
