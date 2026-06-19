@@ -1053,18 +1053,12 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* Mode title doubles as the menu trigger. Styled to match the BEAST MODE brand
    (same accent yellow, no pill) with a caret to signal it opens the mode menu. */
 .mobile-topbar-mode {
-  display:inline-flex; align-items:center; gap:6px;
-  font-family:'IBM Plex Mono',sans-serif; font-size:22px; letter-spacing:2px;
-  color:var(--accent); white-space:nowrap; cursor:pointer;
-  background:none; border:none; padding:0; max-width:34%; overflow:hidden;
+  display:inline-flex; align-items:center; justify-content:center;
+  color:var(--accent); cursor:pointer;
+  background:none; border:none; padding:6px; flex:0 0 auto;
 }
-.mobile-topbar-mode:hover .mobile-topbar-mode-text,
-.mobile-topbar-mode.open .mobile-topbar-mode-text { text-decoration:underline; text-underline-offset:3px; }
-.mobile-topbar-mode-text { overflow:hidden; text-overflow:ellipsis; }
-.mobile-topbar-mode-caret {
-  font-size:13px; color:var(--accent); transition:transform .2s; flex:0 0 auto;
-}
-.mobile-topbar-mode.open .mobile-topbar-mode-caret { transform:rotate(180deg); }
+.mobile-topbar-mode-ic { font-size:26px; line-height:1; display:inline-flex; }
+.mobile-topbar-mode.open .mobile-topbar-mode-ic { color:var(--accent); filter:brightness(1.2); }
 
 /* Top-bar Queue button (centre). Opens the queue modal over the current mode. */
 .mobile-topbar-queue {
@@ -1215,6 +1209,14 @@ body.bm-queue-modal-open { overflow:hidden; }
   display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;
 }
 @media(max-width:640px){ .lib-grid { grid-template-columns:1fr; gap:10px; } }
+/* Mobile: show the full image at its natural aspect ratio rather than cropping
+   it to a 16:9 cover. height:auto + the natural ratio lets the card grow to fit
+   the image; object-fit:contain guards the rare case the box is constrained. */
+@media(max-width:640px){
+  .lib-card-image {
+    aspect-ratio:auto; height:auto; max-height:80vh; object-fit:contain;
+  }
+}
 
 /* Card */
 .lib-card {
@@ -1284,6 +1286,8 @@ img.bm-thumb-missing { background:var(--surface2); }
 .lib-tag.mode-insect { background:color-mix(in srgb,#00ffb0 12%,transparent);color:#00ffb0; }
 .lib-tag.mode-beast  { background:color-mix(in srgb,#ff6a00 12%,transparent);color:#ff6a00; }
 .lib-tag.mode-fusion { background:color-mix(in srgb,#c800ff 12%,transparent);color:#c800ff; }
+.lib-tag.mode-image  { background:color-mix(in srgb,#38b6ff 12%,transparent);color:#38b6ff; }
+.lib-tag.mode-upscale { background:color-mix(in srgb,#caff00 14%,transparent);color:#caff00; }
 .lib-tag.tag-model   { background:var(--surface2);color:var(--muted);border:1px solid var(--border); }
 .lib-tag.tag-cost    { background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent); }
 .lib-tag.tag-needs-processing {
@@ -3294,9 +3298,8 @@ img.bm-thumb-missing { background:var(--surface2); }
     <span class="mobile-topbar-queue-txt" id="mobileQueueTxt">QUEUE</span>
     <span class="mobile-topbar-queue-badge" id="mobileQueueBadge" style="display:none;">0</span>
   </button>
-  <button class="mobile-topbar-mode" id="mobileModeTitle" onclick="toggleModeNav()" aria-haspopup="true" aria-expanded="false" aria-label="Change mode">
-    <span class="mobile-topbar-mode-text">IMAGE GEN</span>
-    <span class="mobile-topbar-mode-caret" aria-hidden="true">▾</span>
+  <button class="mobile-topbar-mode" id="mobileModeTitle" onclick="toggleModeNav()" aria-haspopup="true" aria-expanded="false" aria-label="Open mode menu">
+    <span class="mobile-topbar-mode-ic" aria-hidden="true"><i class="ti ti-menu-2"></i></span>
   </button>
 </div>
 
@@ -6962,10 +6965,12 @@ let favourites = []
 const FOLDERS_FILE      = 'beast-mode-folders.json'
 let libFolders          = []        // [{id, name, color}]
 let libDriveFoldersId   = null
-let libActiveFolderId   = '__all__' // '__all__' | '__starred__' | folderId
+let libActiveFolderId   = '__images__' // category/virtual folder or a real folderId
 const VIRTUAL_FOLDERS   = [
-  { id:'__starred__', name:'⭐ Starred',      color:'#ffcc00', virtual:true },
-  { id:'__all__',     name:'All Prompts',    color:'var(--accent)', virtual:true },
+  { id:'__starred__', name:'⭐ Starred',          color:'#ffcc00',  virtual:true },
+  { id:'__images__',  name:'🖼 Generated Images', color:'#38b6ff',  virtual:true },
+  { id:'__upscales__',name:'✦ Upscales',          color:'#caff00',  virtual:true },
+  { id:'__prompts__', name:'⬡ Prompts',           color:'var(--accent)', virtual:true },
 ]
 
 const FIELD_DEFS = [
@@ -8528,7 +8533,58 @@ function restoreFav(id) {
   const f = favourites.find(x => x.id === id)
   if (!f) return
 
-  // ── 1. Generated image → Image Gen mode ──────────────────────────────────
+  // ── 1. Upscale output → Upscaler mode ─────────────────────────────────────
+  // Restore the ORIGINAL source image that was upscaled, plus the upscale
+  // settings (model, factor, target MP), into the Upscaler. Checked FIRST: an
+  // upscale of a generated image can also carry igSettings, and we want the
+  // upscale path to win for an upscale output.
+  if (f.isUpscale || f.upscaleMeta) {
+    switchView('upscaler')
+    const um = f.upscaleMeta || {}
+    const applyUp = () => {
+      // Apply the upscale recipe to upState, tolerant of legacy/partial meta.
+      if (um.model && upState.models && upState.models.some(m => m.id === um.model)) {
+        upState.modelId = um.model
+        const sel = document.getElementById('upModel'); if (sel) sel.value = um.model
+      }
+      if (typeof upModelChanged === 'function') upModelChanged()
+      if (um.factor != null && Number.isFinite(Number(um.factor))) upState.factor = Number(um.factor)
+      if (um.mp != null && Number.isFinite(Number(um.mp))) upState.mp = Number(um.mp)
+
+      // Resolve the original source fav this upscale came from, and load it as
+      // the upscale source. upSelectFav handles bytes-resolution + stage/rail.
+      let original = null
+      if (f.upscaledFromId != null) {
+        original = favourites.find(x => x && Number(x.id) === Number(f.upscaledFromId)) || null
+      }
+      if (!original && typeof upResolveGroup === 'function') {
+        try { original = (upResolveGroup(f) || {}).original || null } catch (_) {}
+      }
+      if (original && typeof upSelectFav === 'function') {
+        upSelectFav(original)
+      } else if (typeof upSelectFav === 'function') {
+        // No resolvable original (e.g. source deleted) — fall back to the
+        // upscale itself so the user still lands on a usable source.
+        upSelectFav(f)
+        if (typeof upStatus === 'function') upStatus('\u26a0 Original source unavailable — loaded the upscale instead', true)
+      }
+      if (typeof upRenderAll === 'function') upRenderAll()
+      if (typeof upStatus === 'function' && original) upStatus('\u2713 Restored upscale settings + source', false)
+    }
+    // The upscaler model list loads async (/api/upscalers). If a model was
+    // recorded but the list isn't ready yet, retry briefly so the recipe's
+    // model reliably restores rather than silently keeping the default.
+    const runWhenReady = (tries) => {
+      const modelsReady = !um.model || (upState.models && upState.models.some(m => m.id === um.model))
+      if (modelsReady || tries <= 0) { applyUp(); return }
+      setTimeout(() => runWhenReady(tries - 1), 200)
+    }
+    if (typeof upState !== 'undefined' && upState.inited) runWhenReady(10)
+    else setTimeout(() => runWhenReady(10), 160)
+    return
+  }
+
+  // ── 2. Generated image → Image Gen mode ──────────────────────────────────
   // Prefer the captured igSettings recipe. Treat any fav that has igSettings as
   // image-gen-restorable. (A plain uploaded image with neither igSettings nor a
   // settings block falls through to the prompt paths below.)
@@ -8544,7 +8600,7 @@ function restoreFav(id) {
     return
   }
 
-  // ── 2. Beast Mode (Builder) prompt → Builder ──────────────────────────────
+  // ── 3. Beast Mode (Builder) prompt → Builder ──────────────────────────────
   // A particle structure means this prompt was composed in the Builder; restore
   // the formula there rather than into Prompt Lab's plain output box.
   if (f.particles && f.particles.length) {
@@ -8567,7 +8623,7 @@ function restoreFav(id) {
     return
   }
 
-  // ── 3. Prompt Lab prompt → Prompt Lab (generator) ─────────────────────────
+  // ── 4. Prompt Lab prompt → Prompt Lab (generator) ─────────────────────────
   const s = extractSettings(f.text)
   const out = document.getElementById('output')
   switchView('generator')
@@ -9511,11 +9567,11 @@ function switchView(view, pushState = true) {
   document.getElementById('nav' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active')
   const mt = document.getElementById('mobileModeTitle')
   if (mt) {
-    // Mobile topbar drops the "// " prefix — it doesn't fit narrow screens.
+    // The mobile trigger is now a static menu icon (the drawer lists every mode
+    // in order). Keep an accessible label reflecting the current mode; never
+    // write into the button (that would clobber the icon).
     const label = (MODE_TITLES[view] || '// BEAST MODE').replace(/^\/\/\s*/, '')
-    const txt = mt.querySelector('.mobile-topbar-mode-text')
-    if (txt) txt.textContent = label
-    else mt.textContent = label
+    mt.setAttribute('aria-label', 'Mode menu — current: ' + label)
   }
   closeModeNav()
   if (view === 'library') renderLibrary()
@@ -9771,7 +9827,7 @@ function doSaveFav(imageData, model, title, rating) {
     model: model || '',
     rating: rating || 0,
     starred: false,
-    folderId: libActiveFolderId === '__all__' || libActiveFolderId === '__starred__'
+    folderId: String(libActiveFolderId).startsWith('__')
       ? null : libActiveFolderId,
     versions: [{ text: full, savedAt: Date.now(), label: 'Original' }],
     imageData: imageData || null,
@@ -9933,7 +9989,7 @@ function libBulkStar() {
 }
 
 function libBulkMove() {
-  const allFolders = [{ id: null, name: 'All Prompts (no folder)' }, ...libFolders]
+  const allFolders = [{ id: null, name: 'No folder' }, ...libFolders]
   const names = allFolders.map((f, i) => `${i+1}. ${f.name}`).join('\n')
   const choice = prompt(`Move ${libSelected.size} prompt${libSelected.size>1?'s':''} to:\n\n${names}\n\nEnter number:`)
   const idx = parseInt(choice) - 1
@@ -9977,9 +10033,12 @@ function renderLibrary() {
 
   let items = [...favourites]
 
-  // Folder filter
+  // Folder filter — virtual category folders classify by kind; real folders by id.
   if (libActiveFolderId === '__starred__') items = items.filter(f => f.starred)
-  else if (libActiveFolderId !== '__all__') items = items.filter(f => f.folderId === libActiveFolderId)
+  else if (libActiveFolderId === '__images__')   items = items.filter(f => bmFavKind(f) === 'image')
+  else if (libActiveFolderId === '__upscales__') items = items.filter(f => bmFavKind(f) === 'upscale')
+  else if (libActiveFolderId === '__prompts__')  items = items.filter(f => bmFavKind(f) === 'prompt')
+  else if (!String(libActiveFolderId).startsWith('__')) items = items.filter(f => f.folderId === libActiveFolderId)
 
   // Filter
   if (libActiveFilter === 'insect') items = items.filter(f => f.mode === 'insect')
@@ -10123,6 +10182,20 @@ function buildLibCardWithSwipe(f) {
   return wrap
 }
 
+// Canonical classification of a library favourite into one of three kinds.
+// Used by the category folders, the card mode-tag, and the type filters so they
+// can never disagree:
+//   'upscale' — an upscale OUTPUT (carries isUpscale / upscaleMeta)
+//   'image'   — a generated (or uploaded) image that is NOT an upscale
+//   'prompt'  — a text prompt with no image
+// The check order matters: upscales also have an image, so test upscale first.
+function bmFavKind(f) {
+  if (!f) return 'prompt'
+  if (f.isUpscale || f.upscaleMeta) return 'upscale'
+  if (f.imageData || f.thumbKey || f.serverImageUrl) return 'image'
+  return 'prompt'
+}
+
 function buildLibCard(f) {
   const card = document.createElement('div')
   card.className = 'lib-card'
@@ -10201,25 +10274,37 @@ function buildLibCard(f) {
     // Re-render folder sidebar counts
     renderFolderSidebar()
   }
-  const titleEl = document.createElement('input')
-  titleEl.className = 'lib-card-title'
-  titleEl.value = f.title || ''
-  titleEl.placeholder = buildAutoTitle(f)
-  titleEl.title = 'Click to rename'
-  titleEl.onclick  = e => e.stopPropagation()
-  titleEl.onkeydown = e => { if (e.key === 'Enter') titleEl.blur() }
-  titleEl.onblur   = () => {
-    const newTitle = titleEl.value.trim()
-    if (newTitle !== f.title) {
-      f.title = newTitle; f.updatedAt = Date.now(); driveSavePrompt(f)
-    }
-  }
+  const _favKind = bmFavKind(f)
   const dateEl = document.createElement('div')
   dateEl.className = 'lib-card-date'
   dateEl.textContent = formatDate(f.createdAt || f.id)
-  header.appendChild(starBtn)
-  header.appendChild(titleEl)
-  header.appendChild(dateEl)
+  // Title: only PROMPT cards get the editable rename field. Generated images
+  // and upscales no longer carry an editable title under the card.
+  if (_favKind === 'prompt') {
+    const titleEl = document.createElement('input')
+    titleEl.className = 'lib-card-title'
+    titleEl.value = f.title || ''
+    titleEl.placeholder = buildAutoTitle(f)
+    titleEl.title = 'Click to rename'
+    titleEl.onclick  = e => e.stopPropagation()
+    titleEl.onkeydown = e => { if (e.key === 'Enter') titleEl.blur() }
+    titleEl.onblur   = () => {
+      const newTitle = titleEl.value.trim()
+      if (newTitle !== f.title) {
+        f.title = newTitle; f.updatedAt = Date.now(); driveSavePrompt(f)
+      }
+    }
+    header.appendChild(starBtn)
+    header.appendChild(titleEl)
+    header.appendChild(dateEl)
+  } else {
+    // Image / upscale: star + date only, with a spacer so the date stays right.
+    const spacer = document.createElement('div')
+    spacer.style.flex = '1'
+    header.appendChild(starBtn)
+    header.appendChild(spacer)
+    header.appendChild(dateEl)
+  }
   body.appendChild(header)
 
   // Creatures line
@@ -10238,7 +10323,12 @@ function buildLibCard(f) {
   tags.className = 'lib-card-tags'
   const presetName = (getPreset(f.preset)?.name || f.preset || 'DEFAULT').toUpperCase()
   const folder = f.folderId ? libFolders.find(x => x.id === f.folderId) : null
-  const modeName = (f.mode || 'image')
+  // Mode tag: images and upscales are tagged by their KIND (not the stale
+  // Beast-Mode currentMode that leaked an erroneous "INSECT" onto generated
+  // images). Prompt cards keep their authoring mode (insect/beast/fusion).
+  const modeName = (_favKind === 'image') ? 'image'
+    : (_favKind === 'upscale') ? 'upscale'
+    : (f.mode || 'image')
   tags.innerHTML = `
     <span class="lib-tag mode-${modeName}">${modeName.toUpperCase()}</span>
     <span class="lib-tag tag-style">${presetName}</span>
@@ -10521,8 +10611,12 @@ function renderFolderSidebar() {
   allFolders.forEach(folder => {
     const count = folder.id === '__starred__'
       ? favourites.filter(f => f.starred).length
-      : folder.id === '__all__'
-        ? favourites.length
+      : folder.id === '__images__'
+        ? favourites.filter(f => bmFavKind(f) === 'image').length
+      : folder.id === '__upscales__'
+        ? favourites.filter(f => bmFavKind(f) === 'upscale').length
+      : folder.id === '__prompts__'
+        ? favourites.filter(f => bmFavKind(f) === 'prompt').length
         : favourites.filter(f => f.folderId === folder.id).length
 
     const item = document.createElement('div')
@@ -10551,10 +10645,10 @@ function libAddFolder() {
 
 function libDeleteFolder(id, e) {
   e?.stopPropagation()
-  if (!confirm('Delete folder? Prompts will move to All Prompts.')) return
+  if (!confirm('Delete folder? Items will move out of this folder.')) return
   libFolders = libFolders.filter(f => f.id !== id)
   favourites.forEach(f => { if (f.folderId === id) { f.folderId = null; driveSavePrompt(f) } })
-  if (libActiveFolderId === id) libActiveFolderId = '__all__'
+  if (libActiveFolderId === id) libActiveFolderId = '__images__'
   libFoldersSync()
   renderLibrary()
 }
@@ -11286,11 +11380,11 @@ function libShowMoveMenu(favId) {
   const f = favourites.find(x => x.id === favId)
   if (!f) return
   const options = [
-    { label: '— No folder (All Prompts)', value: null },
+    { label: '— No folder', value: null },
     ...libFolders.map(folder => ({ label: folder.name, value: folder.id }))
   ]
   const choice = options.find(o => {
-    const label = o.value === null ? '— No folder (All Prompts)' : o.label
+    const label = o.value === null ? '— No folder' : o.label
     return window.confirm ? null : label
   })
   // Simple prompt-based selection for now
@@ -16081,7 +16175,7 @@ function bkiPopulateDestFolder() {
   // No folder option
   const noneOpt = document.createElement('option')
   noneOpt.value = '__none__'
-  noneOpt.textContent = 'No folder (All Prompts)'
+  noneOpt.textContent = 'No folder'
   sel.appendChild(noneOpt)
 }
 
@@ -20848,7 +20942,10 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
     const fav = {
       text: full,
       promptOnly: prompt,
-      mode: typeof currentMode !== 'undefined' ? currentMode : '',
+      // Mode reflects what this fav IS, not the Beast-Mode generator's
+      // currentMode (which defaults to 'insect' and previously leaked onto every
+      // generated image). Upscales → 'upscale', generated images → 'image'.
+      mode: (extra && (extra.isUpscale || extra.upscaleMeta)) ? 'upscale' : 'image',
       preset: typeof currentPreset !== 'undefined' ? currentPreset : '',
       id: (extra && extra.serverFavId != null && Number.isFinite(Number(extra.serverFavId))) ? Number(extra.serverFavId) : Date.now(),
       title: '',
