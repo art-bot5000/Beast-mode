@@ -432,11 +432,21 @@ async function runJob(job: JobRecord): Promise<void> {
     if (v) { body.inputImage = v; stashedFields.push("inputImage"); }
   }
   if (Array.isArray(body.referenceImages)) {
-    const refs = body.referenceImages as unknown[];
-    for (let i = 0; i < refs.length; i++) {
-      if (isJobBlobMarker(refs[i])) {
+    // IMPORTANT: { ...job.request } is a SHALLOW copy, so body.referenceImages
+    // is the SAME array instance as job.request.referenceImages. Mutating its
+    // elements in place would re-inflate the off-KV markers back onto job.request
+    // — and completeJob({ ...job }) would then persist 3 multi-MB data URIs into
+    // the job record, blowing KV's 64KB cap ("Value too large") on i2i jobs.
+    // Build a NEW array so the original request keeps its small markers.
+    const src = body.referenceImages as unknown[];
+    const refs: unknown[] = new Array(src.length);
+    for (let i = 0; i < src.length; i++) {
+      if (isJobBlobMarker(src[i])) {
         const v = await fetchJobBlob(job.id, `referenceImages_${i}`);
         if (v) { refs[i] = v; stashedFields.push(`referenceImages_${i}`); }
+        else refs[i] = src[i];
+      } else {
+        refs[i] = src[i];
       }
     }
     body.referenceImages = refs;

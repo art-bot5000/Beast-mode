@@ -242,6 +242,32 @@ export async function completeJob(job: JobRecord, result: JobRecord["result"]): 
   const now = Date.now();
   const safeResult = result ? await stashResultBlobs(job.id, result) : result;
   const done: JobRecord = { ...job, status: "done", result: safeResult, updatedAt: now, finishedAt: now };
+  // DIAGNOSTIC + SAFETY: KV caps a value at 64KB. If the assembled record is
+  // still oversized after stashing (a field we didn't anticipate carrying bytes,
+  // e.g. a base64 echo on an image item, or a bloated request), log WHICH part
+  // is large and which image urls look like inline data — then drop the request
+  // payload (the client doesn't read it back from a done job) as a last resort
+  // so the job can still settle instead of stranding in "running".
+  try {
+    const size = new TextEncoder().encode(JSON.stringify(done)).length;
+    if (size > 60_000) {
+      const imgs = Array.isArray(safeResult?.images) ? safeResult!.images : [];
+      console.error(
+        `completeJob oversized: job=${job.id} bytes=${size}` +
+        ` imgUrls=${JSON.stringify(imgs.map((x) => (typeof x?.url === "string" ? x.url.slice(0, 24) : typeof x?.url)))}` +
+        ` imgKeys=${JSON.stringify(imgs.map((x) => Object.keys(x || {})))}` +
+        ` reqKeys=${JSON.stringify(Object.keys(job.request || {}))}`,
+      );
+      // Strip the request (not needed once done) and retry size.
+      const slimDone: JobRecord = { ...done, request: {} as Record<string, unknown> };
+      const size2 = new TextEncoder().encode(JSON.stringify(slimDone)).length;
+      if (size2 <= 64_000) {
+        await kv.set(["job", job.userHash, job.id], slimDone);
+        return;
+      }
+      console.error(`completeJob STILL oversized after stripping request: bytes=${size2}`);
+    }
+  } catch (_) { /* probe must never block the write */ }
   await kv.set(["job", job.userHash, job.id], done);
 }
 
