@@ -7,12 +7,16 @@ RUN npm install
 # The app is a single large HTML file plus the service worker, manifest, icons,
 # and the model-dropdown helper. (Unlike stckrm there are no separate JS modules
 # to minify on the frontend — the app logic lives inside the HTML.)
-COPY beast-mode-mech-my-ride-v4.html admin.html sw.js manifest.json bm-auth-crypto.js ./
+COPY app.html app.css admin.html sw.js manifest.json bm-auth-crypto.js ./
 COPY icon192.png icon512.png ./
-COPY fonts/ ./fonts/
 
+# Inline app.css into the <!-- BUILD:INLINE-CSS app.css --> placeholder, wrapping
+# it in a single <style> block, THEN minify. Shipped artifact is a self-contained
+# index.html (CSS is split only at authoring time). Done in Node (always present
+# in the builder image) to avoid sed-escaping pitfalls with CSS content.
 RUN mkdir -p public && \
-    npx html-minifier-terser beast-mode-mech-my-ride-v4.html \
+    node -e "const fs=require('fs');const html=fs.readFileSync('app.html','utf8');const css=fs.readFileSync('app.css','utf8');if(!html.includes('<!-- BUILD:INLINE-CSS app.css -->')){console.error('CSS placeholder missing in app.html');process.exit(1);}fs.writeFileSync('app.inlined.html',html.replace('<!-- BUILD:INLINE-CSS app.css -->','<style>\n'+css+'\n</style>'));" && \
+    npx html-minifier-terser app.inlined.html \
       --collapse-whitespace --remove-comments \
       --remove-redundant-attributes \
       --remove-tag-whitespace --minify-css true --minify-js true \
@@ -22,8 +26,7 @@ RUN mkdir -p public && \
     cp manifest.json public/manifest.json && \
     cp bm-auth-crypto.js public/bm-auth-crypto.js && \
     cp icon192.png public/icon192.png && \
-    cp icon512.png public/icon512.png && \
-    mkdir -p public/fonts && cp fonts/*.woff2 public/fonts/
+    cp icon512.png public/icon512.png
 
 # ── Stage 2: Deno runtime + Caddy (Brotli build) ─────────────────────────────
 FROM denoland/deno:2.3.1
