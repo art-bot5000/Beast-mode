@@ -154,7 +154,11 @@ export async function generate(req) {
     // Each ref must be an https URL or a data URI (caps payload at ~15MB each).
     for (const r of req.referenceImages) {
       const isUrl = /^https?:\/\//i.test(r);
-      const isDataUri = /^data:image\/(png|jpe?g|webp);base64,/i.test(r);
+      // Accept ANY image/<subtype> data URI (png/jpeg/webp/gif/avif/heic/…). The
+      // /data store re-encodes library sources via FileReader, so the subtype is
+      // whatever the stored content-type was — pinning it to four formats 400'd
+      // valid i2i refs ("Each reference image must be an http(s) URL or…").
+      const isDataUri = /^data:image\/[a-z0-9.+-]+;base64,/i.test(r);
       if (!isUrl && !isDataUri) {
         throw new ProviderError('Each reference image must be an http(s) URL or a base64 image data URI', { code: 'bad_request', status: 400 });
       }
@@ -294,7 +298,8 @@ export async function upscale(req) {
     throw new ProviderError('An "inputImage" is required', { code: 'bad_request', status: 400 });
   }
   const isUrl = /^https?:\/\//i.test(img);
-  const isDataUri = /^data:image\/(png|jpe?g|webp);base64,/i.test(img);
+  // Any image/<subtype> data URI — see referenceImages note above.
+  const isDataUri = /^data:image\/[a-z0-9.+-]+;base64,/i.test(img);
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(img);
   if (!isUrl && !isDataUri && !isUuid) {
     throw new ProviderError('inputImage must be an http(s) URL, a base64 image data URI, or a Runware image UUID', { code: 'bad_request', status: 400 });

@@ -20043,11 +20043,22 @@ const bmQueue = (() => {
     }
     render();
 
-    // Stop polling once nothing is outstanding (no queued/running, nothing
+    // HARD STOP for stranded jobs. A job stuck in "running" past the server's
+    // own ceiling (gen 180s / upscale 240s, +buffer) will never settle — e.g.
+    // the worker lane died mid-write. Without this, `busy` stays true forever
+    // and the poller hammers /api/jobs indefinitely. We treat such a job as
+    // stale: it no longer counts as active, so polling can wind down, and the
+    // card renders as timed-out (see statusInfo).
+    const now = Date.now();
+    const isStaleRunning = (j) =>
+      j.status === 'running' &&
+      (now - (j.startedAt || j.createdAt || now)) > STALE_RUNNING_MS;
+
+    // Stop polling once nothing is outstanding (no LIVE queued/running, nothing
     // un-drained). It restarts on the next enqueue or sign-in. While work is
     // outstanding, keep the cadence snappy; the moment it settles we stop.
     const busy = data.jobs.some(j =>
-      j.status === 'queued' || j.status === 'running');
+      j.status === 'queued' || (j.status === 'running' && !isStaleRunning(j)));
     const active = busy ||
       data.jobs.some(j => j.status === 'done' && !j.delivered);
     if (!active) stop();
@@ -20186,6 +20197,10 @@ const bmQueue = (() => {
   // poll() so the cadence tracks the current state.
   const POLL_BUSY_MS = 1500;
   const POLL_IDLE_MS = 3000;
+  // A running job older than this is considered stranded (server gen ceiling is
+  // 180s, upscale 240s — this sits above both so we only ever flag genuine
+  // strandings, never a legitimately slow job still in flight).
+  const STALE_RUNNING_MS = 300000;
   let pollMs = POLL_BUSY_MS;
   function reschedule(busy) {
     const next = busy ? POLL_BUSY_MS : POLL_IDLE_MS;
@@ -20210,7 +20225,16 @@ const bmQueue = (() => {
   // ── Rendering ────────────────────────────────────────────────────────────
   function statusInfo(job) {
     if (job.status === 'queued')  return { icon: '◌', text: 'Queued',      cls: 'q-queued' };
-    if (job.status === 'running') return { icon: '◍', text: 'Generating…', cls: 'q-running' };
+    if (job.status === 'running') {
+      // A run past the server ceiling never settled — show it as timed out
+      // rather than an eternal "Generating…". No tokens are charged for a job
+      // that never delivered (the server holds, then refunds on timeout/fail).
+      const startedish = job.startedAt || job.createdAt || Date.now();
+      if (Date.now() - startedish > STALE_RUNNING_MS) {
+        return { icon: '✕', text: 'Timed out — no tokens charged. Try again.', cls: 'q-failed' };
+      }
+      return { icon: '◍', text: 'Generating…', cls: 'q-running' };
+    }
     if (job.status === 'failed')  return { icon: '✕', text: (job.error && job.error.message) || 'Failed', cls: 'q-failed' };
     return { icon: '✓', text: 'Done · saved to library', cls: 'q-done' };
   }
@@ -26165,10 +26189,15 @@ async function driveServerTokenBootstrap() {
     try { cloudSetProvider('gdrive') } catch (e) {}
     if (typeof setDriveStatus === 'function') setDriveStatus('✓ CONNECTED', 'ok')
     if (typeof updateLocalWarning === 'function') updateLocalWarning()
-    // Refresh 2 minutes before expiry, via the backend (not Google directly).
+    // Refresh ~2 minutes before expiry, via the backend (not Google directly).
+    // HARD GUARD: a missing/garbage expiresIn previously yielded
+    // setTimeout(..., NaN) → treated as 0ms → an unbounded refresh storm
+    // (thousands of /oauth/google/token POSTs). Coerce to a finite number and
+    // floor the delay so a bad value can never schedule a tight loop.
     clearTimeout(bmDriveTokenTimer)
-    bmDriveTokenTimer = setTimeout(driveServerTokenBootstrap,
-      Math.max(60, (data.expiresIn - 120)) * 1000)
+    const exp = Number(data.expiresIn)
+    const refreshInSec = Number.isFinite(exp) && exp > 0 ? Math.max(60, exp - 120) : 1800
+    bmDriveTokenTimer = setTimeout(driveServerTokenBootstrap, refreshInSec * 1000)
     if (typeof driveOnSignedIn === 'function') driveOnSignedIn()
   } catch (e) { /* network blip — retried on next load/sign-in */ }
 }
