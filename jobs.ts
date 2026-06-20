@@ -33,7 +33,14 @@
 //   unchanged — they just happen in the worker instead of the request handler.
 
 import { kv } from "./auth.ts";
-import { stashJobBlob } from "./data-store.ts";
+import { stashJobBlob, clearJobBlobs } from "./data-store.ts";
+
+// Result-image stash fields completeJob() may create (mirrors input fields).
+// Cleared when a job is delivered or dismissed so /data/jobtmp doesn't leak.
+const RESULT_BLOB_FIELDS = [
+  "result_image",
+  ...Array.from({ length: 8 }, (_, i) => `result_img_${i}`),
+];
 
 export type JobKind = "generate" | "upscale";
 export type JobStatus = "queued" | "running" | "done" | "failed";
@@ -148,7 +155,10 @@ export async function enqueueJob(args: {
   return job;
 }
 
-/** List a user's jobs, newest first. Drops expired done/failed records lazily. */
+/** List a user's jobs, newest first. Drops expired done/failed records lazily,
+ *  and caps retained terminal (done/failed) history at the newest HISTORY_CAP
+ *  so the queue can't grow without bound. In-flight jobs are never capped. */
+const HISTORY_CAP = 50;
 export async function listJobs(userHash: string): Promise<JobRecord[]> {
   const out: JobRecord[] = [];
   const now = Date.now();
@@ -163,7 +173,23 @@ export async function listJobs(userHash: string): Promise<JobRecord[]> {
     out.push(j);
   }
   out.sort((a, b) => b.createdAt - a.createdAt);
-  return out;
+  // Enforce the history cap: keep all in-flight jobs, but trim terminal jobs
+  // beyond the newest HISTORY_CAP (GC the overflow). Sorted newest-first, so we
+  // count terminal records as we go and drop the tail.
+  let terminalSeen = 0;
+  const kept: JobRecord[] = [];
+  for (const j of out) {
+    const terminal = (j.status === "done" || j.status === "failed");
+    if (terminal) {
+      terminalSeen++;
+      if (terminalSeen > HISTORY_CAP) {
+        kv.delete(["job", userHash, j.id]).catch(() => {});
+        continue;
+      }
+    }
+    kept.push(j);
+  }
+  return kept;
 }
 
 export async function getJob(userHash: string, jobId: string): Promise<JobRecord | null> {
@@ -201,11 +227,44 @@ export async function claimNextJob(): Promise<JobRecord | null> {
   return null;
 }
 
-/** Mark a claimed job done with its result. Worker has already settled tokens. */
+/** Mark a claimed job done with its result. Worker has already settled tokens.
+ *
+ *  KV caps a value at 64KB. The happy path swaps each image URL to a tiny
+ *  /api/img/<id> ref, so the record is small. But the rehost SOFT-DEGRADE leaves
+ *  a multi-MB `data:` URI on img.url when /data is unwritable — and on the WORKER
+ *  path that URI gets persisted here, blowing the 64KB cap. The set() then throws,
+ *  the lane catch swallows it, and the job is stranded in "running": the image was
+ *  generated (and paid for) but never delivered. To stay symmetric with the input
+ *  stashing in enqueueJob(), we move any oversized data: URI in the result OFF the
+ *  record onto /data and leave a `jobblob:<field>` marker. The GET /api/jobs drain
+ *  rehydrates it so the client still receives the image this session. */
 export async function completeJob(job: JobRecord, result: JobRecord["result"]): Promise<void> {
   const now = Date.now();
-  const done: JobRecord = { ...job, status: "done", result, updatedAt: now, finishedAt: now };
+  const safeResult = result ? await stashResultBlobs(job.id, result) : result;
+  const done: JobRecord = { ...job, status: "done", result: safeResult, updatedAt: now, finishedAt: now };
   await kv.set(["job", job.userHash, job.id], done);
+}
+
+// Move any large data: URI in a result off-KV (mirrors enqueueJob input stashing).
+// Returns a shallow-cloned result with `jobblob:<field>` markers in place of bytes.
+async function stashResultBlobs(jobId: string, result: NonNullable<JobRecord["result"]>): Promise<JobRecord["result"]> {
+  const BIG = 8192; // only data: URIs over this are worth stashing
+  const out = { ...result };
+  if (Array.isArray(out.images)) {
+    out.images = await Promise.all(out.images.map(async (img, i) => {
+      const u = img?.url;
+      if (typeof u === "string" && u.startsWith("data:") && u.length > BIG) {
+        const marker = await stashJobBlob(jobId, `result_img_${i}`, u);
+        return { ...img, url: marker };
+      }
+      return img;
+    }));
+  }
+  if (out.image && typeof out.image.url === "string" && out.image.url.startsWith("data:") && out.image.url.length > BIG) {
+    const marker = await stashJobBlob(jobId, "result_image", out.image.url);
+    out.image = { ...out.image, url: marker };
+  }
+  return out;
 }
 
 /** Mark a claimed job failed. Worker has already refunded the hold. */
@@ -228,13 +287,74 @@ export async function markDelivered(userHash: string, jobId: string): Promise<bo
   const ok = await kv.atomic().check(res).set(["job", userHash, jobId], updated).commit();
   if (!ok.ok) return false; // another tab won the race
   // Remove shortly after so the UI can show the "delivered" state briefly.
-  setTimeout(() => { kv.delete(["job", userHash, jobId]).catch(() => {}); }, 60_000);
+  setTimeout(() => {
+    kv.delete(["job", userHash, jobId]).catch(() => {});
+    clearJobBlobs(jobId, RESULT_BLOB_FIELDS).catch(() => {});
+  }, 60_000);
   return true;
 }
 
 /** Let the user dismiss a failed/done job from their queue explicitly. */
 export async function deleteJob(userHash: string, jobId: string): Promise<void> {
   await kv.delete(["job", userHash, jobId]);
+  clearJobBlobs(jobId, RESULT_BLOB_FIELDS).catch(() => {});
+}
+
+/** Cancel a QUEUED job before a worker lane claims it. Flips it to "failed"
+ *  (code: "cancelled") and drops its queue pointer so no lane runs it. The
+ *  token hold is refunded by the caller (main.ts) — jobs.ts deliberately
+ *  doesn't import the ledger. Returns false if the job isn't queued (e.g. a
+ *  lane already claimed it; the running-job path in main.ts handles that). */
+export async function cancelQueuedJob(userHash: string, jobId: string): Promise<boolean> {
+  const res = await kv.get<JobRecord>(["job", userHash, jobId]);
+  const job = res.value;
+  if (!job || job.status !== "queued") return false;
+  const now = Date.now();
+  const failed: JobRecord = {
+    ...job, status: "failed", updatedAt: now, finishedAt: now,
+    error: { message: "Cancelled before it started.", code: "cancelled" },
+  };
+  // CAS so we don't clobber a claim that lands in the same instant.
+  const ok = await kv.atomic().check(res).set(["job", userHash, jobId], failed).commit();
+  if (!ok.ok) return false;
+  // Best-effort: remove the FIFO pointer so claimNextJob() doesn't waste a scan.
+  // claimNextJob() also self-heals (it skips non-queued jobs), so a miss is fine.
+  for await (const e of kv.list<{ userHash: string; jobId: string }>({ prefix: ["job_queue"] })) {
+    if (e.value && e.value.jobId === jobId) { await kv.delete(e.key); break; }
+  }
+  return true;
+}
+
+/** Mark a RUNNING job as failed/cancelled once its provider call has been
+ *  aborted (the abort itself happens in main.ts via the AbortController
+ *  registry; runJob's own catch will also failJob it, so this is the explicit
+ *  path for when the abort needs the record updated immediately). */
+export async function markCancelled(userHash: string, jobId: string): Promise<boolean> {
+  const res = await kv.get<JobRecord>(["job", userHash, jobId]);
+  const job = res.value;
+  if (!job || (job.status !== "running" && job.status !== "queued")) return false;
+  const now = Date.now();
+  const failed: JobRecord = {
+    ...job, status: "failed", updatedAt: now, finishedAt: now,
+    error: { message: "Cancelled.", code: "cancelled" },
+  };
+  await kv.set(["job", userHash, jobId], failed);
+  return true;
+}
+
+/** Remove ALL terminal (done/failed) jobs for a user — the "Clear" button.
+ *  In-flight jobs (queued/running) are left untouched. Returns the count
+ *  removed. */
+export async function clearTerminalJobs(userHash: string): Promise<number> {
+  let removed = 0;
+  for await (const e of kv.list<JobRecord>({ prefix: ["job", userHash] })) {
+    const j = e.value;
+    if (j && (j.status === "done" || j.status === "failed")) {
+      await kv.delete(e.key);
+      removed++;
+    }
+  }
+  return removed;
 }
 
 /** Boot recovery: any job left "running" by a crash/restart is flipped back to

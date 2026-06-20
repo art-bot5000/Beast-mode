@@ -77,7 +77,8 @@ import { handleAdmin } from "./admin.ts";
 import { handleOAuth } from "./oauth.ts";
 import {
   enqueueJob, listJobs, getJob, claimNextJob, completeJob, failJob,
-  markDelivered, deleteJob, reclaimOrphans, type JobRecord,
+  markDelivered, deleteJob, reclaimOrphans,
+  cancelQueuedJob, markCancelled, clearTerminalJobs, type JobRecord,
 } from "./jobs.ts";
 
 const PORT = 8000; // Caddy reverse-proxies to this; start.sh probes /ping here.
@@ -188,6 +189,7 @@ async function runGenerateHeld(
       quality: body.quality as string | undefined,
       renderingSpeed: body.renderingSpeed as string | undefined,
       snapDims,
+      signal: body.signal as AbortSignal | undefined,
     });
 
     // PRIMARY IMAGE STORE — write bytes to the per-user /data volume and hand
@@ -307,6 +309,7 @@ async function runUpscaleHeld(
       CFGScale: body.CFGScale as number | undefined,
       strength: body.strength as number | undefined,
       seed: body.seed as number | undefined,
+      signal: body.signal as AbortSignal | undefined,
     });
 
     const out = result.image as { url?: string; b64?: string; favId?: string };
@@ -386,6 +389,37 @@ async function runUpscaleHeld(
 // KV, a refresh/disconnect/logout in the browser cannot interrupt it.
 let workerRunning = false;
 
+// In-process registry of the AbortController for each RUNNING job, keyed by
+// jobId. Lets the DELETE route cancel a job whose provider call is currently
+// in flight in a worker lane (the lane is awaiting inside runJob, so it can't
+// be reached any other way). Single-machine today; if this ever scales to
+// multiple machines, a KV "cancel_requested" flag would be the cross-process
+// signal — for now the worker and the route share this process.
+const runningControllers = new Map<string, AbortController>();
+
+// Per-job wall-clock ceiling for the provider call. A hung upstream fetch (the
+// class of bug that left a job "Generating…" for hours) is aborted here, which
+// the provider adapters surface as a `timeout` ProviderError → failJob + the
+// hold is refunded by runGenerateHeld/runUpscaleHeld's catch. Upscales get
+// longer since large-factor jobs legitimately take longer.
+const JOB_TIMEOUT_MS = Math.max(
+  30_000,
+  Math.min(600_000, Number(process.env.JOB_TIMEOUT_MS) || 180_000),
+);
+const UPSCALE_TIMEOUT_MS = Math.max(
+  30_000,
+  Math.min(600_000, Number(process.env.UPSCALE_TIMEOUT_MS) || 240_000),
+);
+
+/** Abort a running job's provider call, if it's in flight in this process.
+ *  Returns true if a controller was found and aborted. */
+function cancelRunningJob(jobId: string): boolean {
+  const ctrl = runningControllers.get(jobId);
+  if (!ctrl) return false;
+  try { ctrl.abort(); } catch { /* already aborted */ }
+  return true;
+}
+
 async function runJob(job: JobRecord): Promise<void> {
   const body = { ...job.request } as Record<string, unknown>;
   // Rehydrate any image inputs stashed off-KV at enqueue (see jobs.ts). A
@@ -408,6 +442,15 @@ async function runJob(job: JobRecord): Promise<void> {
     body.referenceImages = refs;
   }
   const q = { totalTokens: job.quotedTotal, perImage: job.perImage };
+  // Cancellation + timeout: one controller drives both. It's registered so the
+  // DELETE route can abort an in-flight job, and a timer aborts a hung upstream.
+  const controller = new AbortController();
+  runningControllers.set(job.id, controller);
+  const timeoutMs = job.kind === "upscale" ? UPSCALE_TIMEOUT_MS : JOB_TIMEOUT_MS;
+  const timeoutTimer = setTimeout(() => {
+    try { controller.abort(); } catch { /* noop */ }
+  }, timeoutMs);
+  body.signal = controller.signal;
   try {
     if (job.kind === "generate") {
       const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
@@ -427,13 +470,45 @@ async function runJob(job: JobRecord): Promise<void> {
       await completeJob(job, { provider: res.provider, model: res.model, image: res.image, tokens: res.tokens });
     }
   } catch (e) {
-    const msg = e instanceof ProviderError ? e.message : "Generation failed — please try again.";
-    const code = e instanceof ProviderError ? e.code : "internal_error";
+    const aborted = (e as Error)?.name === "AbortError" ||
+      (e instanceof ProviderError && e.code === "timeout");
+    const msg = aborted
+      ? "Cancelled or timed out — no tokens charged."
+      : (e instanceof ProviderError ? e.message : "Generation failed — please try again.");
+    const code = aborted ? "cancelled" : (e instanceof ProviderError ? e.code : "internal_error");
     await failJob(job, msg, code);
-    console.error(`job ${job.id} (${job.kind}) failed:`, (e as Error).message);
+    console.error(`job ${job.id} (${job.kind}) ${aborted ? "cancelled/timeout" : "failed"}:`, (e as Error).message);
   } finally {
+    clearTimeout(timeoutTimer);
+    runningControllers.delete(job.id);
     if (stashedFields.length) clearJobBlobs(job.id, stashedFields).catch(() => {});
   }
+}
+
+// Replace any "jobblob:<field>" marker on a done-job result with the data URI
+// stashed on /data by completeJob (its soft-degrade path). Mirrors the input
+// rehydration in runJob(). Read-only — the stashed file is cleaned when the job
+// is delivered or dismissed. If the blob is missing (already cleaned), the
+// marker is dropped so the client doesn't try to save the literal marker string.
+async function rehydrateResultBlobs(
+  jobId: string,
+  result: NonNullable<JobRecord["result"]>,
+): Promise<JobRecord["result"]> {
+  const out = { ...result };
+  if (Array.isArray(out.images)) {
+    out.images = await Promise.all(out.images.map(async (img, i) => {
+      if (img && isJobBlobMarker(img.url)) {
+        const v = await fetchJobBlob(jobId, `result_img_${i}`);
+        return { ...img, url: v ?? undefined };
+      }
+      return img;
+    }));
+  }
+  if (out.image && isJobBlobMarker(out.image.url)) {
+    const v = await fetchJobBlob(jobId, "result_image");
+    out.image = { ...out.image, url: v ?? undefined };
+  }
+  return out;
 }
 
 // Max jobs running concurrently in this process. Each job is I/O-bound (it
@@ -697,12 +772,19 @@ async function handler(req: Request): Promise<Response> {
     const jobs = await listJobs(userHash);
     // Strip the request payload from the listing — it can be large (reference
     // images as data URIs) and the client doesn't need it back.
-    const slim = jobs.map((j) => ({
-      id: j.id, kind: j.kind, status: j.status, label: j.label, model: j.model,
-      result: j.status === "done" ? j.result : undefined,
-      error: j.status === "failed" ? j.error : undefined,
-      delivered: !!j.delivered,
-      createdAt: j.createdAt, finishedAt: j.finishedAt,
+    const slim = await Promise.all(jobs.map(async (j) => {
+      let result = j.status === "done" ? j.result : undefined;
+      // Rehydrate any result image whose bytes were stashed off-KV by
+      // completeJob (the soft-degrade data: URI case). The marker is replaced
+      // with the original data URI so the client save path is unchanged.
+      if (result) result = await rehydrateResultBlobs(j.id, result);
+      return {
+        id: j.id, kind: j.kind, status: j.status, label: j.label, model: j.model,
+        result,
+        error: j.status === "failed" ? j.error : undefined,
+        delivered: !!j.delivered,
+        createdAt: j.createdAt, finishedAt: j.finishedAt,
+      };
     }));
     return json({ jobs: slim });
   }
@@ -721,7 +803,27 @@ async function handler(req: Request): Promise<Response> {
     }
   }
 
-  // DELETE /api/jobs/<id> — user dismisses a finished/failed job from the queue.
+  // POST /api/jobs/clear — remove ALL terminal (done/failed) jobs for the user.
+  // In-flight jobs (queued/running) are left untouched. This is the "Clear"
+  // button; individual in-flight cancellation goes through DELETE below.
+  if (path === "/api/jobs/clear" && req.method === "POST") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
+    const removed = await clearTerminalJobs(userHash);
+    return json({ ok: true, removed });
+  }
+
+  // DELETE /api/jobs/<id> — dismiss a terminal job, OR cancel an in-flight one.
+  //   • done/failed → just delete the record.
+  //   • queued      → flip to failed(cancelled) + drop the queue pointer, then
+  //                   refund the still-open hold.
+  //   • running     → abort the provider call in this process; runJob's catch
+  //                   marks it failed(cancelled) and refunds the hold. If no
+  //                   controller is found (e.g. a stale record from before this
+  //                   deploy, or another machine), force the record to failed
+  //                   and refund so it can never get stuck again.
   {
     const m = path.match(/^\/api\/jobs\/([^/]+)$/);
     if (m && req.method === "DELETE") {
@@ -729,13 +831,36 @@ async function handler(req: Request): Promise<Response> {
       const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
       const userHash = await verifySessionToken(token);
       if (!userHash) return json({ error: "Sign in.", code: "auth_required" }, 401);
-      // Only allow dismissing terminal jobs; in-flight jobs must finish so their
-      // hold is settled/refunded rather than orphaned.
-      const job = await getJob(userHash, m[1]);
-      if (job && (job.status === "queued" || job.status === "running")) {
-        return json({ error: "Job still in progress.", code: "in_progress" }, 409);
+      const jobId = m[1];
+      const job = await getJob(userHash, jobId);
+      if (!job) { await deleteJob(userHash, jobId); return json({ ok: true }); }
+
+      if (job.status === "queued") {
+        const ok = await cancelQueuedJob(userHash, jobId);
+        if (ok) {
+          await refundHold(userHash, job.holdRef, job.quotedTotal, "cancelled")
+            .catch((re) => console.error("refund after queued cancel failed:", (re as Error).message));
+          return json({ ok: true, cancelled: true });
+        }
+        // Race: a lane claimed it between read and CAS — fall through to running.
       }
-      await deleteJob(userHash, m[1]);
+
+      if (job.status === "running" || job.status === "queued") {
+        const aborted = cancelRunningJob(jobId);
+        if (aborted) {
+          // runJob's catch will failJob + refund via runGenerate/UpscaleHeld.
+          return json({ ok: true, cancelling: true });
+        }
+        // No live controller (stale record from a prior process / crash). Force
+        // it terminal and refund the orphaned hold so it can't stick forever.
+        await markCancelled(userHash, jobId);
+        await refundHold(userHash, job.holdRef, job.quotedTotal, "cancelled_orphan")
+          .catch((re) => console.error("refund after orphan cancel failed:", (re as Error).message));
+        return json({ ok: true, cancelled: true });
+      }
+
+      // Terminal (done/failed) → plain dismiss.
+      await deleteJob(userHash, jobId);
       return json({ ok: true });
     }
   }
