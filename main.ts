@@ -783,7 +783,7 @@ async function handler(req: Request): Promise<Response> {
         result,
         error: j.status === "failed" ? j.error : undefined,
         delivered: !!j.delivered,
-        createdAt: j.createdAt, finishedAt: j.finishedAt,
+        createdAt: j.createdAt, startedAt: j.startedAt, finishedAt: j.finishedAt,
       };
     }));
     return json({ jobs: slim });

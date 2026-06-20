@@ -158,7 +158,7 @@ async function oauthCallback(url: URL): Promise<Response> {
 // error shape. Cleans up the stored record on invalid_grant (user revoked).
 async function mintAccessToken(
   emailHash: string,
-): Promise<{ token: string; email?: string } | { error: string; code: string; status: number }> {
+): Promise<{ token: string; email?: string; expiresIn: number } | { error: string; code: string; status: number }> {
   const rec = await kv.get<GDriveRecord>(["gdrive", emailHash]);
   if (!rec.value) return { error: "Google Drive not connected", code: "not_connected", status: 404 };
 
@@ -184,7 +184,13 @@ async function mintAccessToken(
       }
       throw new Error(JSON.stringify(tok).slice(0, 200));
     }
-    return { token: tok.access_token as string, email: rec.value.email };
+    // Google returns expires_in (seconds, normally 3599). The client schedules
+    // its NEXT refresh from this, so it MUST be a finite positive number — a
+    // missing value made the client compute setTimeout(..., NaN) → fire at 0ms →
+    // an unbounded /oauth/google/token refresh storm. Default defensively.
+    const expiresIn = (typeof tok.expires_in === "number" && tok.expires_in > 0)
+      ? tok.expires_in : 3600;
+    return { token: tok.access_token as string, email: rec.value.email, expiresIn };
   } catch (e) {
     console.error("Token refresh failed:", (e as Error).message);
     return { error: "Token refresh failed", code: "upstream", status: 502 };
@@ -197,7 +203,7 @@ async function oauthToken(req: Request): Promise<Response> {
   if (!emailHash) return json({ error: "Sign in first", code: "auth_required" }, 401);
   const r = await mintAccessToken(emailHash);
   if ("error" in r) return json({ error: r.error, code: r.code }, r.status);
-  return json({ accessToken: r.token, email: r.email });
+  return json({ accessToken: r.token, email: r.email, expiresIn: r.expiresIn });
 }
 
 // ── disconnect: forget + best-effort revoke ──────────────────────────────────
