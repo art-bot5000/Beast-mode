@@ -4622,7 +4622,7 @@ body.up-group-modal-open { overflow:hidden; }
     align-items:start;
   }
   #viewImagegen .ig-area-settings {
-    align-self:stretch; height:calc(100vh - 16px);
+    align-self:stretch; height:calc(100vh - 32px - var(--ig-libbar-h, 140px));
     overflow-y:auto; min-height:0;
     scrollbar-width:thin; scrollbar-color:var(--border) transparent;
   }
@@ -4630,7 +4630,7 @@ body.up-group-modal-open { overflow:hidden; }
   #viewImagegen .ig-area-settings::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
   #viewImagegen .ig-area-rail {
-    align-self:stretch; height:calc(100vh - 16px);
+    align-self:stretch; height:calc(100vh - 32px - var(--ig-libbar-h, 140px));
     display:flex; flex-direction:column; min-height:0;
   }
   #viewImagegen .ig-rail {
