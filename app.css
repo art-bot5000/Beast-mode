@@ -2402,13 +2402,29 @@ img.bm-thumb-missing { background:var(--surface2); }
   background:var(--accent,#00ffb0); border-radius:4px;
   box-shadow:0 1px 4px rgba(0,0,0,.45); pointer-events:none;
 }
-.lib-upscale-src {
+/* Mode badge (top-left): icon matches the left mode-nav. Default accent pill;
+   per-mode tints below echo the card's type-tag colours. */
+.lib-mode-badge {
   position:absolute; left:8px; top:8px; z-index:3;
+  display:flex; align-items:center; justify-content:center;
+  min-width:22px; height:22px; padding:0 5px;
+  font-size:13px; line-height:1; color:#000;
+  background:var(--accent,#00ffb0); border-radius:5px;
+  box-shadow:0 1px 4px rgba(0,0,0,.45); pointer-events:none;
+}
+.lib-mode-badge i { font-size:14px; line-height:1; }
+.lib-mode-badge.is-upscale { background:#caff00; }                 /* Upscaler  */
+.lib-mode-badge.is-i2i      { background:#ff7ac6; font-size:15px; font-weight:700; } /* i2i ⇄ */
+/* The "has upscale versions" dot is secondary — push it below the mode badge so
+   the two never overlap in the top-left corner. */
+.lib-upscale-src {
+  position:absolute; left:11px; top:36px; z-index:3;
   width:9px; height:9px; border-radius:50%;
   background:color-mix(in srgb, var(--accent,#00ffb0) 70%, transparent);
   box-shadow:0 0 0 2px rgba(0,0,0,.5); pointer-events:none;
 }
 .lib-grid.list-view .lib-upscale-badge,
+.lib-grid.list-view .lib-mode-badge,
 .lib-grid.list-view .lib-upscale-src { display:none; }
 
 /* ══ RESOLUTION OVERLAY LABELS (Phases 2–3) ═══════════════════════ */

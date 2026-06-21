@@ -3116,6 +3116,22 @@ const VIRTUAL_FOLDERS   = [
 function bmFavIsI2I(f) {
   return !!(f && Array.isArray(f.familySrcIds) && f.familySrcIds.length)
 }
+// The top-left card badge reflects the mode the item was generated in, using the
+// same icons as the left mode-nav slide-out. i2i uses the opposing-arrows glyph
+// (Unicode, matching the Image 2 Image folder) since the subsetted Tabler font
+// carries no left-right arrows icon. Returns { html, title } or null for kinds
+// that get no badge. `html` is trusted markup (Tabler <i> or a Unicode char).
+function bmFavModeBadge(f) {
+  const kind = bmFavKind(f)
+  if (kind === 'upscale') return { html: '<i class="ti ti-arrows-maximize"></i>', title: 'Upscaled · Upscaler' }
+  if (kind === 'image') {
+    return bmFavIsI2I(f)
+      ? { html: '\u21C4', title: 'Image → Image' }                    // ⇄ matches the i2i folder
+      : { html: '<i class="ti ti-sparkles"></i>', title: 'Text → Image · Image Gen' }
+  }
+  if (kind === 'prompt') return { html: '<i class="ti ti-flask"></i>', title: 'Prompt · Prompt Lab' }
+  return null
+}
 
 const FIELD_DEFS = [
   { key:'body',     label:'Body',     defaultA:true,  defaultB:false },
@@ -6385,15 +6401,19 @@ function buildLibCard(f) {
     infoBtn.innerHTML = '<span class="lib-info-i">i</span>'
     infoBtn.onclick = e => { e.stopPropagation(); libOpenInfo(f.id) }
     card.appendChild(infoBtn)
-    // Upscale marker (bottom-left). Placeholder glyph — slated for redesign.
-    // Shown on upscale OUTPUTS; sources that have upscales get a subtler dot.
-    if (f.isUpscale) {
+    // Mode badge (top-left) — reflects the generation mode with the same icon
+    // as the left mode-nav. Upscaler / Image Gen / i2i / Prompt Lab.
+    const mb = bmFavModeBadge(f)
+    if (mb) {
       const badge = document.createElement('div')
-      badge.className = 'lib-upscale-badge'
-      badge.title = 'Upscaled image'
-      badge.textContent = '\u2726' // ✦
+      badge.className = 'lib-mode-badge' + (f.isUpscale ? ' is-upscale' : '') + (bmFavIsI2I(f) ? ' is-i2i' : '')
+      badge.title = mb.title
+      badge.innerHTML = mb.html
       card.appendChild(badge)
-    } else if (f.hasUpscales) {
+    }
+    // Secondary marker: this image HAS upscale versions (it's a source, not an
+    // upscale itself). Small dot, offset so it never collides with the badge.
+    if (!f.isUpscale && f.hasUpscales) {
       const dot = document.createElement('div')
       dot.className = 'lib-upscale-src'
       dot.title = 'Has upscaled version' + ((f.upscaleIds && f.upscaleIds.length > 1) ? 's' : '')
