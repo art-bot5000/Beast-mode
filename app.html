@@ -6215,7 +6215,7 @@ function renderLibrary() {
   // Count
   if (count) {
     if (items.length === favourites.length) {
-      count.innerHTML = `<span>${favourites.length}</span> PROMPT${favourites.length !== 1 ? 'S' : ''}`
+      count.innerHTML = `<span>${favourites.length}</span> ITEM${favourites.length !== 1 ? 'S' : ''}`
     } else {
       count.innerHTML = `<span>${items.length}</span> OF ${favourites.length} SHOWN`
     }
@@ -6539,6 +6539,14 @@ function buildLibCard(f) {
   expandBtn.className = 'lib-card-expand-btn'
   expandBtn.textContent = '▸ SHOW FULL PROMPT'
   expandBtn.onclick = e => { e.stopPropagation(); togglePromptExpand(promptEl, expandBtn) }
+  // Only surface the expand toggle when the prompt actually overflows the 3-line
+  // clamp — when the whole prompt already fits, there's nothing to expand, so the
+  // button is hidden (and the bare "SHOW FULL PROMPT" with no effect is gone).
+  // Measured after layout via rAF since the card isn't in the DOM yet here.
+  expandBtn.style.display = 'none'
+  requestAnimationFrame(() => {
+    if (promptEl.scrollHeight - promptEl.clientHeight > 2) expandBtn.style.display = ''
+  })
   promptWrap.appendChild(expandBtn)
   body.appendChild(promptWrap)
 
@@ -6597,19 +6605,23 @@ function buildLibCard(f) {
   // ── Actions bar ────────────────────────────────────────────
   const actions = document.createElement('div')
   actions.className = 'lib-card-actions'
+  // Prompt-authoring actions (EDIT IN LAB / ITERATE / PARTICLES) only make sense
+  // for prompt cards — they operate on particles/prompt text. Generated images
+  // and upscales have no prompt structure to lab-edit, so they're hidden there.
+  const _isPromptCard = (_favKind === 'prompt')
   const actionDefs = [
     { label:'⬆ RESTORE',  cls:'', fn: () => { restoreFav(f.id) } },
     { label:'⎘ COPY',     cls:'', fn: () => copyFav(f.id) },
-    { label:'✎ EDIT IN LAB', cls:'', fn: () => editInPromptLab(f), title:'Open and edit in Prompt Lab' },
-    { label:'⟳ ITERATE',  cls:'', fn: () => openIterate(f.id), title:'Generate variants by swapping a particle' },
-    { label:'⊛ PARTICLES',cls:'', fn: () => sendToParticleLab(f), title:'Import into Prompt Lab as particles' },
+    { label:'✎ EDIT IN LAB', cls:'', promptOnly:true, fn: () => editInPromptLab(f), title:'Open and edit in Prompt Lab' },
+    { label:'⟳ ITERATE',  cls:'', promptOnly:true, fn: () => openIterate(f.id), title:'Generate variants by swapping a particle' },
+    { label:'⊛ PARTICLES',cls:'', promptOnly:true, fn: () => sendToParticleLab(f), title:'Import into Prompt Lab as particles' },
     { label:'🕒',          cls:'', fn: () => openVersionHistory(f.id), title:'Version history' },
     { label:'🖼',          cls:'', fn: () => openImageModal(f.id), title:'Upload image' },
     { label:'☁',          cls:'', fn: () => openDrivePhoto(f.id), title:'Pick image from Google Drive' },
     { label:'📁',          cls:'', fn: () => libShowMoveMenu(f.id), title:'Move to folder' },
     { label:'✕',          cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() } },
   ]
-  actionDefs.forEach(a => {
+  actionDefs.filter(a => !(a.promptOnly && !_isPromptCard)).forEach(a => {
     const btn = document.createElement('button')
     btn.className = 'lib-action-btn' + (a.cls ? ' '+a.cls : '')
     btn.textContent = a.label
@@ -6631,8 +6643,11 @@ function libCloseInfo() {
   if (m) m.style.display = 'none'
 }
 function libFmtSettingKey(k) {
-  // camelCase / snake_case → "Title Case" for display.
-  return String(k)
+  const s = String(k)
+  // Already a spaced display label (e.g. "CFG Scale", "Output Format") — leave as-is.
+  if (/\s/.test(s) && !/[_\-]/.test(s)) return s
+  // camelCase / snake_case → "Title Case".
+  return s
     .replace(/[_\-]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/\b\w/g, c => c.toUpperCase())
@@ -6648,11 +6663,32 @@ function libOpenInfo(favId) {
   // Prompt — strip any leading [tag] marker the same way the card does.
   const promptText = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').trim()
 
-  // Settings — prefer the structured igSettings snapshot; otherwise parse the
-  // ---SETTINGS--- JSON island embedded in f.text. Either may be absent on
-  // legacy / imported favourites.
+  // Settings — depends on the kind of item.
+  //  • Upscales: build from upscaleMeta (+ its captured request params) and the
+  //    measured output dimensions. The prompt-gen ---SETTINGS--- island (creature
+  //    A/B, colours, field states) is meaningless for an upscale, so never use it.
+  //  • Generated images / prompts: prefer the igSettings snapshot, else parse the
+  //    embedded ---SETTINGS--- JSON.
   let settings = null
-  if (f.igSettings && typeof f.igSettings === 'object') {
+  if (bmFavKind(f) === 'upscale') {
+    const um = (f.upscaleMeta && typeof f.upscaleMeta === 'object') ? f.upscaleMeta : {}
+    const p  = (um.params && typeof um.params === 'object') ? um.params : {}
+    const us = {}
+    if (um.model || f.model) us['Model'] = um.model || f.model
+    if (um.factor != null) us['Upscale Factor'] = um.factor + '×'
+    if (um.mp != null) us['Target Megapixels'] = um.mp + ' MP'
+    if (p.positivePrompt) us['Prompt'] = p.positivePrompt
+    if (p.negativePrompt) us['Negative Prompt'] = p.negativePrompt
+    if (p.steps != null) us['Steps'] = p.steps
+    if (p.CFGScale != null) us['CFG Scale'] = p.CFGScale
+    if (p.seed != null) us['Seed'] = p.seed
+    if (p.strength != null) us['Strength'] = p.strength
+    if (p.enhanceDetails) us['Enhance Details'] = 'on'
+    if (p.realism) us['Realism'] = 'on'
+    if (p.outputFormat) us['Output Format'] = p.outputFormat
+    if (f.outW && f.outH) us['Output Size'] = f.outW + ' × ' + f.outH
+    settings = Object.keys(us).length ? us : null
+  } else if (f.igSettings && typeof f.igSettings === 'object') {
     settings = f.igSettings
   } else if (typeof extractSettings === 'function') {
     try { settings = extractSettings(f.text || '') } catch (_) { settings = null }
@@ -16424,6 +16460,9 @@ const bmQueue = (() => {
             kind: meta.upKind || null,
             factor: (meta.upFactor != null) ? meta.upFactor : null,
             mp: (meta.upMp != null) ? meta.upMp : null,
+            // Full upscale request recipe (output format, prompt/negative,
+            // steps, CFG, seed, strength, model toggles) for the info panel.
+            params: (meta.upParams && typeof meta.upParams === 'object') ? meta.upParams : null,
           },
           outW: outW || null,
           outH: outH || null,
@@ -21484,6 +21523,22 @@ async function upRun() {
       srcImageData: inputImage || upState.srcData || null,
       srcW: upState.srcW || null,
       srcH: upState.srcH || null,
+      // Persist the actual upscale request parameters so the library info panel
+      // can show the real recipe (model options, prompt/negative, steps, CFG,
+      // seed, output format) rather than the unrelated prompt-gen settings.
+      upParams: {
+        outputFormat: body.outputFormat || null,
+        upscaleFactor: (body.upscaleFactor != null) ? body.upscaleFactor : null,
+        targetMegapixels: (body.targetMegapixels != null) ? body.targetMegapixels : null,
+        positivePrompt: body.positivePrompt || null,
+        negativePrompt: body.negativePrompt || null,
+        steps: (body.steps != null) ? body.steps : null,
+        CFGScale: (body.CFGScale != null) ? body.CFGScale : null,
+        seed: (body.seed != null) ? body.seed : null,
+        strength: (body.strength != null) ? body.strength : null,
+        enhanceDetails: body.enhanceDetails || null,
+        realism: body.realism || null,
+      },
     });
     if (!r.ok) {
       if (r.code === 'auth_required') {
