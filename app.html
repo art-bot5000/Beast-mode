@@ -1780,6 +1780,20 @@ handleShareTarget()
   </div>
 </div>
 
+<!-- ═══════════════════════════════ LIBRARY CARD INFO ═══════════════════════════════ -->
+<!-- Generation details: full prompt, the settings used, and (for image-to-image
+     outputs) thumbnails of the source images. Populated by libOpenInfo(favId). -->
+<div id="libInfoModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;">
+  <div class="modal-card" style="max-width:620px;width:100%;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <div class="modal-title">// GENERATION DETAILS</div>
+      <button class="modal-close" onclick="libCloseInfo()">✕</button>
+    </div>
+    <div class="modal-body" id="libInfoBody" style="overflow:auto;">
+    </div>
+  </div>
+</div>
+
 <!-- Mobile bottom prompt bar -->
 <div id="pbBottomBar" class="pb-bottom-bar" style="display:none;">
   <div class="pb-bottom-bar-inner">
@@ -3087,13 +3101,21 @@ let favourites = []
 const FOLDERS_FILE      = 'beast-mode-folders.json'
 let libFolders          = []        // [{id, name, color}]
 let libDriveFoldersId   = null
-let libActiveFolderId   = '__images__' // category/virtual folder or a real folderId
+let libActiveFolderId   = '__all__' // category/virtual folder or a real folderId
 const VIRTUAL_FOLDERS   = [
+  { id:'__all__',     name:'⬢ All',               color:'var(--accent)', virtual:true },
   { id:'__starred__', name:'⭐ Starred',          color:'#ffcc00',  virtual:true },
   { id:'__images__',  name:'🖼 Generated Images', color:'#38b6ff',  virtual:true },
+  { id:'__i2i__',     name:'⇄ Image 2 Image',     color:'#ff7ac6',  virtual:true },
   { id:'__upscales__',name:'✦ Upscales',          color:'#caff00',  virtual:true },
   { id:'__prompts__', name:'⬡ Prompts',           color:'var(--accent)', virtual:true },
 ]
+// True when this fav is an image-to-image OUTPUT that has associated source
+// images (the library favIds it was generated from). familySrcIds is stamped by
+// autoSaveGeneratedImage on i2i generations; plain text-to-image leaves it null.
+function bmFavIsI2I(f) {
+  return !!(f && Array.isArray(f.familySrcIds) && f.familySrcIds.length)
+}
 
 const FIELD_DEFS = [
   { key:'body',     label:'Body',     defaultA:true,  defaultB:false },
@@ -6156,8 +6178,10 @@ function renderLibrary() {
   let items = [...favourites]
 
   // Folder filter — virtual category folders classify by kind; real folders by id.
-  if (libActiveFolderId === '__starred__') items = items.filter(f => f.starred)
+  if (libActiveFolderId === '__all__') { /* no filter — show everything */ }
+  else if (libActiveFolderId === '__starred__') items = items.filter(f => f.starred)
   else if (libActiveFolderId === '__images__')   items = items.filter(f => bmFavKind(f) === 'image')
+  else if (libActiveFolderId === '__i2i__')      items = items.filter(f => bmFavIsI2I(f))
   else if (libActiveFolderId === '__upscales__') items = items.filter(f => bmFavKind(f) === 'upscale')
   else if (libActiveFolderId === '__prompts__')  items = items.filter(f => bmFavKind(f) === 'prompt')
   else if (!String(libActiveFolderId).startsWith('__')) items = items.filter(f => f.folderId === libActiveFolderId)
@@ -6351,6 +6375,16 @@ function buildLibCard(f) {
     img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f) }
     img.onclick = e => { e.stopPropagation(); if (typeof bmOpenFull === 'function') bmOpenFull(f); else openLightbox(img.src) }
     card.appendChild(img)
+    // Info button (circled i, top-right) — opens the generation details panel:
+    // full prompt, settings used, and i2i source thumbnails. Shown on any image
+    // or upscale card (prompt-only cards get it too if they carry settings).
+    const infoBtn = document.createElement('button')
+    infoBtn.className = 'lib-card-info-btn'
+    infoBtn.type = 'button'
+    infoBtn.title = 'Generation details'
+    infoBtn.innerHTML = '<span class="lib-info-i">i</span>'
+    infoBtn.onclick = e => { e.stopPropagation(); libOpenInfo(f.id) }
+    card.appendChild(infoBtn)
     // Upscale marker (bottom-left). Placeholder glyph — slated for redesign.
     // Shown on upscale OUTPUTS; sources that have upscales get a subtler dot.
     if (f.isUpscale) {
@@ -6447,12 +6481,18 @@ function buildLibCard(f) {
   const folder = f.folderId ? libFolders.find(x => x.id === f.folderId) : null
   // Mode tag: images and upscales are tagged by their KIND (not the stale
   // Beast-Mode currentMode that leaked an erroneous "INSECT" onto generated
-  // images). Prompt cards keep their authoring mode (insect/beast/fusion).
-  const modeName = (_favKind === 'image') ? 'image'
+  // images). Generated images are further split into text→image vs image→image
+  // by whether they carry i2i source links. Prompt cards keep their authoring
+  // mode (insect/beast/fusion).
+  const _isI2I = bmFavIsI2I(f)
+  const modeName = (_favKind === 'image') ? (_isI2I ? 'i2i' : 'image')
     : (_favKind === 'upscale') ? 'upscale'
     : (f.mode || 'image')
+  const modeLabel = modeName === 'i2i' ? 'IMAGE → IMAGE'
+    : modeName === 'image' ? 'TEXT → IMAGE'
+    : modeName.toUpperCase()
   tags.innerHTML = `
-    <span class="lib-tag mode-${modeName}">${modeName.toUpperCase()}</span>
+    <span class="lib-tag mode-${modeName}">${modeLabel}</span>
     <span class="lib-tag tag-style">${presetName}</span>
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || f.model) : f.model}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
@@ -6579,6 +6619,134 @@ function buildLibCard(f) {
   })
   card.appendChild(actions)
   return card
+}
+
+// ── Library card INFO panel ────────────────────────────────────────────────
+// Opened by the circled-i button on each card. Shows the full generation
+// prompt, the settings used (parsed from the embedded ---SETTINGS--- island or
+// the igSettings snapshot), and — for image-to-image outputs — thumbnails of
+// the library source images it was generated from (resolved via familySrcIds).
+function libCloseInfo() {
+  const m = document.getElementById('libInfoModal')
+  if (m) m.style.display = 'none'
+}
+function libFmtSettingKey(k) {
+  // camelCase / snake_case → "Title Case" for display.
+  return String(k)
+    .replace(/[_\-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .trim()
+}
+function libOpenInfo(favId) {
+  const f = (typeof favourites !== 'undefined')
+    ? favourites.find(x => x && Number(x.id) === Number(favId)) : null
+  const body = document.getElementById('libInfoBody')
+  const modal = document.getElementById('libInfoModal')
+  if (!f || !body || !modal) return
+
+  // Prompt — strip any leading [tag] marker the same way the card does.
+  const promptText = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').trim()
+
+  // Settings — prefer the structured igSettings snapshot; otherwise parse the
+  // ---SETTINGS--- JSON island embedded in f.text. Either may be absent on
+  // legacy / imported favourites.
+  let settings = null
+  if (f.igSettings && typeof f.igSettings === 'object') {
+    settings = f.igSettings
+  } else if (typeof extractSettings === 'function') {
+    try { settings = extractSettings(f.text || '') } catch (_) { settings = null }
+  }
+
+  // i2i source favourites, resolved from the stamped library favIds.
+  const srcIds = Array.isArray(f.familySrcIds) ? f.familySrcIds : []
+  const srcFavs = srcIds
+    .map(id => favourites.find(x => x && Number(x.id) === Number(id)))
+    .filter(Boolean)
+
+  const esc = s => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  let html = ''
+
+  // ── Type + model summary ──────────────────────────────────────────────
+  const kind = bmFavKind(f)
+  const typeLabel = (kind === 'upscale') ? 'Upscale'
+    : (kind === 'image') ? (bmFavIsI2I(f) ? 'Image → Image' : 'Text → Image')
+    : 'Prompt'
+  html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+    <span class="lib-tag mode-${kind === 'image' && bmFavIsI2I(f) ? 'i2i' : kind}">${esc(typeLabel)}</span>
+    ${f.model ? `<span class="lib-tag tag-model">🤖 ${esc(f.model)}</span>` : ''}
+    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost">◈ ${f.tokenCost} TOK</span>` : ''}
+  </div>`
+
+  // ── Prompt ────────────────────────────────────────────────────────────
+  html += `<div class="lib-info-section">
+    <div class="lib-info-label">PROMPT</div>
+    <div class="lib-info-prompt">${esc(promptText) || '<span style="opacity:.5;">No prompt recorded</span>'}</div>
+  </div>`
+
+  // ── Settings ──────────────────────────────────────────────────────────
+  if (settings && typeof settings === 'object' && Object.keys(settings).length) {
+    let rows = ''
+    Object.keys(settings).forEach(k => {
+      let v = settings[k]
+      if (v == null || v === '') return
+      if (typeof v === 'object') { try { v = JSON.stringify(v) } catch (_) { v = String(v) } }
+      rows += `<div class="lib-info-setting">
+        <span class="lib-info-setting-key">${esc(libFmtSettingKey(k))}</span>
+        <span class="lib-info-setting-val">${esc(v)}</span>
+      </div>`
+    })
+    if (rows) {
+      html += `<div class="lib-info-section">
+        <div class="lib-info-label">SETTINGS</div>
+        <div class="lib-info-settings">${rows}</div>
+      </div>`
+    }
+  }
+
+  // ── i2i source thumbnails ─────────────────────────────────────────────
+  if (srcFavs.length) {
+    html += `<div class="lib-info-section">
+      <div class="lib-info-label">SOURCE IMAGES · IMAGE → IMAGE (${srcFavs.length})</div>
+      <div class="lib-info-sources" id="libInfoSources"></div>
+    </div>`
+  } else if (srcIds.length) {
+    // Sources were stamped but the favourites are gone (deleted/not yet synced).
+    html += `<div class="lib-info-section">
+      <div class="lib-info-label">SOURCE IMAGES</div>
+      <div style="font-size:12px;color:var(--muted);opacity:.7;">${srcIds.length} source image${srcIds.length !== 1 ? 's' : ''} no longer in your library.</div>
+    </div>`
+  }
+
+  body.innerHTML = html
+  modal.style.display = 'flex'
+
+  // Hydrate source thumbnails after the DOM exists. Reuse bmApplyThumb so the
+  // encrypted R2 thumb / authed /api/img path resolves exactly as on the cards.
+  if (srcFavs.length) {
+    const wrap = document.getElementById('libInfoSources')
+    if (wrap) {
+      srcFavs.forEach(sf => {
+        const thumb = document.createElement('div')
+        thumb.className = 'lib-info-source'
+        const img = document.createElement('img')
+        img.className = 'lib-info-source-img'
+        img.alt = sf.title || 'source image'
+        img.loading = 'lazy'
+        img.dataset.favId = sf.id
+        const seed = (typeof sf.imageData === 'string' && sf.imageData.indexOf('/api/img/') !== 0) ? sf.imageData : ''
+        img.src = seed
+        if (typeof bmApplyThumb === 'function') bmApplyThumb(img, sf)
+        img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, sf) }
+        img.onclick = () => { libCloseInfo(); if (typeof bmOpenFull === 'function') bmOpenFull(sf) }
+        img.title = 'Open source image'
+        thumb.appendChild(img)
+        wrap.appendChild(thumb)
+      })
+    }
+  }
 }
 
 // Send a library image into the Upscaler. Switches view, loads the image as the
@@ -6731,10 +6899,14 @@ function renderFolderSidebar() {
   const allFolders = [...VIRTUAL_FOLDERS, ...libFolders]
   const frag = document.createDocumentFragment()
   allFolders.forEach(folder => {
-    const count = folder.id === '__starred__'
+    const count = folder.id === '__all__'
+      ? favourites.length
+      : folder.id === '__starred__'
       ? favourites.filter(f => f.starred).length
       : folder.id === '__images__'
         ? favourites.filter(f => bmFavKind(f) === 'image').length
+      : folder.id === '__i2i__'
+        ? favourites.filter(f => bmFavIsI2I(f)).length
       : folder.id === '__upscales__'
         ? favourites.filter(f => bmFavKind(f) === 'upscale').length
       : folder.id === '__prompts__'
@@ -6770,7 +6942,7 @@ function libDeleteFolder(id, e) {
   if (!confirm('Delete folder? Items will move out of this folder.')) return
   libFolders = libFolders.filter(f => f.id !== id)
   favourites.forEach(f => { if (f.folderId === id) { f.folderId = null; driveSavePrompt(f) } })
-  if (libActiveFolderId === id) libActiveFolderId = '__images__'
+  if (libActiveFolderId === id) libActiveFolderId = '__all__'
   libFoldersSync()
   renderLibrary()
 }

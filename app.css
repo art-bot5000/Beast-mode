@@ -2739,6 +2739,102 @@ img.bm-thumb-missing { background:var(--surface2); }
   #libFolderList { display:flex;flex-wrap:wrap;gap:4px; }
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   LIBRARY — large-screen redesign
+   • Full-bleed left-aligned content (matches Image Gen / Upscaler, which
+     override the centered 900px .view-inner).
+   • Three-column preview grid that steps down to 2 then 1.
+   • Larger previews, letterboxed (whole image visible, never cropped).
+   • Wider folder rail to suit the longer virtual-folder names.
+   ════════════════════════════════════════════════════════════════════════ */
+#viewLibrary .view-inner { max-width:none; margin:0; padding:16px 24px 24px 24px; }
+
+/* Folder rail a touch wider for "Generated Images" / "Image 2 Image". */
+#viewLibrary .lib-folders { width:210px; }
+
+/* Three equal columns on large screens. The grid governs preview size, so the
+   cards (and their letterboxed images) scale up with the column width. */
+#viewLibrary .lib-grid {
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:20px;
+}
+@media (max-width: 1200px) { #viewLibrary .lib-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width: 760px)  { #viewLibrary .lib-grid { grid-template-columns:1fr; } }
+
+/* Preview: show the WHOLE image (letterbox), no crop. A generous fixed-height
+   stage keeps the three-up grid tidy while the image scales to fit inside it. */
+#viewLibrary .lib-card-image {
+  aspect-ratio:auto;
+  height:300px;
+  object-fit:contain;
+  background:var(--surface2);
+  padding:4px;
+}
+@media (max-width: 1200px) { #viewLibrary .lib-card-image { height:280px; } }
+
+/* Circled-i info button, top-right of the preview. */
+.lib-card { position:relative; }
+.lib-card-info-btn {
+  position:absolute;top:8px;right:8px;z-index:3;
+  width:26px;height:26px;border-radius:50%;
+  border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);
+  background:rgba(0,0,0,.55);backdrop-filter:blur(3px);
+  color:var(--accent);cursor:pointer;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;opacity:.75;
+}
+.lib-card:hover .lib-card-info-btn { opacity:1; }
+.lib-card-info-btn:hover {
+  background:var(--accent);color:#000;border-color:var(--accent);
+  transform:scale(1.08);
+}
+.lib-info-i {
+  font-family:'IBM Plex Mono',monospace;font-style:italic;
+  font-weight:700;font-size:15px;line-height:1;
+}
+
+/* New i2i mode tag colour (pink) — distinct from text→image blue. */
+.lib-tag.mode-i2i {
+  background:color-mix(in srgb,#ff7ac6 14%,transparent);color:#ff7ac6;
+}
+
+/* ── Info panel content ────────────────────────────────────────────────── */
+.lib-info-section { margin-bottom:18px; }
+.lib-info-section:last-child { margin-bottom:0; }
+.lib-info-label {
+  font-size:11px;letter-spacing:2px;font-weight:700;color:var(--muted);
+  margin-bottom:8px;
+}
+.lib-info-prompt {
+  font-size:13px;line-height:1.6;color:var(--text);
+  background:var(--surface2);border-radius:5px;padding:12px 14px;
+  white-space:pre-wrap;word-break:break-word;
+}
+.lib-info-settings {
+  display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;
+  background:var(--surface2);border-radius:5px;padding:12px 14px;
+}
+.lib-info-setting { display:contents; }
+.lib-info-setting-key {
+  font-size:12px;color:var(--muted);letter-spacing:.5px;font-weight:600;
+}
+.lib-info-setting-val {
+  font-size:12px;color:var(--text);font-family:'IBM Plex Mono',monospace;
+  word-break:break-word;
+}
+.lib-info-sources {
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;
+}
+.lib-info-source {
+  border:1px solid var(--border);border-radius:5px;overflow:hidden;
+  background:var(--surface2);aspect-ratio:1;
+}
+.lib-info-source-img {
+  width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;
+  transition:transform .15s;
+}
+.lib-info-source-img:hover { transform:scale(1.05); }
+
 /* ── STARRED BUTTON ON CARD ─────────────────────────────────────── */
 .lib-star-btn {
   background:none;border:none;cursor:pointer;font-size:18px;
