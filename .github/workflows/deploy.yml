@@ -17,7 +17,7 @@ jobs:
       - name: Check required files exist
         run: |
           REQUIRED=(
-            beast-mode-mech-my-ride-v4.html
+            app.html app.css app.js
             sw.js manifest.json
             icon192.png icon512.png
             main.ts auth.ts deno.json start.sh Caddyfile
@@ -55,7 +55,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@v1
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io (production)
         # --no-cache: avoids the remote builder reusing cached minify output,
