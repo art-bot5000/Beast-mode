@@ -826,7 +826,7 @@ handleShareTarget()
     <div style="display:flex;gap:6px;">
       <button class="btn btn-ghost" id="copyPromptBtn" onclick="copyPromptOnly()" style="padding:4px 12px;font-size:12px;">⎘ COPY PROMPT</button>
       <button class="btn btn-ghost" id="copyOutBtn" onclick="copyOutput()" style="padding:4px 12px;font-size:12px;">⎘ COPY ALL</button>
-      <button class="btn btn-primary" id="genImageBtn" onclick="generateImage()" style="padding:4px 12px;font-size:12px;">✦ GENERATE IMAGE</button>
+      <button class="btn btn-primary" id="genImageBtn" onclick="generateImage()" style="padding:4px 12px;font-size:12px;">GENERATE IMAGE</button>
     </div>
   </div>
   <div class="output-box" id="output">// Select a configuration and generate your mech prompt...</div>
@@ -1048,7 +1048,7 @@ handleShareTarget()
           </div>
         </div>
 
-        <button class="btn btn-primary" id="igGenerateBtn" onclick="igGenerate()" style="width:100%;margin-top:18px;padding:12px;font-size:14px;letter-spacing:2px;">✦ GENERATE</button>
+        <button class="btn btn-primary" id="igGenerateBtn" onclick="igGenerate()" style="width:100%;margin-top:18px;padding:12px;font-size:14px;letter-spacing:2px;">GENERATE</button>
         <div id="igStatus"></div>
       </div>
 
@@ -1188,7 +1188,7 @@ handleShareTarget()
         <div id="upConfigBlockAnchor" style="display:none;"></div>
 
 
-        <button class="btn btn-primary" id="upRunBtn" onclick="upRun()" style="width:100%;margin-top:18px;padding:12px;font-size:14px;letter-spacing:2px;">✦ UPSCALE</button>
+        <button class="btn btn-primary" id="upRunBtn" onclick="upRun()" style="width:100%;margin-top:18px;padding:12px;font-size:14px;letter-spacing:2px;">UPSCALE</button>
         <div id="upStatus"></div>
       </div>
 
@@ -1240,7 +1240,7 @@ handleShareTarget()
         <!-- Action row under the toolbar (mobile + desktop center). -->
         <div class="up-stage-actions" id="upStageActions">
           <button class="btn btn-ghost" type="button" id="upStageSettingsBtn" onclick="upOpenSettingsModal()"><i class="ti ti-settings"></i>SETTINGS</button>
-          <button class="btn btn-primary" type="button" id="upStageRunBtn" onclick="upRun()">✦ UPSCALE</button>
+          <button class="btn btn-primary" type="button" id="upStageRunBtn" onclick="upRun()">UPSCALE</button>
         </div>
       </div>
 
@@ -18196,18 +18196,28 @@ async function bmUsageRender(force) {
   });
 }
 
+// Build a run-button label in the "C" style: VERB · ◆ <cost>, with the cost
+// rendered as the Tabler diamond icon + number (no leading sparkle). When cost
+// is null/unknown the verb stands alone. Used by Image Gen + Upscaler so the
+// two buttons stay identical. Returns an HTML string (set via innerHTML).
+function bmRunBtnLabel(verb, cost) {
+  const base = String(verb);
+  if (cost == null || !(typeof cost === 'number' && isFinite(cost))) return base;
+  return base + ' <span class="run-cost"><i class="ti ti-diamond" aria-hidden="true"></i> ' + cost + '</span>';
+}
+
 function igUpdateCostHint() {
   // The standalone "THIS RUN…" hint was removed; this now only keeps the
-  // Generate button label in sync (✦ GENERATE <tokens>). Name + call sites
+  // Generate button label in sync (GENERATE · ◆ <tokens>). Name + call sites
   // are unchanged so callers don't need to know.
   const genBtn = document.getElementById('igGenerateBtn');
   if (!genBtn || (igState && igState.busy)) return; // never clobber busy text
   const m = typeof igModel === 'function' ? igModel() : null;
   if (!m) return;
   const per = bmTokensPerImage(m.id, igState);
-  if (per === null) { genBtn.textContent = '\u2726 GENERATE'; return; }
+  if (per === null) { genBtn.innerHTML = bmRunBtnLabel('GENERATE', null); return; }
   const count = parseInt((document.getElementById('igCount') || {}).value, 10) || 1;
-  genBtn.textContent = '\u2726 GENERATE ' + (per * count);
+  genBtn.innerHTML = bmRunBtnLabel('GENERATE', per * count);
 }
 
 function igModel() { return IG_MODELS.find(m => m.id === igState.modelId) || IG_MODELS[0]; }
@@ -18689,15 +18699,15 @@ function igPullPrompt() {
 let _igSentToQueueTimer = null;
 function igFlashSentToQueue(btn) {
   if (!btn) return;
-  const original = btn.dataset.label || btn.textContent;
-  btn.dataset.label = original;
-  btn.textContent = '\u2713 SENT TO QUEUE';
+  const original = btn.dataset.labelHtml || btn.innerHTML;
+  btn.dataset.labelHtml = original;
+  btn.innerHTML = '\u2713 SENT TO QUEUE';
   btn.classList.add('ig-sent');
   btn.disabled = false; btn.style.opacity = '1';
   if (_igSentToQueueTimer) clearTimeout(_igSentToQueueTimer);
   _igSentToQueueTimer = setTimeout(() => {
     btn.classList.remove('ig-sent');
-    btn.textContent = btn.dataset.label || '\u2726 GENERATE';
+    btn.innerHTML = btn.dataset.labelHtml || bmRunBtnLabel('GENERATE', null);
   }, 1600);
 }
 
@@ -18925,7 +18935,7 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   // Upscale: send this generated image straight into the Upscaler.
   const up = document.createElement('button');
   up.className = 'btn btn-ghost';
-  up.textContent = '\u2726 UPSCALE';
+  up.innerHTML = '<i class="ti ti-arrows-maximize" aria-hidden="true"></i> UPSCALE';
   up.title = 'Upscale this image';
   up.onclick = () => {
     if (typeof switchView === 'function') switchView('upscaler');
@@ -19758,7 +19768,7 @@ function upUpdateCostHint() {
   const m = upModel();
   if (!btn || upState.busy || !m) return;
   const tok = upCurrentTokenCost();
-  btn.textContent = (tok != null) ? ('\u2726 UPSCALE ' + tok) : '\u2726 UPSCALE';
+  btn.innerHTML = bmRunBtnLabel('UPSCALE', (tok != null) ? tok : null);
   upSyncMobileRunBtn();
 }
 
@@ -21463,7 +21473,7 @@ function upSyncMobileRunBtn() {
   const src = document.getElementById('upRunBtn');
   const dst = document.getElementById('upStageRunBtn');
   if (!src || !dst) return;
-  dst.textContent = src.textContent;
+  dst.innerHTML = src.innerHTML;
   dst.disabled = src.disabled;
   dst.style.opacity = src.style.opacity || '1';
 }
