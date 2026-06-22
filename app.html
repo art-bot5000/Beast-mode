@@ -344,6 +344,12 @@ handleShareTarget()
     <button class="mk-btn" id="mkToolArrow" onclick="mkSetTool('arrow')">↗ ARROW</button>
     <button class="mk-btn" id="mkToolBox" onclick="mkSetTool('box')">▢ BOX</button>
     <button class="mk-btn" id="mkToolText" onclick="mkSetTool('text')">T TEXT</button>
+    <span class="mk-hint">·</span>
+    <label class="mk-size" title="Brush size">
+      <span class="mk-size-label">SIZE</span>
+      <input type="range" id="mkBrushRange" min="0.5" max="3" step="0.5" value="1" oninput="mkSetBrush(this.value)">
+      <span class="mk-size-val" id="mkBrushVal">1×</span>
+    </label>
   </div>
   <div class="mk-stage">
     <canvas id="mkCanvas"></canvas>
@@ -542,6 +548,9 @@ handleShareTarget()
           <span class="lib-folder-title">FOLDERS</span>
           <button class="lib-folder-add" onclick="libAddFolder()" title="New folder">+</button>
         </div>
+        <!-- Mobile: virtual + custom folders collapse into a dropdown. Populated
+             by renderFolderSidebar() in lock-step with the desktop chip list. -->
+        <select class="lib-folder-mobile-select" id="libFolderMobileSelect" onchange="libFolderSelectMobile(this.value)" aria-label="Folder"></select>
         <div id="libFolderList"></div>
       </div>
 
@@ -6411,14 +6420,6 @@ function buildLibCard(f) {
       badge.innerHTML = mb.html
       card.appendChild(badge)
     }
-    // Secondary marker: this image HAS upscale versions (it's a source, not an
-    // upscale itself). Small dot, offset so it never collides with the badge.
-    if (!f.isUpscale && f.hasUpscales) {
-      const dot = document.createElement('div')
-      dot.className = 'lib-upscale-src'
-      dot.title = 'Has upscaled version' + ((f.upscaleIds && f.upscaleIds.length > 1) ? 's' : '')
-      card.appendChild(dot)
-    }
   } else {
     const ph = document.createElement('div')
     ph.className = 'lib-card-image-ph'
@@ -6514,7 +6515,7 @@ function buildLibCard(f) {
   tags.innerHTML = `
     <span class="lib-tag mode-${modeName}">${modeLabel}</span>
     <span class="lib-tag tag-style">${presetName}</span>
-    ${f.model ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || f.model) : f.model}</span>` : ''}
+    ${f.model ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || f.model) : bmModelLabel(f.model)}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
     ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
@@ -6635,9 +6636,9 @@ function buildLibCard(f) {
     { label:'✎ EDIT IN LAB', cls:'', promptOnly:true, fn: () => editInPromptLab(f), title:'Open and edit in Prompt Lab' },
     { label:'⟳ ITERATE',  cls:'', promptOnly:true, fn: () => openIterate(f.id), title:'Generate variants by swapping a particle' },
     { label:'⊛ PARTICLES',cls:'', promptOnly:true, fn: () => sendToParticleLab(f), title:'Import into Prompt Lab as particles' },
-    { label:'🕒',          cls:'', fn: () => openVersionHistory(f.id), title:'Version history' },
-    { label:'🖼',          cls:'', fn: () => openImageModal(f.id), title:'Upload image' },
-    { label:'☁',          cls:'', fn: () => openDrivePhoto(f.id), title:'Pick image from Google Drive' },
+    { label:'🕒',          cls:'', promptOnly:true, fn: () => openVersionHistory(f.id), title:'Version history' },
+    { label:'🖼',          cls:'', promptOnly:true, fn: () => openImageModal(f.id), title:'Upload image' },
+    { label:'☁',          cls:'', promptOnly:true, fn: () => openDrivePhoto(f.id), title:'Pick image from Google Drive' },
     { label:'📁',          cls:'', fn: () => libShowMoveMenu(f.id), title:'Move to folder' },
     { label:'✕',          cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() } },
   ]
@@ -6694,7 +6695,7 @@ function libOpenInfo(favId) {
     const um = (f.upscaleMeta && typeof f.upscaleMeta === 'object') ? f.upscaleMeta : {}
     const p  = (um.params && typeof um.params === 'object') ? um.params : {}
     const us = {}
-    if (um.model || f.model) us['Model'] = um.model || f.model
+    if (um.model || f.model) us['Model'] = bmUpscalerLabel(um.model || f.model)
     if (um.factor != null) us['Upscale Factor'] = um.factor + '×'
     if (um.mp != null) us['Target Megapixels'] = um.mp + ' MP'
     if (p.positivePrompt) us['Prompt'] = p.positivePrompt
@@ -6732,7 +6733,7 @@ function libOpenInfo(favId) {
     : 'Prompt'
   html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
     <span class="lib-tag mode-${kind === 'image' && bmFavIsI2I(f) ? 'i2i' : kind}">${esc(typeLabel)}</span>
-    ${f.model ? `<span class="lib-tag tag-model">🤖 ${esc(f.model)}</span>` : ''}
+    ${f.model ? `<span class="lib-tag tag-model">🤖 ${esc((kind === 'upscale') ? bmUpscalerLabel(f.model) : bmModelLabel(f.model))}</span>` : ''}
     ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost">◈ ${f.tokenCost} TOK</span>` : ''}
   </div>`
 
@@ -6954,6 +6955,9 @@ function renderFolderSidebar() {
 
   const allFolders = [...VIRTUAL_FOLDERS, ...libFolders]
   const frag = document.createDocumentFragment()
+  // Mobile dropdown mirror — rebuilt from the same source so counts/labels match.
+  const sel = document.getElementById('libFolderMobileSelect')
+  if (sel) sel.innerHTML = ''
   allFolders.forEach(folder => {
     const count = folder.id === '__all__'
       ? favourites.length
@@ -6979,8 +6983,23 @@ function renderFolderSidebar() {
       ${!folder.virtual ? `<span class="lib-folder-del" onclick="libDeleteFolder('${folder.id}',event)">×</span>` : ''}
     `
     frag.appendChild(item)
+
+    if (sel) {
+      const opt = document.createElement('option')
+      opt.value = folder.id
+      opt.textContent = folder.name + ' (' + count + ')'
+      if (folder.id === libActiveFolderId) opt.selected = true
+      sel.appendChild(opt)
+    }
   })
   list.appendChild(frag)
+}
+
+// Mobile folder dropdown change handler — same effect as tapping a chip.
+function libFolderSelectMobile(fid) {
+  if (!fid) return
+  libActiveFolderId = fid
+  renderLibrary()
 }
 
 function libAddFolder() {
@@ -18406,6 +18425,7 @@ const MK_COLOURS = [
 
 const mk = {
   open:false, tool:'brush', colourIdx:0,
+  brush:1,                  // brush-size multiplier (0.5 = fine … 3 = heavy)
   img:null,                 // HTMLImageElement (base)
   strokes:[],               // committed ops, each { tool, colour, name, pts:[], text? }
   cur:null,                 // in-progress op
@@ -18433,9 +18453,21 @@ function mkSetTool(t){
 }
 function mkColour(){ return MK_COLOURS[mk.colourIdx]; }
 
+// Brush-size control: a multiplier on the resolution-derived base width. New
+// strokes pick up the current value (stamped per-op in mkDown), so the slider
+// affects subsequent marks without resizing committed ones.
+function mkSetBrush(v){
+  const n=parseFloat(v);
+  mk.brush=(isFinite(n)&&n>0)?n:1;
+  const lbl=document.getElementById('mkBrushVal');
+  if(lbl) lbl.textContent=mk.brush+'\u00D7';
+}
+
 function mkOpen(dataUri, onApply){
   mk.onApply=onApply; mk.strokes=[]; mk.cur=null;
-  mk.tool='brush'; mk.colourIdx=0;
+  mk.tool='brush'; mk.colourIdx=0; mk.brush=1;
+  const _r=document.getElementById('mkBrushRange'); if(_r) _r.value='1';
+  mkSetBrush(1);
   mkBuildPalette(); mkSetTool('brush');
   const img=new Image();
   img.onload=()=>{
@@ -18478,7 +18510,12 @@ function mkRedraw(){
   all.forEach(op=>mkDrawOp(ctx,op,cv));
 }
 function mkDrawOp(ctx,op,cv){
-  const lw=Math.max(3, Math.round(cv.width/220));
+  const baseLw=Math.max(3, Math.round(cv.width/220));
+  // Per-op brush size: committed strokes carry their own multiplier so changing
+  // the slider later never retro-resizes earlier marks; the in-progress op falls
+  // back to the live setting.
+  const mult=(typeof op.brush==='number' && op.brush>0)?op.brush:mk.brush;
+  const lw=Math.max(1, baseLw*mult);
   ctx.lineWidth=lw; ctx.strokeStyle=op.colour; ctx.fillStyle=op.colour;
   ctx.lineCap='round'; ctx.lineJoin='round';
   if(op.tool==='brush'){
@@ -18526,12 +18563,12 @@ function mkDown(e){
   if(mk.tool==='text'){
     const txt=prompt('Label text:');
     if(txt && txt.trim()){
-      mk.strokes.push({ tool:'text', colour:c.hex, name:c.name, pts:[p], text:txt.trim() });
+      mk.strokes.push({ tool:'text', colour:c.hex, name:c.name, pts:[p], text:txt.trim(), brush:mk.brush });
       mkRedraw();
     }
     return;
   }
-  mk.cur={ tool:mk.tool, colour:c.hex, name:c.name, pts:[p] };
+  mk.cur={ tool:mk.tool, colour:c.hex, name:c.name, pts:[p], brush:mk.brush };
   mkRedraw();
 }
 function mkMove(e){
@@ -19549,6 +19586,27 @@ function bmUpscalerLabel(code) {
   return UPSCALER_LABELS[code] || code;
 }
 window.bmUpscalerLabel = bmUpscalerLabel;
+
+// Resolve a stored model identifier to its friendly, human-readable label.
+// Generated images persist the full provider id (e.g. "runware:runware:400@3");
+// the card/info UIs should show the catalog label ("FLUX.2 [klein] 9B") instead
+// of the raw code. Resolution order: IG_MODELS catalog → live upscaler labels →
+// static upscaler map → the raw value unchanged (so unknown ids still render).
+function bmModelLabel(code) {
+  if (!code) return code;
+  try {
+    if (typeof IG_MODELS !== 'undefined' && Array.isArray(IG_MODELS)) {
+      const m = IG_MODELS.find(x => x.id === code);
+      if (m && m.label) return m.label;
+    }
+  } catch (_) {}
+  if (typeof bmUpscalerLabel === 'function') {
+    const up = bmUpscalerLabel(code);
+    if (up && up !== code) return up;
+  }
+  return code;
+}
+window.bmModelLabel = bmModelLabel;
 
 function upBuildModelSelect() {
   const sel = document.getElementById('upModel');
