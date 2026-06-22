@@ -851,7 +851,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .mode-nav-more[hidden] { display:none; }
 .nav-more-item {
   display:flex; align-items:center; gap:10px; width:100%; padding:9px 12px;
-  font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:700; letter-spacing:1.5px;
+  font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:400; letter-spacing:1.5px;
   color:var(--muted); cursor:pointer; border:none; background:transparent;
   border-radius:6px; transition:all .15s; white-space:nowrap; text-align:left; text-decoration:none;
 }
@@ -861,7 +861,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* Tabs become full-width vertical rows in this layout. */
 .mode-nav .nav-tab {
   display:flex; align-items:center; gap:10px; width:100%; padding:11px 14px;
-  font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:700; letter-spacing:2px;
+  font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:400; letter-spacing:2px;
   color:var(--muted); cursor:pointer; border:none; background:transparent;
   border-radius:6px; transition:color .15s, background .15s; white-space:nowrap; text-align:left;
 }
@@ -1075,6 +1075,12 @@ body.bm-queue-modal-open { overflow:hidden; }
   width:100%;aspect-ratio:16/9;object-fit:cover;display:block;
   background:var(--surface2);cursor:zoom-in;
 }
+/* Image wrapper for overlay labels */
+.lib-card-img-wrap {
+  position:relative; width:100%; overflow:hidden;
+  background:var(--surface2);
+}
+.lib-card-img-wrap .lib-card-image { aspect-ratio:unset; width:100%; height:220px; }
 .lib-card-image-ph {
   width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;
   background:var(--surface2);color:var(--muted);font-size:14px;letter-spacing:2px;
@@ -1168,6 +1174,11 @@ img.bm-thumb-missing { background:var(--surface2); }
 .cpo-prompt { font-size:12px;color:var(--text);background:var(--surface2);border-radius:4px;padding:10px 12px;margin-bottom:14px;line-height:1.6;max-height:80px;overflow:hidden;text-overflow:ellipsis; }
 .cpo-actions { display:flex;gap:8px;flex-wrap:wrap; }
 .lib-tag.tag-style   { background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--accent);opacity:.7; }
+/* Pinned virtual folder */
+.lib-folder-item[data-folder-id="__pinned__"].active {
+  background:color-mix(in srgb,#ff9f43 12%,transparent);
+  border-color:color-mix(in srgb,#ff9f43 30%,transparent);color:#ff9f43;
+}
 
 /* Prompt text */
 .lib-card-prompt-wrap { position:relative; }
@@ -2818,14 +2829,28 @@ img.bm-thumb-missing { background:var(--surface2); }
 
 /* Preview: show the WHOLE image (letterbox), no crop. A generous fixed-height
    stage keeps the three-up grid tidy while the image scales to fit inside it. */
-#viewLibrary .lib-card-image {
+#viewLibrary .lib-card-img-wrap .lib-card-image {
   aspect-ratio:auto;
   height:300px;
-  object-fit:contain;
+  object-fit:cover;
   background:var(--surface2);
-  padding:4px;
+  padding:0;
 }
-@media (max-width: 1200px) { #viewLibrary .lib-card-image { height:280px; } }
+@media (max-width: 1200px) { #viewLibrary .lib-card-img-wrap .lib-card-image { height:260px; } }
+
+/* Overlay labels inside the image area */
+.lib-card-img-type {
+  position:absolute;bottom:7px;left:8px;z-index:4;
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;letter-spacing:1.5px;
+  background:rgba(0,0,0,.65);color:#fff;border-radius:4px;padding:3px 7px;
+  backdrop-filter:blur(3px);pointer-events:none;
+}
+.lib-card-img-age {
+  position:absolute;bottom:7px;right:8px;z-index:4;
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.5px;
+  background:rgba(0,0,0,.55);color:rgba(255,255,255,.75);border-radius:4px;padding:3px 7px;
+  backdrop-filter:blur(3px);pointer-events:none;
+}
 
 /* Circled-i info button, top-right of the preview. */
 .lib-card { position:relative; }
@@ -2897,6 +2922,14 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .lib-star-btn.starred { color:#ffcc00; }
 .lib-star-btn:hover { transform:scale(1.2); }
+
+/* ── PIN BUTTON ON CARD ─────────────────────────────────────────── */
+.lib-pin-btn {
+  background:none;border:none;cursor:pointer;font-size:14px;
+  padding:0;line-height:1;transition:transform .15s;opacity:.3;
+}
+.lib-pin-btn.pinned { opacity:1; }
+.lib-pin-btn:hover { transform:scale(1.15);opacity:.8; }
 
 /* ── MODAL SHARED STYLES ────────────────────────────────────────── */
 .modal-card {
@@ -3709,7 +3742,7 @@ body.up-group-modal-open { overflow:hidden; }
 /* Center preview stage — large single preview of the most recent / selected
    result. Empty state doubles as guidance. */
 .ig-stage {
-  position:relative; background:#000; border:1px solid var(--border);
+  position:relative; background:transparent; border:1px solid var(--border);
   border-radius:10px; min-height:360px; overflow:hidden;
   display:flex; align-items:center; justify-content:center;
 }

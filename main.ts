@@ -1012,6 +1012,7 @@ async function handler(req: Request): Promise<Response> {
           ? (body.familySrcIds as unknown[]).filter((s) => typeof s === "string") as string[] : undefined,
         familyCodesAppend: Array.isArray(body.familyCodesAppend)
           ? (body.familyCodesAppend as unknown[]).filter((s) => typeof s === "string") as string[] : undefined,
+        pinnedProtect: typeof body.pinnedProtect === "boolean" ? body.pinnedProtect : undefined,
       });
       return json({ ok, patched: ok });
     } catch (e) {

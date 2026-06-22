@@ -76,6 +76,9 @@ interface ImgMeta {
   familyCode?: string;      // on a GENERATED output: its own family code
   familySrcIds?: string[];  // on a GENERATED output: the library source favIds
   familyCodes?: string[];   // on a SOURCE image: families it belongs to (cap 100)
+  // FIFO protection: set true when the client pins or stars this image.
+  // trimOldestUntilFits skips protected items so they survive auto-deletion.
+  pinnedProtect?: boolean;
 }
 
 // Hard cap on how many families a single source image records (FIFO — oldest
@@ -166,6 +169,7 @@ async function trimOldestUntilFits(userHash: string, needBytes: number, cap: num
   let freed = 0;
   for (const it of items) {
     if (usage + needBytes <= cap) break;
+    if (it.meta.pinnedProtect) continue; // skip starred/pinned images
     try { await deleteImage(userHash, it.favId); } catch { /* best-effort */ }
     usage -= it.meta.bytes;
     freed += it.meta.bytes;
@@ -340,7 +344,7 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
 export async function patchImageMeta(
   userHash: string,
   favId: string,
-  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodesAppend?: string[] },
+  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodesAppend?: string[]; pinnedProtect?: boolean },
 ): Promise<boolean> {
   const id = favIdSafe(favId);
   const k = await kv();
@@ -356,6 +360,7 @@ export async function patchImageMeta(
   if (typeof patch.upFactor === "number" && patch.upFactor > 0) next.upFactor = patch.upFactor;
   if (typeof patch.upModel === "string" && patch.upModel) next.upModel = patch.upModel;
   if (typeof patch.lineage === "string" && patch.lineage) next.lineage = patch.lineage;
+  if (typeof patch.pinnedProtect === "boolean") next.pinnedProtect = patch.pinnedProtect;
   // i2i family: the OUTPUT records its own code + sources; a SOURCE appends the
   // new code to its membership list (merge + FIFO cap, so concurrent registers
   // from a batch accumulate rather than clobber).

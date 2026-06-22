@@ -489,10 +489,6 @@ handleShareTarget()
       <span class="tab-label">MORE</span>
     </button>
     <div class="mode-nav-more" id="navMorePanel" hidden>
-      <button class="nav-more-item" id="navSignOutItem" onclick="bmNavSignOut()">
-        <span class="tab-icon"><i class="ti ti-logout"></i></span>
-        <span class="tab-label">SIGN OUT</span>
-      </button>
       <button class="nav-more-item" id="lightToggle" onclick="toggleLightMode()">
         <span class="tab-icon"><i class="ti ti-sun"></i></span>
         <span class="tab-label">LIGHT MODE</span>
@@ -504,6 +500,10 @@ handleShareTarget()
       <button class="nav-more-item" onclick="sendFeedback()">
         <span class="tab-icon"><i class="ti ti-mail"></i></span>
         <span class="tab-label">SEND FEEDBACK</span>
+      </button>
+      <button class="nav-more-item" id="navSignOutItem" onclick="bmNavSignOut()">
+        <span class="tab-icon"><i class="ti ti-logout"></i></span>
+        <span class="tab-label">SIGN OUT</span>
       </button>
     </div>
 
@@ -567,8 +567,6 @@ handleShareTarget()
             <option value="rating">TOP RATED</option>
             <option value="name">A–Z</option>
           </select>
-          <button class="btn btn-ghost lib-view-toggle" id="libViewToggle" onclick="libToggleView()" style="font-size:14px;padding:5px 10px;" title="Toggle list/grid view">⊟</button>
-          <button class="btn btn-ghost lib-select-toggle" id="libSelectToggle" onclick="libToggleSelectMode()" style="font-size:11px;padding:5px 12px;white-space:nowrap;">☐ SELECT</button>
         </div>
         <!-- Bulk action bar — slides up when items selected -->
         <div id="libBulkBar" style="display:none;" class="lib-bulk-bar">
@@ -581,7 +579,11 @@ handleShareTarget()
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
           <div class="lib-filter-row" id="libFilters" style="margin-bottom:0;"></div>
-          <div class="lib-count" id="libCount"></div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="btn btn-ghost lib-view-toggle" id="libViewToggle" onclick="libToggleView()" style="font-size:13px;padding:4px 9px;" title="Switch to list view"><i class="ti ti-layout-list"></i></button>
+            <button class="btn btn-ghost lib-select-toggle" id="libSelectToggle" onclick="libToggleSelectMode()" style="font-size:11px;padding:4px 10px;white-space:nowrap;">☐ SELECT</button>
+            <div class="lib-count" id="libCount"></div>
+          </div>
         </div>
         <!-- Convert to particles banner — shown when needsProcessing prompts exist -->
         <div id="libConvertBanner">
@@ -1004,11 +1006,11 @@ handleShareTarget()
         </div>
 
         <div class="ig-label">ASPECT RATIO</div>
-        <div class="ig-chips" id="igAspectChips"></div>
+        <select class="ig-select" id="igAspectSelect" onchange="igState.ar=this.value;igRenderAll()"></select>
 
         <div id="igResWrap">
           <div class="ig-label">RESOLUTION</div>
-          <div class="ig-chips" id="igResChips"></div>
+          <select class="ig-select" id="igResSelect" onchange="igState.res=this.value;igRenderAll()"></select>
           <div class="ig-note" id="igDimNote"></div>
         </div>
 
@@ -3117,6 +3119,7 @@ let libActiveFolderId   = '__all__' // category/virtual folder or a real folderI
 const VIRTUAL_FOLDERS   = [
   { id:'__all__',     name:'⬢ All',               color:'var(--accent)', virtual:true },
   { id:'__starred__', name:'⭐ Starred',          color:'#ffcc00',  virtual:true },
+  { id:'__pinned__',  name:'📌 Pinned',           color:'#ff9f43',  virtual:true },
   { id:'__images__',  name:'🖼 Generated Images', color:'#38b6ff',  virtual:true },
   { id:'__i2i__',     name:'⇄ Image 2 Image',     color:'#ff7ac6',  virtual:true },
   { id:'__upscales__',name:'✦ Upscales',          color:'#caff00',  virtual:true },
@@ -6085,7 +6088,6 @@ function renderLibFilters() {
     beast:  favourites.filter(f=>f.mode==='beast').length,
     fusion: favourites.filter(f=>f.mode==='fusion').length,
     rated:  favourites.filter(f=>f.rating>0).length,
-    image:  favourites.filter(f=>f.imageData).length,
   }
 
   const filters = [
@@ -6094,7 +6096,6 @@ function renderLibFilters() {
     { id:'beast', label:'☠ BEAST'  },
     { id:'fusion',label:'⚡ FUSION' },
     { id:'rated', label:'★ RATED'  },
-    { id:'image', label:'🖼 IMAGE'  },
   ]
 
   row.innerHTML = ''
@@ -6121,7 +6122,7 @@ function libToggleView() {
   lsSave('bm_lib_list_view', libListView)
   const btn = document.getElementById('libViewToggle')
   if (btn) {
-    btn.textContent = libListView ? '⊞' : '⊟'
+    btn.innerHTML = libListView ? '<i class="ti ti-layout-grid"></i>' : '<i class="ti ti-layout-list"></i>'
     btn.title = libListView ? 'Switch to grid view' : 'Switch to list view'
     btn.classList.toggle('list-active', libListView)
   }
@@ -6226,6 +6227,7 @@ function renderLibrary() {
   // Folder filter — virtual category folders classify by kind; real folders by id.
   if (libActiveFolderId === '__all__') { /* no filter — show everything */ }
   else if (libActiveFolderId === '__starred__') items = items.filter(f => f.starred)
+  else if (libActiveFolderId === '__pinned__')  items = items.filter(f => f.pinned)
   else if (libActiveFolderId === '__images__')   items = items.filter(f => bmFavKind(f) === 'image')
   else if (libActiveFolderId === '__i2i__')      items = items.filter(f => bmFavIsI2I(f))
   else if (libActiveFolderId === '__upscales__') items = items.filter(f => bmFavKind(f) === 'upscale')
@@ -6237,7 +6239,6 @@ function renderLibrary() {
   if (libActiveFilter === 'beast')  items = items.filter(f => f.mode === 'beast')
   if (libActiveFilter === 'fusion') items = items.filter(f => f.mode === 'fusion')
   if (libActiveFilter === 'rated')  items = items.filter(f => f.rating > 0)
-  if (libActiveFilter === 'image')  items = items.filter(f => f.imageData)
   if (query) {
     items = items.filter(f =>
       (f.promptOnly||f.text||'').toLowerCase().includes(query) ||
@@ -6315,7 +6316,7 @@ function renderLibrary() {
   // Sync toggle button state
   const vBtn = document.getElementById('libViewToggle')
   if (vBtn) {
-    vBtn.textContent = libListView ? '⊞' : '⊟'
+    vBtn.innerHTML = libListView ? '<i class="ti ti-layout-grid"></i>' : '<i class="ti ti-layout-list"></i>'
     vBtn.title = libListView ? 'Switch to grid view' : 'Switch to list view'
     vBtn.classList.toggle('list-active', libListView)
   }
@@ -6394,53 +6395,57 @@ function buildLibCard(f) {
   card.id = 'libCard_' + f.id
 
   // ── Image ──────────────────────────────────────────────────
-  // Prompt-only entries (e.g. imported from the pre-image-gen app) carry no
-  // image and never should — render NO preview slot and NO "add reference"
-  // affordance. Distinct from an image-capable fav that simply hasn't had an
-  // image attached yet (that still gets the placeholder below).
+  // Prompt-only entries carry no image — render NO preview slot.
   if (f.noPreview) {
     card.classList.add('lib-card-noimg')
-    // fall through to body; no image element, no placeholder
   } else if (f.imageData || f.thumbKey || f.serverImageUrl) {
+    // Wrap: relative container for overlaid bottom labels
+    const imgWrap = document.createElement('div')
+    imgWrap.className = 'lib-card-img-wrap'
     const img = document.createElement('img')
     img.className = 'lib-card-image'
-    // Do NOT pre-assign an /api/img URL — it needs the auth header, so a raw
-    // <img src> 401s and trips onerror -> the "no longer available" placeholder
-    // before bmApplyThumb's authed fetch resolves. Seed src only with directly
-    // usable sources (data:/blob:/http); bmApplyThumb owns /api/img + thumbs.
     const seed = (typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') !== 0) ? f.imageData : ''
     img.src = seed
     img.alt = f.title || buildAutoTitle(f)
     img.loading = 'lazy'
-    // Prefer the encrypted R2 thumbnail (small); falls back to local cache,
-    // the durable /data copy (authed), then the inline copy.
     img.dataset.favId = f.id
     if (typeof bmApplyThumb === 'function') bmApplyThumb(img, f)
-    // onerror only meaningful once a real src is set; bmApplyThumb handles the
-    // unresolved case with its own placeholder, so guard against the transient.
     img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f) }
     img.onclick = e => { e.stopPropagation(); if (typeof bmOpenFull === 'function') bmOpenFull(f); else openLightbox(img.src) }
-    card.appendChild(img)
-    // Info button (circled i, top-right) — opens the generation details panel:
-    // full prompt, settings used, and i2i source thumbnails. Shown on any image
-    // or upscale card (prompt-only cards get it too if they carry settings).
+    imgWrap.appendChild(img)
+    // Info button (circled i, top-right)
     const infoBtn = document.createElement('button')
     infoBtn.className = 'lib-card-info-btn'
     infoBtn.type = 'button'
     infoBtn.title = 'Generation details'
     infoBtn.innerHTML = '<span class="lib-info-i">i</span>'
     infoBtn.onclick = e => { e.stopPropagation(); libOpenInfo(f.id) }
-    card.appendChild(infoBtn)
-    // Mode badge (top-left) — reflects the generation mode with the same icon
-    // as the left mode-nav. Upscaler / Image Gen / i2i / Prompt Lab.
+    imgWrap.appendChild(infoBtn)
+    // Mode badge (top-left)
     const mb = bmFavModeBadge(f)
     if (mb) {
       const badge = document.createElement('div')
       badge.className = 'lib-mode-badge' + (f.isUpscale ? ' is-upscale' : '') + (bmFavIsI2I(f) ? ' is-i2i' : '')
       badge.title = mb.title
       badge.innerHTML = mb.html
-      card.appendChild(badge)
+      imgWrap.appendChild(badge)
     }
+    // Overlay bottom-left: image type label
+    const _imgFavKind = bmFavKind(f)
+    const _imgIsI2I   = bmFavIsI2I(f)
+    const _typeLabel  = _imgFavKind === 'upscale' ? 'UPSCALE'
+      : _imgIsI2I ? 'IMAGE → IMAGE'
+      : 'TEXT → IMAGE'
+    const typeOverlay = document.createElement('div')
+    typeOverlay.className = 'lib-card-img-type'
+    typeOverlay.textContent = _typeLabel
+    imgWrap.appendChild(typeOverlay)
+    // Overlay bottom-right: age label
+    const ageOverlay = document.createElement('div')
+    ageOverlay.className = 'lib-card-img-age'
+    ageOverlay.textContent = formatDate(f.createdAt || f.id)
+    imgWrap.appendChild(ageOverlay)
+    card.appendChild(imgWrap)
   } else {
     const ph = document.createElement('div')
     ph.className = 'lib-card-image-ph'
@@ -6469,7 +6474,24 @@ function buildLibCard(f) {
     starBtn.className = 'lib-star-btn' + (f.starred ? ' starred' : '')
     starBtn.title = f.starred ? 'Unstar' : 'Star'
     driveSavePrompt(f)
-    // Re-render folder sidebar counts
+    renderFolderSidebar()
+  }
+  // Pin button
+  const pinBtn = document.createElement('button')
+  pinBtn.className = 'lib-pin-btn' + (f.pinned ? ' pinned' : '')
+  pinBtn.textContent = '📌'
+  pinBtn.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+  pinBtn.onclick = e => {
+    e.stopPropagation()
+    f.pinned = !f.pinned
+    f.updatedAt = Date.now()
+    pinBtn.className = 'lib-pin-btn' + (f.pinned ? ' pinned' : '')
+    pinBtn.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+    driveSavePrompt(f)
+    // Register pinned status in server meta so FIFO trim respects it
+    if (typeof bmRegisterUpscaleMeta === 'function') {
+      bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
+    }
     renderFolderSidebar()
   }
   const _favKind = bmFavKind(f)
@@ -6493,15 +6515,16 @@ function buildLibCard(f) {
       }
     }
     header.appendChild(starBtn)
+    header.appendChild(pinBtn)
     header.appendChild(titleEl)
     header.appendChild(dateEl)
   } else {
-    // Image / upscale: star + date only, with a spacer so the date stays right.
+    // Image / upscale: star + pin only — date lives in the image overlay.
     const spacer = document.createElement('div')
     spacer.style.flex = '1'
     header.appendChild(starBtn)
+    header.appendChild(pinBtn)
     header.appendChild(spacer)
-    header.appendChild(dateEl)
   }
   body.appendChild(header)
 
@@ -6519,7 +6542,6 @@ function buildLibCard(f) {
   // Tags
   const tags = document.createElement('div')
   tags.className = 'lib-card-tags'
-  const presetName = (getPreset(f.preset)?.name || f.preset || 'DEFAULT').toUpperCase()
   const folder = f.folderId ? libFolders.find(x => x.id === f.folderId) : null
   // Mode tag: images and upscales are tagged by their KIND (not the stale
   // Beast-Mode currentMode that leaked an erroneous "INSECT" onto generated
@@ -6535,7 +6557,6 @@ function buildLibCard(f) {
     : modeName.toUpperCase()
   tags.innerHTML = `
     <span class="lib-tag mode-${modeName}">${modeLabel}</span>
-    <span class="lib-tag tag-style">${presetName}</span>
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || f.model) : bmModelLabel(f.model)}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
@@ -6592,29 +6613,9 @@ function buildLibCard(f) {
   promptWrap.appendChild(expandBtn)
   body.appendChild(promptWrap)
 
-  // Stars + meta
+  // Stars + meta (only the starred button — 5-star rating removed)
   const meta = document.createElement('div')
   meta.className = 'lib-card-meta'
-  const starsWrap = document.createElement('div')
-  starsWrap.className = 'lib-card-stars'
-  let currentRating = f.rating || 0
-  const rebuildStars = () => {
-    starsWrap.innerHTML = ''
-    for (let i = 1; i <= 5; i++) {
-      const star = document.createElement('span')
-      star.className = 'lib-star' + (i <= currentRating ? ' on' : '')
-      star.textContent = '★'
-      star.onclick = e => {
-        e.stopPropagation()
-        currentRating = currentRating === i ? 0 : i // click same star to clear
-        f.rating = currentRating; f.updatedAt = Date.now()
-        driveSavePrompt(f); rebuildStars()
-      }
-      starsWrap.appendChild(star)
-    }
-  }
-  rebuildStars()
-  meta.appendChild(starsWrap)
   body.appendChild(meta)
 
   card.appendChild(body)
@@ -7009,6 +7010,8 @@ function renderFolderSidebar() {
       ? favourites.length
       : folder.id === '__starred__'
       ? favourites.filter(f => f.starred).length
+      : folder.id === '__pinned__'
+        ? favourites.filter(f => f.pinned).length
       : folder.id === '__images__'
         ? favourites.filter(f => bmFavKind(f) === 'image').length
       : folder.id === '__i2i__'
@@ -18391,11 +18394,19 @@ function igChip(label, active, onclick, title) {
 
 function igRenderResChips() {
   const m = igModel();
-  const wrap = document.getElementById('igResChips');
-  wrap.innerHTML = '';
+  const sel = document.getElementById('igResSelect');
+  if (!sel) return;
+  const prev = igState.res;
+  sel.innerHTML = '';
   Object.keys(m.dims).forEach(tier => {
-    wrap.appendChild(igChip(tier, igState.res === tier, () => { igState.res = tier; igRenderAll(); }));
+    const opt = document.createElement('option');
+    opt.value = tier; opt.textContent = tier;
+    if (tier === igState.res) opt.selected = true;
+    sel.appendChild(opt);
   });
+  // Ensure igState.res is a valid option
+  if (!m.dims[igState.res]) igState.res = Object.keys(m.dims)[0];
+  sel.value = igState.res;
   const note = document.getElementById('igDimNote');
   if (igState.ar === 'AUTO') {
     note.textContent = 'Output matches the reference image aspect ratio at ' + igState.res + '.';
@@ -18407,14 +18418,23 @@ function igRenderResChips() {
 
 function igRenderAspectChips() {
   const m = igModel();
-  const wrap = document.getElementById('igAspectChips');
-  wrap.innerHTML = '';
+  const sel = document.getElementById('igAspectSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
   if (m.autoAR && igState.refs.length) {
-    wrap.appendChild(igChip('AUTO', igState.ar === 'AUTO', () => { igState.ar = 'AUTO'; igRenderAll(); }, 'Match the reference image aspect ratio'));
+    const opt = document.createElement('option');
+    opt.value = 'AUTO'; opt.textContent = 'AUTO (match reference)';
+    if (igState.ar === 'AUTO') opt.selected = true;
+    sel.appendChild(opt);
   }
-  Object.keys(m.dims[igState.res]).forEach(ar => {
-    wrap.appendChild(igChip(ar, igState.ar === ar, () => { igState.ar = ar; igRenderAll(); }));
+  Object.keys(m.dims[igState.res] || m.dims[Object.keys(m.dims)[0]]).forEach(ar => {
+    const opt = document.createElement('option');
+    opt.value = ar; opt.textContent = ar;
+    if (ar === igState.ar) opt.selected = true;
+    sel.appendChild(opt);
   });
+  // Ensure igState.ar is valid
+  if (sel.value) igState.ar = sel.value;
 }
 
 function igRenderQualityChips() {
@@ -20261,7 +20281,12 @@ function upRenderLibBar() {
   plus.title = 'New — clear the preview to load another image';
   plus.setAttribute('aria-label', 'New image');
   plus.textContent = '+';
-  plus.onclick = () => { if (typeof upClearSource === 'function') upClearSource(); };
+  plus.onclick = () => {
+    if (typeof upClearSource === 'function') upClearSource();
+    // Also clear Results so the user starts fresh
+    const grid = document.getElementById('upResults');
+    if (grid) grid.innerHTML = '';
+  };
   bar.appendChild(plus);
 
   // Match the library card's "has an image" predicate (buildLibCard) — NOT just
