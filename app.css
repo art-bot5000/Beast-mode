@@ -389,7 +389,7 @@ select:focus { border-color: var(--accent); }
    button's dark text colour; the diamond sits inline with the number. */
 .run-cost { display:inline-flex;align-items:center;gap:5px;font-weight:700; }
 .run-cost::before { content:"\00B7";margin:0 7px 0 0;opacity:.55;font-weight:400; }
-.run-cost .ti { font-size:1em;line-height:1; }
+.run-cost .ti { font-size:1.33em;line-height:1; }
 .btn-outline { background:transparent;color:var(--accent);border:1px solid var(--accent); }
 .btn-outline:hover { background:color-mix(in srgb,var(--accent) 10%,transparent); }
 .btn-ghost { background:transparent;color:var(--muted);border:1px solid var(--border); }
@@ -1325,6 +1325,26 @@ img.bm-thumb-missing { background:var(--surface2); }
 .mk-colors { display:flex;gap:6px; }
 .mk-color { width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;padding:0; }
 .mk-color.sel { border-color:#fff;box-shadow:0 0 0 2px #000,0 0 0 4px currentColor; }
+/* Shape picker (replaces the old Box/Arrow buttons) */
+.mk-shapewrap { position:relative;display:inline-flex; }
+.mk-shape-cur { color:var(--accent);font-weight:700;margin:0 2px;text-transform:capitalize; }
+.mk-shape-pop {
+  display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:30;
+  background:var(--surface);border:1px solid var(--accent);border-radius:4px;
+  padding:6px;min-width:172px;box-shadow:0 8px 24px rgba(0,0,0,.5);
+  grid-template-columns:1fr 1fr;gap:4px;
+}
+.mk-shape-pop.open { display:grid; }
+.mk-shape-opt {
+  display:flex;align-items:center;gap:8px;background:transparent;border:1px solid transparent;
+  border-radius:3px;padding:6px 8px;cursor:pointer;color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;text-align:left;
+}
+.mk-shape-opt:hover { border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent); }
+.mk-shape-opt.sel { border-color:var(--accent);color:var(--accent); }
+.mk-shape-gly { font-size:15px;line-height:1;width:18px;text-align:center; }
+.mk-fill-btn.on { border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.mk-fill-btn #mkFillState { color:var(--accent); }
 .mk-size { display:inline-flex;align-items:center;gap:8px; }
 .mk-size-label { font-size:11px;letter-spacing:2px;color:var(--muted);font-weight:700; }
 .mk-size input[type=range] { width:90px;accent-color:var(--accent);cursor:pointer; }

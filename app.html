@@ -341,8 +341,11 @@ handleShareTarget()
     <div class="mk-colors" id="mkColors"></div>
     <span class="mk-hint">·</span>
     <button class="mk-btn active" id="mkToolBrush" onclick="mkSetTool('brush')">✏ BRUSH</button>
-    <button class="mk-btn" id="mkToolArrow" onclick="mkSetTool('arrow')">↗ ARROW</button>
-    <button class="mk-btn" id="mkToolBox" onclick="mkSetTool('box')">▢ BOX</button>
+    <div class="mk-shapewrap">
+      <button class="mk-btn" id="mkToolShape" onclick="mkShapePickerToggle(event)" aria-haspopup="true" aria-expanded="false">◇ SHAPE <span class="mk-shape-cur" id="mkShapeCur">rectangle</span> ▾</button>
+      <div class="mk-shape-pop" id="mkShapePop" role="menu"></div>
+    </div>
+    <button class="mk-btn mk-fill-btn" id="mkFillBtn" onclick="mkToggleFill()" title="Toggle fill for new shapes" aria-pressed="false">FILL: <span id="mkFillState">NONE</span></button>
     <button class="mk-btn" id="mkToolText" onclick="mkSetTool('text')">T TEXT</button>
     <span class="mk-hint">·</span>
     <label class="mk-size" title="Brush size">
@@ -992,10 +995,10 @@ handleShareTarget()
 
         <div id="igRefsWrap" style="display:none;">
           <div class="ig-label">REFERENCE IMAGES <span id="igRefsCount" style="color:var(--accent);"></span></div>
-          <div class="ig-drop" id="igDrop" onclick="document.getElementById('igRefFile').click()">⬆ DROP IMAGES OR CLICK TO UPLOAD</div>
+          <div class="ig-drop" id="igDrop" onclick="document.getElementById('igRefFile').click()">⬆ SELECT BELOW OR CLICK TO UPLOAD</div>
           <input type="file" id="igRefFile" accept="image/png,image/jpeg,image/webp" multiple style="display:none;" onchange="igRefFilesPicked(this.files)">
           <div class="ig-refs" id="igRefThumbs"></div>
-          <button class="btn btn-ghost" id="igMarkupBtn" style="margin-top:8px;font-size:13px;letter-spacing:1px;" onclick="document.getElementById('igMarkupFile').click()">✎ MARKUP IMAGE</button>
+          <button class="btn btn-ghost" id="igMarkupBtn" style="margin-top:8px;font-size:13px;letter-spacing:1px;" onclick="igMarkupFromRefs()">✎ MARKUP IMAGE</button>
           <input type="file" id="igMarkupFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="igMarkupFilePicked(this.files)">
           <div class="ig-note">Image-to-image: the model uses these as visual references / edit sources. Use <b>Markup image</b> to mark regions by colour and seed change instructions.</div>
         </div>
@@ -4279,6 +4282,10 @@ function applySettings(s) {
   if (s.fieldStateA) { Object.assign(fieldState.A, s.fieldStateA); renderFieldSelector('A', sdState.A.value) }
   if (s.fieldStateB) { Object.assign(fieldState.B, s.fieldStateB); renderFieldSelector('B', sdState.B.value) }
 
+  // Image-Gen bottom-bar pin preference (cross-device). Only apply when the
+  // settings actually carry the flag so older saves don't force a default.
+  if (typeof s.libBarPinned === 'boolean' && typeof igLibApplyPinned === 'function') igLibApplyPinned(s.libBarPinned)
+
   updateTunerSummary()
 }
 
@@ -4300,6 +4307,8 @@ function captureSettings() {
     insp2:      document.getElementById('insp2Sel')?.value    || '',
     fieldStateA: { ...fieldState.A },
     fieldStateB: { ...fieldState.B },
+    // Image-Gen bottom-bar pin preference, persisted to the server settings doc.
+    libBarPinned: (typeof igLibState !== 'undefined') ? !!igLibState.pinned : false,
   }
 }
 
@@ -4698,6 +4707,18 @@ function exportAll(){
 //      structure): restore the particle formula into the BUILDER.
 //   3. A PROMPT LAB prompt (carries a ---SETTINGS--- block, no particles):
 //      apply the settings and put the clean prompt back in PROMPT LAB.
+// Human label for WHERE restoreFav(f) will land this favourite. Mirrors the
+// branch order inside restoreFav so the RESTORE button's tooltip is accurate:
+//   upscale → Upscaler · igSettings → Image Gen · particles → Beast Mode ·
+//   else → Prompt Lab.
+function bmRestoreModeLabel(f) {
+  if (!f) return 'Prompt Lab'
+  if (f.isUpscale || f.upscaleMeta) return 'Upscaler'
+  if (f.igSettings && typeof f.igSettings === 'object') return 'Image Gen'
+  if (f.particles && f.particles.length) return 'Beast Mode'
+  return 'Prompt Lab'
+}
+
 function restoreFav(id) {
   const f = favourites.find(x => x.id === id)
   if (!f) return
@@ -6600,8 +6621,11 @@ function buildLibCard(f) {
 
   // ── Image action buttons (only when image present) ────────────
   // "Upscale" takes this image into the Upscaler; "Markup" opens it in the
-  // vector image editor. (These replaced the old passive status toggles.)
-  if (f.imageData) {
+  // vector image editor. Shown for ANY image-kind card — including i2i outputs
+  // and favourites that only carry a server URL / thumbnail (no inline bytes),
+  // not just ones with inline imageData. bmFavKind === 'image' is the canonical
+  // test (imageData || thumbKey || serverImageUrl, and not an upscale/prompt).
+  if (bmFavKind(f) === 'image') {
     const statusRow = document.createElement('div')
     statusRow.className = 'lib-card-img-status'
 
@@ -6631,8 +6655,8 @@ function buildLibCard(f) {
   // and upscales have no prompt structure to lab-edit, so they're hidden there.
   const _isPromptCard = (_favKind === 'prompt')
   const actionDefs = [
-    { label:'⬆ RESTORE',  cls:'', fn: () => { restoreFav(f.id) } },
-    { label:'⎘ COPY',     cls:'', fn: () => copyFav(f.id) },
+    { label:'⬆ RESTORE',  cls:'', fn: () => { restoreFav(f.id) }, title:'Restore to ' + bmRestoreModeLabel(f) + ' mode' },
+    { label:'⎘ COPY',     cls:'', fn: () => copyFav(f.id), title:'Copy prompt to clipboard' },
     { label:'✎ EDIT IN LAB', cls:'', promptOnly:true, fn: () => editInPromptLab(f), title:'Open and edit in Prompt Lab' },
     { label:'⟳ ITERATE',  cls:'', promptOnly:true, fn: () => openIterate(f.id), title:'Generate variants by swapping a particle' },
     { label:'⊛ PARTICLES',cls:'', promptOnly:true, fn: () => sendToParticleLab(f), title:'Import into Prompt Lab as particles' },
@@ -6640,7 +6664,7 @@ function buildLibCard(f) {
     { label:'🖼',          cls:'', promptOnly:true, fn: () => openImageModal(f.id), title:'Upload image' },
     { label:'☁',          cls:'', promptOnly:true, fn: () => openDrivePhoto(f.id), title:'Pick image from Google Drive' },
     { label:'📁',          cls:'', fn: () => libShowMoveMenu(f.id), title:'Move to folder' },
-    { label:'✕',          cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() } },
+    { label:'✕',          cls:'danger', fn: () => { deleteFav(f.id); renderLibrary() }, title:'Delete' },
   ]
   actionDefs.filter(a => !(a.promptOnly && !_isPromptCard)).forEach(a => {
     const btn = document.createElement('button')
@@ -6829,11 +6853,33 @@ function sendToUpscaler(f) {
 // markupOfId back-reference) so the two group together in the library, and it
 // carries its own version-history entry recording the markup.
 function markupFav(f) {
-  if (!f || !f.imageData) return
+  if (!f) return
   if (typeof mkOpen !== 'function') return
-  mkOpen(f.imageData, result => {
-    if (!result || !result.image) return
+  // Resolve usable image bytes first. Inline data: URIs open directly; favourites
+  // that only carry a /api/img URL, serverImageUrl, or thumbKey (i2i outputs and
+  // cross-device-synced items) are resolved to real bytes via the shared
+  // resolver so the editor gets a drawable image rather than an unauthed URL.
+  const openEditor = (src) => {
+    if (!src) { if (typeof setDriveStatus === 'function') setDriveStatus('\u2717 COULD NOT LOAD IMAGE', 'err'); return }
+    mkOpen(src, result => {
+      if (!result || !result.image) return
+      _markupFavSave(f, result)
+    })
+  }
+  const inlineUsable = (typeof f.imageData === 'string' && f.imageData && f.imageData.indexOf('/api/img/') !== 0)
+  if (inlineUsable) { openEditor(f.imageData); return }
+  const serverUrl = f.serverImageUrl
+    || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : ('/api/img/' + f.id))
+  if (typeof upResolveInputImage === 'function') {
+    upResolveInputImage(serverUrl).then(openEditor).catch(() => openEditor(null))
+  } else if (typeof bmGetCachedImage === 'function') {
+    bmGetCachedImage(f.id).then(openEditor).catch(() => openEditor(null))
+  } else { openEditor(f.imageData || null) }
+}
 
+// Persist a markup result as a NEW favourite linked to the source `f`.
+function _markupFavSave(f, result) {
+  {
     const colourLabel = (result.colours && result.colours.length)
       ? ' · ' + result.colours.join(', ') : ''
     const now = Date.now()
@@ -6893,7 +6939,7 @@ function markupFav(f) {
       setDriveStatus('✓ MARKUP SAVED AS NEW FILE', 'ok')
       setTimeout(() => setDriveStatus('✓ SYNCED', 'ok'), 2500)
     }
-  })
+  }
 }
 
 function togglePromptExpand(promptEl, btn) {
@@ -18433,11 +18479,30 @@ const MK_COLOURS = [
   { name:'cyan',    hex:'#32d4ff' },
 ];
 
+// The 10 basic shapes offered by the shape picker. `draw` receives the 2D ctx,
+// the bounding box {x0,y0,x1,y1} (anchor → current point), the line width, and
+// whether to fill. Each path is built then stroked and/or filled by mkDrawShape.
+// 'line' and 'arrow' are open paths (never filled — fill is a no-op for them).
+const MK_SHAPES = [
+  { id:'rectangle', label:'Rectangle', glyph:'▭' },
+  { id:'ellipse',   label:'Ellipse',   glyph:'◯' },
+  { id:'triangle',  label:'Triangle',  glyph:'△' },
+  { id:'diamond',   label:'Diamond',   glyph:'◇' },
+  { id:'pentagon',  label:'Pentagon',  glyph:'⬠' },
+  { id:'hexagon',   label:'Hexagon',   glyph:'⬡' },
+  { id:'star',      label:'Star',      glyph:'★' },
+  { id:'heart',     label:'Heart',     glyph:'♥' },
+  { id:'line',      label:'Line',      glyph:'╱' },
+  { id:'arrow',     label:'Arrow',     glyph:'↗' },
+];
+
 const mk = {
   open:false, tool:'brush', colourIdx:0,
+  shape:'rectangle',        // active shape id (used when tool==='shape')
+  fill:false,               // fill new closed shapes vs outline only
   brush:1,                  // brush-size multiplier (0.5 = fine … 3 = heavy)
   img:null,                 // HTMLImageElement (base)
-  strokes:[],               // committed ops, each { tool, colour, name, pts:[], text? }
+  strokes:[],               // committed ops, each { tool, colour, name, pts:[], text?, shape?, fill? }
   cur:null,                 // in-progress op
   onApply:null,
   dpr:1,
@@ -18455,11 +18520,69 @@ function mkBuildPalette(){
     wrap.appendChild(b);
   });
 }
+// Tool buttons are now: brush, shape (dropdown), text. The shape button stays
+// highlighted whenever the shape tool is active. Guard each lookup so a missing
+// button (e.g. mid-DOM-swap) never throws.
 function mkSetTool(t){
   mk.tool=t;
-  ['brush','arrow','box','text'].forEach(x=>{
-    document.getElementById('mkTool'+x[0].toUpperCase()+x.slice(1)).classList.toggle('active',x===t);
+  const setActive=(id,on)=>{ const el=document.getElementById(id); if(el) el.classList.toggle('active',!!on); };
+  setActive('mkToolBrush', t==='brush');
+  setActive('mkToolShape', t==='shape');
+  setActive('mkToolText',  t==='text');
+}
+
+// Build the shape dropdown menu (once per open is fine; cheap to rebuild).
+function mkBuildShapePicker(){
+  const pop=document.getElementById('mkShapePop');
+  if(!pop) return;
+  pop.innerHTML='';
+  MK_SHAPES.forEach(s=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='mk-shape-opt'+(s.id===mk.shape?' sel':'');
+    b.setAttribute('role','menuitem');
+    b.innerHTML='<span class="mk-shape-gly">'+s.glyph+'</span><span class="mk-shape-lbl">'+s.label+'</span>';
+    b.onclick=()=>{ mkSetShape(s.id); mkShapePickerClose(); };
+    pop.appendChild(b);
   });
+}
+function mkSetShape(id){
+  if(!MK_SHAPES.some(s=>s.id===id)) return;
+  mk.shape=id;
+  mkSetTool('shape');                       // picking a shape activates the shape tool
+  const cur=document.getElementById('mkShapeCur');
+  if(cur){ const def=MK_SHAPES.find(s=>s.id===id); cur.textContent=def?def.label.toLowerCase():id; }
+}
+function mkShapePickerToggle(e){
+  if(e){ e.preventDefault(); e.stopPropagation(); }
+  const pop=document.getElementById('mkShapePop');
+  if(!pop) return;
+  const willOpen=!pop.classList.contains('open');
+  mkBuildShapePicker();
+  pop.classList.toggle('open', willOpen);
+  const btn=document.getElementById('mkToolShape');
+  if(btn) btn.setAttribute('aria-expanded', willOpen?'true':'false');
+  // Activate the shape tool the moment the picker is opened so a click-drag
+  // right after works even without choosing a (different) shape.
+  if(willOpen) mkSetTool('shape');
+}
+function mkShapePickerClose(){
+  const pop=document.getElementById('mkShapePop');
+  if(pop) pop.classList.remove('open');
+  const btn=document.getElementById('mkToolShape');
+  if(btn) btn.setAttribute('aria-expanded','false');
+}
+// Close the picker on any outside click.
+document.addEventListener('click', e=>{
+  const wrap=e.target.closest && e.target.closest('.mk-shapewrap');
+  if(!wrap) mkShapePickerClose();
+});
+function mkToggleFill(){
+  mk.fill=!mk.fill;
+  const btn=document.getElementById('mkFillBtn');
+  const st=document.getElementById('mkFillState');
+  if(st) st.textContent=mk.fill?'FILL':'NONE';
+  if(btn){ btn.classList.toggle('on',mk.fill); btn.setAttribute('aria-pressed',mk.fill?'true':'false'); }
 }
 function mkColour(){ return MK_COLOURS[mk.colourIdx]; }
 
@@ -18476,9 +18599,14 @@ function mkSetBrush(v){
 function mkOpen(dataUri, onApply){
   mk.onApply=onApply; mk.strokes=[]; mk.cur=null;
   mk.tool='brush'; mk.colourIdx=0; mk.brush=1;
+  mk.shape='rectangle'; mk.fill=false;
   const _r=document.getElementById('mkBrushRange'); if(_r) _r.value='1';
   mkSetBrush(1);
   mkBuildPalette(); mkSetTool('brush');
+  mkBuildShapePicker(); mkShapePickerClose();
+  const _sc=document.getElementById('mkShapeCur'); if(_sc) _sc.textContent='rectangle';
+  const _fs=document.getElementById('mkFillState'); if(_fs) _fs.textContent='NONE';
+  const _fb=document.getElementById('mkFillBtn'); if(_fb){ _fb.classList.remove('on'); _fb.setAttribute('aria-pressed','false'); }
   const img=new Image();
   img.onload=()=>{
     mk.img=img;
@@ -18532,20 +18660,15 @@ function mkDrawOp(ctx,op,cv){
     ctx.beginPath();
     op.pts.forEach((p,i)=>{ i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); });
     ctx.stroke();
-  } else if(op.tool==='box'){
+  } else if(op.tool==='shape'){
     const a=op.pts[0], b=op.pts[op.pts.length-1];
-    if(a&&b) ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);
-  } else if(op.tool==='arrow'){
+    if(a&&b) mkDrawShape(ctx, op.shape||'rectangle', a, b, lw, !!op.fill);
+  } else if(op.tool==='box'){          // legacy op compatibility
     const a=op.pts[0], b=op.pts[op.pts.length-1];
-    if(a&&b){
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-      const ang=Math.atan2(b.y-a.y,b.x-a.x), h=lw*4;
-      ctx.beginPath();
-      ctx.moveTo(b.x,b.y);
-      ctx.lineTo(b.x-h*Math.cos(ang-0.4), b.y-h*Math.sin(ang-0.4));
-      ctx.lineTo(b.x-h*Math.cos(ang+0.4), b.y-h*Math.sin(ang+0.4));
-      ctx.closePath(); ctx.fill();
-    }
+    if(a&&b) mkDrawShape(ctx, 'rectangle', a, b, lw, !!op.fill);
+  } else if(op.tool==='arrow'){        // legacy op compatibility
+    const a=op.pts[0], b=op.pts[op.pts.length-1];
+    if(a&&b) mkDrawShape(ctx, 'arrow', a, b, lw, false);
   } else if(op.tool==='text'){
     const p=op.pts[0];
     if(p&&op.text){
@@ -18564,6 +18687,74 @@ function mkDrawOp(ctx,op,cv){
   }
 }
 
+// Render one shape into the bounding box defined by anchor `a` → current `b`.
+// Closed shapes honour `fill` (fill + outline); 'line'/'arrow' are open and
+// always stroked (fill ignored). The arrow head scales with line width.
+function mkDrawShape(ctx, shape, a, b, lw, fill){
+  const x0=Math.min(a.x,b.x), y0=Math.min(a.y,b.y);
+  const x1=Math.max(a.x,b.x), y1=Math.max(a.y,b.y);
+  const w=x1-x0, h=y1-y0, cx=(x0+x1)/2, cy=(y0+y1)/2;
+  const closeAndPaint=()=>{ ctx.closePath(); if(fill) ctx.fill(); ctx.stroke(); };
+  const poly=(pts)=>{ ctx.beginPath(); pts.forEach((p,i)=>{ i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); }); closeAndPaint(); };
+
+  if(shape==='rectangle'){
+    ctx.beginPath(); ctx.rect(x0,y0,w,h); closeAndPaint();
+  } else if(shape==='ellipse'){
+    ctx.beginPath(); ctx.ellipse(cx,cy,Math.max(1,w/2),Math.max(1,h/2),0,0,Math.PI*2); closeAndPaint();
+  } else if(shape==='triangle'){
+    poly([[cx,y0],[x1,y1],[x0,y1]]);
+  } else if(shape==='diamond'){
+    poly([[cx,y0],[x1,cy],[cx,y1],[x0,cy]]);
+  } else if(shape==='pentagon'){
+    poly(mkRegularPoly(cx,cy,w/2,h/2,5,-Math.PI/2));
+  } else if(shape==='hexagon'){
+    poly(mkRegularPoly(cx,cy,w/2,h/2,6,-Math.PI/2));
+  } else if(shape==='star'){
+    poly(mkStarPoly(cx,cy,w/2,h/2,5,0.45,-Math.PI/2));
+  } else if(shape==='heart'){
+    mkHeartPath(ctx,x0,y0,w,h); closeAndPaint();
+  } else if(shape==='line'){
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  } else if(shape==='arrow'){
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    const ang=Math.atan2(b.y-a.y,b.x-a.x), hd=lw*4;
+    ctx.beginPath();
+    ctx.moveTo(b.x,b.y);
+    ctx.lineTo(b.x-hd*Math.cos(ang-0.4), b.y-hd*Math.sin(ang-0.4));
+    ctx.lineTo(b.x-hd*Math.cos(ang+0.4), b.y-hd*Math.sin(ang+0.4));
+    ctx.closePath(); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.rect(x0,y0,w,h); closeAndPaint();
+  }
+}
+// N-sided polygon inscribed in the (possibly non-square) bbox via separate
+// x/y radii, so shapes stretch to fill the drawn rectangle.
+function mkRegularPoly(cx,cy,rx,ry,n,rot){
+  const pts=[];
+  for(let i=0;i<n;i++){ const a=rot+i*2*Math.PI/n; pts.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]); }
+  return pts;
+}
+// 2n-point star alternating outer/inner radius (inner = ratio·outer).
+function mkStarPoly(cx,cy,rx,ry,points,ratio,rot){
+  const pts=[];
+  for(let i=0;i<points*2;i++){
+    const a=rot+i*Math.PI/points;
+    const fx=(i%2===0)?rx:rx*ratio, fy=(i%2===0)?ry:ry*ratio;
+    pts.push([cx+Math.cos(a)*fx, cy+Math.sin(a)*fy]);
+  }
+  return pts;
+}
+// Heart built from two bezier lobes, scaled into the bbox.
+function mkHeartPath(ctx,x0,y0,w,h){
+  const sx=x=>x0+x*w, sy=y=>y0+y*h;
+  ctx.beginPath();
+  ctx.moveTo(sx(0.5),sy(0.32));
+  ctx.bezierCurveTo(sx(0.5),sy(0.10), sx(0.10),sy(0.02), sx(0.06),sy(0.30));
+  ctx.bezierCurveTo(sx(0.02),sy(0.52), sx(0.30),sy(0.72), sx(0.5),sy(0.98));
+  ctx.bezierCurveTo(sx(0.70),sy(0.72), sx(0.98),sy(0.52), sx(0.94),sy(0.30));
+  ctx.bezierCurveTo(sx(0.90),sy(0.02), sx(0.5),sy(0.10), sx(0.5),sy(0.32));
+}
+
 /* pointer handling */
 function mkDown(e){
   if(!mk.open||!mk.img) return;
@@ -18578,7 +18769,9 @@ function mkDown(e){
     }
     return;
   }
-  mk.cur={ tool:mk.tool, colour:c.hex, name:c.name, pts:[p], brush:mk.brush };
+  const opStart={ tool:mk.tool, colour:c.hex, name:c.name, pts:[p], brush:mk.brush };
+  if(mk.tool==='shape'){ opStart.shape=mk.shape; opStart.fill=!!mk.fill; }
+  mk.cur=opStart;
   mkRedraw();
 }
 function mkMove(e){
@@ -18624,6 +18817,81 @@ function mkApply(){
 
 
 // Launch from the refs area: read the chosen file, open the editor on it.
+// Entry point for the "✎ MARKUP IMAGE" button. Instead of always opening a file
+// dialog, this now sources from the current i2i references:
+//   • 0 refs  → fall back to the upload dialog (nothing to mark up yet)
+//   • 1 ref   → open it straight in the markup editor
+//   • 2+ refs → show a chooser modal; the picked image opens in the editor
+// The chosen image flows through the same mkOpen(…, igMarkupApply) path the
+// file picker uses, so the marked-up result is added back as a new reference and
+// the colour change-lines are seeded into the prompt exactly as before.
+function igMarkupFromRefs() {
+  const m = igModel();
+  if (!m.i2i) { igStatus && igStatus('\u2717 This model has no image input.', true); return; }
+  const refs = (typeof igState !== 'undefined' && Array.isArray(igState.refs)) ? igState.refs : [];
+  const usable = refs.filter(r => r && typeof r.data === 'string' && r.data);
+  if (usable.length === 0) {
+    // Nothing selected — let the user upload one to mark up.
+    const fi = document.getElementById('igMarkupFile'); if (fi) fi.click();
+    return;
+  }
+  if (usable.length === 1) {
+    if (typeof mkOpen === 'function') mkOpen(usable[0].data, igMarkupApply);
+    return;
+  }
+  igMarkupChooserOpen(usable);
+}
+
+// Build (once) and show the i2i-reference chooser. Reused across opens; the grid
+// is repopulated each time from the passed ref list.
+function igMarkupChooserOpen(refs) {
+  let ov = document.getElementById('igMarkupPick');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'igMarkupPick';
+    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.82);align-items:center;justify-content:center;padding:20px;';
+    ov.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--accent);border-radius:4px;width:100%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;">' +
+          '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:18px;letter-spacing:1.5px;color:var(--accent);">// MARK UP WHICH IMAGE?</div>' +
+          '<button type="button" onclick="igMarkupChooserClose()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:3px 10px;cursor:pointer;font-size:14px;">\u2715</button>' +
+        '</div>' +
+        '<div style="padding:8px 18px 4px;font-size:12px;letter-spacing:1px;color:var(--muted);flex-shrink:0;">Choose a reference to open in the vector editor.</div>' +
+        '<div id="igMarkupPickGrid" style="flex:1;overflow-y:auto;padding:14px 18px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;"></div>' +
+      '</div>';
+    // Backdrop click (outside the panel) closes.
+    ov.addEventListener('click', e => { if (e.target === ov) igMarkupChooserClose(); });
+    document.body.appendChild(ov);
+  }
+  const grid = ov.querySelector('#igMarkupPickGrid');
+  grid.innerHTML = '';
+  refs.forEach((r, i) => {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.style.cssText = 'padding:0;border:2px solid var(--border);border-radius:4px;overflow:hidden;cursor:pointer;background:var(--surface2);aspect-ratio:1/1;display:block;';
+    cell.title = 'Mark up reference ' + (i + 1);
+    cell.onmouseenter = () => { cell.style.borderColor = 'var(--accent)'; };
+    cell.onmouseleave = () => { cell.style.borderColor = 'var(--border)'; };
+    const img = document.createElement('img');
+    img.src = r.data;
+    img.alt = 'Reference ' + (i + 1);
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+    cell.appendChild(img);
+    cell.onclick = () => {
+      igMarkupChooserClose();
+      if (typeof mkOpen === 'function') mkOpen(r.data, igMarkupApply);
+    };
+    grid.appendChild(cell);
+  });
+  ov.style.display = 'flex';
+}
+function igMarkupChooserClose() {
+  const ov = document.getElementById('igMarkupPick');
+  if (ov) ov.style.display = 'none';
+}
+window.igMarkupFromRefs = igMarkupFromRefs;
+window.igMarkupChooserClose = igMarkupChooserClose;
+
 function igMarkupFilePicked(files) {
   const m = igModel();
   if (!m.i2i) { igStatus && igStatus('\u2717 This model has no image input.', true); return; }
@@ -19020,7 +19288,12 @@ function igStageClear() {
 
 // Bottom-bar pin/minimise state (parallels upLibState; own LS key + body
 // classes so it never collides with the Upscaler's up-* state).
-const igLibState = { pinned: true, loaded: false };
+// Pin state now defaults to UNPINNED (minimised). The user's choice is persisted
+// two ways: a local cache (LS.IG_LIBBAR, instant restore on reload) AND the
+// server-synced settings doc (captureSettings/applySettings carry libBarPinned),
+// so a pin survives across devices. igLibApplyPinned() is the single setter that
+// both restore paths call.
+const igLibState = { pinned: false, loaded: false };
 function igLibLoadState() {
   if (igLibState.loaded) return;
   igLibState.loaded = true;
@@ -19029,8 +19302,20 @@ function igLibLoadState() {
     if (saved && typeof saved.pinned === 'boolean') igLibState.pinned = saved.pinned;
   } catch (e) {}
 }
+// Apply a pin value from an external source (e.g. restored server settings)
+// without writing back to the server — just updates state, local cache + DOM.
+function igLibApplyPinned(pinned) {
+  if (typeof pinned !== 'boolean') return;
+  igLibState.loaded = true;
+  igLibState.pinned = pinned;
+  try { if (typeof lsSave === 'function') lsSave(LS.IG_LIBBAR, { pinned: igLibState.pinned }); } catch (e) {}
+  igLibApplyState();
+}
+window.igLibApplyPinned = igLibApplyPinned;
 function igLibSaveState() {
   try { if (typeof lsSave === 'function') lsSave(LS.IG_LIBBAR, { pinned: igLibState.pinned }); } catch (e) {}
+  // Push the pin into the server-synced settings doc (debounced inside bmDocSave).
+  try { if (typeof bmDocSave === 'function' && typeof bmDocReady === 'function' && bmDocReady() && typeof captureSettings === 'function' && typeof BM_DOC_KEYS !== 'undefined') bmDocSave(BM_DOC_KEYS.SETTINGS, captureSettings()); } catch (e) {}
 }
 function igLibApplyState() {
   igLibLoadState();
@@ -19059,11 +19344,24 @@ function igRefIndexForFav(favId) {
 // Toggle a library image as a reference (i2i models only). Mirrors the inline
 // dropzone limit logic; pushes { data, favId } so the existing igGenerate
 // payload (refs.map(r => r.data)) works unchanged.
+//
+// NOTE: ticking/unticking updates the bar's selection state IN PLACE
+// (igLibUpdateSelection) rather than rebuilding it. A full igRenderLibBar()
+// wipes bar.innerHTML and recreates every <img>, which made the whole strip
+// flash black for a frame while the lazy images re-decoded. The image set is
+// unchanged by a selection toggle, so we only re-apply .sel/.checked/selnum.
 function igLibToggleRef(f) {
   const m = igModel();
   if (!m.i2i) return; // timeline mode: non-selectable
   const existing = igRefIndexForFav(f.id);
-  if (existing >= 0) { igRemoveRef(existing); return; }
+  if (existing >= 0) {
+    igState.refs.splice(existing, 1);
+    if (!igState.refs.length && igState.ar === 'AUTO') igState.ar = '1:1';
+    igRenderRefs();
+    if (typeof igRenderAspectChips === 'function') igRenderAspectChips();
+    igLibUpdateSelection();
+    return;
+  }
   if (igState.refs.length >= (m.maxRefs || 1)) {
     igStatus('\u2717 Reference limit reached for this model (' + (m.maxRefs || 1) + ').', true);
     return;
@@ -19073,8 +19371,9 @@ function igLibToggleRef(f) {
     if (!data) { igStatus('\u2717 Could not load that image.', true); return; }
     if (igState.refs.length >= (m.maxRefs || 1)) return;
     igState.refs.push({ data, favId: f.id });
-    igRenderAll();
-    igRenderLibBar();
+    igRenderRefs();
+    if (typeof igRenderAspectChips === 'function') igRenderAspectChips();
+    igLibUpdateSelection();
   };
   // Prefer inline data; else resolve the authed server URL to real bytes via
   // the shared resolver (same path the Upscaler uses on pick), then cache.
@@ -19087,6 +19386,37 @@ function igLibToggleRef(f) {
     bmGetCachedImage(f.id).then(addData).catch(() => addData(null));
   } else { addData(f.imageData || null); }
 }
+
+// Re-apply selection visuals to the EXISTING bottom-bar cells without touching
+// their <img> elements. Keeps numbering (1..n) in selection order and updates
+// the hint counter. Used by tick toggles so the strip never flashes.
+function igLibUpdateSelection() {
+  const bar = document.getElementById('igLibBar');
+  if (!bar || igFamily.open) { igRenderLibBar(); return; }
+  const m = igModel();
+  if (!(m && m.i2i)) { igRenderLibBar(); return; }
+  bar.querySelectorAll('.ig-libbar-thumb').forEach(cell => {
+    const favId = cell.dataset.favId;
+    const selIdx = igState.refs.findIndex(r => r && String(r.favId) === String(favId));
+    cell.classList.toggle('sel', selIdx >= 0);
+    // Selection-order badge (top-left).
+    let num = cell.querySelector('.ig-libbar-selnum');
+    if (selIdx >= 0) {
+      if (!num) { num = document.createElement('div'); num.className = 'ig-libbar-selnum'; cell.appendChild(num); }
+      num.textContent = String(selIdx + 1);
+    } else if (num) { num.remove(); }
+    // Tickbox state (bottom-right).
+    const tick = cell.querySelector('.ig-libbar-tick');
+    if (tick) {
+      tick.classList.toggle('checked', selIdx >= 0);
+      tick.title = (selIdx >= 0) ? 'Deselect reference' : 'Select as reference';
+      tick.setAttribute('aria-checked', selIdx >= 0 ? 'true' : 'false');
+    }
+  });
+  const hint = document.getElementById('igLibBarHint');
+  if (hint) hint.textContent = igState.refs.length + ' / ' + (m.maxRefs || 1) + ' selected \u00B7 tap image for its source set';
+}
+window.igLibUpdateSelection = igLibUpdateSelection;
 
 // Render the bottom bar. Newest-left. i2i → selectable refs; else timeline.
 function igRenderLibBar() {
