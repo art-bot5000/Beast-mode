@@ -829,9 +829,9 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .mode-nav-identity .bm-profile-thumb:hover { border-color:var(--accent); }
 /* Token balance readout, sits inline with the account button. */
 .mode-nav-balance {
-  display:flex; align-items:baseline; gap:6px; margin-left:auto;
+  display:flex; align-items:center; gap:5px; margin-left:auto;
 }
-.mode-nav-balance .bal-label { font-family:'IBM Plex Sans',sans-serif;font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:700; }
+.mode-nav-balance .bal-label { font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:var(--accent);font-weight:700;display:inline-flex;align-items:center; }
 .mode-nav-balance .bal-value { font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;color:var(--accent); }
 
 /* "More" dropdown: floats ABOVE the footer flow (absolute) so revealing it never

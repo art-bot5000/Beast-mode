@@ -513,8 +513,8 @@ handleShareTarget()
       <div class="mode-nav-identity">
         <button class="bm-profile-thumb" id="bmProfileThumb" onclick="openProfileImageModal()" title="Change profile image">⊙</button>
         <button id="bmAccountBtn" onclick="bmAccountClick()" title="Account" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 14px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);transition:all .2s;">ACCOUNT</button>
-        <div class="mode-nav-balance" id="navBalanceWrap" style="display:none;">
-          <span class="bal-label">TOKENS</span>
+        <div class="mode-nav-balance" id="navBalanceWrap" style="display:none;" title="Token balance">
+          <span class="bal-label" aria-label="Tokens"><i class="ti ti-diamond" aria-hidden="true"></i></span>
           <span class="bal-value" id="navTokenBalance">—</span>
         </div>
         <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
@@ -1508,7 +1508,7 @@ handleShareTarget()
         </div>
         <div id="bmTokSignedOut" style="display:none;font-size:12px;color:var(--muted);letter-spacing:.5px;">Sign in to see your token balance and activity.</div>
         <div id="bmTokSignedIn" style="display:none;">
-          <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens</span></div>
+          <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <i class="ti ti-diamond" aria-hidden="true" style="color:var(--accent);font-size:13px;vertical-align:-1px;margin-right:2px;"></i><span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span></div>
           <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:12px;">Tokens are spent on image generation and priced per model and resolution. Every charge, refund, and grant is recorded on your account; charges link to the saved image in your library.</div>
           <button class="btn btn-outline" onclick="bmUsageOpen()" style="font-size:12px;">⊞ USAGE HISTORY</button>
         </div>
@@ -6519,7 +6519,7 @@ function buildLibCard(f) {
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
     ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
-    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost">◈ ${f.tokenCost} TOK</span>` : ''}
+    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-diamond" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
   `
   body.appendChild(tags)
 
@@ -6734,7 +6734,7 @@ function libOpenInfo(favId) {
   html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
     <span class="lib-tag mode-${kind === 'image' && bmFavIsI2I(f) ? 'i2i' : kind}">${esc(typeLabel)}</span>
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${esc((kind === 'upscale') ? bmUpscalerLabel(f.model) : bmModelLabel(f.model))}</span>` : ''}
-    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost">◈ ${f.tokenCost} TOK</span>` : ''}
+    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-diamond" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
   </div>`
 
   // ── Prompt ────────────────────────────────────────────────────────────
@@ -16684,7 +16684,7 @@ const bmQueue = (() => {
     row.appendChild(ic); row.appendChild(lbl);
     const _tok = jobTokens(job);
     if (_tok != null) {
-      const tk = document.createElement('span'); tk.className = 'bm-q-rowtok'; tk.textContent = _tok + ' TOK';
+      const tk = document.createElement('span'); tk.className = 'bm-q-rowtok'; tk.innerHTML = '<i class="ti ti-diamond" aria-hidden="true"></i> ' + _tok;
       row.appendChild(tk);
     }
     // Delete: only when the job can be cancelled without cost. 'queued' jobs
@@ -16720,7 +16720,7 @@ const bmQueue = (() => {
     const t1 = document.createElement('div'); t1.className = 'bm-q-card-label'; t1.textContent = job.label || job.kind;
     const t2 = document.createElement('div'); t2.className = 'bm-q-card-status';
     const _tok = jobTokens(job);
-    t2.textContent = s.text + (_tok != null ? (' · ' + _tok + ' TOK') : '');
+    t2.textContent = s.text + (_tok != null ? (' · \u25C6 ' + _tok) : '');
     txt.appendChild(t1); txt.appendChild(t2);
     main.appendChild(ic); main.appendChild(txt);
     card.appendChild(main);
@@ -17306,7 +17306,7 @@ async function generateImage() {
         status.textContent = '\u2713 IMAGE GENERATED';
         status.style.color = 'var(--accent)';
         const tk = result.tokens || {};
-        const costStr = (typeof tk.charged === 'number') ? (' \u00B7 ' + tk.charged + ' TOKEN' + (tk.charged === 1 ? '' : 'S')) : '';
+        const costStr = (typeof tk.charged === 'number') ? (' \u00B7 \u25C6 ' + tk.charged) : '';
         document.getElementById('genImageMeta').textContent = 'Model: ' + (result.model || GEN_IMAGE_MODEL) + costStr + ' \u00B7 saved to library';
         // NOTE: library save is handled by bmQueue.drain() — do NOT save again here.
       },
@@ -18852,7 +18852,7 @@ async function igGenerate() {
         document.getElementById('igEmpty').style.display = 'none';
         const tk = result.tokens || {};
         const costStr = (typeof tk.charged === 'number')
-          ? (' \u00B7 ' + tk.charged + ' TOKEN' + (tk.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + tk.balance)
+          ? (' \u00B7 \u25C6 ' + tk.charged + ' \u00B7 BALANCE ' + tk.balance)
           : '';
         const backupStr = igHasDurableStorage()
           ? ' \u00B7 saved to library + Drive'
@@ -18902,7 +18902,7 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   const left = document.createElement('span');
   left.textContent = model.label + (Number.isFinite(image.seed) ? (' \u00B7 seed ' + image.seed) : '');
   const right = document.createElement('span');
-  if (tokens && typeof tokens.perImage === 'number') right.textContent = tokens.perImage + ' TOK';
+  if (tokens && typeof tokens.perImage === 'number') right.innerHTML = '<i class="ti ti-diamond" aria-hidden="true"></i> ' + tokens.perImage;
   meta.appendChild(left); meta.appendChild(right);
 
   const actions = document.createElement('div');
@@ -21649,7 +21649,7 @@ async function upRun() {
         // saved it to the library. No separate inline result card needed.
         const tk = result.tokens || {};
         const costStr = (typeof tk.charged === 'number')
-          ? (' \u00B7 ' + tk.charged + ' TOKEN' + (tk.charged === 1 ? '' : 'S') + ' \u00B7 BALANCE ' + tk.balance)
+          ? (' \u00B7 \u25C6 ' + tk.charged + ' \u00B7 BALANCE ' + tk.balance)
           : '';
         const backupStr = (typeof igHasDurableStorage === 'function' && igHasDurableStorage())
           ? ' \u00B7 saved to library + Drive'
@@ -21695,7 +21695,7 @@ function upAddResultCard(image, model, tokens) {
   const left = document.createElement('span');
   left.textContent = model.label;
   const right = document.createElement('span');
-  if (tokens && typeof tokens.perImage === 'number') right.textContent = tokens.perImage + ' TOK';
+  if (tokens && typeof tokens.perImage === 'number') right.innerHTML = '<i class="ti ti-diamond" aria-hidden="true"></i> ' + tokens.perImage;
   meta.appendChild(left); meta.appendChild(right);
 
   const actions = document.createElement('div');
@@ -21795,7 +21795,7 @@ try {
     </div>
     <div class="modal-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
-        <div style="font-size:12px;letter-spacing:1px;">BALANCE: <span id="bmUsageBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span> <span style="color:var(--muted);font-size:11px;">tokens</span></div>
+        <div style="font-size:12px;letter-spacing:1px;">BALANCE: <i class="ti ti-diamond" aria-hidden="true" style="color:var(--accent);font-size:13px;vertical-align:-1px;margin-right:2px;"></i><span id="bmUsageBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span></div>
         <button onclick="bmUsageRender(true)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);"><i class="ti ti-refresh"></i>REFRESH</button>
       </div>
       <div id="bmTokActivity" style="max-height:60vh;overflow-y:auto;border-top:1px solid var(--border);"></div>
