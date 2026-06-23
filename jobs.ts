@@ -90,7 +90,7 @@ function queueSeq(): string {
   return `${Date.now().toString().padStart(15, "0")}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-const JOB_TTL_MS = 24 * 60 * 60 * 1000; // keep done/failed records 24h for the UI
+const JOB_TTL_MS = 30 * 24 * 60 * 60 * 1000; // keep done/failed records 30 days for the history view
 
 /** Enqueue a new job. The token HOLD must already have been taken by the caller
  *  (the route does the quote+hold so it can return 402 synchronously). */
