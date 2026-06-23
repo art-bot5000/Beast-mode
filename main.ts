@@ -1013,6 +1013,8 @@ async function handler(req: Request): Promise<Response> {
         familyCodesAppend: Array.isArray(body.familyCodesAppend)
           ? (body.familyCodesAppend as unknown[]).filter((s) => typeof s === "string") as string[] : undefined,
         pinnedProtect: typeof body.pinnedProtect === "boolean" ? body.pinnedProtect : undefined,
+        igSettings: (body.igSettings && typeof body.igSettings === "object" && !Array.isArray(body.igSettings))
+          ? body.igSettings as Record<string, unknown> : undefined,
       });
       return json({ ok, patched: ok });
     } catch (e) {
