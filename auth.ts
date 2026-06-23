@@ -96,6 +96,25 @@ function isEnvelope(e: unknown): e is Envelope {
   return !!e && typeof (e as Envelope).wrapped === "string";
 }
 
+/** Canonical email for alias-abuse detection.
+ *  Strips +tags on any domain; strips dots on Gmail/Googlemail.
+ *  The result is only used for the duplicate-signup index — accounts are keyed
+ *  on the original emailHash, not the canonical one.
+ */
+function canonicaliseEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return email;
+  const domain = email.slice(at + 1);
+  let local = email.slice(0, at).split("+")[0];
+  if (domain === "gmail.com" || domain === "googlemail.com") local = local.replace(/\./g, "");
+  return local + "@" + domain;
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
+
 // Six-digit OTP. Delivery via Resend (email.ts) with console-log fallback.
 function makeOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -145,6 +164,18 @@ async function register(body: Record<string, unknown>): Promise<Response> {
   const existing = await kv.get<UserRecord>(["user", emailHash as string]);
   if (existing.value) return json({ error: "Account already exists", code: "exists" }, 409);
 
+  // Canonical form: strip plus-tags and dots from the local part for Gmail-style
+  // providers, then check a separate index. This prevents sign-up with
+  // user+1@gmail.com / u.s.e.r@gmail.com to circumvent free-tier limits.
+  // We store the canonical hash as an index entry (value = true) so the check is
+  // a single KV read. The real account key stays on the original emailHash.
+  const canonEmail = canonicaliseEmail((email as string).toLowerCase());
+  const canonHash = await sha256Hex(canonEmail);
+  if (canonHash !== (emailHash as string)) {
+    const canonExists = await kv.get(["emailcanon", canonHash]);
+    if (canonExists.value) return json({ error: "Account already exists", code: "exists" }, 409);
+  }
+
   const record: UserRecord = {
     emailHash: emailHash as string,
     email: (email as string).toLowerCase(),
@@ -156,9 +187,12 @@ async function register(body: Record<string, unknown>): Promise<Response> {
     createdAt: Date.now(),
   };
   // Atomic create: fail if someone registered the same hash in between.
+  // Also atomically write the canonical-email index to block alias re-use.
   const res = await kv.atomic()
     .check({ key: ["user", record.emailHash], versionstamp: null })
+    .check({ key: ["emailcanon", canonHash], versionstamp: null })
     .set(["user", record.emailHash], record)
+    .set(["emailcanon", canonHash], record.emailHash)
     .commit();
   if (!res.ok) return json({ error: "Account already exists", code: "exists" }, 409);
 
