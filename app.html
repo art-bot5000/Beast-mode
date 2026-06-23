@@ -19655,7 +19655,7 @@ function igRenderLibBar() {
       cell.appendChild(fam);
     }
     if (i2i) {
-      // Tickbox (bottom-right) toggles i2i ref selection.
+      // Tickbox (bottom-right) is the ONLY way to toggle i2i ref selection.
       const tick = document.createElement('button');
       tick.type = 'button';
       tick.className = 'ig-libbar-tick' + (selIdx >= 0 ? ' checked' : '');
@@ -19664,12 +19664,11 @@ function igRenderLibBar() {
       tick.setAttribute('aria-checked', selIdx >= 0 ? 'true' : 'false');
       tick.onclick = (e) => { e.stopPropagation(); igLibToggleRef(f); };
       cell.appendChild(tick);
-      // Tap anywhere on the thumb: toggle ref selection (same as the tickbox).
-      // If the thumb is already selected AND has a family, a second tap opens the family.
+      // Tapping anywhere else on the cell opens the family/source view if this
+      // image has one (one tap, not two). If it has no family, show in stage.
       cell.onclick = () => {
-        const alreadySel = igRefIndexForFav(f.id) >= 0;
-        if (alreadySel && igFavHasFamily(f)) igOpenFamilyForOutput(f);
-        else igLibToggleRef(f);
+        if (igFavHasFamily(f)) igOpenFamilyForOutput(f);
+        else igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
       };
     } else {
       cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
