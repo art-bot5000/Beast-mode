@@ -19519,13 +19519,12 @@ function igRenderLibBar() {
       tick.setAttribute('aria-checked', selIdx >= 0 ? 'true' : 'false');
       tick.onclick = (e) => { e.stopPropagation(); igLibToggleRef(f); };
       cell.appendChild(tick);
-      // Tapping the rest of the thumb OPENS the image's family (its i2i sources)
-      // if it has one; otherwise falls back to a preview. We accept EITHER a
-      // familyCode OR a non-empty familySrcIds — the view only needs the source
-      // id list, so an output whose code didn't persist is still openable.
+      // Tap anywhere on the thumb: toggle ref selection (same as the tickbox).
+      // If the thumb is already selected AND has a family, a second tap opens the family.
       cell.onclick = () => {
-        if (igFavHasFamily(f)) igOpenFamilyForOutput(f);
-        else igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
+        const alreadySel = igRefIndexForFav(f.id) >= 0;
+        if (alreadySel && igFavHasFamily(f)) igOpenFamilyForOutput(f);
+        else igLibToggleRef(f);
       };
     } else {
       cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
@@ -19654,6 +19653,8 @@ function igRenderFamilyBar() {
       if (typeof bmApplyThumb === 'function') bmApplyThumb(img, f);
       else img.src = f.imageData || ('/api/img/' + f.id);
       cell.appendChild(img);
+      // Tap anywhere on the thumb toggles ref selection (same as ticking the box).
+      cell.onclick = (e) => { e.stopPropagation(); igLibToggleRef(f); };
       if (selIdx >= 0) {
         const num = document.createElement('div');
         num.className = 'ig-libbar-selnum';
@@ -20338,37 +20339,44 @@ function upRenderLibBar() {
     if (upState.srcFavId === f.id) upAttachThumbGestures(cell, f);
     bar.appendChild(cell);
   });
+  // Scroll the selected thumb into view so on restore from Library
+  // the user doesn't have to hunt for it in the bar.
+  if (upState.srcFavId != null) {
+    const sel = bar.querySelector('.up-libbar-thumb.sel');
+    if (sel) requestAnimationFrame(() => sel.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }));
+  }
 }
 
-// Attach swipe-up + long-press recognisers to a selected bottom-bar thumb.
+// Attach swipe-up + double-tap recognisers to a selected bottom-bar thumb.
 // Either gesture opens the group modal for that fav. Idempotent per element.
 function upAttachThumbGestures(cell, fav) {
   if (!cell || cell._upGestured) return;
   cell._upGestured = true;
-  let startX = 0, startY = 0, moved = false, holdTimer = null, fired = false;
+  let startX = 0, startY = 0, fired = false;
   const SWIPE_UP = 28;   // px upward to count as a swipe
-  const SLOP = 16;       // px horizontal tolerance before we call it a scroll
-  const HOLD_MS = 450;   // long-press threshold
-  const clearHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } };
+  // Double-tap tracking
+  let lastTap = 0;
+  const DOUBLE_TAP_MS = 300;
   const open = () => {
-    if (fired) return; fired = true; clearHold();
+    if (fired) return; fired = true;
     if (typeof upOpenGroupModal === 'function') upOpenGroupModal(fav);
   };
   cell.addEventListener('touchstart', (e) => {
     const t = e.touches && e.touches[0]; if (!t) return;
-    startX = t.clientX; startY = t.clientY; moved = false; fired = false;
-    clearHold();
-    holdTimer = setTimeout(open, HOLD_MS);
+    startX = t.clientX; startY = t.clientY; fired = false;
   }, { passive: true });
   cell.addEventListener('touchmove', (e) => {
     const t = e.touches && e.touches[0]; if (!t) return;
     const dx = t.clientX - startX, dy = t.clientY - startY;
-    if (Math.abs(dx) > SLOP || Math.abs(dy) > SLOP) { moved = true; clearHold(); }
     if (dy <= -SWIPE_UP && Math.abs(dx) < Math.abs(dy)) open();
   }, { passive: true });
-  cell.addEventListener('touchend', () => { clearHold(); }, { passive: true });
-  cell.addEventListener('touchcancel', () => { clearHold(); }, { passive: true });
-  // Desktop parity (and trackpad testing): long-press via mouse + context menu.
+  cell.addEventListener('touchend', () => {
+    const now = Date.now();
+    if (now - lastTap < DOUBLE_TAP_MS) { open(); lastTap = 0; }
+    else { lastTap = now; }
+  }, { passive: true });
+  // Desktop parity: double-click or right-click context menu.
+  cell.addEventListener('dblclick', (e) => { e.preventDefault(); open(); });
   cell.addEventListener('contextmenu', (e) => { e.preventDefault(); open(); });
 }
 
