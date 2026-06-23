@@ -6584,7 +6584,12 @@ function buildLibCard(f) {
     if (promptEl.scrollHeight - promptEl.clientHeight > 2) expandBtn.style.display = ''
   })
   promptWrap.appendChild(expandBtn)
-  body.appendChild(promptWrap)
+  // Only attach the prompt block when there's something to show — image/upscale
+  // cards with no prompt text (and no particles) would otherwise leave an empty
+  // padded band between the status row and the actions bar.
+  if ((f.particles && f.particles.length) || promptText) {
+    body.appendChild(promptWrap)
+  }
 
   // ── Status row: sits directly below the image with no gap.
   // Left: UPSCALE (images only) + MARKUP. Right: ★ star + 📌 pin.
@@ -6644,7 +6649,16 @@ function buildLibCard(f) {
     card.appendChild(statusRow)
   }
 
-  card.appendChild(body)
+  // The tags row is always appended to body, but may be empty whitespace for
+  // image/upscale cards with no model/folder/cost tags. Only attach body to the
+  // card when it actually has rendered content — otherwise its 14px padding +
+  // flex:1 produces an empty gap between the status row and the actions bar.
+  const _bodyHasContent = Array.from(body.children).some(
+    el => el.classList.contains('lib-card-tags')
+      ? el.children.length > 0
+      : (el.textContent || '').trim().length > 0 || el.children.length > 0
+  )
+  if (_bodyHasContent) card.appendChild(body)
 
   // ── Actions bar ────────────────────────────────────────────
   const actions = document.createElement('div')
