@@ -6258,6 +6258,11 @@ function renderLibrary() {
     const nb = b.title || buildAutoTitle(b)
     return na.localeCompare(nb)
   })
+  // Pinned items always float to the top (within whatever sort/filter is active),
+  // except when browsing the __pinned__ folder itself (already filtered to pinned).
+  if (libActiveFolderId !== '__pinned__') {
+    items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+  }
 
   // Count
   if (count) {
@@ -6430,21 +6435,7 @@ function buildLibCard(f) {
       badge.innerHTML = mb.html
       imgWrap.appendChild(badge)
     }
-    // Overlay bottom-left: image type label
-    const _imgFavKind = bmFavKind(f)
-    const _imgIsI2I   = bmFavIsI2I(f)
-    const _typeLabel  = _imgFavKind === 'upscale' ? 'UPSCALE'
-      : _imgIsI2I ? 'IMAGE → IMAGE'
-      : 'TEXT → IMAGE'
-    const typeOverlay = document.createElement('div')
-    typeOverlay.className = 'lib-card-img-type'
-    typeOverlay.textContent = _typeLabel
-    imgWrap.appendChild(typeOverlay)
-    // Overlay bottom-right: age label
-    const ageOverlay = document.createElement('div')
-    ageOverlay.className = 'lib-card-img-age'
-    ageOverlay.textContent = formatDate(f.createdAt || f.id)
-    imgWrap.appendChild(ageOverlay)
+    // Overlay bottom-right: age label — now moved to actions row; omit from here.
     card.appendChild(imgWrap)
   } else {
     const ph = document.createElement('div')
@@ -6543,20 +6534,7 @@ function buildLibCard(f) {
   const tags = document.createElement('div')
   tags.className = 'lib-card-tags'
   const folder = f.folderId ? libFolders.find(x => x.id === f.folderId) : null
-  // Mode tag: images and upscales are tagged by their KIND (not the stale
-  // Beast-Mode currentMode that leaked an erroneous "INSECT" onto generated
-  // images). Generated images are further split into text→image vs image→image
-  // by whether they carry i2i source links. Prompt cards keep their authoring
-  // mode (insect/beast/fusion).
-  const _isI2I = bmFavIsI2I(f)
-  const modeName = (_favKind === 'image') ? (_isI2I ? 'i2i' : 'image')
-    : (_favKind === 'upscale') ? 'upscale'
-    : (f.mode || 'image')
-  const modeLabel = modeName === 'i2i' ? 'IMAGE → IMAGE'
-    : modeName === 'image' ? 'TEXT → IMAGE'
-    : modeName.toUpperCase()
   tags.innerHTML = `
-    <span class="lib-tag mode-${modeName}">${modeLabel}</span>
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || f.model) : bmModelLabel(f.model)}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
@@ -6622,29 +6600,67 @@ function buildLibCard(f) {
 
   // ── Image action buttons (only when image present) ────────────
   // "Upscale" takes this image into the Upscaler; "Markup" opens it in the
-  // vector image editor. Shown for ANY image-kind card — including i2i outputs
-  // and favourites that only carry a server URL / thumbnail (no inline bytes),
-  // not just ones with inline imageData. bmFavKind === 'image' is the canonical
-  // test (imageData || thumbKey || serverImageUrl, and not an upscale/prompt).
-  if (bmFavKind(f) === 'image') {
+  // ── Status row (above actions): Markup always; Upscale for image cards only.
+  // Pin, Star and age live on the right for ALL image/upscale cards.
+  if (_favKind === 'image' || _favKind === 'upscale') {
     const statusRow = document.createElement('div')
     statusRow.className = 'lib-card-img-status'
 
-    const imgActionDefs = [
-      { label:'⬆ UPSCALE', title:'Open this image in the Upscaler',
-        fn: () => sendToUpscaler(f) },
-      { label:'✎ MARKUP',  title:'Open this image in the vector editor',
-        fn: () => markupFav(f) },
-    ]
-    imgActionDefs.forEach(a => {
-      const btn = document.createElement('button')
-      btn.type = 'button'
-      btn.className = 'img-status-pill img-status-action'
-      btn.textContent = a.label
-      btn.title = a.title
-      btn.onclick = e => { e.stopPropagation(); a.fn() }
-      statusRow.appendChild(btn)
-    })
+    // Left: action pills
+    const leftPills = document.createElement('div')
+    leftPills.className = 'lib-card-status-left'
+    if (_favKind === 'image') {
+      const upBtn = document.createElement('button')
+      upBtn.type = 'button'; upBtn.className = 'img-status-pill img-status-action'
+      upBtn.textContent = '⬆ UPSCALE'; upBtn.title = 'Open this image in the Upscaler'
+      upBtn.onclick = e => { e.stopPropagation(); sendToUpscaler(f) }
+      leftPills.appendChild(upBtn)
+    }
+    const mkBtn = document.createElement('button')
+    mkBtn.type = 'button'; mkBtn.className = 'img-status-pill img-status-action'
+    mkBtn.textContent = '✎ MARKUP'; mkBtn.title = 'Open this image in the vector editor'
+    mkBtn.onclick = e => { e.stopPropagation(); markupFav(f) }
+    leftPills.appendChild(mkBtn)
+    statusRow.appendChild(leftPills)
+
+    // Right: pin | star | age
+    const rightGroup = document.createElement('div')
+    rightGroup.className = 'lib-card-status-right'
+
+    const srPinBtn = document.createElement('button')
+    srPinBtn.className = 'lib-pin-btn' + (f.pinned ? ' pinned' : '')
+    srPinBtn.textContent = '📌'; srPinBtn.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+    srPinBtn.onclick = e => {
+      e.stopPropagation(); f.pinned = !f.pinned; f.updatedAt = Date.now()
+      srPinBtn.className = 'lib-pin-btn' + (f.pinned ? ' pinned' : '')
+      srPinBtn.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+      driveSavePrompt(f)
+      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
+      renderFolderSidebar()
+      const hdrPin = card.querySelector('.lib-card-header .lib-pin-btn')
+      if (hdrPin) { hdrPin.className = srPinBtn.className; hdrPin.title = srPinBtn.title }
+    }
+
+    const srStarBtn = document.createElement('button')
+    srStarBtn.className = 'lib-star-btn' + (f.starred ? ' starred' : '')
+    srStarBtn.textContent = '★'; srStarBtn.title = f.starred ? 'Unstar' : 'Star'
+    srStarBtn.onclick = e => {
+      e.stopPropagation(); f.starred = !f.starred; f.updatedAt = Date.now()
+      srStarBtn.className = 'lib-star-btn' + (f.starred ? ' starred' : '')
+      srStarBtn.title = f.starred ? 'Unstar' : 'Star'
+      driveSavePrompt(f)
+      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
+      renderFolderSidebar()
+      const hdrStar = card.querySelector('.lib-card-header .lib-star-btn')
+      if (hdrStar) { hdrStar.className = srStarBtn.className; hdrStar.title = srStarBtn.title }
+    }
+
+    const ageSpan = document.createElement('span')
+    ageSpan.className = 'lib-card-status-age'
+    ageSpan.textContent = formatDate(f.createdAt || f.id)
+
+    rightGroup.appendChild(srPinBtn); rightGroup.appendChild(srStarBtn); rightGroup.appendChild(ageSpan)
+    statusRow.appendChild(rightGroup)
     card.appendChild(statusRow)
   }
 
@@ -19026,20 +19042,30 @@ function igApplySettings(s) {
   const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
   if (typeof s.modelId === 'string' && IG_MODELS.some(m => m.id === s.modelId)) igState.modelId = s.modelId;
   const modelSel = document.getElementById('igModel'); if (modelSel) modelSel.value = igState.modelId;
-  if (typeof s.res === 'string') igState.res = s.res;
-  if (typeof s.ar === 'string') igState.ar = s.ar;
+  // Run igModelChanged FIRST so it can reset dims/sampler defaults for the model —
+  // then re-apply the restored res/ar so they win over the model defaults.
+  if (typeof igModelChanged === 'function') igModelChanged();
+  // Re-apply res/ar AFTER igModelChanged (which may have reset them to defaults).
+  if (typeof s.res === 'string') {
+    const m = igModel();
+    if (m && m.dims && Object.keys(m.dims).includes(s.res)) igState.res = s.res;
+  }
+  if (typeof s.ar === 'string') {
+    const m = igModel();
+    if (m && m.dims && m.dims[igState.res]) {
+      const validAR = s.ar === 'AUTO' ? (m.autoAR && igState.refs.length) : Object.keys(m.dims[igState.res]).includes(s.ar);
+      if (validAR) igState.ar = s.ar;
+    }
+  }
   if (typeof s.quality === 'string') igState.quality = s.quality;
   if (typeof s.speed === 'string') igState.speed = s.speed;
-  // Normalise res/ar against the model's dimension table + seed sampler
-  // defaults FIRST (igModelChanged also re-renders the dependent controls)…
-  if (typeof igModelChanged === 'function') igModelChanged();
-  // …THEN write the input-backed fields so the restored values win over the
-  // model's defaults (steps/cfg) rather than being clobbered by them.
+  // Write input-backed fields.
   if (typeof s.prompt === 'string') setVal('igPrompt', s.prompt);
   setVal('igNegative', s.negative || '');
   setVal('igSeed', s.seed || '');
   if (s.steps) setVal('igSteps', s.steps);
   if (s.cfg) setVal('igCfg', s.cfg);
+  // Final render: selects + chips reflect the fully-restored state.
   if (typeof igRenderAll === 'function') igRenderAll();
   return true;
 }
