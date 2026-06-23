@@ -6705,7 +6705,7 @@ function libOpenInfo(favId) {
   if (!f || !body || !modal) return
 
   // Prompt — strip any leading [tag] marker the same way the card does.
-  const promptText = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').trim()
+  let promptText = (f.promptOnly || f.text || '').replace(/\[.*?\]\s*/, '').trim()
 
   // Settings — depends on the kind of item.
   //  • Upscales: build from upscaleMeta (+ its captured request params) and the
@@ -6736,6 +6736,26 @@ function libOpenInfo(favId) {
     settings = f.igSettings
   } else if (typeof extractSettings === 'function') {
     try { settings = extractSettings(f.text || '') } catch (_) { settings = null }
+  }
+
+  // If the top-level prompt is empty but settings carries a Prompt key, promote it
+  // to the top section and drop it from the settings table to avoid duplication.
+  if (!promptText && settings && typeof settings === 'object') {
+    const promptKey = Object.keys(settings).find(k => k.toLowerCase() === 'prompt')
+    if (promptKey) {
+      promptText = String(settings[promptKey] || '').trim()
+      const clone = Object.assign({}, settings)
+      delete clone[promptKey]
+      settings = Object.keys(clone).length ? clone : null
+    }
+  } else if (promptText && settings && typeof settings === 'object') {
+    // Prompt is already shown at top — remove duplicate from settings table.
+    const promptKey = Object.keys(settings).find(k => k.toLowerCase() === 'prompt')
+    if (promptKey) {
+      const clone = Object.assign({}, settings)
+      delete clone[promptKey]
+      settings = Object.keys(clone).length ? clone : null
+    }
   }
 
   // i2i source favourites, resolved from the stamped library favIds.
@@ -6773,6 +6793,12 @@ function libOpenInfo(favId) {
       let v = settings[k]
       if (v == null || v === '') return
       if (typeof v === 'object') { try { v = JSON.stringify(v) } catch (_) { v = String(v) } }
+      // Resolve model IDs to friendly names.
+      const kLow = String(k).toLowerCase().replace(/[_\s-]/g, '')
+      if ((kLow === 'modelid' || kLow === 'model') && typeof bmModelLabel === 'function') {
+        const friendly = bmModelLabel(String(v))
+        if (friendly) v = friendly
+      }
       rows += `<div class="lib-info-setting">
         <span class="lib-info-setting-key">${esc(libFmtSettingKey(k))}</span>
         <span class="lib-info-setting-val">${esc(v)}</span>
