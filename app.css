@@ -2879,24 +2879,17 @@ img.bm-thumb-missing { background:var(--surface2); }
   font-family:'IBM Plex Mono',monospace;font-style:italic;
   font-weight:700;font-size:15px;line-height:1;
 }
-/* Star + pin overlays on image cards — compact, stacked below the info button */
-.lib-img-ovr-star, .lib-img-ovr-pin {
-  position:absolute;right:8px;z-index:3;
-  width:24px;height:24px;border-radius:50%;
-  background:rgba(0,0,0,.55);backdrop-filter:blur(3px);
-  border:1px solid rgba(255,255,255,.15);
-  color:rgba(255,255,255,.4);cursor:pointer;padding:0;font-size:13px;line-height:1;
-  display:flex;align-items:center;justify-content:center;
-  transition:all .15s;opacity:0;
+/* Star + pin in the status row (right side) */
+.lib-sr-star, .lib-sr-pin {
+  background:none;border:none;cursor:pointer;line-height:1;
+  padding:2px 4px;border-radius:4px;transition:transform .12s,color .12s;
+  color:var(--muted);font-size:16px;
 }
-.lib-card:hover .lib-img-ovr-star,
-.lib-card:hover .lib-img-ovr-pin { opacity:.8; }
-.lib-img-ovr-star { top:40px; }
-.lib-img-ovr-pin  { top:70px; font-size:11px; }
-.lib-img-ovr-star.starred { color:#ffcc00;opacity:1!important;border-color:rgba(255,204,0,.4); }
-.lib-img-ovr-pin.pinned   { color:#ff9f43;opacity:1!important;border-color:rgba(255,159,67,.4); }
-.lib-img-ovr-star:hover { color:#ffcc00;opacity:1!important;transform:scale(1.1); }
-.lib-img-ovr-pin:hover  { color:#ff9f43;opacity:1!important;transform:scale(1.1); }
+.lib-sr-star.starred { color:#ffcc00; }
+.lib-sr-pin          { font-size:13px; opacity:.45; }
+.lib-sr-pin.pinned   { color:#ff9f43; opacity:1; }
+.lib-sr-star:hover   { color:#ffcc00; transform:scale(1.2); }
+.lib-sr-pin:hover    { color:#ff9f43; opacity:1; transform:scale(1.15); }
 
 /* New i2i mode tag colour (pink) — distinct from text→image blue. */
 .lib-tag.mode-i2i {

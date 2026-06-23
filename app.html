@@ -6427,37 +6427,6 @@ function buildLibCard(f) {
     infoBtn.innerHTML = '<span class="lib-info-i">i</span>'
     infoBtn.onclick = e => { e.stopPropagation(); libOpenInfo(f.id) }
     imgWrap.appendChild(infoBtn)
-    // Star + pin overlays (top-right, stacked below info button)
-    const ovrStar = document.createElement('button')
-    ovrStar.className = 'lib-img-ovr-star' + (f.starred ? ' starred' : '')
-    ovrStar.type = 'button'
-    ovrStar.textContent = '★'
-    ovrStar.title = f.starred ? 'Unstar' : 'Star'
-    ovrStar.onclick = e => {
-      e.stopPropagation()
-      f.starred = !f.starred; f.updatedAt = Date.now()
-      ovrStar.className = 'lib-img-ovr-star' + (f.starred ? ' starred' : '')
-      ovrStar.title = f.starred ? 'Unstar' : 'Star'
-      driveSavePrompt(f)
-      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
-      renderFolderSidebar()
-    }
-    imgWrap.appendChild(ovrStar)
-    const ovrPin = document.createElement('button')
-    ovrPin.className = 'lib-img-ovr-pin' + (f.pinned ? ' pinned' : '')
-    ovrPin.type = 'button'
-    ovrPin.textContent = '📌'
-    ovrPin.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
-    ovrPin.onclick = e => {
-      e.stopPropagation()
-      f.pinned = !f.pinned; f.updatedAt = Date.now()
-      ovrPin.className = 'lib-img-ovr-pin' + (f.pinned ? ' pinned' : '')
-      ovrPin.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
-      driveSavePrompt(f)
-      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
-      renderFolderSidebar()
-    }
-    imgWrap.appendChild(ovrPin)
     // Mode badge (top-left)
     const mb = bmFavModeBadge(f)
     if (mb) {
@@ -6467,7 +6436,6 @@ function buildLibCard(f) {
       badge.innerHTML = mb.html
       imgWrap.appendChild(badge)
     }
-    // Overlay bottom-right: age label — now moved to actions row; omit from here.
     card.appendChild(imgWrap)
   } else {
     const ph = document.createElement('div')
@@ -6618,16 +6586,10 @@ function buildLibCard(f) {
   promptWrap.appendChild(expandBtn)
   body.appendChild(promptWrap)
 
-  // Stars + meta (only the starred button — 5-star rating removed)
-  const meta = document.createElement('div')
-  meta.className = 'lib-card-meta'
-  body.appendChild(meta)
-
-  card.appendChild(body)
-
-  // ── Image action buttons (only when image present) ────────────
-  // "Upscale" takes this image into the Upscaler; "Markup" opens it in the
-  // ── Status row (above actions): Markup always; Upscale for image cards only.
+  // ── Status row: sits directly below the image with no gap.
+  // Left: UPSCALE (images only) + MARKUP. Right: ★ star + 📌 pin.
+  // body (tags/prompt) is appended AFTER the status row so the image
+  // sits flush against the action bar with no padding gap between them.
   if (_favKind === 'image' || _favKind === 'upscale') {
     const statusRow = document.createElement('div')
     statusRow.className = 'lib-card-img-status'
@@ -6645,8 +6607,44 @@ function buildLibCard(f) {
     mkBtn.onclick = e => { e.stopPropagation(); markupFav(f) }
     statusRow.appendChild(mkBtn)
 
+    // Spacer pushes star + pin to the far right
+    const srSpacer = document.createElement('div'); srSpacer.style.flex = '1'
+    statusRow.appendChild(srSpacer)
+
+    const srStar = document.createElement('button')
+    srStar.type = 'button'
+    srStar.className = 'lib-sr-star' + (f.starred ? ' starred' : '')
+    srStar.textContent = '★'
+    srStar.title = f.starred ? 'Unstar' : 'Star'
+    srStar.onclick = e => {
+      e.stopPropagation(); f.starred = !f.starred; f.updatedAt = Date.now()
+      srStar.className = 'lib-sr-star' + (f.starred ? ' starred' : '')
+      srStar.title = f.starred ? 'Unstar' : 'Star'
+      driveSavePrompt(f)
+      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
+      renderFolderSidebar()
+    }
+    statusRow.appendChild(srStar)
+
+    const srPin = document.createElement('button')
+    srPin.type = 'button'
+    srPin.className = 'lib-sr-pin' + (f.pinned ? ' pinned' : '')
+    srPin.textContent = '📌'
+    srPin.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+    srPin.onclick = e => {
+      e.stopPropagation(); f.pinned = !f.pinned; f.updatedAt = Date.now()
+      srPin.className = 'lib-sr-pin' + (f.pinned ? ' pinned' : '')
+      srPin.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+      driveSavePrompt(f)
+      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
+      renderFolderSidebar()
+    }
+    statusRow.appendChild(srPin)
+
     card.appendChild(statusRow)
   }
+
+  card.appendChild(body)
 
   // ── Actions bar ────────────────────────────────────────────
   const actions = document.createElement('div')
