@@ -22118,6 +22118,14 @@ try {
   border-radius:4px; padding:10px 12px; font-size:14px; font-family:'IBM Plex Sans',sans-serif; width:100%;
 }
 .bm-auth-input:focus { outline:none; border-color:var(--accent,#00ffb0); }
+.bm-pass-wrap { position:relative; display:block; }
+.bm-pass-wrap .bm-auth-input { width:100%; box-sizing:border-box; padding-right:38px; }
+.bm-pass-eye {
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  background:none; border:none; cursor:pointer; font-size:16px; line-height:1;
+  color:var(--muted,#888); padding:4px; opacity:.55;
+}
+.bm-pass-eye:hover { opacity:1; }
 .bm-auth-btn {
   background:var(--accent,#00ffb0); color:#000; border:none; border-radius:4px;
   padding:11px; font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:700; letter-spacing:1.5px;
@@ -22213,11 +22221,16 @@ function renderPanel(panel, ctx = {}) {
 function renderLogin() {
   titleEl().textContent = '// SIGN IN';
   body().innerHTML = `
-    <div class="bm-auth-label">Email</div>
-    <input class="bm-auth-input" id="bmLEmail" type="email" autocomplete="email">
-    <div class="bm-auth-label">Passphrase</div>
-    <input class="bm-auth-input" id="bmLPass" type="password" autocomplete="current-password">
-    <button class="bm-auth-btn" id="bmLBtn">Sign In</button>
+    <form autocomplete="on" onsubmit="return false" style="display:contents;">
+      <div class="bm-auth-label">Email</div>
+      <input class="bm-auth-input" id="bmLEmail" type="email" name="email" autocomplete="email">
+      <div class="bm-auth-label">Passphrase</div>
+      <div class="bm-pass-wrap">
+        <input class="bm-auth-input" id="bmLPass" type="password" name="password" autocomplete="current-password" style="padding-right:38px;">
+        <button type="button" class="bm-pass-eye" id="bmLEye" tabindex="-1" aria-label="Show passphrase">👁</button>
+      </div>
+      <button class="bm-auth-btn" id="bmLBtn" type="submit">Sign In</button>
+    </form>
     <div class="bm-auth-msg" id="bmLMsg"></div>
     <div class="bm-auth-switch">No account? <a id="bmToReg">Create one</a></div>
     <div class="bm-auth-switch"><a id="bmToRecover">Forgot passphrase? Recover</a></div>
@@ -22226,6 +22239,17 @@ function renderLogin() {
   document.getElementById('bmToReg').onclick = () => renderPanel('register');
   document.getElementById('bmToRecover').onclick = () => renderPanel('recover');
   document.getElementById('bmLBtn').onclick = doLogin;
+  // Password show/hide toggle
+  const eye = document.getElementById('bmLEye');
+  const passEl = document.getElementById('bmLPass');
+  if (eye && passEl) {
+    eye.onclick = () => {
+      const show = passEl.type === 'password';
+      passEl.type = show ? 'text' : 'password';
+      eye.textContent = show ? '🙈' : '👁';
+      eye.setAttribute('aria-label', show ? 'Hide passphrase' : 'Show passphrase');
+    };
+  }
   const pkLink = document.getElementById('bmToPasskey');
   if (pkLink) pkLink.onclick = doPasskeyLogin;
 }

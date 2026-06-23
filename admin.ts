@@ -222,6 +222,19 @@ async function restoreAccount(body: Record<string, unknown>, ip: string): Promis
   return json({ ok: true });
 }
 
+async function clearLoginRateLimit(body: Record<string, unknown>, ip: string): Promise<Response> {
+  const emailHash = body.emailHash;
+  if (typeof emailHash !== "string") return json({ error: "emailHash required", code: "bad_request" }, 400);
+  const rec = await kv.get<number[]>(["loginhits", emailHash]);
+  if (!rec.value || rec.value.length === 0) {
+    return json({ ok: true, cleared: 0, note: "No active rate-limit for this account" });
+  }
+  const count = rec.value.length;
+  await kv.delete(["loginhits", emailHash]);
+  await audit("account.unlock_rate_limit", emailHash, ip, `cleared ${count} login hit(s)`);
+  return json({ ok: true, cleared: count });
+}
+
 async function purgeAccount(body: Record<string, unknown>, ip: string): Promise<Response> {
   const emailHash = body.emailHash;
   if (typeof emailHash !== "string") return json({ error: "emailHash required", code: "bad_request" }, 400);
@@ -289,6 +302,8 @@ export async function handleAdmin(req: Request, path: string): Promise<Response>
       return restoreAccount(body, ip);
     case "/admin/purge-account":
       return purgeAccount(body, ip);
+    case "/admin/clear-login-rate-limit":
+      return clearLoginRateLimit(body, ip);
     case "/admin/tokens/grant": {
       const emailHash = body.emailHash;
       const tokens = Number(body.tokens);
