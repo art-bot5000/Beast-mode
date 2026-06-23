@@ -1285,7 +1285,8 @@ handleShareTarget()
     </div>
     <div class="up-settings-modal-body" id="upSettingsModalBody"></div>
     <div class="up-settings-modal-foot">
-      <button class="btn btn-primary" type="button" style="width:100%;padding:12px;letter-spacing:2px;" onclick="upCloseSettingsModal()">DONE</button>
+      <button class="btn btn-primary" type="button" id="upModalRunBtn" onclick="upRun();upCloseSettingsModal()" style="flex:1;padding:12px;letter-spacing:2px;">UPSCALE</button>
+      <button class="btn btn-ghost"   type="button" onclick="upCloseSettingsModal()" style="flex:0 0 auto;padding:12px 20px;letter-spacing:2px;">DONE</button>
     </div>
   </div>
 </div>
@@ -6601,66 +6602,23 @@ function buildLibCard(f) {
   // ── Image action buttons (only when image present) ────────────
   // "Upscale" takes this image into the Upscaler; "Markup" opens it in the
   // ── Status row (above actions): Markup always; Upscale for image cards only.
-  // Pin, Star and age live on the right for ALL image/upscale cards.
   if (_favKind === 'image' || _favKind === 'upscale') {
     const statusRow = document.createElement('div')
     statusRow.className = 'lib-card-img-status'
 
-    // Left: action pills
-    const leftPills = document.createElement('div')
-    leftPills.className = 'lib-card-status-left'
     if (_favKind === 'image') {
       const upBtn = document.createElement('button')
       upBtn.type = 'button'; upBtn.className = 'img-status-pill img-status-action'
       upBtn.textContent = '⬆ UPSCALE'; upBtn.title = 'Open this image in the Upscaler'
       upBtn.onclick = e => { e.stopPropagation(); sendToUpscaler(f) }
-      leftPills.appendChild(upBtn)
+      statusRow.appendChild(upBtn)
     }
     const mkBtn = document.createElement('button')
     mkBtn.type = 'button'; mkBtn.className = 'img-status-pill img-status-action'
     mkBtn.textContent = '✎ MARKUP'; mkBtn.title = 'Open this image in the vector editor'
     mkBtn.onclick = e => { e.stopPropagation(); markupFav(f) }
-    leftPills.appendChild(mkBtn)
-    statusRow.appendChild(leftPills)
+    statusRow.appendChild(mkBtn)
 
-    // Right: pin | star | age
-    const rightGroup = document.createElement('div')
-    rightGroup.className = 'lib-card-status-right'
-
-    const srPinBtn = document.createElement('button')
-    srPinBtn.className = 'lib-pin-btn' + (f.pinned ? ' pinned' : '')
-    srPinBtn.textContent = '📌'; srPinBtn.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
-    srPinBtn.onclick = e => {
-      e.stopPropagation(); f.pinned = !f.pinned; f.updatedAt = Date.now()
-      srPinBtn.className = 'lib-pin-btn' + (f.pinned ? ' pinned' : '')
-      srPinBtn.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
-      driveSavePrompt(f)
-      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
-      renderFolderSidebar()
-      const hdrPin = card.querySelector('.lib-card-header .lib-pin-btn')
-      if (hdrPin) { hdrPin.className = srPinBtn.className; hdrPin.title = srPinBtn.title }
-    }
-
-    const srStarBtn = document.createElement('button')
-    srStarBtn.className = 'lib-star-btn' + (f.starred ? ' starred' : '')
-    srStarBtn.textContent = '★'; srStarBtn.title = f.starred ? 'Unstar' : 'Star'
-    srStarBtn.onclick = e => {
-      e.stopPropagation(); f.starred = !f.starred; f.updatedAt = Date.now()
-      srStarBtn.className = 'lib-star-btn' + (f.starred ? ' starred' : '')
-      srStarBtn.title = f.starred ? 'Unstar' : 'Star'
-      driveSavePrompt(f)
-      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
-      renderFolderSidebar()
-      const hdrStar = card.querySelector('.lib-card-header .lib-star-btn')
-      if (hdrStar) { hdrStar.className = srStarBtn.className; hdrStar.title = srStarBtn.title }
-    }
-
-    const ageSpan = document.createElement('span')
-    ageSpan.className = 'lib-card-status-age'
-    ageSpan.textContent = formatDate(f.createdAt || f.id)
-
-    rightGroup.appendChild(srPinBtn); rightGroup.appendChild(srStarBtn); rightGroup.appendChild(ageSpan)
-    statusRow.appendChild(rightGroup)
     card.appendChild(statusRow)
   }
 
@@ -21852,11 +21810,13 @@ function upStatus(msg, isError) {
 // with the panel's #upRunBtn (label/cost-hint + busy disabled state).
 function upSyncMobileRunBtn() {
   const src = document.getElementById('upRunBtn');
-  const dst = document.getElementById('upStageRunBtn');
-  if (!src || !dst) return;
-  dst.innerHTML = src.innerHTML;
-  dst.disabled = src.disabled;
-  dst.style.opacity = src.style.opacity || '1';
+  const targets = ['upStageRunBtn', 'upModalRunBtn'].map(id => document.getElementById(id)).filter(Boolean);
+  if (!src || !targets.length) return;
+  targets.forEach(dst => {
+    dst.innerHTML = src.innerHTML;
+    dst.disabled = src.disabled;
+    dst.style.opacity = src.style.opacity || '1';
+  });
 }
 
 // Briefly show "✓ SENT TO QUEUE" on the Upscale button(s), then let the next
@@ -21868,6 +21828,7 @@ function upFlashSentToQueue() {
   const targets = [
     document.getElementById('upRunBtn'),
     document.getElementById('upStageRunBtn'),
+    document.getElementById('upModalRunBtn'),
   ].filter(Boolean);
   if (!targets.length) return;
   targets.forEach((dst) => {
@@ -22335,7 +22296,11 @@ async function doPasskeyLogin() {
 
 async function doLogin() {
   const email = document.getElementById('bmLEmail').value.trim();
-  const pass = document.getElementById('bmLPass').value;
+  // Some password managers (especially on Android/mobile) inject a trailing \r
+  // or \n when using programmatic autofill — the field's .value ends up with an
+  // extra character that never appears in the visible field but corrupts the
+  // PBKDF2 verifier. Stripping \r\n here matches what the user sees.
+  const pass = document.getElementById('bmLPass').value.replace(/[\r\n]/g, '');
   const msg = document.getElementById('bmLMsg');
   const btn = document.getElementById('bmLBtn');
   if (!email || !pass) { msg.className = 'bm-auth-msg err'; msg.textContent = 'Enter email and passphrase.'; return; }
