@@ -1,7 +1,7 @@
 // Beast Mode // Service Worker
 // v4.2 — message-based update flow
 
-const CACHE_NAME = 'beast-mode-v6.89'
+const CACHE_NAME = 'beast-mode-v6.90'
 
 const CACHE_URLS = [
   './',

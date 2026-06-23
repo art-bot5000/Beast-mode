@@ -6427,6 +6427,37 @@ function buildLibCard(f) {
     infoBtn.innerHTML = '<span class="lib-info-i">i</span>'
     infoBtn.onclick = e => { e.stopPropagation(); libOpenInfo(f.id) }
     imgWrap.appendChild(infoBtn)
+    // Star + pin overlays (top-right, stacked below info button)
+    const ovrStar = document.createElement('button')
+    ovrStar.className = 'lib-img-ovr-star' + (f.starred ? ' starred' : '')
+    ovrStar.type = 'button'
+    ovrStar.textContent = '★'
+    ovrStar.title = f.starred ? 'Unstar' : 'Star'
+    ovrStar.onclick = e => {
+      e.stopPropagation()
+      f.starred = !f.starred; f.updatedAt = Date.now()
+      ovrStar.className = 'lib-img-ovr-star' + (f.starred ? ' starred' : '')
+      ovrStar.title = f.starred ? 'Unstar' : 'Star'
+      driveSavePrompt(f)
+      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
+      renderFolderSidebar()
+    }
+    imgWrap.appendChild(ovrStar)
+    const ovrPin = document.createElement('button')
+    ovrPin.className = 'lib-img-ovr-pin' + (f.pinned ? ' pinned' : '')
+    ovrPin.type = 'button'
+    ovrPin.textContent = '📌'
+    ovrPin.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+    ovrPin.onclick = e => {
+      e.stopPropagation()
+      f.pinned = !f.pinned; f.updatedAt = Date.now()
+      ovrPin.className = 'lib-img-ovr-pin' + (f.pinned ? ' pinned' : '')
+      ovrPin.title = f.pinned ? 'Unpin' : 'Pin (protects from auto-deletion)'
+      driveSavePrompt(f)
+      if (typeof bmRegisterUpscaleMeta === 'function') bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
+      renderFolderSidebar()
+    }
+    imgWrap.appendChild(ovrPin)
     // Mode badge (top-left)
     const mb = bmFavModeBadge(f)
     if (mb) {
@@ -6490,8 +6521,9 @@ function buildLibCard(f) {
   const dateEl = document.createElement('div')
   dateEl.className = 'lib-card-date'
   dateEl.textContent = formatDate(f.createdAt || f.id)
-  // Title: only PROMPT cards get the editable rename field. Generated images
-  // and upscales no longer carry an editable title under the card.
+  // Title + star + pin: only PROMPT cards get the full header row with editable
+  // title. Image / upscale cards no longer have a header strip — star and pin
+  // are accessible as compact overlay buttons on the image itself.
   if (_favKind === 'prompt') {
     const titleEl = document.createElement('input')
     titleEl.className = 'lib-card-title'
@@ -6510,15 +6542,9 @@ function buildLibCard(f) {
     header.appendChild(pinBtn)
     header.appendChild(titleEl)
     header.appendChild(dateEl)
-  } else {
-    // Image / upscale: star + pin only — date lives in the image overlay.
-    const spacer = document.createElement('div')
-    spacer.style.flex = '1'
-    header.appendChild(starBtn)
-    header.appendChild(pinBtn)
-    header.appendChild(spacer)
+    body.appendChild(header)
   }
-  body.appendChild(header)
+  // For image/upscale cards: star + pin are added to the imgWrap overlay below.
 
   // Creatures line
   const cr = extractCreatures(f)
