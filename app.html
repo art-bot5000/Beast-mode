@@ -17170,6 +17170,10 @@ async function bmSyncLibraryFromManifest() {
       if (Array.isArray(m.familyCodes) && m.familyCodes.length) {
         fav.familyCodes = m.familyCodes.filter(c => typeof c === 'string' && c);
       }
+      // igSettings — restores Restore-button and info-panel on rehydrated images.
+      if (m.igSettings && typeof m.igSettings === 'object') {
+        fav.igSettings = m.igSettings;
+      }
       favourites.push(fav);
       added++;
     }
@@ -17435,12 +17439,23 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
     // register lineage only; upscales also register their linkage above.
     try {
       if (fav.id != null && typeof bmRegisterUpscaleMeta === 'function') {
-        bmRegisterUpscaleMeta(fav.id, {
+        const metaPatch = {
           lineage: fav.lineage || null,
           isUpscale: !!fav.isUpscale,
           outW: (typeof fav.outW === 'number') ? fav.outW : null,
           outH: (typeof fav.outH === 'number') ? fav.outH : null,
-        });
+        };
+        // For generated images (not upscales): also durably store the igSettings
+        // snapshot so Restore + the info panel work on rehydrated favs after a
+        // re-login when the ZK doc hasn't loaded yet.
+        if (!fav.isUpscale && fav.igSettings && typeof fav.igSettings === 'object') {
+          metaPatch.igSettings = fav.igSettings;
+        }
+        if (!fav.isUpscale && fav.familyCode) metaPatch.familyCode = fav.familyCode;
+        if (!fav.isUpscale && Array.isArray(fav.familySrcIds) && fav.familySrcIds.length) {
+          metaPatch.familySrcIds = fav.familySrcIds.map(String);
+        }
+        bmRegisterUpscaleMeta(fav.id, metaPatch);
       }
     } catch (_) {}
     if (typeof favourites !== 'undefined') {
