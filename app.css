@@ -3535,11 +3535,11 @@ body.up-settings-modal-open { overflow:hidden; }
 }
 .up-group-item {
   position:relative; border:2px solid transparent; border-radius:10px;
-  overflow:hidden; background:#000; cursor:pointer;
+  overflow:hidden; background:transparent; cursor:pointer;
 }
 .up-group-item.sel { border-color:var(--accent); }
 .up-group-item > img {
-  display:block; width:100%; max-height:46vh; object-fit:contain; background:transparent;
+  display:block; width:100%; height:auto; object-fit:contain; background:transparent;
 }
 .up-group-item-tag {
   position:absolute; top:8px; left:8px;
