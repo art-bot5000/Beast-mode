@@ -18177,7 +18177,13 @@ async function bmUsageRender(force) {
   // Fold holds into their settle/refund outcome (entries are newest-first).
   const outcomes = {};
   entries.forEach(en => { if ((en.type === 'settle' || en.type === 'refund') && en.ref) outcomes[en.ref] = en.type; });
-  const modelLabel = id => { const m = (typeof IG_MODELS !== 'undefined') && IG_MODELS.find(x => x.id === id); return m ? m.label : (id || ''); };
+  const modelLabel = id => {
+    const m = (typeof IG_MODELS !== 'undefined') && IG_MODELS.find(x => x.id === id);
+    if (m) return m.label;
+    if (!id) return '';
+    // Friendly fallback: strip prefix and humanise
+    return id.replace(/^[^:]+:/, '').replace(/-/g, ' ');
+  };
   const rows = [];
   entries.forEach(en => {
     const when = en.at ? new Date(en.at) : null;
@@ -18186,7 +18192,7 @@ async function bmUsageRender(force) {
       if (outcomes[en.ref]) return; // resolved — its settle/refund row tells the story
       rows.push({ ts, label: 'Generating\u2026 (pending)', delta: en.tokens, ref: en.ref, model: en.model });
     } else if (en.type === 'settle') {
-      rows.push({ ts, label: 'Generated ' + (en.images || 0) + ' image' + (en.images === 1 ? '' : 's') + ' \u00B7 ' + modelLabel(en.model), delta: -(en.chargedTokens || 0), ref: en.ref, model: en.model, linkable: true });
+      rows.push({ ts, label: modelLabel(en.model), delta: -(en.chargedTokens || 0), ref: en.ref, model: en.model, images: en.images || 0, linkable: true });
     } else if (en.type === 'refund') {
       rows.push({ ts, label: 'Refunded \u2014 generation failed', delta: en.tokens, ref: en.ref });
     } else if (en.type === 'grant') {
@@ -18200,38 +18206,113 @@ async function bmUsageRender(force) {
     list.innerHTML = '<div style="padding:10px 4px;font-size:11px;color:var(--muted);">No activity yet \u2014 generate an image to see it here.</div>';
     return;
   }
-  rows.forEach(rw => {
+
+  // Helper to navigate to a fav in the library
+  const navToFav = (fav) => {
+    if (typeof switchView === 'function') switchView('library');
+    setTimeout(() => {
+      if (typeof bmOpenFull === 'function') bmOpenFull(fav);
+    }, 150);
+  };
+
+  // Build a row element
+  const buildRow = (rw, fav) => {
     const div = document.createElement('div');
     div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);font-size:12px;';
     const t = document.createElement('span');
-    t.style.cssText = 'color:var(--muted);font-size:11px;white-space:nowrap;min-width:118px;';
+    t.style.cssText = 'color:var(--muted);font-size:10px;white-space:nowrap;min-width:90px;';
     t.textContent = rw.ts;
-    const lbl = document.createElement('span');
-    lbl.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    lbl.textContent = rw.label;
-    const amt = document.createElement('span');
-    amt.style.cssText = 'font-weight:700;white-space:nowrap;color:' + (rw.delta < 0 ? 'var(--err,#f85149)' : 'var(--accent)') + ';';
-    amt.textContent = (rw.delta > 0 ? '+' : '') + rw.delta;
-    div.appendChild(t); div.appendChild(lbl);
+    div.appendChild(t);
 
-    // Image link: find the library copies stamped with this ledger ref.
-    if (rw.linkable && rw.ref && typeof favourites !== 'undefined') {
-      const favs = favourites.filter(f => f.tokenRef === rw.ref);
-      if (favs.length) {
+    // Thumbnail (if we have a fav)
+    if (rw.linkable && fav) {
+      const thumb = document.createElement('img');
+      thumb.loading = 'lazy';
+      thumb.style.cssText = 'width:38px;height:38px;object-fit:contain;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;background:var(--surface2);';
+      thumb.title = 'Open in Library';
+      if (typeof bmApplyThumb === 'function') bmApplyThumb(thumb, fav);
+      else thumb.src = fav.imageData || '';
+      thumb.onclick = () => navToFav(fav);
+      div.appendChild(thumb);
+    } else if (rw.linkable) {
+      // Placeholder slot to keep alignment consistent
+      const slot = document.createElement('div');
+      slot.style.cssText = 'width:38px;height:38px;flex-shrink:0;border-radius:4px;border:1px dashed var(--border);background:var(--surface2);';
+      div.appendChild(slot);
+    }
+
+    // Label: model name + resolution if available
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'flex:1;min-width:0;';
+    const modelSpan = document.createElement('div');
+    modelSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    modelSpan.textContent = rw.label || '';
+    lbl.appendChild(modelSpan);
+
+    // Resolution from fav igSettings or upscaleMeta
+    if (rw.linkable && fav) {
+      const res = (fav.igSettings && fav.igSettings.res) || null;
+      const dims = (fav.outW && fav.outH) ? (fav.outW + '\u00D7' + fav.outH) : null;
+      const upModel = (fav.upscaleMeta && fav.upscaleMeta.model) ? fav.upscaleMeta.model : null;
+      const subParts = [];
+      if (rw.images > 0) subParts.push(rw.images + ' image' + (rw.images > 1 ? 's' : ''));
+      if (res) subParts.push(res);
+      if (dims) subParts.push(dims);
+      if (upModel) subParts.push(upModel.replace(/^[^:]+:/, '').replace(/-/g, ' '));
+      if (subParts.length) {
+        const sub = document.createElement('div');
+        sub.style.cssText = 'font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        sub.textContent = subParts.join(' \u00B7 ');
+        lbl.appendChild(sub);
+      }
+    } else if (rw.images) {
+      const sub = document.createElement('div');
+      sub.style.cssText = 'font-size:10px;color:var(--muted);margin-top:1px;';
+      sub.textContent = rw.images + ' image' + (rw.images > 1 ? 's' : '');
+      lbl.appendChild(sub);
+    }
+    div.appendChild(lbl);
+
+    const amt = document.createElement('span');
+    amt.style.cssText = 'font-weight:700;white-space:nowrap;color:' + (rw.delta < 0 ? 'var(--err,#f85149)' : 'var(--accent)') + ';font-size:13px;';
+    amt.textContent = (rw.delta > 0 ? '+' : '') + rw.delta;
+    div.appendChild(amt);
+    return div;
+  };
+
+  // Match favs now (may be empty if ZK doc not loaded yet)
+  const favsFor = (ref) => {
+    if (!ref || typeof favourites === 'undefined') return null;
+    const matches = favourites.filter(f => f.tokenRef === ref);
+    return matches.length ? matches[0] : null;
+  };
+
+  rows.forEach(rw => {
+    list.appendChild(buildRow(rw, rw.linkable ? favsFor(rw.ref) : null));
+  });
+
+  // If favourites isn't loaded yet, retry once after a short delay to fill in thumbnails
+  if (rows.some(r => r.linkable) && (typeof favourites === 'undefined' || !favourites.length)) {
+    setTimeout(() => {
+      Array.from(list.children).forEach((div, i) => {
+        const rw = rows[i];
+        if (!rw || !rw.linkable) return;
+        const fav = favsFor(rw.ref);
+        if (!fav) return;
+        const slot = div.querySelector('div[style*="dashed"]');
+        const existThumb = div.querySelector('img');
+        if (existThumb || !slot) return;
         const thumb = document.createElement('img');
         thumb.loading = 'lazy';
-        thumb.style.cssText = 'width:34px;height:34px;object-fit:cover;border-radius:3px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;';
-        thumb.title = 'Open image' + (favs.length > 1 ? ' (1 of ' + favs.length + ')' : '');
-        if (typeof bmApplyThumb === 'function') bmApplyThumb(thumb, favs[0]);
-        else { thumb.src = favs[0].imageData; }
-        thumb.onerror = () => { if (typeof bmImageFallback === 'function') bmImageFallback(thumb, favs[0]); };
-        thumb.onclick = () => { if (typeof bmOpenFull === 'function') bmOpenFull(favs[0]); else window.open(thumb.src, '_blank', 'noopener'); };
-        div.appendChild(thumb);
-      }
-    }
-    div.appendChild(amt);
-    list.appendChild(div);
-  });
+        thumb.style.cssText = 'width:38px;height:38px;object-fit:contain;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;background:var(--surface2);';
+        thumb.title = 'Open in Library';
+        if (typeof bmApplyThumb === 'function') bmApplyThumb(thumb, fav);
+        else thumb.src = fav.imageData || '';
+        thumb.onclick = () => navToFav(fav);
+        slot.replaceWith(thumb);
+      });
+    }, 2500);
+  }
 }
 
 // Build a run-button label in the "C" style: VERB · ◆ <cost>, with the cost

@@ -3867,6 +3867,11 @@ body.up-group-modal-open { overflow:hidden; }
 .ig-libbar-empty { color:var(--muted); font-size:12px; padding:10px 2px; }
 /* Timeline mode (non-i2i models): thumbs are non-selectable, show a subtle
    read-only cue instead of the selection ring. */
+/* Family bar: source thumbs match the output result size so they all read as equal */
+.ig-fam-divider ~ .ig-libbar-thumb,
+.ig-fam-missing {
+  width:110px; height:110px;
+}
 #igMain.ig-timeline .ig-libbar-thumb { cursor:default; }
 #igMain.ig-timeline .ig-libbar-thumb.sel { border-color:transparent; }
 
