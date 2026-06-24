@@ -75,7 +75,8 @@ export interface JobRecord {
   // Populated when status === "failed".
   error?: { message: string; code?: string };
   // Set true once a browser has drained the result into the library, so we
-  // don't double-save across tabs. The record is removed shortly after.
+  // don't double-save across tabs. The record is KEPT as queue history
+  // (retention via listJobs: newest HISTORY_CAP terminal jobs + 30-day TTL).
   delivered?: boolean;
   createdAt: number;
   updatedAt: number;
@@ -302,8 +303,9 @@ export async function failJob(job: JobRecord, message: string, code?: string): P
   await kv.set(["job", job.userHash, job.id], failed);
 }
 
-/** Mark a done job as drained into the user's library (so other tabs skip it),
- *  then schedule the record for removal. Returns false if already delivered. */
+/** Mark a done job as drained into the user's library (so other tabs skip it)
+ *  and free its stashed result blob. The record is KEPT as queue history
+ *  (retention via listJobs). Returns false if already delivered or not done. */
 export async function markDelivered(userHash: string, jobId: string): Promise<boolean> {
   const res = await kv.get<JobRecord>(["job", userHash, jobId]);
   const job = res.value;
@@ -312,11 +314,11 @@ export async function markDelivered(userHash: string, jobId: string): Promise<bo
   const updated: JobRecord = { ...job, delivered: true, updatedAt: Date.now() };
   const ok = await kv.atomic().check(res).set(["job", userHash, jobId], updated).commit();
   if (!ok.ok) return false; // another tab won the race
-  // Remove shortly after so the UI can show the "delivered" state briefly.
-  setTimeout(() => {
-    kv.delete(["job", userHash, jobId]).catch(() => {});
-    clearJobBlobs(jobId, RESULT_BLOB_FIELDS).catch(() => {});
-  }, 60_000);
+  // Keep the delivered record as persistent queue history — retention is handled
+  // by listJobs (newest HISTORY_CAP terminal jobs, 30-day TTL). We only free the
+  // stashed result blob: it's just the soft-degrade data: fallback, and the
+  // history card renders its thumbnail from the durable /api/img/<favId> URL.
+  clearJobBlobs(jobId, RESULT_BLOB_FIELDS).catch(() => {});
   return true;
 }
 
