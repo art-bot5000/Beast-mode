@@ -82,6 +82,10 @@ interface ImgMeta {
   // Image-Gen settings snapshot — stored for Restore and info-panel display.
   // Small JSON object (~200 bytes) so safe to embed in ImgMeta directly.
   igSettings?: Record<string, unknown>;
+  // Ledger correlation: the hold/settle ref from /api/generate or /api/upscale.
+  // Lets the token usage history panel link a ledger entry back to the saved
+  // image even after rehydration on a new device (where fav.tokenRef is absent).
+  tokenRef?: string;
 }
 
 // Hard cap on how many families a single source image records (FIFO — oldest
@@ -190,7 +194,7 @@ export async function storeImage(
   bytes: Uint8Array,
   mime: string,
   createdAt?: number,
-  extraMeta?: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[] },
+  extraMeta?: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; tokenRef?: string },
 ): Promise<string> {
   const id = favIdSafe(favId);
   const ext = extSafe(mime.split("/")[1]);
@@ -254,6 +258,7 @@ export async function storeImage(
     if (Array.isArray(extraMeta.familyCodes) && extraMeta.familyCodes.length) {
       meta.familyCodes = dedupeTail(extraMeta.familyCodes.filter((s) => typeof s === "string" && s), FAMILY_CODES_CAP);
     }
+    if (typeof extraMeta.tokenRef === "string" && extraMeta.tokenRef) meta.tokenRef = extraMeta.tokenRef;
   }
   await (await kv()).set(["imgmeta", userHash, id], meta);
   await addUsage(userHash, bytes.length);
@@ -312,12 +317,12 @@ async function globalUsageBytes(): Promise<number> {
 // ── manifest for login re-hydration ──────────────────────────────────────────
 // Returns the lightweight index the client uses to rebuild its library on
 // login: favId + metadata, NO bytes. The client lazy-loads bytes via /api/img.
-export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown> }>> {
+export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string }>> {
   const items = await listMeta(userHash);
   return items
     .map((x) => {
       const m = x.meta;
-      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown> } =
+      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string } =
         { favId: x.favId, ext: m.ext, bytes: m.bytes, mime: m.mime, createdAt: m.createdAt };
       // Only attach upscale fields that are actually set, to keep the manifest lean.
       if (m.isUpscale) base.isUpscale = true;
@@ -334,6 +339,7 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
       if (Array.isArray(m.familyCodes) && m.familyCodes.length) base.familyCodes = m.familyCodes;
       // igSettings — lets Restore and the info panel work on rehydrated favs.
       if (m.igSettings && typeof m.igSettings === "object") base.igSettings = m.igSettings;
+      if (typeof m.tokenRef === "string" && m.tokenRef) base.tokenRef = m.tokenRef;
       return base;
     })
     .sort((a, b) => b.createdAt - a.createdAt); // newest first, matches library order
@@ -349,7 +355,7 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
 export async function patchImageMeta(
   userHash: string,
   favId: string,
-  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodesAppend?: string[]; pinnedProtect?: boolean; igSettings?: Record<string, unknown> },
+  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodesAppend?: string[]; pinnedProtect?: boolean; igSettings?: Record<string, unknown>; tokenRef?: string },
 ): Promise<boolean> {
   const id = favIdSafe(favId);
   const k = await kv();
@@ -371,6 +377,7 @@ export async function patchImageMeta(
     const serialised = JSON.stringify(patch.igSettings);
     if (serialised.length <= 4096) next.igSettings = patch.igSettings;
   }
+  if (typeof patch.tokenRef === "string" && patch.tokenRef) next.tokenRef = patch.tokenRef;
   // i2i family: the OUTPUT records its own code + sources; a SOURCE appends the
   // new code to its membership list (merge + FIFO cap, so concurrent registers
   // from a batch accumulate rather than clobber).

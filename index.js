@@ -205,7 +205,7 @@ export async function searchModels(opts = {}) {
 
 /**
  * @typedef {Object} UpscaleRequest
- * @property {string}  model          Upscaler id: "prunaai:p-image@upscale" | "runware:500@1" | "runware:502@1".
+ * @property {string}  model          Upscaler id: "prunaai:p-image@upscale" | "runware:500@1" | "runware:502@1" | google Nano Banana ids.
  * @property {string}  inputImage     Source image (https URL, data URI, base64, or Runware image UUID).
  * @property {string} [outputFormat]  JPG | PNG | WEBP (default JPG).
  * @property {number} [outputQuality] 20–99.
@@ -219,6 +219,8 @@ export async function searchModels(opts = {}) {
  * @property {number} [CFGScale]       Diffusion upscalers.
  * @property {number} [strength]       Diffusion upscalers (0–1).
  * @property {number} [seed]           Diffusion upscalers.
+ * @property {string} [resolution]     Gemini upscalers: '0.5K'|'1K'|'2K'|'4K'.
+ * @property {string} [aspectRatio]    Gemini upscalers: '1:1'|'16:9'|etc.
  * @property {AbortSignal} [signal]
  */
 
@@ -269,6 +271,42 @@ export const UPSCALERS = [
     sampler: { steps: 20, cfg: 6.5 },
     note: 'Fast 2× latent-space upscale before VAE decode. Improves detail without changing composition.',
   },
+  // ── Google Nano Banana (Gemini) — AI-guided upscale via generate+reference ──
+  // These use the direct Gemini API (google.js). The source image is sent as a
+  // reference image; the model regenerates at the target resolution guided by
+  // the prompt. Requires GEMINI_API_KEY. Resolution options match Gemini's
+  // supported imageSize values. Results are "AI-reimagined" rather than pixel-
+  // perfect upscales — excellent for artistic enhancement, detail recovery.
+  {
+    id: 'google:gemini-3-pro-image:upscale',
+    label: 'Nano Banana Pro',
+    family: 'Google',
+    kind: 'gemini-upscale',             // routes to googleAdapter.generate() with referenceImages
+    geminiModel: 'google:gemini-3-pro-image', // the underlying generate model id
+    resolution: { values: ['1K', '2K', '4K'], default: '2K' },
+    prompt: true,
+    note: 'Gemini 3 Pro: AI-guided enhancement at 1K/2K/4K. Adds detail and improves quality using your prompt. Direct Google API.',
+  },
+  {
+    id: 'google:gemini-3.1-flash-image:upscale',
+    label: 'Nano Banana 2',
+    family: 'Google',
+    kind: 'gemini-upscale',
+    geminiModel: 'google:gemini-3.1-flash-image',
+    resolution: { values: ['0.5K', '1K', '2K', '4K'], default: '2K' },
+    prompt: true,
+    note: 'Gemini 3.1 Flash: fast AI-guided enhancement at up to 4K. Great text rendering. Direct Google API.',
+  },
+  {
+    id: 'google:gemini-2.5-flash-image:upscale',
+    label: 'Nano Banana (2.5)',
+    family: 'Google',
+    kind: 'gemini-upscale',
+    geminiModel: 'google:gemini-2.5-flash-image',
+    resolution: { values: ['1K'], default: '1K' }, // 2.5 Flash ignores imageSize, outputs ~1K
+    prompt: true,
+    note: 'Gemini 2.5 Flash: cost-effective AI enhancement. Fixed ~1K output size. Direct Google API.',
+  },
 ];
 
 /** Look up a curated upscaler entry by id. */
@@ -277,9 +315,9 @@ export function findUpscaler(modelId) {
 }
 
 /**
- * Provider-agnostic image upscale. All curated upscalers are Runware-served, so
- * we route to that adapter directly (their ids are full AIRs and must NOT pass
- * through parseModelId's prefix split). Validates the source image + the
+ * Provider-agnostic image upscale. Runware-served upscalers route to the
+ * runware adapter; Gemini-kind upscalers route to googleAdapter.generate()
+ * with the source image as a reference. Validates the source image + the
  * model-specific config before calling the adapter.
  *
  * @param {UpscaleRequest} req
@@ -306,6 +344,45 @@ export async function upscale(req) {
   }
   if (isDataUri && img.length > 15_000_000) {
     throw new ProviderError('Source image too large (max ~10MB)', { code: 'bad_request', status: 400 });
+  }
+
+  // ── Gemini-guided upscale (AI reimagining with reference image) ─────────────
+  if (entry.kind === 'gemini-upscale') {
+    if (!entry.geminiModel) {
+      throw new ProviderError('geminiModel not set on upscaler entry', { code: 'bad_request', status: 400 });
+    }
+    // Gemini requires inline data URIs for reference images — URLs need fetching
+    // first. For Runware UUIDs (not applicable here) we'd need a different path;
+    // in practice the frontend always sends data URIs for the upscaler.
+    if (!isDataUri && !isUrl) {
+      throw new ProviderError('Gemini upscale requires a data URI or https URL as inputImage', { code: 'bad_request', status: 400 });
+    }
+    const prompt = req.positivePrompt || 'Upscale this image to the selected resolution and improve details, enhance sharpness and clarity while preserving the original style and composition.';
+    const genReq = {
+      model: entry.geminiModel,
+      prompt,
+      referenceImages: [img],
+      resolution: req.resolution || (entry.resolution && entry.resolution.default) || '2K',
+      aspectRatio: req.aspectRatio || '1:1',
+      signal: req.signal,
+    };
+    const adapter = registry()[googleAdapter.id];
+    if (!adapter || typeof adapter.generate !== 'function') {
+      throw new ProviderError('Google Gemini adapter is not available', { code: 'auth', status: 503 });
+    }
+    const result = await adapter.generate(genReq);
+    // Map GenerateResult → UpscaleResult shape
+    const firstImage = Array.isArray(result.images) ? result.images[0] : null;
+    if (!firstImage) {
+      throw new ProviderError('Gemini returned no image', { code: 'upstream', status: 502 });
+    }
+    return {
+      provider: result.provider,
+      model: entry.geminiModel,
+      image: { url: firstImage.url, b64: firstImage.b64 },
+      costUsd: result.costUsd || null,
+      raw: result.raw || null,
+    };
   }
 
   const adapter = registry()[runwareAdapter.id];

@@ -144,6 +144,28 @@ export const UPSCALE_PRICING = {
     tokens: 1,
     costUsd: 0.0013,
   },
+  // ── Google Nano Banana upscalers — resolution-priced, same as generation ──
+  // These route through googleAdapter.generate() so actual cost = Gemini pricing.
+  // Charged at ×1.40 anchor tier (same as the generation table) because the
+  // underlying API call is identical — a generate with a reference image.
+  'google:gemini-3-pro-image:upscale': {
+    label: 'Nano Banana Pro (upscale)',
+    kind: 'resolution',
+    byRes: { '1K': 19, '2K': 19, '4K': 34 },
+    costUsd: { '1K': 0.134, '2K': 0.134, '4K': 0.24 },
+  },
+  'google:gemini-3.1-flash-image:upscale': {
+    label: 'Nano Banana 2 (upscale)',
+    kind: 'resolution',
+    byRes: { '0.5K': 7, '1K': 10, '2K': 15, '4K': 22 },
+    costUsd: { '0.5K': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151 },
+  },
+  'google:gemini-2.5-flash-image:upscale': {
+    label: 'Nano Banana (2.5) (upscale)',
+    kind: 'flat',
+    tokens: 6,
+    costUsd: 0.039,
+  },
 };
 
 /** Resolve an upscaler model id to its pricing row, or null. */
@@ -168,6 +190,12 @@ export function tokensPerUpscale(modelId, opts = {}) {
       const mp = Number(opts.targetMegapixels);
       // Unknown/missing MP -> high (conservative). 1–4 -> low, 5–8 -> high.
       t = (Number.isFinite(mp) && mp <= 4) ? row.byMp.low : row.byMp.high;
+      break;
+    }
+    case 'resolution': {
+      // Gemini upscalers priced by output resolution bucket ('0.5K'|'1K'|'2K'|'4K').
+      const bucket = opts.resolution ? String(opts.resolution).toUpperCase() : null;
+      t = (bucket && row.byRes[bucket]) || maxOf(row.byRes);
       break;
     }
     default:
@@ -200,6 +228,10 @@ export function estimatedUpscaleCostUsd(modelId, opts = {}) {
   if (row.kind === 'megapixels') {
     const mp = Number(opts.targetMegapixels);
     return (Number.isFinite(mp) && mp <= 4) ? row.costUsd.low : row.costUsd.high;
+  }
+  if (row.kind === 'resolution') {
+    const bucket = opts.resolution ? String(opts.resolution).toUpperCase() : null;
+    return (bucket && row.costUsd[bucket]) || maxOf(row.costUsd);
   }
   return null;
 }

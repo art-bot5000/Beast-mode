@@ -233,6 +233,7 @@ async function runGenerateHeld(
           lineage: genLineage,
           outW: typeof _imgDim.width === "number" ? _imgDim.width : (typeof body.width === "number" ? body.width as number : undefined),
           outH: typeof _imgDim.height === "number" ? _imgDim.height : (typeof body.height === "number" ? body.height as number : undefined),
+          tokenRef: holdRef,
         });
         img.favId = favId;
         (img as { lineage?: string }).lineage = genLineage; // echo back so client uses the SAME root
@@ -291,7 +292,7 @@ async function runUpscaleHeld(
   q: { totalTokens: number; perImage: number },
   holdRef: string,
   upModel: string,
-  upOpts: { targetMegapixels?: number },
+  upOpts: { targetMegapixels?: number; resolution?: string },
 ): Promise<RunUpResult> {
   try {
     const result = await upscale({
@@ -309,6 +310,9 @@ async function runUpscaleHeld(
       CFGScale: body.CFGScale as number | undefined,
       strength: body.strength as number | undefined,
       seed: body.seed as number | undefined,
+      // Gemini upscale fields
+      resolution: body.resolution as string | undefined,
+      aspectRatio: body.aspectRatio as string | undefined,
       signal: body.signal as AbortSignal | undefined,
     });
 
@@ -336,6 +340,7 @@ async function runUpscaleHeld(
           upMp: typeof body.targetMegapixels === "number" ? body.targetMegapixels as number : undefined,
           upFactor: typeof body.upscaleFactor === "number" ? body.upscaleFactor as number : undefined,
           upModel: upModel,
+          tokenRef: holdRef,
         });
         out.favId = favId;
         (out as { lineage?: string }).lineage = typeof body.lineage === "string" ? body.lineage as string : undefined;
@@ -348,7 +353,13 @@ async function runUpscaleHeld(
 
     const delivered = out?.url ? 1 : 0;
     const charged = delivered ? q.totalTokens : 0;
+    // For Gemini upscale models, try to compute actual cost from usageMetadata
+    // (same as the generate path — the underlying call is a generate with reference).
+    const rawUsage = (result.raw && typeof result.raw === "object")
+      ? (result.raw as Record<string, unknown>).usageMetadata
+      : undefined;
     const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
+      ?? geminiUsageCostUsd(upModel.replace(/:upscale$/, ""), rawUsage)
       ?? estimatedUpscaleCostUsd(upModel, upOpts);
     const settled = await settleHold(userHash, holdRef, {
       chargedTokens: charged,
@@ -475,7 +486,10 @@ async function runJob(job: JobRecord): Promise<void> {
       await completeJob(job, { provider: res.provider, model: res.model, images: res.images, tokens: res.tokens });
     } else {
       const upModel = body.model as string;
-      const upOpts = { targetMegapixels: Number(body.targetMegapixels) || undefined };
+      const upOpts = {
+        targetMegapixels: Number(body.targetMegapixels) || undefined,
+        resolution: typeof body.resolution === "string" ? body.resolution : undefined,
+      };
       const res = await runUpscaleHeld(job.userHash, body, q, job.holdRef, upModel, upOpts);
       await completeJob(job, { provider: res.provider, model: res.model, image: res.image, tokens: res.tokens });
     }
@@ -668,9 +682,12 @@ async function handler(req: Request): Promise<Response> {
       return json({ error: `Unknown upscaler "${upModel}".`, code: "bad_request" }, 400);
     }
 
-    // ── TOKEN QUOTE + HOLD. P-Image is priced by target megapixels; the others
-    // are flat. One output image per task, so the quote is the whole charge.
-    const upOpts = { targetMegapixels: Number(body.targetMegapixels) || undefined };
+    // ── TOKEN QUOTE + HOLD. P-Image is priced by target megapixels; Gemini
+    // upscalers are priced by output resolution; the others are flat.
+    const upOpts = {
+      targetMegapixels: Number(body.targetMegapixels) || undefined,
+      resolution: typeof body.resolution === "string" ? body.resolution : undefined,
+    };
     const q = quoteUpscale(upModel, upOpts);
     const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
     if (!hold.ok) {
@@ -753,7 +770,10 @@ async function handler(req: Request): Promise<Response> {
       if (!findUpscaler(upModel)) {
         return json({ error: `Unknown upscaler "${upModel}".`, code: "bad_request" }, 400);
       }
-      const upOpts = { targetMegapixels: Number(body.targetMegapixels) || undefined };
+      const upOpts = {
+        targetMegapixels: Number(body.targetMegapixels) || undefined,
+        resolution: typeof body.resolution === "string" ? body.resolution : undefined,
+      };
       const q = quoteUpscale(upModel, upOpts);
       const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
       if (!hold.ok) {
@@ -1133,9 +1153,17 @@ async function handler(req: Request): Promise<Response> {
   if (path === "/api/upscalers" && req.method === "GET") {
     const models = UPSCALERS.map((u) => ({
       ...u,
-      tokens: tokensPerUpscale(u.id, { targetMegapixels: u.kind === "megapixels" ? (u.targetMegapixels?.default) : undefined }),
+      tokens: tokensPerUpscale(u.id, {
+        targetMegapixels: u.kind === "megapixels" ? (u.targetMegapixels?.default) : undefined,
+        resolution: u.kind === "gemini-upscale" ? (u.resolution?.default) : undefined,
+      }),
       tokensByMp: u.kind === "megapixels"
         ? { low: tokensPerUpscale(u.id, { targetMegapixels: 1 }), high: tokensPerUpscale(u.id, { targetMegapixels: 8 }) }
+        : undefined,
+      // Resolution-priced Gemini upscalers: send the by-resolution token map so
+      // the frontend can update the cost hint when the user changes resolution.
+      tokensByRes: u.kind === "gemini-upscale" && u.resolution
+        ? Object.fromEntries(u.resolution.values.map((r: string) => [r, tokensPerUpscale(u.id, { resolution: r })]))
         : undefined,
     }));
     return json({ models });
