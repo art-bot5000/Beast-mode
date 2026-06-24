@@ -6724,7 +6724,17 @@ function buildLibCard(f) {
     if (typeof bmRegisterUpscaleMeta === 'function') {
       bmRegisterUpscaleMeta(f.id, { pinnedProtect: f.pinned || f.starred })
     }
-    renderFolderSidebar()
+    // Re-render the library so the pin-float sort moves this card to the front
+    // immediately (instead of waiting for the next refresh). When pinning, bring
+    // the card into view at the top so the move is visible rather than off-screen.
+    const wasPinned = f.pinned
+    renderLibrary()
+    if (wasPinned) {
+      requestAnimationFrame(() => {
+        const moved = document.getElementById('libCard_' + f.id)
+        if (moved) moved.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
   }
   const _favKind = bmFavKind(f)
   const dateEl = document.createElement('div')
