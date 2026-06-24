@@ -517,7 +517,7 @@ handleShareTarget()
         <button class="bm-profile-thumb" id="bmProfileThumb" onclick="openProfileImageModal()" title="Change profile image">⊙</button>
         <button id="bmAccountBtn" onclick="bmAccountClick()" title="Account" style="background:transparent;border:1px solid var(--border);border-radius:20px;padding:4px 14px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);transition:all .2s;">ACCOUNT</button>
         <div class="mode-nav-balance" id="navBalanceWrap" style="display:none;" title="Token balance">
-          <span class="bal-label" aria-label="Tokens"><i class="ti ti-diamond" aria-hidden="true"></i></span>
+          <span class="bal-label" aria-label="Tokens"><i class="ti ti-flask" aria-hidden="true"></i></span>
           <span class="bal-value" id="navTokenBalance">—</span>
         </div>
         <div id="navDriveStatus" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Drive not connected"></div>
@@ -1325,13 +1325,349 @@ handleShareTarget()
 
 <!-- ═══════════════════════ SETTINGS VIEW ═══════════════════════ -->
 <div class="view" id="viewSettings">
-  <div class="view-inner">
-      <header style="margin-bottom:20px;">
-        <div class="title-line">
-          <h1 style="font-family:'IBM Plex Mono',sans-serif;font-size:36px;letter-spacing:2px;color:var(--accent);">// SETTINGS</h1>
+  <div class="view-inner view-inner--settings">
+
+    <!-- ── DESKTOP: side-nav shell (Option B) ── -->
+    <div class="st-shell" id="stShell">
+
+      <!-- Left rail -->
+      <nav class="st-nav" id="stNav" aria-label="Settings sections">
+        <div class="st-nav-head">
+          <h1 class="st-nav-title">// SETTINGS</h1>
         </div>
-      </header>
-    <div class="settings-grid">
+        <button class="st-nav-item active" data-section="account"   onclick="stShowSection('account')"  ><i class="ti ti-user"        aria-hidden="true"></i><span>Account</span></button>
+        <button class="st-nav-item"        data-section="billing"   onclick="stShowSection('billing')"  ><i class="ti ti-flask"       aria-hidden="true"></i><span>Tokens</span></button>
+        <button class="st-nav-item"        data-section="sync"      onclick="stShowSection('sync')"     ><i class="ti ti-stack-2"     aria-hidden="true"></i><span>Cloud Sync</span></button>
+        <button class="st-nav-item"        data-section="appearance" onclick="stShowSection('appearance')"><i class="ti ti-palette"   aria-hidden="true"></i><span>Appearance</span></button>
+        <button class="st-nav-item"        data-section="advanced"  onclick="stShowSection('advanced')" ><i class="ti ti-adjustments" aria-hidden="true"></i><span>Advanced</span></button>
+      </nav>
+
+      <!-- Content pane -->
+      <div class="st-content" id="stContent">
+
+        <!-- ── ACCOUNT ── -->
+        <section class="st-section active" id="stSec-account">
+          <div class="st-section-head"><h2 class="st-section-title">Account</h2></div>
+
+          <!-- Profile -->
+          <div class="settings-section" id="settingsProfileSection">
+            <div class="settings-section-title">Profile</div>
+            <div style="display:flex;align-items:center;gap:16px;">
+              <button id="settingsProfileThumb" class="bm-profile-thumb settings-profile-thumb" onclick="openProfileImageModal()" title="Change profile image">⊙</button>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;color:var(--text);font-weight:700;margin-bottom:2px;">Profile image</div>
+                <div style="font-size:12px;color:var(--muted);">Click the image to upload one or choose from your library.</div>
+              </div>
+            </div>
+            <div style="margin-top:16px;">
+              <label for="settingsUsernameInput" style="display:block;font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;font-weight:700;">USERNAME</label>
+              <input class="ig-input" id="settingsUsernameInput" type="text" maxlength="24" autocomplete="off"
+                placeholder="Choose a display name"
+                style="max-width:320px;"
+                oninput="usernameInputChanged()"
+                onblur="usernameCommit()"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+              <div class="ig-note" id="settingsUsernameNote" style="margin-top:6px;">Shown on your account. Defaults to the first part of your email.</div>
+            </div>
+          </div>
+
+          <!-- Account Storage -->
+          <div class="settings-section" id="settingsStorageSection">
+            <div class="settings-section-title">Account Storage</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+              Your generated and upscaled images are saved to your account automatically.
+              When storage is full, the oldest images are removed first.
+            </div>
+            <div id="bmStorageMeterWrap" style="max-width:420px;">
+              <div style="height:10px;border-radius:6px;background:var(--panel-2,rgba(255,255,255,0.08));overflow:hidden;">
+                <div id="bmStorageMeterBar" style="height:100%;width:0%;background:var(--accent);transition:width .3s ease;"></div>
+              </div>
+              <div id="bmStorageMeterLabel" style="font-size:12px;color:var(--muted);margin-top:6px;letter-spacing:0.5px;">Loading storage usage…</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── TOKENS / BILLING ── -->
+        <section class="st-section" id="stSec-billing">
+          <div class="st-section-head"><h2 class="st-section-title">Tokens</h2></div>
+
+          <div class="settings-section" id="settingsTokensSection">
+            <!-- Limelight badge — shown only when bmIsLimelight() is true -->
+            <div id="stLimelightBanner" style="display:none;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:4px;padding:10px 12px;margin-bottom:16px;display:none;align-items:center;gap:10px;">
+              <i class="ti ti-flask" aria-hidden="true" style="font-size:16px;color:var(--accent);flex-shrink:0;"></i>
+              <div>
+                <div style="font-size:12px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:3px;">LIMELIGHT ACCOUNT</div>
+                <div style="font-size:11px;color:var(--muted);line-height:1.6;">You're charged at provider cost. Tokens are metered in 0.1 increments, rounded up to the nearest $0.001 per generation.</div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
+              <div class="settings-section-title" style="margin-bottom:0;">Balance</div>
+              <button onclick="bmFetchBalance()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);"><i class="ti ti-refresh"></i>REFRESH</button>
+            </div>
+            <div id="bmTokSignedOut" style="display:none;font-size:12px;color:var(--muted);letter-spacing:.5px;">Sign in to see your token balance and activity.</div>
+            <div id="bmTokSignedIn" style="display:none;">
+              <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <i class="ti ti-flask" aria-hidden="true" style="color:var(--accent);font-size:13px;vertical-align:-1px;margin-right:2px;"></i><span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span></div>
+              <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:16px;">Tokens are spent on image generation and priced per model and resolution. Every charge, refund, and grant is recorded on your account; charges link to the saved image in your library.</div>
+              <button class="btn btn-outline" onclick="bmUsageOpen()" style="font-size:12px;">⊞ USAGE HISTORY</button>
+            </div>
+
+            <!-- Stripe purchase — placeholder UI; wired up when Stripe is live -->
+            <div id="stBuySection" style="display:none;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+              <div style="font-size:11px;letter-spacing:2px;color:var(--muted);font-weight:700;margin-bottom:12px;">BUY TOKENS</div>
+              <div class="st-pkg-grid" id="stPkgGrid">
+                <button class="st-pkg active" data-tokens="200"  data-price="2.00"  onclick="stSelectPkg(this)"><span class="st-pkg-tokens"><i class="ti ti-flask" aria-hidden="true"></i> 200</span><span class="st-pkg-price">$2.00</span></button>
+                <button class="st-pkg"        data-tokens="500"  data-price="5.00"  onclick="stSelectPkg(this)"><span class="st-pkg-tokens"><i class="ti ti-flask" aria-hidden="true"></i> 500</span><span class="st-pkg-price">$5.00</span></button>
+                <button class="st-pkg"        data-tokens="1000" data-price="10.00" onclick="stSelectPkg(this)"><span class="st-pkg-tokens"><i class="ti ti-flask" aria-hidden="true"></i> 1000</span><span class="st-pkg-price">$10.00</span></button>
+              </div>
+              <div class="st-qty-row">
+                <span style="font-size:11px;letter-spacing:1px;color:var(--muted);">QTY</span>
+                <button class="st-qty-btn" onclick="stQtyAdj(-1)" aria-label="Decrease quantity">−</button>
+                <span class="st-qty-val" id="stQtyVal">1</span>
+                <button class="st-qty-btn" onclick="stQtyAdj(1)"  aria-label="Increase quantity">+</button>
+                <span class="st-qty-total" id="stQtyTotal">= 200 tokens · $2.00</span>
+              </div>
+              <button class="btn btn-primary st-buy-btn" id="stBuyBtn" onclick="stInitiateCheckout()" style="width:100%;padding:12px;font-size:13px;letter-spacing:2px;margin-bottom:8px;">BUY VIA STRIPE</button>
+              <div style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);opacity:0.6;border:1px solid var(--border);border-radius:2px;padding:1px 5px;">STRIPE</span>
+                Secure payment. Tokens added instantly after checkout.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── CLOUD SYNC ── -->
+        <section class="st-section" id="stSec-sync">
+          <div class="st-section-head"><h2 class="st-section-title">Cloud Sync</h2></div>
+
+          <div class="settings-section" id="settingsSyncSection">
+            <!-- Provider selector -->
+            <div style="margin-bottom:14px;">
+              <div style="font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;font-weight:700;">SYNC SERVICE</div>
+              <div class="cloud-provider-row" id="cloudProviderRow">
+                <button class="cloud-provider-btn active" id="providerBtnGdrive" onclick="cloudSetProvider('gdrive')">
+                  <span class="cloud-provider-icon">▲</span>Google Drive
+                </button>
+                <button class="cloud-provider-btn" id="providerBtnDropbox" onclick="cloudSetProvider('dropbox')">
+                  <span class="cloud-provider-icon">⬡</span>Dropbox
+                </button>
+              </div>
+            </div>
+            <!-- Google Drive auth panel -->
+            <div id="cloudPanelGdrive">
+              <div id="settingsDriveSignedIn" style="display:none;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                  <img class="drive-avatar" id="settingsAvatar" src="" alt="">
+                  <div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);" id="settingsName"></div>
+                    <div style="font-size:12px;color:var(--muted);" id="settingsStatusLine">Connected</div>
+                  </div>
+                </div>
+                <button class="btn btn-ghost" onclick="bmConfirmRestoreFromDrive()" style="font-size:12px;margin-right:6px;" title="Pull prompts &amp; settings from Drive and merge into your library. Your account (Fly) is normally the source of truth — use this only to recover from Drive."><i class="ti ti-refresh"></i>RESTORE FROM DRIVE</button>
+                <button class="btn btn-ghost" onclick="driveSignOut()" style="font-size:12px;">SIGN OUT</button>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:12px;color:var(--muted);cursor:pointer;">
+                  <input type="checkbox" id="bmDriveBackupToggle" onchange="setDriveBackupEnabled(this.checked)" style="width:16px;height:16px;cursor:pointer;">
+                  <span>Also back up new images to Google Drive <span style="opacity:0.7;">(optional — your images are already saved to your account)</span></span>
+                </label>
+                <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+                  <button class="btn btn-ghost" id="bmDriveMergeBtn" onclick="bmDriveMerge()" style="font-size:12px;">⤓ IMPORT IMAGES FROM DRIVE</button>
+                  <div id="bmDriveMergeStatus" style="font-size:12px;color:var(--muted);margin-top:8px;display:none;"></div>
+                  <div style="font-size:11px;color:var(--muted);opacity:0.7;margin-top:6px;">One-time recovery of images saved to your Drive "Beast Mode" folder. Safe to run again — already-imported images are skipped.</div>
+                  <button class="btn btn-ghost" id="bmReconcileBtn" onclick="bmReconcileDeadImages()" style="font-size:12px;margin-top:12px;">🧹 CLEAN UP DEAD ENTRIES</button>
+                  <div style="font-size:11px;color:var(--muted);opacity:0.7;margin-top:6px;">Remove library entries whose image no longer exists anywhere. You'll see a count and confirm before anything is deleted. Prompt-only entries are never affected.</div>
+                </div>
+              </div>
+              <div id="settingsDriveSignedOut" style="display:block;">
+                <div id="settingsDriveStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
+                <div id="settingsSignInBtn" style="margin-top:8px;"></div>
+              </div>
+            </div>
+            <!-- Dropbox auth panel -->
+            <div id="cloudPanelDropbox" style="display:none;">
+              <div id="dbxSignedIn" style="display:none;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                  <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;">⬡</div>
+                  <div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);" id="dbxName"></div>
+                    <div style="font-size:12px;color:var(--muted);">Dropbox connected</div>
+                  </div>
+                </div>
+                <button class="btn btn-ghost" onclick="cloudSync()" style="font-size:12px;margin-right:6px;"><i class="ti ti-refresh"></i>SYNC NOW</button>
+                <button class="btn btn-ghost" onclick="dbxSignOut()" style="font-size:12px;">SIGN OUT</button>
+              </div>
+              <div id="dbxSignedOut" style="display:block;">
+                <div id="dbxStatus" style="font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px;">Not connected</div>
+                <button class="btn btn-primary" onclick="dbxSignIn()" style="font-size:12px;margin-top:8px;">CONNECT DROPBOX</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── APPEARANCE ── -->
+        <section class="st-section" id="stSec-appearance">
+          <div class="st-section-head"><h2 class="st-section-title">Appearance</h2></div>
+
+          <div class="settings-section">
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Light Mode</div>
+                <div class="settings-desc">Switch to light colour scheme</div>
+              </div>
+              <button class="btn btn-ghost" onclick="toggleLightMode()" style="font-size:12px;" id="settingsLightBtn">☀ LIGHT</button>
+            </div>
+            <div style="margin-top:16px;">
+              <div class="settings-label" style="margin-bottom:10px;">Interface Colour</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;" id="themeColourPicker">
+                <!-- rendered by renderThemePicker() -->
+              </div>
+              <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-top:8px;line-height:1.5;">Choose your accent colour. Applies across the whole interface.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── ADVANCED ── -->
+        <section class="st-section" id="stSec-advanced">
+          <div class="st-section-head"><h2 class="st-section-title">Advanced</h2></div>
+
+          <!-- Custom Models -->
+          <div class="settings-section" id="settingsModelsSection">
+            <div class="settings-section-title">My AI Models</div>
+            <div style="font-size:12px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;line-height:1.6;">Custom models saved for reuse when tagging prompts.</div>
+            <div class="models-list" id="settingsModelsList"></div>
+            <div style="display:flex;gap:6px;margin-top:12px;">
+              <input id="settingsNewModel" class="img-modal-input" placeholder="Model name…" style="flex:1;font-size:14px;padding:6px 8px;">
+              <button class="btn btn-outline" onclick="addCustomModelFromSettings()" style="font-size:12px;padding:6px 12px;">+ ADD</button>
+            </div>
+          </div>
+
+          <!-- Style Presets -->
+          <div class="settings-section">
+            <div class="settings-section-title">Style Presets</div>
+            <div style="font-size:12px;color:var(--muted);letter-spacing:1px;margin-bottom:12px;line-height:1.6;">Manage built-in and custom style presets.</div>
+            <button class="btn btn-outline" onclick="openStyleEditor();switchView('generator')" style="font-size:12px;width:100%;">✎ OPEN STYLE EDITOR</button>
+          </div>
+
+          <!-- Export -->
+          <div class="settings-section" id="settingsDataSection">
+            <div class="settings-section-title">Data &amp; Export</div>
+            <div id="localStorageWarning" style="display:none;background:color-mix(in srgb,#ff9900 12%,transparent);border:1px solid #ff9900;border-radius:4px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#ff9900;letter-spacing:.5px;line-height:1.7;">
+              ⚠ <strong>No cloud sync active.</strong> Prompts are stored in this browser only, and <strong>only your last 5 generated images are kept online</strong> — older images are removed and browser storage can be wiped at any time. Connect Google Drive or Dropbox in the Cloud Sync section above to keep all your prompts and images safe.
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+              <button class="btn btn-primary" onclick="exportZip()" style="font-size:12px;">📦 DOWNLOAD FULL BACKUP (.ZIP)</button>
+              <button class="btn btn-outline" onclick="document.getElementById('zipImportModal').style.display='flex'" style="font-size:12px;">⬆ RESTORE FROM ZIP</button>
+            </div>
+            <div style="height:1px;background:var(--border);margin:10px 0;"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-ghost" onclick="exportAll()" style="font-size:12px;"><i class="ti ti-download"></i>EXPORT PROMPTS .TXT</button>
+              <button class="btn btn-ghost" onclick="exportLibraryJSON()" style="font-size:12px;"><i class="ti ti-download"></i>EXPORT LIBRARY .JSON</button>
+            </div>
+          </div>
+
+          <!-- Tutorials -->
+          <div class="settings-section" id="settingsTutorialsSection">
+            <div class="settings-section-title">Tutorials</div>
+            <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:12px;">Replay the Prompt Lab orientation and the first-run setup checklist. Completion is saved with your synced data, so dismissed tutorials stay dismissed across devices and cache clears.</div>
+            <button class="btn btn-outline" onclick="bmTutorialsReplay()" style="font-size:12px;"><i class="ti ti-refresh"></i>REPLAY TUTORIALS</button>
+          </div>
+
+          <!-- Particle Usage Stats -->
+          <div class="settings-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
+              <div class="settings-section-title" style="margin-bottom:0;">Particle Usage</div>
+              <button onclick="pbUsageStats={};try{localStorage.removeItem('bm_particle_usage')}catch(e){};pbRenderUsageStats()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);">✕ RESET</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:14px;">Your most-used particles across all Lab sessions. Top 20 by use count.</div>
+            <div id="pbUsageStatsPanel"></div>
+          </div>
+
+          <!-- Keyboard Shortcuts -->
+          <div class="settings-section">
+            <div class="settings-section-title">Keyboard Shortcuts</div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:2;">
+              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Z</span><span style="color:var(--muted);">Undo formula change</span>
+              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Y</span><span style="color:var(--muted);">Redo formula change</span>
+              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Enter</span><span style="color:var(--muted);">Copy current prompt to clipboard</span>
+              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Shift + R</span><span style="color:var(--muted);">Randomise formula (Lab) / Generate (Generator)</span>
+              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Shift + S</span><span style="color:var(--muted);">Save current prompt to Library</span>
+              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Escape</span><span style="color:var(--muted);">Close any open modal or panel</span>
+              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">1 / 2 / 3 / 4 / 5</span><span style="color:var(--muted);">Switch tabs (Prompt Gen. / Lab / Library / Settings / Image Gen)</span>
+            </div>
+          </div>
+
+          <!-- Share target diagnostic -->
+          <div class="settings-section" id="shareTargetDiag">
+            <div class="settings-section-title">Share Target Diagnostic</div>
+            <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-bottom:10px;">Shows the URL the app was last launched with — use after testing the share target.</div>
+            <div id="shareDiagOutput" style="font-family:monospace;font-size:11px;color:var(--accent);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 12px;word-break:break-all;line-height:1.8;"></div>
+            <button onclick="
+              const url = localStorage.getItem('bm_last_launch_url') || 'nothing recorded yet';
+              const search = localStorage.getItem('bm_last_launch_search') || '(none)';
+              document.getElementById('shareDiagOutput').textContent = 'URL: ' + url + '\nSearch: ' + search;
+            " class="btn btn-ghost" style="font-size:11px;margin-top:8px;">⟳ READ LAST LAUNCH URL</button>
+          </div>
+
+          <!-- Feedback -->
+          <div class="settings-section">
+            <div class="settings-section-title">Send Feedback</div>
+            <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;line-height:1.7;margin-bottom:14px;">Found a bug? Have a suggestion? We'd love to hear from you.</div>
+            <a id="feedbackBtn" href="#" onclick="sendFeedback(event)" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;">
+              <button class="btn btn-outline" style="font-size:12px;pointer-events:none;">✉ SEND FEEDBACK</button>
+            </a>
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.5px;margin-top:10px;line-height:1.6;">
+              Opens your email app pre-filled with app details.<br>Sends to <span style="color:var(--accent);"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="9bebe9f4f6ebeff7faf9dbfae9eff9f4efaeabababb5f8f4f6">[email&#160;protected]</a></span>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /st-content -->
+    </div><!-- /st-shell -->
+
+    <!-- ── MOBILE M1: index list (≤640px only) ── -->
+    <div class="st-mobile-shell" id="stMobileShell">
+
+      <!-- Index screen -->
+      <div class="st-mob-index" id="stMobIndex">
+        <header style="margin-bottom:4px;">
+          <h1 style="font-family:'IBM Plex Mono',sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);">// SETTINGS</h1>
+        </header>
+        <div class="st-mob-list">
+          <button class="st-mob-row" onclick="stMobPush('account')">
+            <div class="st-mob-row-left"><i class="ti ti-user" aria-hidden="true"></i><div><div class="st-mob-row-label">Account</div><div class="st-mob-row-sub">Profile, username, storage</div></div></div>
+            <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
+          </button>
+          <button class="st-mob-row" onclick="stMobPush('billing')">
+            <div class="st-mob-row-left"><i class="ti ti-flask" aria-hidden="true" style="color:var(--accent);"></i><div><div class="st-mob-row-label" style="color:var(--accent);">Tokens</div><div class="st-mob-row-sub" id="stMobBalanceSub">— tokens</div></div></div>
+            <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
+          </button>
+          <button class="st-mob-row" onclick="stMobPush('sync')">
+            <div class="st-mob-row-left"><i class="ti ti-stack-2" aria-hidden="true"></i><div><div class="st-mob-row-label">Cloud Sync</div><div class="st-mob-row-sub" id="stMobSyncSub">Not connected</div></div></div>
+            <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
+          </button>
+          <button class="st-mob-row" onclick="stMobPush('appearance')">
+            <div class="st-mob-row-left"><i class="ti ti-palette" aria-hidden="true"></i><div><div class="st-mob-row-label">Appearance</div><div class="st-mob-row-sub">Theme, accent colour</div></div></div>
+            <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
+          </button>
+          <button class="st-mob-row" onclick="stMobPush('advanced')">
+            <div class="st-mob-row-left"><i class="ti ti-adjustments" aria-hidden="true"></i><div><div class="st-mob-row-label">Advanced</div><div class="st-mob-row-sub">Models, export, shortcuts</div></div></div>
+            <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Detail screen (shared; content swapped by stMobPush) -->
+      <div class="st-mob-detail" id="stMobDetail" style="display:none;">
+        <button class="st-mob-back" id="stMobBackBtn" onclick="stMobPop()" aria-label="Back to settings">
+          <i class="ti ti-wand" aria-hidden="true" style="font-size:16px;transform:rotate(-90deg);display:inline-block;"></i>
+          <span>Settings</span>
+        </button>
+        <div id="stMobDetailBody"></div>
+      </div>
+
+    </div><!-- /st-mobile-shell -->
+
+  </div><!-- /view-inner -->
+</div><!-- /viewSettings -->
 
       <!-- Profile -->
       <div class="settings-section" style="grid-column:1/-1;" id="settingsProfileSection">
@@ -1514,7 +1850,7 @@ handleShareTarget()
         </div>
         <div id="bmTokSignedOut" style="display:none;font-size:12px;color:var(--muted);letter-spacing:.5px;">Sign in to see your token balance and activity.</div>
         <div id="bmTokSignedIn" style="display:none;">
-          <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <i class="ti ti-diamond" aria-hidden="true" style="color:var(--accent);font-size:13px;vertical-align:-1px;margin-right:2px;"></i><span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span></div>
+          <div style="font-size:12px;letter-spacing:1px;margin-bottom:12px;">BALANCE: <i class="ti ti-flask" aria-hidden="true" style="color:var(--accent);font-size:13px;vertical-align:-1px;margin-right:2px;"></i><span id="bmTokSetBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span></div>
           <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:12px;">Tokens are spent on image generation and priced per model and resolution. Every charge, refund, and grant is recorded on your account; charges link to the saved image in your library.</div>
           <button class="btn btn-outline" onclick="bmUsageOpen()" style="font-size:12px;">⊞ USAGE HISTORY</button>
         </div>
@@ -1566,11 +1902,6 @@ handleShareTarget()
         <div style="font-size:10px;color:var(--muted);letter-spacing:.5px;margin-top:10px;line-height:1.6;">
           Opens your email app pre-filled with app details.<br>Sends to <span style="color:var(--accent);"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="9bebe9f4f6ebeff7faf9dbfae9eff9f4efaeabababb5f8f4f6">[email&#160;protected]</a></span>
         </div>
-      </div>
-
-    </div>
-  </div>
-</div>
 <!-- ═══════════════════════════════════════════════════════ BUILDER VIEW ═══ -->
 <div class="view" id="viewBuilder">
   <div class="view-inner">
@@ -1677,7 +2008,7 @@ handleShareTarget()
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
         <button class="pb-creator-btn" id="pbCreatorPersonalBtn" onclick="pbCreatorSetFilter('mine')"><i class="ti ti-user"></i>PERSONAL</button>
         <button class="pb-creator-btn active" id="pbCreatorBuiltinBtn" onclick="pbCreatorSetFilter('builtin')">◈ BUILT-IN</button>
-        <button class="pb-creator-btn" id="pbCreatorAllFilterBtn" onclick="pbCreatorSetFilter('all')"><i class="ti ti-diamond"></i><i class="ti ti-user"></i>ALL</button>
+        <button class="pb-creator-btn" id="pbCreatorAllFilterBtn" onclick="pbCreatorSetFilter('all')"><i class="ti ti-flask"></i><i class="ti ti-user"></i>ALL</button>
         <!-- Favourites toggle -->
         <button class="pb-creator-btn pb-creator-fav-toggle" id="pbCreatorFavBtn" onclick="pbCreatorToggleFavs()">⭐ FAVOURITES</button>
       </div>
@@ -6545,7 +6876,7 @@ function buildLibCard(f) {
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
     ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
-    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-diamond" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
+    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-flask" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
   `
   body.appendChild(tags)
 
@@ -6802,7 +7133,7 @@ function libOpenInfo(favId) {
   html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
     <span class="lib-tag mode-${kind === 'image' && bmFavIsI2I(f) ? 'i2i' : kind}">${esc(typeLabel)}</span>
     ${f.model ? `<span class="lib-tag tag-model">🤖 ${esc((kind === 'upscale') ? bmUpscalerLabel(f.model) : bmModelLabel(f.model))}</span>` : ''}
-    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-diamond" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
+    ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-flask" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
   </div>`
 
   // ── Prompt ────────────────────────────────────────────────────────────
@@ -7990,6 +8321,105 @@ Browser: ${navigator.userAgent}
   window.location.href = `mailto:promptlab@artbot5000.com?subject=${subject}&body=${body}`
 }
 
+// ── SETTINGS NAV (Option B desktop + M1 mobile) ──────────────────────────────
+// Desktop: side-nav rail with stShowSection().
+// Mobile (≤640px): full-screen drill-down (stMobPush / stMobPop).
+// The mobile detail pane clones the desktop section content by ID so all the
+// real DOM elements (inputs, checkboxes, token meter, etc.) remain in exactly
+// one place — we move the relevant st-section node into the detail pane and
+// return it on pop. This keeps renderSettingsView() working without changes.
+
+let _stMobCurrentSection = null; // section key currently drilled into
+
+function stShowSection(key) {
+  // Activate rail item
+  document.querySelectorAll('.st-nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.section === key);
+  });
+  // Show matching section panel
+  document.querySelectorAll('.st-section').forEach(el => {
+    el.classList.toggle('active', el.id === 'stSec-' + key);
+  });
+}
+
+// Mobile drill-in: move the section node into the detail pane.
+function stMobPush(key) {
+  _stMobCurrentSection = key;
+  const secEl = document.getElementById('stSec-' + key);
+  if (!secEl) return;
+  const body = document.getElementById('stMobDetailBody');
+  body.innerHTML = '';
+  body.appendChild(secEl);
+  document.getElementById('stMobIndex').style.display = 'none';
+  document.getElementById('stMobDetail').style.display = 'block';
+  // Scroll to top
+  const vi = document.querySelector('#viewSettings .view-inner');
+  if (vi) vi.scrollTop = 0;
+}
+
+// Mobile back: return the section node to the desktop content pane.
+function stMobPop() {
+  if (!_stMobCurrentSection) return;
+  const secEl = document.getElementById('stSec-' + _stMobCurrentSection);
+  if (secEl) {
+    const desktop = document.getElementById('stContent');
+    if (desktop) desktop.appendChild(secEl);
+  }
+  _stMobCurrentSection = null;
+  document.getElementById('stMobDetail').style.display = 'none';
+  document.getElementById('stMobIndex').style.display = '';
+}
+
+// Update the mobile index status subtitles when settings renders.
+function stMobUpdateSubtitles() {
+  // Token balance subtitle
+  const balEl = document.getElementById('stMobBalanceSub');
+  const balVal = document.getElementById('navTokenBalance');
+  if (balEl && balVal && balVal.textContent && balVal.textContent !== '—') {
+    balEl.textContent = balVal.textContent + ' tokens';
+  }
+  // Sync subtitle
+  const syncEl = document.getElementById('stMobSyncSub');
+  if (syncEl) {
+    const connected = (typeof cloudIsConnected === 'function') ? cloudIsConnected() : false;
+    const provider = (typeof cloudProvider !== 'undefined') ? cloudProvider : '';
+    if (connected && provider === 'gdrive') syncEl.textContent = 'Google Drive connected';
+    else if (connected && provider === 'dropbox') syncEl.textContent = 'Dropbox connected';
+    else syncEl.textContent = 'Not connected';
+  }
+}
+
+// Token purchase state
+let _stPkg = { tokens: 200, price: 2.00 };
+let _stQty = 1;
+
+function stSelectPkg(btn) {
+  document.querySelectorAll('.st-pkg').forEach(el => el.classList.remove('active'));
+  btn.classList.add('active');
+  _stPkg = { tokens: parseInt(btn.dataset.tokens), price: parseFloat(btn.dataset.price) };
+  _stQty = 1;
+  stUpdateQtyDisplay();
+}
+
+function stQtyAdj(delta) {
+  _stQty = Math.max(1, Math.min(10, _stQty + delta));
+  stUpdateQtyDisplay();
+}
+
+function stUpdateQtyDisplay() {
+  const qv = document.getElementById('stQtyVal');
+  const qt = document.getElementById('stQtyTotal');
+  if (qv) qv.textContent = _stQty;
+  if (qt) qt.textContent = '= ' + (_stPkg.tokens * _stQty) + ' tokens · $' + (_stPkg.price * _stQty).toFixed(2);
+}
+
+function stInitiateCheckout() {
+  // Stripe checkout stub — replace with real Stripe.js call when live.
+  const total = _stPkg.tokens * _stQty;
+  const usd = (_stPkg.price * _stQty).toFixed(2);
+  alert('Stripe checkout: ' + total + ' tokens · $' + usd + '\n(Integration coming soon)');
+}
+
 function renderSettingsView() {
   renderThemePicker()
   renderSettingsViewGenOnly()
@@ -8058,6 +8488,9 @@ function renderSettingsView() {
   if (lBtn) lBtn.textContent = document.body.classList.contains('light') ? '🌙 DARK' : '☀ LIGHT'
 
   renderSettingsModelsList()
+  // Ensure the desktop nav starts on Account and update mobile index subtitles
+  if (typeof stShowSection === 'function' && !document.querySelector('.st-nav-item.active')) stShowSection('account')
+  if (typeof stMobUpdateSubtitles === 'function') stMobUpdateSubtitles()
 }
 
 function renderSettingsModelsList() {
@@ -16787,7 +17220,7 @@ const bmQueue = (() => {
     row.appendChild(ic); row.appendChild(lbl);
     const _tok = jobTokens(job);
     if (_tok != null) {
-      const tk = document.createElement('span'); tk.className = 'bm-q-rowtok'; tk.innerHTML = '<i class="ti ti-diamond" aria-hidden="true"></i> ' + _tok;
+      const tk = document.createElement('span'); tk.className = 'bm-q-rowtok'; tk.innerHTML = '<i class="ti ti-flask" aria-hidden="true"></i> ' + _tok;
       row.appendChild(tk);
     }
     // Delete: only when the job can be cancelled without cost. 'queued' jobs
@@ -18402,7 +18835,7 @@ async function bmUsageRender(force) {
 function bmRunBtnLabel(verb, cost) {
   const base = String(verb);
   if (cost == null || !(typeof cost === 'number' && isFinite(cost))) return base;
-  return base + ' <span class="run-cost"><i class="ti ti-diamond" aria-hidden="true"></i> ' + cost + '</span>';
+  return base + ' <span class="run-cost"><i class="ti ti-flask" aria-hidden="true"></i> ' + cost + '</span>';
 }
 
 function igUpdateCostHint() {
@@ -19403,7 +19836,7 @@ function igResetMode() {
   const left = document.createElement('span');
   left.textContent = model.label + (Number.isFinite(image.seed) ? (' \u00B7 seed ' + image.seed) : '');
   const right = document.createElement('span');
-  if (tokens && typeof tokens.perImage === 'number') right.innerHTML = '<i class="ti ti-diamond" aria-hidden="true"></i> ' + tokens.perImage;
+  if (tokens && typeof tokens.perImage === 'number') right.innerHTML = '<i class="ti ti-flask" aria-hidden="true"></i> ' + tokens.perImage;
   meta.appendChild(left); meta.appendChild(right);
 
   const actions = document.createElement('div');
@@ -22313,7 +22746,7 @@ function upAddResultCard(image, model, tokens) {
   const left = document.createElement('span');
   left.textContent = model.label;
   const right = document.createElement('span');
-  if (tokens && typeof tokens.perImage === 'number') right.innerHTML = '<i class="ti ti-diamond" aria-hidden="true"></i> ' + tokens.perImage;
+  if (tokens && typeof tokens.perImage === 'number') right.innerHTML = '<i class="ti ti-flask" aria-hidden="true"></i> ' + tokens.perImage;
   meta.appendChild(left); meta.appendChild(right);
 
   const actions = document.createElement('div');
@@ -22421,7 +22854,7 @@ try {
     </div>
     <div class="modal-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
-        <div style="font-size:12px;letter-spacing:1px;">BALANCE: <i class="ti ti-diamond" aria-hidden="true" style="color:var(--accent);font-size:13px;vertical-align:-1px;margin-right:2px;"></i><span id="bmUsageBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span></div>
+        <div style="font-size:12px;letter-spacing:1px;">BALANCE: <i class="ti ti-flask" aria-hidden="true" style="color:var(--accent);font-size:13px;vertical-align:-1px;margin-right:2px;"></i><span id="bmUsageBalance" style="color:var(--accent);font-weight:700;font-size:15px;">—</span></div>
         <button onclick="bmUsageRender(true)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);"><i class="ti ti-refresh"></i>REFRESH</button>
       </div>
       <div id="bmTokActivity" style="max-height:60vh;overflow-y:auto;border-top:1px solid var(--border);"></div>
