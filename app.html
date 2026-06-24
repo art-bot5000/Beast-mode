@@ -981,7 +981,7 @@ handleShareTarget()
           <h1>// IMAGE GEN</h1>
           <span class="up-settings-sub">RUNWARE MULTI-MODEL ENGINE</span>
         </div>
-        <div class="ig-label">MODEL</div>
+        <div class="ig-label">MODEL <button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;letter-spacing:1px;opacity:0.7;" onclick="igResetMode()" title="Clear all settings and results">↺ RESET</button></div>
         <select class="ig-select" id="igModel" aria-label="Image model" onchange="igModelChanged()"></select>
         <div class="ig-note" id="igModelNote"></div>
 
@@ -1142,7 +1142,7 @@ handleShareTarget()
         <!-- CONFIG BLOCK: model + params + run. Moves into a modal on mobile. -->
         <div id="upConfigBlock">
         <!-- Model -->
-        <div class="ig-label">MODEL</div>
+        <div class="ig-label">MODEL <button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;letter-spacing:1px;opacity:0.7;" onclick="upResetMode()" title="Clear all settings and results">↺ RESET</button></div>
         <select class="ig-select" id="upModel" onchange="upModelChanged()"></select>
         <div class="ig-note" id="upModelNote"></div>
 
@@ -4744,6 +4744,17 @@ function restoreFav(id) {
       if (typeof upModelChanged === 'function') upModelChanged()
       if (um.factor != null && Number.isFinite(Number(um.factor))) upState.factor = Number(um.factor)
       if (um.mp != null && Number.isFinite(Number(um.mp))) upState.mp = Number(um.mp)
+
+      // Restore diffusion params (seed, steps, CFG) from saved upParams
+      if (um.params && typeof um.params === 'object') {
+        const p = um.params
+        const setV = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v }
+        if (p.seed != null) setV('upSeed', p.seed)
+        if (p.steps != null) setV('upSteps', p.steps)
+        if (p.CFGScale != null) setV('upCfg', p.CFGScale)
+        if (p.positivePrompt != null) setV('upPrompt', p.positivePrompt)
+        if (p.negativePrompt != null) setV('upNegative', p.negativePrompt)
+      }
 
       // Resolve the original source fav this upscale came from, and load it as
       // the upscale source. upSelectFav handles bytes-resolution + stage/rail.
@@ -16543,11 +16554,16 @@ const bmQueue = (() => {
           let srvFavId = null;
           const mu = (typeof im.url === 'string') ? im.url.match(/\/api\/img\/(\d+)/) : null;
           if (mu) srvFavId = Number(mu[1]);
+          // Patch igSettings seed with the actual seed returned by the API
+          // so Restore always reuses the exact seed that produced this image.
+          const igSettingsWithSeed = meta.igSettings
+            ? { ...meta.igSettings, seed: Number.isFinite(im.seed) ? String(im.seed) : (meta.igSettings.seed || '') }
+            : meta.igSettings;
           const savedFav = autoSaveGeneratedImage(prompt, fullText, im.url, model, pristine,
             tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged),
             { serverFavId: srvFavId, lineage: (typeof im.lineage === 'string' ? im.lineage : null),
               familySrcIds: Array.isArray(meta.srcFavIds) ? meta.srcFavIds : null,
-              igSettings: meta.igSettings || null });
+              igSettings: igSettingsWithSeed || null });
           // Link the job to the first saved library entry so a queue-card tap
           // can jump straight to it.
           if (savedFav && savedFav.id != null && job.savedFavId == null) job.savedFavId = savedFav.id;
@@ -19218,8 +19234,14 @@ async function igGenerate() {
   if (m.i2i && igState.refs.length) body.referenceImages = igState.refs.map(r => r.data);
 
   if (m.seed) {
-    const s = parseInt(document.getElementById('igSeed').value, 10);
-    if (Number.isFinite(s) && s >= 0) body.seed = s;
+    const seedEl = document.getElementById('igSeed');
+    let s = parseInt(seedEl.value, 10);
+    if (!Number.isFinite(s) || s < 0) {
+      // Generate a random seed client-side so it's always known + saved
+      s = Math.floor(Math.random() * 2147483647);
+      seedEl.value = s;
+    }
+    body.seed = s;
   }
   if (m.quality && igState.quality !== 'auto') body.quality = igState.quality;
   if (m.speed && igState.speed !== 'DEFAULT') body.renderingSpeed = igState.speed;
@@ -19318,7 +19340,44 @@ function igStatus(msg, isError) {
   el.style.color = isError ? 'var(--err, #f85149)' : 'var(--accent)';
 }
 
-function igAddResultCard(image, model, prompt, tokens, batchSize) {
+function igResetMode() {
+  // Clear results rail
+  const rail = document.getElementById('igResults');
+  if (rail) rail.innerHTML = '';
+  const empty = document.getElementById('igEmpty');
+  if (empty) empty.style.display = 'block';
+  // Clear stage preview
+  const stage = document.getElementById('igStage');
+  if (stage) stage.innerHTML = '';
+  // Clear text fields
+  const promptEl = document.getElementById('igPrompt');
+  if (promptEl) promptEl.value = '';
+  const negEl = document.getElementById('igNegative');
+  if (negEl) negEl.value = '';
+  const seedEl = document.getElementById('igSeed');
+  if (seedEl) seedEl.value = '';
+  const stepsEl = document.getElementById('igSteps');
+  if (stepsEl) stepsEl.value = '';
+  const cfgEl = document.getElementById('igCfg');
+  if (cfgEl) cfgEl.value = '';
+  // Reset state
+  igState.refs = [];
+  igState.ar = '1:1';
+  igState.res = null;
+  igState.quality = 'auto';
+  igState.speed = 'DEFAULT';
+  // Reset model to first available
+  const modelSel = document.getElementById('igModel');
+  if (modelSel && typeof IG_MODELS !== 'undefined' && IG_MODELS.length) {
+    igState.modelId = IG_MODELS[0].id;
+    modelSel.value = igState.modelId;
+  }
+  if (typeof igModelChanged === 'function') igModelChanged();
+  if (typeof igRenderAll === 'function') igRenderAll();
+  igStatus('Settings reset.', false);
+}
+
+
   const grid = document.getElementById('igResults');
   const card = document.createElement('div');
   card.className = 'ig-card';
@@ -21973,6 +22032,40 @@ function upStatus(msg, isError) {
     el.style.color = color;
   });
 }
+
+function upResetMode() {
+  // Clear rail
+  const rail = document.getElementById('upRail');
+  if (rail) rail.innerHTML = '';
+  const railEmpty = document.getElementById('upRailEmpty');
+  if (railEmpty) railEmpty.style.display = 'block';
+  // Clear source / preview
+  if (typeof upClearSource === 'function') upClearSource();
+  // Reset seed/prompt/negative fields
+  const seedEl = document.getElementById('upSeed');
+  if (seedEl) seedEl.value = '';
+  const promptEl = document.getElementById('upPrompt');
+  if (promptEl) promptEl.value = '';
+  const negEl = document.getElementById('upNegative');
+  if (negEl) negEl.value = '';
+  const stepsEl = document.getElementById('upSteps');
+  if (stepsEl) stepsEl.value = '';
+  const cfgEl = document.getElementById('upCfg');
+  if (cfgEl) cfgEl.value = '';
+  // Reset model to first available
+  const modelSel = document.getElementById('upModel');
+  if (modelSel && upState.models && upState.models.length) {
+    upState.modelId = upState.models[0].id;
+    modelSel.value = upState.modelId;
+  }
+  upState.factor = 2;
+  upState.mp = 4;
+  if (typeof upModelChanged === 'function') upModelChanged();
+  if (typeof upRenderAll === 'function') upRenderAll();
+  upStatus('Settings reset.', false);
+}
+
+
 // Keep the under-preview Upscale button (shown on every width) in lock-step
 // with the panel's #upRunBtn (label/cost-hint + busy disabled state).
 function upSyncMobileRunBtn() {
@@ -22062,10 +22155,16 @@ async function upRun() {
     if (np) body.negativePrompt = np;
     const st = parseInt(document.getElementById('upSteps').value, 10);
     const cf = parseFloat(document.getElementById('upCfg').value);
-    const sd = parseInt(document.getElementById('upSeed').value, 10);
+    const seedUpEl = document.getElementById('upSeed');
+    let sd = parseInt(seedUpEl.value, 10);
+    if (!Number.isFinite(sd) || sd < 0) {
+      // Generate a random seed client-side so it's always saved with the result
+      sd = Math.floor(Math.random() * 2147483647);
+      seedUpEl.value = sd;
+    }
     if (Number.isFinite(st) && st >= 1 && st <= 60) body.steps = st;
     if (Number.isFinite(cf) && cf >= 0 && cf <= 20) body.CFGScale = cf;
-    if (Number.isFinite(sd) && sd >= 0) body.seed = sd;
+    body.seed = sd;
     if (m.sampler && Number.isFinite(m.sampler.strength)) body.strength = m.sampler.strength;
   }
 
