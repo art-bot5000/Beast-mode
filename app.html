@@ -18011,13 +18011,18 @@ function _bytesFromB64(b64) {
   return a;
 }
 
-// Downscale to a ~256px WebP (JPEG fallback for old WebKit that ignores webp).
+// Encrypted-thumbnail encoding version. Bump this whenever the size/quality in
+// bmMakeThumbBytes changes so the background sweep regenerates stale thumbs:
+//   v1 = 256px WebP q0.60  (too soft/blocky on the library grid)
+//   v2 = 512px WebP q0.82  (current — sharp at card display size, still small)
+const THUMB_VER = 2;
+// Downscale to a ~512px WebP (JPEG fallback for old WebKit that ignores webp).
 function bmMakeThumbBytes(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       try {
-        const max = 256;
+        const max = 512;
         const ratio = Math.min(max / img.width, max / img.height, 1);
         const c = document.createElement('canvas');
         c.width = Math.round(img.width * ratio);
@@ -18031,9 +18036,9 @@ function bmMakeThumbBytes(dataUrl) {
             c.toBlob((jb) => {
               if (!jb) { resolve(null); return; }
               jb.arrayBuffer().then((b) => resolve({ bytes: new Uint8Array(b), mime: 'image/jpeg' }));
-            }, 'image/jpeg', 0.7);
+            }, 'image/jpeg', 0.85);
           }
-        }, 'image/webp', 0.6);
+        }, 'image/webp', 0.82);
       } catch (e) { resolve(null); }
     };
     img.onerror = () => resolve(null);
@@ -18067,6 +18072,13 @@ async function bmThumbUpload(fav, srcUrl) {
     fav.thumbKey = pd.key;
     fav.thumbIv = _b64FromBytes(iv);
     fav.thumbMime = made.mime;
+    fav.thumbVer = THUMB_VER;
+    // The R2 key is stable per fav, so a re-encode (e.g. a version bump) reuses
+    // the same key with fresh bytes/IV. Drop any cached decrypted blob URL so
+    // bmThumbDecrypt re-fetches the new image instead of returning the old one.
+    try {
+      if (_thumbUrlCache[fav.id]) { URL.revokeObjectURL(_thumbUrlCache[fav.id]); delete _thumbUrlCache[fav.id]; }
+    } catch (e) { /* ignore */ }
     if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
     if (typeof driveSavePrompt === 'function') driveSavePrompt(fav); // persist keys
   } catch (e) { /* best-effort */ }
@@ -18354,7 +18366,12 @@ async function bmThumbSweep() {
   if (typeof favourites === 'undefined') return;
   _bmThumbSweeping = true;
   try {
-    const targets = favourites.filter((f) => f && f.imageData && !f.thumbKey);
+    // Pick up favs with no thumb yet, OR a thumb encoded by an older version of
+    // bmMakeThumbBytes (so a size/quality bump self-heals the back-catalogue).
+    // A stale-version fav still needs a resolvable source to re-encode from; the
+    // source-resolution step below skips it harmlessly if none is available.
+    const targets = favourites.filter((f) =>
+      f && f.imageData && (!f.thumbKey || (f.thumbVer || 0) < THUMB_VER));
     // Newest-first: the most recently created images get their thumbnails
     // generated first, so a user landing on Library/Upscaler sees their latest
     // work resolve immediately rather than waiting through the back-catalogue.
