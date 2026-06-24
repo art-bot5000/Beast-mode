@@ -1155,32 +1155,42 @@ handleShareTarget()
           <label class="up-check"><input type="checkbox" id="upRealism"> <span>Realism enhancement (best for AI images)</span></label>
         </div>
 
-        <!-- Diffusion controls: factor + prompt + sampler -->
+        <!-- Gemini upscale controls: resolution chips only -->
+        <div id="upResWrap" style="display:none;">
+          <div class="ig-label">OUTPUT RESOLUTION</div>
+          <div class="ig-chips" id="upResChips"></div>
+          <div class="ig-note" style="margin-top:6px;">AI-guided enhancement — the model regenerates at the target resolution using your image as a reference. Results may differ from the source.</div>
+        </div>
+
+        <!-- Diffusion controls: factor -->
         <div id="upFactorWrap" style="display:none;">
           <div class="ig-label">UPSCALE FACTOR</div>
           <div class="ig-chips" id="upFactorChips"></div>
         </div>
         <div id="upPromptWrap" style="display:none;">
           <div class="ig-label">GUIDING PROMPT <span style="color:var(--muted);">(optional)</span></div>
-          <textarea class="ig-textarea" id="upPrompt" style="min-height:52px;" placeholder="Describe the desired detail, e.g. crisp edges, restored texture…"></textarea>
-          <div class="ig-label">NEGATIVE PROMPT <span style="color:var(--muted);">(optional)</span></div>
-          <textarea class="ig-textarea" id="upNegative" style="min-height:44px;" placeholder="Things to avoid…"></textarea>
-          <div class="ig-row" style="margin-top:14px;">
-            <div style="flex:1;">
-              <div class="ig-label" style="margin-top:0;">STEPS</div>
-              <input class="ig-input" id="upSteps" type="number" min="1" max="60" step="1">
+          <textarea class="ig-textarea" id="upPrompt" style="min-height:52px;" placeholder="Upscale this image to the selected resolution and improve details (delete or change this prompt to suit)"></textarea>
+          <!-- Advanced diffusion controls (steps/CFG/seed/negative) — hidden for Gemini -->
+          <div id="upAdvWrap">
+            <div class="ig-label">NEGATIVE PROMPT <span style="color:var(--muted);">(optional)</span></div>
+            <textarea class="ig-textarea" id="upNegative" style="min-height:44px;" placeholder="Things to avoid…"></textarea>
+            <div class="ig-row" style="margin-top:14px;">
+              <div style="flex:1;">
+                <div class="ig-label" style="margin-top:0;">STEPS</div>
+                <input class="ig-input" id="upSteps" type="number" min="1" max="60" step="1">
+              </div>
+              <div style="flex:1;">
+                <div class="ig-label" style="margin-top:0;">CFG SCALE</div>
+                <input class="ig-input" id="upCfg" type="number" min="0" max="20" step="0.5">
+              </div>
             </div>
-            <div style="flex:1;">
-              <div class="ig-label" style="margin-top:0;">CFG SCALE</div>
-              <input class="ig-input" id="upCfg" type="number" min="0" max="20" step="0.5">
-            </div>
-          </div>
-          <div class="ig-row" style="margin-top:14px;">
-            <div style="flex:1;">
-              <div class="ig-label" style="margin-top:0;">SEED</div>
-              <div class="ig-row">
-                <input class="ig-input" id="upSeed" type="number" min="0" step="1" placeholder="random">
-                <button class="btn btn-ghost" style="padding:6px 10px;font-size:13px;" onclick="document.getElementById('upSeed').value=''" title="Clear = random seed"><i class="ti ti-dice-5"></i></button>
+            <div class="ig-row" style="margin-top:14px;">
+              <div style="flex:1;">
+                <div class="ig-label" style="margin-top:0;">SEED</div>
+                <div class="ig-row">
+                  <input class="ig-input" id="upSeed" type="number" min="0" step="1" placeholder="random">
+                  <button class="btn btn-ghost" style="padding:6px 10px;font-size:13px;" onclick="document.getElementById('upSeed').value=''" title="Clear = random seed"><i class="ti ti-dice-5"></i></button>
+                </div>
               </div>
             </div>
           </div>
@@ -6780,8 +6790,16 @@ function buildLibCard(f) {
   const tags = document.createElement('div')
   tags.className = 'lib-card-tags'
   const folder = f.folderId ? libFolders.find(x => x.id === f.folderId) : null
+  // For server-rehydrated images the fav carries igSettings but not f.model —
+  // fall back to igSettings.modelId so the model tag still renders.
+  const _cardModel = f.model || (f.igSettings && f.igSettings.modelId) || null
+  // Also recover the prompt text for rehydrated images: igSettings may have a
+  // promptOnly snapshot stored at generation time.
+  if (!f.promptOnly && f.igSettings && f.igSettings.promptOnly) {
+    f.promptOnly = f.igSettings.promptOnly
+  }
   tags.innerHTML = `
-    ${f.model ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || f.model) : bmModelLabel(f.model)}</span>` : ''}
+    ${_cardModel ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || _cardModel) : bmModelLabel(_cardModel)}</span>` : ''}
     ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
     ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
@@ -17624,6 +17642,11 @@ async function bmSyncLibraryFromManifest() {
       if (m.igSettings && typeof m.igSettings === 'object') {
         fav.igSettings = m.igSettings;
       }
+      // tokenRef — links this image to a ledger entry in the token usage history
+      // modal so thumbnails and library navigation work cross-device.
+      if (typeof m.tokenRef === 'string' && m.tokenRef && !fav.tokenRef) {
+        fav.tokenRef = m.tokenRef;
+      }
       favourites.push(fav);
       added++;
     }
@@ -20471,6 +20494,7 @@ const upState = {
   srcMp: 0,            // source megapixels (w*h/1e6), 0 = unknown
   mp: 4,               // P-Image target megapixels
   factor: 2,           // diffusion upscale factor
+  resolution: '2K',    // gemini-upscale output resolution
   format: 'JPG',
   busy: false,
   inited: false,
@@ -20601,6 +20625,9 @@ function upModelChanged() {
       if (cf && !cf.value) cf.value = m.sampler.cfg;
     }
   }
+  if (m && m.kind === 'gemini-upscale' && m.resolution) {
+    if (!m.resolution.values.includes(upState.resolution)) upState.resolution = m.resolution.default || m.resolution.values[0];
+  }
   upRenderAll();
 }
 
@@ -20611,9 +20638,28 @@ function upRenderAll() {
   document.getElementById('upModelNote').textContent = m.note || '';
 
   const isMp = m.kind === 'megapixels';
+  const isGemini = m.kind === 'gemini-upscale';
   document.getElementById('upMpWrap').style.display = isMp ? 'block' : 'none';
-  document.getElementById('upFactorWrap').style.display = isMp ? 'none' : 'block';
+  // Factor chips shown for diffusion only; gemini uses resolution chips in upResWrap
+  document.getElementById('upFactorWrap').style.display = (!isMp && !isGemini) ? 'block' : 'none';
+  // Resolution chips for Gemini upscalers
+  const upResWrap = document.getElementById('upResWrap');
+  if (upResWrap) upResWrap.style.display = isGemini ? 'block' : 'none';
+  // Prompt shown for both diffusion and gemini-upscale
   document.getElementById('upPromptWrap').style.display = (m.prompt && !isMp) ? 'block' : 'none';
+  // Seed/steps/CFG only for diffusion
+  const upAdvWrap = document.getElementById('upAdvWrap');
+  if (upAdvWrap) upAdvWrap.style.display = (!isMp && !isGemini) ? 'block' : 'none';
+
+  // Set default prompt placeholder for Gemini upscale models
+  const upPromptEl = document.getElementById('upPrompt');
+  if (upPromptEl) {
+    if (isGemini) {
+      upPromptEl.placeholder = 'Upscale this image to the selected resolution and improve details (delete or change this prompt to suit)';
+    } else {
+      upPromptEl.placeholder = 'Optional guiding prompt — describe the style or detail to enhance';
+    }
+  }
 
   if (isMp) {
     const mp = document.getElementById('upMp');
@@ -20643,6 +20689,8 @@ function upRenderAll() {
         note.textContent = 'Output is rendered toward this megapixel count (capped at ' + hardMax + ' MP).';
       }
     }
+  } else if (isGemini) {
+    upRenderResolutionChips();
   } else {
     upRenderFactorChips();
     if (m.sampler) {
@@ -20663,6 +20711,22 @@ function upMpChanged() {
   upState.mp = parseInt(document.getElementById('upMp').value, 10) || 4;
   upMpLabel();
   upUpdateCostHint();
+}
+
+function upRenderResolutionChips() {
+  const m = upModel();
+  const wrap = document.getElementById('upResChips');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const vals = (m && m.resolution && m.resolution.values) ? m.resolution.values : ['1K', '2K', '4K'];
+  if (!vals.includes(upState.resolution)) upState.resolution = (m && m.resolution && m.resolution.default) || vals[0];
+  vals.forEach(v => {
+    wrap.appendChild(igChip(v, upState.resolution === v, () => {
+      upState.resolution = v;
+      upRenderResolutionChips();
+      upUpdateCostHint();
+    }));
+  });
 }
 
 function upRenderFactorChips() {
@@ -20700,15 +20764,18 @@ function upRenderFormatChips() {
   });
 }
 
-// Live token hint on the Upscale button. P-Image is tiered by MP; the others
-// are flat. Reads the price the backend reported per model so the UI and ledger
-// can't disagree.
+// Live token hint on the Upscale button. P-Image is tiered by MP; Gemini
+// upscalers are priced by resolution; the others are flat. Reads the price
+// the backend reported per model so the UI and ledger can't disagree.
 function upCurrentTokenCost() {
   const m = upModel();
   if (!m) return null;
   let tok = m.tokens;
   if (m.kind === 'megapixels' && m.tokensByMp) {
     tok = (upState.mp <= 4) ? m.tokensByMp.low : m.tokensByMp.high;
+  }
+  if (m.kind === 'gemini-upscale' && m.tokensByRes) {
+    tok = m.tokensByRes[upState.resolution] || m.tokens;
   }
   return Number.isFinite(tok) ? tok : null;
 }
@@ -22543,6 +22610,27 @@ async function upRun() {
     body.targetMegapixels = upState.mp;
     if (document.getElementById('upEnhance').checked) body.enhanceDetails = true;
     if (document.getElementById('upRealism').checked) body.realism = true;
+  } else if (m.kind === 'gemini-upscale') {
+    body.resolution = upState.resolution;
+    // Gemini needs an aspect ratio — derive from source dimensions if known,
+    // else default to 1:1. The model will preserve composition regardless.
+    if (upState.srcW > 0 && upState.srcH > 0) {
+      const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+      const g = gcd(upState.srcW, upState.srcH);
+      const aw = upState.srcW / g, ah = upState.srcH / g;
+      // Map to nearest supported Gemini AR; fall back to 1:1 if too unusual
+      const supported = ['1:1','3:2','2:3','4:3','3:4','4:5','5:4','16:9','9:16','21:9'];
+      const ratio = upState.srcW / upState.srcH;
+      const nearest = supported.reduce((best, ar) => {
+        const [aw2, ah2] = ar.split(':').map(Number);
+        return Math.abs(aw2/ah2 - ratio) < Math.abs(best[0]/best[1] - ratio) ? ar.split(':').map(Number) : best;
+      }, [1, 1]);
+      body.aspectRatio = Array.isArray(nearest) ? nearest.join(':') : '1:1';
+    } else {
+      body.aspectRatio = '1:1';
+    }
+    const pp = (document.getElementById('upPrompt').value || '').trim();
+    if (pp) body.positivePrompt = pp;
   } else {
     body.upscaleFactor = upState.factor;
     const pp = (document.getElementById('upPrompt').value || '').trim();
@@ -22600,13 +22688,17 @@ async function upRun() {
   upStatus('\u25CC UPSCALING\u2026 (' + m.label + ')', false);
 
   try {
-    const label = 'Upscaled \u00B7 ' + m.label + (m.kind === 'megapixels' ? (' \u00B7 ' + upState.mp + 'MP') : (' \u00B7 ' + upState.factor + '\u00D7'));
+    const label = 'Upscaled \u00B7 ' + m.label + (
+      m.kind === 'megapixels' ? (' \u00B7 ' + upState.mp + 'MP') :
+      m.kind === 'gemini-upscale' ? (' \u00B7 ' + upState.resolution) :
+      (' \u00B7 ' + upState.factor + '\u00D7')
+    );
     const r = await bmQueue.enqueueUpscale(body, {
       prompt: label, fullText: '', model: m.id,
       srcFavId: upState.srcFavId,
       upKind: m.kind,
       tokens: upCurrentTokenCost(),
-      upFactor: (m.kind === 'megapixels') ? null : upState.factor,
+      upFactor: (m.kind === 'megapixels' || m.kind === 'gemini-upscale') ? null : upState.factor,
       upMp: (m.kind === 'megapixels') ? upState.mp : null,
       // Pin the exact input fed to the upscaler (data URI for upload/library,
       // URL string for the URL tab) + its measured dimensions, so the before/
