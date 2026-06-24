@@ -459,6 +459,11 @@ handleShareTarget()
       <span class="tab-icon"><i class="ti ti-arrows-maximize"></i></span>
       <span class="tab-label">UPSCALER</span>
     </button>
+    <button class="nav-tab" id="navLibrary" onclick="switchView('library')">
+      <span class="tab-icon"><i class="ti ti-stack-2"></i></span>
+      <span class="tab-label">LIBRARY</span>
+      <span class="tab-badge" id="libBadge" style="display:none">0</span>
+    </button>
     <button class="nav-tab active" id="navGenerator" onclick="switchView('generator')">
       <span class="tab-icon"><i class="ti ti-cube"></i></span>
       <span class="tab-label">BEAST MODE</span>
@@ -466,11 +471,6 @@ handleShareTarget()
     <button class="nav-tab" id="navBuilder" onclick="switchView('builder')">
       <span class="tab-icon"><i class="ti ti-flask"></i></span>
       <span class="tab-label">PROMPT LAB</span>
-    </button>
-    <button class="nav-tab" id="navLibrary" onclick="switchView('library')">
-      <span class="tab-icon"><i class="ti ti-stack-2"></i></span>
-      <span class="tab-label">LIBRARY</span>
-      <span class="tab-badge" id="libBadge" style="display:none">0</span>
     </button>
     <button class="nav-tab" id="navQueue" onclick="switchView('queue')">
       <span class="tab-icon"><i class="ti ti-clock-hour-4"></i></span>
@@ -1339,7 +1339,8 @@ handleShareTarget()
         <button class="st-nav-item"        data-section="billing"   onclick="stShowSection('billing')"  ><i class="ti ti-flask"       aria-hidden="true"></i><span>Tokens</span></button>
         <button class="st-nav-item"        data-section="sync"      onclick="stShowSection('sync')"     ><i class="ti ti-stack-2"     aria-hidden="true"></i><span>Cloud Sync</span></button>
         <button class="st-nav-item"        data-section="appearance" onclick="stShowSection('appearance')"><i class="ti ti-palette"   aria-hidden="true"></i><span>Appearance</span></button>
-        <button class="st-nav-item"        data-section="advanced"  onclick="stShowSection('advanced')" ><i class="ti ti-adjustments" aria-hidden="true"></i><span>Advanced</span></button>
+        <button class="st-nav-item"        data-section="accessibility" onclick="stShowSection('accessibility')"><i class="ti ti-adjustments" aria-hidden="true"></i><span>Accessibility</span></button>
+        <button class="st-nav-item"        data-section="advanced"  onclick="stShowSection('advanced')" ><i class="ti ti-settings" aria-hidden="true"></i><span>Advanced</span></button>
       </nav>
 
       <!-- Content pane -->
@@ -1525,6 +1526,64 @@ handleShareTarget()
           </div>
         </section>
 
+        <!-- ── ACCESSIBILITY ── -->
+        <section class="st-section" id="stSec-accessibility">
+          <div class="st-section-head"><h2 class="st-section-title">Accessibility</h2></div>
+
+          <!-- Display -->
+          <div class="settings-section">
+            <div class="settings-section-title">Display</div>
+
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Light Mode</div>
+                <div class="settings-desc">Switch to light colour scheme</div>
+              </div>
+              <button class="btn btn-ghost" onclick="toggleLightMode()" style="font-size:12px;" id="a11yLightBtn">☀ LIGHT</button>
+            </div>
+
+            <div class="settings-row" style="margin-top:14px;">
+              <div>
+                <div class="settings-label">High Contrast</div>
+                <div class="settings-desc">Boost text and border contrast for readability</div>
+              </div>
+              <button class="btn btn-ghost" onclick="toggleHighContrast()" style="font-size:12px;" id="a11yContrastBtn">CONTRAST: OFF</button>
+            </div>
+          </div>
+
+          <!-- Text Size -->
+          <div class="settings-section">
+            <div class="settings-section-title">Text Size</div>
+            <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:12px;line-height:1.6;">Scale interface text. Applies across the whole app and is saved with your synced settings.</div>
+            <div class="a11y-textsize-row" id="a11yTextSizeRow" role="group" aria-label="Text size">
+              <button class="a11y-size-btn" data-size="s"  onclick="setTextSize('s')">S</button>
+              <button class="a11y-size-btn" data-size="m"  onclick="setTextSize('m')">M</button>
+              <button class="a11y-size-btn" data-size="l"  onclick="setTextSize('l')">L</button>
+              <button class="a11y-size-btn" data-size="xl" onclick="setTextSize('xl')">XL</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-top:8px;line-height:1.5;">M is the default. L and XL increase legibility; S is more compact.</div>
+          </div>
+
+          <!-- Keyboard Shortcuts -->
+          <div class="settings-section">
+            <div class="settings-section-title">Keyboard Shortcuts</div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:2;">
+              <span class="kbd-key">1 / 2 / 3</span><span style="color:var(--muted);">Switch to Image Gen / Upscaler / Library</span>
+              <span class="kbd-key">4 / 5 / 6</span><span style="color:var(--muted);">Switch to Beast Mode / Prompt Lab / Queue</span>
+              <span class="kbd-key">G</span><span style="color:var(--muted);">Generate / run in the current mode</span>
+              <span class="kbd-key">R</span><span style="color:var(--muted);">Randomise (Beast Mode / Prompt Lab)</span>
+              <span class="kbd-key">?</span><span style="color:var(--muted);">Open this shortcuts reference</span>
+              <span class="kbd-key">Ctrl + Z</span><span style="color:var(--muted);">Undo formula change (Lab)</span>
+              <span class="kbd-key">Ctrl + Y</span><span style="color:var(--muted);">Redo formula change (Lab)</span>
+              <span class="kbd-key">Ctrl + Enter</span><span style="color:var(--muted);">Copy current prompt to clipboard</span>
+              <span class="kbd-key">Ctrl + Shift + R</span><span style="color:var(--muted);">Randomise (Lab / Beast Mode)</span>
+              <span class="kbd-key">Ctrl + Shift + S</span><span style="color:var(--muted);">Save current prompt to Library</span>
+              <span class="kbd-key">Escape</span><span style="color:var(--muted);">Close any open modal or panel</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-top:10px;line-height:1.5;">Single-key shortcuts are ignored while typing in a text field.</div>
+          </div>
+        </section>
+
         <!-- ── ADVANCED ── -->
         <section class="st-section" id="stSec-advanced">
           <div class="st-section-head"><h2 class="st-section-title">Advanced</h2></div>
@@ -1581,20 +1640,6 @@ handleShareTarget()
             <div id="pbUsageStatsPanel"></div>
           </div>
 
-          <!-- Keyboard Shortcuts -->
-          <div class="settings-section">
-            <div class="settings-section-title">Keyboard Shortcuts</div>
-            <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:2;">
-              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Z</span><span style="color:var(--muted);">Undo formula change</span>
-              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Y</span><span style="color:var(--muted);">Redo formula change</span>
-              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Enter</span><span style="color:var(--muted);">Copy current prompt to clipboard</span>
-              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Shift + R</span><span style="color:var(--muted);">Randomise formula (Lab) / Generate (Generator)</span>
-              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Ctrl + Shift + S</span><span style="color:var(--muted);">Save current prompt to Library</span>
-              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">Escape</span><span style="color:var(--muted);">Close any open modal or panel</span>
-              <span style="font-family:monospace;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 7px;color:var(--accent);white-space:nowrap;">1 / 2 / 3 / 4 / 5</span><span style="color:var(--muted);">Switch tabs (Prompt Gen. / Lab / Library / Settings / Image Gen)</span>
-            </div>
-          </div>
-
           <!-- Share target diagnostic -->
           <div class="settings-section" id="shareTargetDiag">
             <div class="settings-section-title">Share Target Diagnostic</div>
@@ -1648,8 +1693,12 @@ handleShareTarget()
             <div class="st-mob-row-left"><i class="ti ti-palette" aria-hidden="true"></i><div><div class="st-mob-row-label">Appearance</div><div class="st-mob-row-sub">Theme, accent colour</div></div></div>
             <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
           </button>
+          <button class="st-mob-row" onclick="stMobPush('accessibility')">
+            <div class="st-mob-row-left"><i class="ti ti-adjustments" aria-hidden="true"></i><div><div class="st-mob-row-label">Accessibility</div><div class="st-mob-row-sub">Contrast, text size, shortcuts</div></div></div>
+            <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
+          </button>
           <button class="st-mob-row" onclick="stMobPush('advanced')">
-            <div class="st-mob-row-left"><i class="ti ti-adjustments" aria-hidden="true"></i><div><div class="st-mob-row-label">Advanced</div><div class="st-mob-row-sub">Models, export, shortcuts</div></div></div>
+            <div class="st-mob-row-left"><i class="ti ti-settings" aria-hidden="true"></i><div><div class="st-mob-row-label">Advanced</div><div class="st-mob-row-sub">Models, export, data</div></div></div>
             <i class="ti ti-wand st-mob-chev" aria-hidden="true" style="font-size:16px;transform:rotate(90deg);"></i>
           </button>
         </div>
@@ -4388,6 +4437,19 @@ function applySettings(s) {
   // settings actually carry the flag so older saves don't force a default.
   if (typeof s.libBarPinned === 'boolean' && typeof igLibApplyPinned === 'function') igLibApplyPinned(s.libBarPinned)
 
+  // Accessibility prefs (cross-device). Only apply when present so older saves
+  // don't clobber a local choice with a default.
+  if (typeof s.a11yContrast === 'boolean') {
+    document.body.classList.toggle('high-contrast', s.a11yContrast)
+    try { localStorage.setItem('bm_high_contrast', s.a11yContrast ? '1' : '') } catch (e) {}
+    if (typeof bmUpdateContrastBtn === 'function') bmUpdateContrastBtn()
+  }
+  if (typeof s.a11yTextSize === 'string' && ['s','m','l','xl'].includes(s.a11yTextSize)) {
+    document.body.setAttribute('data-textsize', s.a11yTextSize)
+    try { localStorage.setItem('bm_text_size', s.a11yTextSize) } catch (e) {}
+    if (typeof bmUpdateTextSizeBtns === 'function') bmUpdateTextSizeBtns()
+  }
+
   updateTunerSummary()
 }
 
@@ -4411,6 +4473,9 @@ function captureSettings() {
     fieldStateB: { ...fieldState.B },
     // Image-Gen bottom-bar pin preference, persisted to the server settings doc.
     libBarPinned: (typeof igLibState !== 'undefined') ? !!igLibState.pinned : false,
+    // Accessibility prefs (cross-device).
+    a11yContrast: document.body.classList.contains('high-contrast'),
+    a11yTextSize: document.body.getAttribute('data-textsize') || 'm',
   }
 }
 
@@ -5808,6 +5873,73 @@ function toggleLightMode() {
       }
     })
   }
+})()
+
+// ── ACCESSIBILITY: High Contrast + Text Size ──────────────────────
+// Both are body-level toggles persisted to localStorage and mirrored into
+// the synced settings doc (bmDoc) so the choice follows the user across
+// devices. High contrast = a body class with token overrides (CSS).
+// Text size = a data-textsize attribute driving a --text-scale variable.
+
+function bmA11ySyncDoc() {
+  // Accessibility prefs ride along in the SETTINGS doc (captureSettings reads
+  // them straight off the body). Save via the same debounced settings-doc path
+  // the Image-Gen pin pref uses; never throw if the sync layer isn't ready.
+  try {
+    if (typeof bmDocSave === 'function' && typeof bmDocReady === 'function' && bmDocReady()
+        && typeof captureSettings === 'function' && typeof BM_DOC_KEYS !== 'undefined') {
+      bmDocSave(BM_DOC_KEYS.SETTINGS, captureSettings())
+    }
+  } catch (e) {}
+}
+
+function toggleHighContrast() {
+  const on = document.body.classList.toggle('high-contrast')
+  localStorage.setItem('bm_high_contrast', on ? '1' : '')
+  bmUpdateContrastBtn()
+  bmA11ySyncDoc()
+}
+
+function bmUpdateContrastBtn() {
+  const on = document.body.classList.contains('high-contrast')
+  const btn = document.getElementById('a11yContrastBtn')
+  if (btn) btn.textContent = on ? 'CONTRAST: ON' : 'CONTRAST: OFF'
+}
+
+const BM_TEXT_SIZES = ['s', 'm', 'l', 'xl']
+function setTextSize(size) {
+  if (!BM_TEXT_SIZES.includes(size)) size = 'm'
+  document.body.setAttribute('data-textsize', size)
+  localStorage.setItem('bm_text_size', size)
+  bmUpdateTextSizeBtns()
+  bmA11ySyncDoc()
+}
+
+function bmUpdateTextSizeBtns() {
+  const cur = document.body.getAttribute('data-textsize') || 'm'
+  document.querySelectorAll('#a11yTextSizeRow .a11y-size-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.size === cur)
+  })
+}
+
+// Restore accessibility preferences as early as possible (before paint where we
+// can) so there's no flash of default sizing/contrast.
+;(function(){
+  // Inline the size list here rather than referencing BM_TEXT_SIZES: this IIFE
+  // runs at parse time, before the `const BM_TEXT_SIZES` above is initialised,
+  // so referencing it would hit the temporal dead zone and throw.
+  const SIZES = ['s', 'm', 'l', 'xl']
+  try {
+    if (localStorage.getItem('bm_high_contrast')) document.body.classList.add('high-contrast')
+    const sz = localStorage.getItem('bm_text_size')
+    document.body.setAttribute('data-textsize', SIZES.includes(sz) ? sz : 'm')
+  } catch (e) {
+    document.body.setAttribute('data-textsize', 'm')
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    bmUpdateContrastBtn()
+    bmUpdateTextSizeBtns()
+  })
 })()
 
 window.addEventListener('load', () => {
@@ -8044,14 +8176,38 @@ document.addEventListener('keydown', e => {
     return
   }
 
-  // ── Number keys 1-4: tab switch (only when NOT typing) ──
+  // ── ? (Shift+/) — open the shortcuts reference (Accessibility page) ──
+  if (!inInput && e.key === '?') {
+    e.preventDefault()
+    switchView('settings')
+    if (typeof stShowSection === 'function') stShowSection('accessibility')
+    if (typeof stMobPush === 'function' && window.matchMedia && window.matchMedia('(max-width:640px)').matches) stMobPush('accessibility')
+    return
+  }
+
+  // ── Bare-key shortcuts (only when NOT typing and no modifier) ──
   if (!inInput && !mod && !e.shiftKey && !e.altKey) {
-    if (e.key === '1') { e.preventDefault(); switchView('generator'); return }
-    if (e.key === '2') { e.preventDefault(); switchView('builder');   return }
+    // Number keys 1-6: tab switch. Order matches the left nav and the
+    // Accessibility → Keyboard Shortcuts reference.
+    if (e.key === '1') { e.preventDefault(); switchView('imagegen');  return }
+    if (e.key === '2') { e.preventDefault(); switchView('upscaler');  return }
     if (e.key === '3') { e.preventDefault(); switchView('library');   return }
-    if (e.key === '4') { e.preventDefault(); switchView('settings');  return }
-    if (e.key === '5') { e.preventDefault(); switchView('imagegen');  return }
-    if (e.key === '6') { e.preventDefault(); switchView('upscaler');  return }
+    if (e.key === '4') { e.preventDefault(); switchView('generator'); return }
+    if (e.key === '5') { e.preventDefault(); switchView('builder');   return }
+    if (e.key === '6') { e.preventDefault(); switchView('queue');     return }
+
+    // G — generate / run in the current mode
+    if (e.key === 'g' || e.key === 'G') {
+      if (currentView === 'generator') { e.preventDefault(); generateSingle(); return }
+      if (currentView === 'imagegen' && typeof igGenerate === 'function') { e.preventDefault(); igGenerate(); return }
+      if (currentView === 'upscaler' && typeof upRun === 'function') { e.preventDefault(); upRun(); return }
+    }
+
+    // R — randomise (Beast Mode / Lab)
+    if (e.key === 'r' || e.key === 'R') {
+      if (currentView === 'generator') { e.preventDefault(); randomiseAll(); return }
+      if (currentView === 'builder' && typeof pbRandomiseAll === 'function') { e.preventDefault(); pbRandomiseAll(); return }
+    }
   }
 })
 
@@ -8253,6 +8409,10 @@ function renderSettingsView() {
   // Light mode button
   const lBtn = document.getElementById('settingsLightBtn')
   if (lBtn) lBtn.textContent = document.body.classList.contains('light') ? '🌙 DARK' : '☀ LIGHT'
+  const a11yLBtn = document.getElementById('a11yLightBtn')
+  if (a11yLBtn) a11yLBtn.textContent = document.body.classList.contains('light') ? '🌙 DARK' : '☀ LIGHT'
+  if (typeof bmUpdateContrastBtn === 'function') bmUpdateContrastBtn()
+  if (typeof bmUpdateTextSizeBtns === 'function') bmUpdateTextSizeBtns()
 
   renderSettingsModelsList()
   // Ensure the desktop nav starts on Account and update mobile index subtitles
