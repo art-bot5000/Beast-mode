@@ -17629,6 +17629,14 @@ async function bmSyncLibraryFromManifest() {
     }
     if (added) {
       favourites.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      // The manifest is what finally delivers familySrcIds/familyCode (and
+      // upscale lineage) after a fresh login or cache clear. Re-run the
+      // idempotent repairs HERE, the moment that data lands, so families and
+      // upscale groups are stitched before the grid renders — instead of
+      // waiting for some incidental later trigger to re-run them (the cause of
+      // the "family view missing for a while after sign-in" lag).
+      if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
+      if (typeof bmRepairFamilyLinks === 'function') bmRepairFamilyLinks();
       if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
       if (typeof renderFavs === 'function') renderFavs();
       if (typeof updateLibBadge === 'function') updateLibBadge();
