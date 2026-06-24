@@ -282,8 +282,11 @@ function providerUpscaleCostUsd(modelId, opts = {}) {
 export function limelightTokensPerImage(modelId, opts = {}) {
   const cost = providerCostUsd(modelId, opts);
   if (cost == null) return tokensPerImage(modelId, opts); // unlisted: use standard
-  // ceil to nearest $0.001, express in tokens ($0.01 each) → one decimal place
-  return Math.round(Math.ceil(cost * 1000) / 10) / 10; // keep 1dp clean
+  // ceil to nearest $0.001 → tokens ($0.01 each = 0.1 token per $0.001).
+  // The inner expr already yields 1dp; the outer round*10/10 only cleans
+  // float drift (e.g. 0.30000000004 → 0.3).
+  const tokens = Math.ceil(cost * 1000) / 10;
+  return Math.round(tokens * 10) / 10;
 }
 
 /**
@@ -311,7 +314,8 @@ export function quoteForLimelight(modelId, opts = {}, count = 1) {
 export function limelightTokensPerUpscale(modelId, opts = {}) {
   const cost = providerUpscaleCostUsd(modelId, opts);
   if (cost == null) return tokensPerUpscale(modelId, opts);
-  return Math.round(Math.ceil(cost * 1000) / 10) / 10;
+  const tokens = Math.ceil(cost * 1000) / 10;
+  return Math.round(tokens * 10) / 10;
 }
 
 /**
@@ -529,6 +533,20 @@ export function pricingTable(forLimelight = false) {
     // Include Limelight token cost alongside standard so the frontend can
     // show the right pre-flight hint without a separate API call.
     m.limelightTokens = limelightTokensPerImage(id, {});
+    // Per-variant Limelight token maps (mirrors byRes/byQuality/bySpeed) so the
+    // frontend price list can show a proper Limelight range, not just the max.
+    if (row.kind === 'resolution' && row.byRes) {
+      m.limelightByRes = {};
+      for (const k of Object.keys(row.byRes)) m.limelightByRes[k] = limelightTokensPerImage(id, { resolution: k });
+    }
+    if (row.kind === 'quality' && row.byQuality) {
+      m.limelightByQuality = {};
+      for (const k of Object.keys(row.byQuality)) m.limelightByQuality[k] = limelightTokensPerImage(id, { quality: k });
+    }
+    if (row.kind === 'speed' && row.bySpeed) {
+      m.limelightBySpeed = {};
+      for (const k of Object.keys(row.bySpeed)) m.limelightBySpeed[k] = limelightTokensPerImage(id, { renderingSpeed: k });
+    }
     models[id] = m;
   }
   return {

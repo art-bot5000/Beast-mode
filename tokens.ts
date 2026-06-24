@@ -204,6 +204,16 @@ export async function holdTokens(
 ): Promise<{ ok: boolean; balance: number; ref: string }> {
   const ref = crypto.randomUUID();
   if (UNLIMITED_HASHES.has(emailHash)) {
+    // Unlimited accounts aren't metered, but we STILL record the ledger entry
+    // so usage history shows their generations. The balance stays at the
+    // sentinel (no adjust()) — only the audit trail is written.
+    await writeLedger(emailHash, {
+      at: new Date().toISOString(),
+      type: "hold",
+      tokens: -total,
+      ref,
+      model: meta.model,
+    });
     return { ok: true, balance: UNLIMITED_BALANCE, ref };
   }
   if (!isValidDelta(-total)) return { ok: false, balance: NaN, ref };
@@ -235,7 +245,20 @@ export async function settleHold(
     actualCostUsd?: number | null;
   },
 ): Promise<{ balance: number }> {
-  if (UNLIMITED_HASHES.has(emailHash)) return { balance: UNLIMITED_BALANCE };
+  if (UNLIMITED_HASHES.has(emailHash)) {
+    // Record the settle for usage history; balance stays at sentinel.
+    await writeLedger(emailHash, {
+      at: new Date().toISOString(),
+      type: "settle",
+      tokens: Math.max(0, args.refundTokens),
+      ref,
+      model: args.model,
+      images: args.images,
+      chargedTokens: args.chargedTokens,
+      actualCostUsd: args.actualCostUsd ?? null,
+    });
+    return { balance: UNLIMITED_BALANCE };
+  }
   let balance: number;
   if (args.refundTokens > 0) {
     const r = await adjust(emailHash, args.refundTokens, { allowNegative: true });
@@ -263,7 +286,17 @@ export async function refundHold(
   total: number,
   reason: string,
 ): Promise<{ balance: number }> {
-  if (UNLIMITED_HASHES.has(emailHash)) return { balance: UNLIMITED_BALANCE };
+  if (UNLIMITED_HASHES.has(emailHash)) {
+    // Record the refund for usage history; balance stays at sentinel.
+    await writeLedger(emailHash, {
+      at: new Date().toISOString(),
+      type: "refund",
+      tokens: total,
+      ref,
+      note: reason,
+    });
+    return { balance: UNLIMITED_BALANCE };
+  }
   const r = await adjust(emailHash, total, { allowNegative: true });
   const balance = r.ok ? r.balance : (await peekBalance(emailHash)) ?? NaN;
   await writeLedger(emailHash, {
