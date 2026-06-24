@@ -1423,6 +1423,21 @@ handleShareTarget()
               <button class="btn btn-outline" onclick="bmUsageOpen()" style="font-size:12px;">⊞ USAGE HISTORY</button>
             </div>
 
+            <!-- ── MODEL PRICE LIST ── -->
+            <!-- Tokens-per-generation for every model. Limelight members see
+                 their (lower) rates; everyone else sees the standard rates.
+                 Only token counts are shown, never the dollar cost. -->
+            <div id="stPriceList" style="display:none;margin-top:24px;padding-top:18px;border-top:1px solid var(--border);">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:10px;flex-wrap:wrap;">
+                <div class="settings-section-title" style="margin-bottom:0;">Model Prices</div>
+                <span id="stPriceListTier" style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:3px;padding:2px 8px;display:none;">LIMELIGHT RATES</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;line-height:1.6;margin-bottom:14px;">
+                Tokens charged per generation, by model. <span id="stPriceListNote"></span>
+              </div>
+              <div id="stPriceListRows"></div>
+            </div>
+
             <!-- Stripe purchase — placeholder UI; wired up when Stripe is live -->
             <div id="stBuySection" style="display:none;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
               <div style="font-size:11px;letter-spacing:2px;color:var(--muted);font-weight:700;margin-bottom:12px;">BUY TOKENS</div>
@@ -8291,6 +8306,11 @@ function stShowSection(key) {
   document.querySelectorAll('.st-section').forEach(el => {
     el.classList.toggle('active', el.id === 'stSec-' + key);
   });
+  // The Tokens (billing) section carries the model price list — render it when
+  // shown so it's populated even if pricing finished loading after first paint.
+  if (key === 'billing' && typeof bmTokensSettingsRender === 'function') {
+    bmTokensSettingsRender();
+  }
 }
 
 // Mobile drill-in: move the section node into the detail pane.
@@ -18544,6 +18564,7 @@ function bmRefetchPricing() {
   bmFetchPricing().then(() => {
     if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
     if (typeof upUpdateCostHint === 'function') upUpdateCostHint();
+    if (typeof bmRenderPriceList === 'function') bmRenderPriceList();
   });
 }
 
@@ -18667,7 +18688,101 @@ async function bmTokensSettingsRender(force) {
   const signedIn = !!(window.bmSession && window.bmSession.sessionToken);
   so.style.display = signedIn ? 'none' : 'block';
   si.style.display = signedIn ? 'block' : 'none';
-  if (signedIn) bmFetchBalance();
+  if (signedIn) {
+    bmFetchBalance();
+    // Render the model price list (needs pricing + tier). Ensure pricing is
+    // fetched with auth so the right tier (Limelight vs standard) is reflected.
+    bmFetchPricing().then(() => bmRenderPriceList());
+  }
+}
+
+// ── MODEL PRICE LIST ────────────────────────────────────────────────────────
+// Shows tokens-per-generation for every model in the pricing table. Limelight
+// members see their lower rates (row.limelightTokens); everyone else sees the
+// standard rate. Only token counts are shown — never the underlying dollar cost.
+// Also shows roughly how many generations $10 buys at each model's rate.
+function bmRenderPriceList() {
+  const wrap = document.getElementById('stPriceList');
+  const rowsEl = document.getElementById('stPriceListRows');
+  const tierBadge = document.getElementById('stPriceListTier');
+  const note = document.getElementById('stPriceListNote');
+  if (!wrap || !rowsEl) return;
+  if (!bmPricing || !bmPricing.models) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const isLL = !!bmUserIsLimelight;
+  if (tierBadge) tierBadge.style.display = isLL ? 'inline-block' : 'none';
+  if (note) {
+    note.textContent = isLL
+      ? 'Your Limelight rate — charged at provider cost in 0.1-token steps. The figure right of each model shows how many generations $10 buys.'
+      : 'The figure right of each model shows roughly how many generations $10 of tokens buys.';
+  }
+
+  // Resolve the per-generation token cost for a model row, respecting tier and
+  // the row's variant kind. For resolution/quality/speed models we show the
+  // cheapest and most expensive variant so the range is clear.
+  const tokenUsd = bmPricing.tokenUsd || 0.01;
+  const tenPerUsd = 10 / tokenUsd; // tokens available for $10
+
+  const fmtTok = n => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const genPer10 = tok => (tok > 0 ? Math.floor(tenPerUsd / tok).toLocaleString() : '—');
+
+  // Build a sorted list: cheapest models first (by their minimum token cost).
+  const entries = Object.entries(bmPricing.models).map(([id, row]) => {
+    let lo, hi;
+    if (isLL) {
+      // Limelight: use per-variant maps when present (resolution/quality/speed),
+      // else the flat limelightTokens value.
+      if (row.kind === 'resolution' && row.limelightByRes) {
+        const v = Object.values(row.limelightByRes);
+        lo = Math.min.apply(null, v); hi = Math.max.apply(null, v);
+      } else if (row.kind === 'quality' && row.limelightByQuality) {
+        const v = Object.values(row.limelightByQuality);
+        lo = Math.min.apply(null, v); hi = Math.max.apply(null, v);
+      } else if (row.kind === 'speed' && row.limelightBySpeed) {
+        const v = Object.values(row.limelightBySpeed);
+        lo = Math.min.apply(null, v); hi = Math.max.apply(null, v);
+      } else if (typeof row.limelightTokens === 'number') {
+        lo = hi = row.limelightTokens;
+      } else {
+        lo = hi = bmPricing.defaultTokens || 4;
+      }
+    } else if (row.kind === 'flat') {
+      lo = hi = row.tokens;
+    } else if (row.kind === 'resolution' && row.byRes) {
+      const vals = Object.values(row.byRes);
+      lo = Math.min.apply(null, vals); hi = Math.max.apply(null, vals);
+    } else if (row.kind === 'quality' && row.byQuality) {
+      const vals = Object.values(row.byQuality);
+      lo = Math.min.apply(null, vals); hi = Math.max.apply(null, vals);
+    } else if (row.kind === 'speed' && row.bySpeed) {
+      const vals = Object.values(row.bySpeed);
+      lo = Math.min.apply(null, vals); hi = Math.max.apply(null, vals);
+    } else {
+      lo = hi = bmPricing.defaultTokens || 4;
+    }
+    return { id, label: row.label || id, lo, hi };
+  });
+  entries.sort((a, b) => a.lo - b.lo);
+
+  let html = '';
+  entries.forEach(e => {
+    const tokLabel = (e.lo === e.hi) ? fmtTok(e.lo) : (fmtTok(e.lo) + '–' + fmtTok(e.hi));
+    // $10 generations: use the cheapest variant (the most generous figure).
+    const per10 = genPer10(e.lo);
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);">'
+      + '<span style="font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _bmEsc(e.label) + '</span>'
+      + '<span style="font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap;display:inline-flex;align-items:center;gap:3px;"><i class="ti ti-flask" aria-hidden="true" style="font-size:12px;"></i>' + tokLabel + '</span>'
+      + '<span style="font-size:11px;color:var(--muted);white-space:nowrap;min-width:96px;text-align:right;">' + per10 + ' / $10</span>'
+      + '</div>';
+  });
+  rowsEl.innerHTML = html;
+}
+
+// Small HTML-escape helper for the price list labels.
+function _bmEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function bmUsageOpen() {
@@ -18808,7 +18923,10 @@ async function bmUsageRender(force) {
 
     const amt = document.createElement('span');
     amt.style.cssText = 'font-weight:700;white-space:nowrap;color:' + (rw.delta < 0 ? 'var(--err,#f85149)' : 'var(--accent)') + ';font-size:13px;';
-    amt.textContent = (rw.delta > 0 ? '+' : '') + rw.delta;
+    // Format delta cleanly: whole numbers as-is, fractional (Limelight) to 1dp.
+    const dv = rw.delta;
+    const dvStr = Number.isInteger(dv) ? String(dv) : (Math.round(dv * 10) / 10).toFixed(1);
+    amt.textContent = (dv > 0 ? '+' : '') + dvStr;
     div.appendChild(amt);
     return div;
   };
