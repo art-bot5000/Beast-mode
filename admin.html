@@ -90,6 +90,33 @@ td { padding:8px; border-bottom:1px solid var(--border); vertical-align:middle; 
     </div>
 
     <div class="panel">
+      <h2>Limelight Tier</h2>
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-bottom:14px;line-height:1.6;">
+        Limelight users are charged at provider cost rounded up to the nearest $0.001,
+        expressed in tenths of a token (0.1&thinsp;◆ = $0.001). Example: FLUX.1 Schnell
+        ($0.0019) → $0.002 → <strong>0.2 tokens</strong> vs standard 1 token.
+        They share the same token balance pool — just spend at a lower rate.
+      </div>
+      <label for="llEmail">ADD BY EMAIL</label>
+      <div class="row" style="align-items:flex-end;margin-bottom:14px;">
+        <input type="text" id="llEmail" placeholder="person@example.com" autocomplete="off" inputmode="email" style="flex:1;">
+        <button class="btn-primary" onclick="limelightAdd()">ADD →</button>
+      </div>
+      <div class="msg" id="llMsg"></div>
+      <div style="margin-top:14px;">
+        <div class="row" style="margin-bottom:8px;">
+          <span style="font-size:11px;letter-spacing:1.5px;color:var(--muted);font-weight:700;">CURRENT MEMBERS</span>
+          <button onclick="limelightRefresh()" style="margin-left:auto;">↻ REFRESH</button>
+        </div>
+        <table>
+          <thead><tr><th>EMAIL</th><th class="hide-sm">HASH</th><th class="hide-sm">ADDED</th><th>ACTION</th></tr></thead>
+          <tbody id="llRows"></tbody>
+        </table>
+        <div id="llEmpty" style="font-size:12px;color:var(--muted);padding:10px 0;display:none;">No Limelight members yet.</div>
+      </div>
+    </div>
+
+    <div class="panel">
       <h2>Grant Tokens by Email</h2>
       <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-bottom:14px;line-height:1.6;">
         Credits any email address. Works for accounts that don't exist yet — the
@@ -228,6 +255,7 @@ async function verifyOtp() {
     document.getElementById('dash').style.display = 'block';
     startSessionTimer();
     await refreshAccounts();
+    await limelightRefresh();
     await loadAudit();
   } catch (e) {
     setMsg('otpMsg', e.message, 'err');
@@ -256,6 +284,61 @@ function hardSignOut(msg) {
   document.getElementById('stepOtp').style.display = 'none';
   document.getElementById('stepSecret').style.display = 'block';
   setMsg('secretMsg', msg || '', msg ? 'warn' : '');
+}
+
+// ── Limelight ────────────────────────────────────────────────────────────────
+let llMembers = [];
+
+async function limelightRefresh() {
+  setMsg('llMsg', 'Loading…');
+  try {
+    const data = await post('/admin/limelight/list', _auth.sessionBody({}));
+    llMembers = data.members || [];
+    renderLimelight();
+    setMsg('llMsg', '');
+  } catch (e) { setMsg('llMsg', e.message, 'err'); }
+}
+
+function renderLimelight() {
+  const tbody = document.getElementById('llRows');
+  const empty = document.getElementById('llEmpty');
+  tbody.innerHTML = '';
+  if (!llMembers.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  llMembers.forEach(m => {
+    const tr = document.createElement('tr');
+    const added = m.addedAt ? new Date(m.addedAt).toLocaleDateString() : '—';
+    tr.innerHTML = `
+      <td>${m.email || '—'}</td>
+      <td class="hide-sm" style="font-family:monospace;font-size:11px;">${m.emailHash}</td>
+      <td class="hide-sm">${added}</td>
+      <td><button class="btn-danger" onclick="limelightRemove('${m.emailHash}')">REMOVE</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function limelightAdd() {
+  const email = document.getElementById('llEmail').value.trim();
+  if (!email) { setMsg('llMsg', 'Enter an email address.', 'warn'); return; }
+  setMsg('llMsg', 'Adding…');
+  try {
+    const r = await post('/admin/limelight/add', _auth.sessionBody({ email }));
+    setMsg('llMsg',
+      `Added${r.existed ? '' : ' (account not yet registered — will apply on sign-up)'}.`,
+      'ok');
+    document.getElementById('llEmail').value = '';
+    await limelightRefresh();
+  } catch (e) { setMsg('llMsg', e.message, 'err'); }
+}
+
+async function limelightRemove(emailHash) {
+  if (!confirm('Remove this account from Limelight tier?')) return;
+  setMsg('llMsg', 'Removing…');
+  try {
+    await post('/admin/limelight/remove', _auth.sessionBody({ emailHash }));
+    setMsg('llMsg', 'Removed.', 'ok');
+    await limelightRefresh();
+  } catch (e) { setMsg('llMsg', e.message, 'err'); }
 }
 
 // ── Accounts ────────────────────────────────────────────────────────────────

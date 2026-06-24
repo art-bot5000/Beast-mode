@@ -18519,16 +18519,38 @@ const igState = { modelId: IG_MODELS[0].id, ar: '1:1', res: null, refs: [], qual
 // The table is fetched once; quotes are computed locally so every chip click
 // updates the cost hint with zero network chatter. The server re-quotes
 // authoritatively at hold time — this is display only.
-let bmPricing = null;       // { tokenUsd, defaultTokens, aliases, models }
+let bmPricing = null;       // { tokenUsd, defaultTokens, aliases, models, limelight }
 let bmTokenBalance = null;  // last known balance (number) or null
+let bmUserIsLimelight = false; // true when signed in as a Limelight member
 
 async function bmFetchPricing() {
   if (bmPricing) return bmPricing;
   try {
-    const r = await fetch('/api/pricing');
-    if (r.ok) bmPricing = await r.json();
+    const tok = window.bmSession && window.bmSession.sessionToken;
+    const headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    const r = await fetch('/api/pricing', { headers });
+    if (r.ok) {
+      bmPricing = await r.json();
+      bmUserIsLimelight = !!(bmPricing && bmPricing.limelight);
+      _bmApplyLimelightUI();
+    }
   } catch (e) {}
   return bmPricing;
+}
+
+// Force a pricing re-fetch after sign-in so Limelight tier reflects immediately.
+function bmRefetchPricing() {
+  bmPricing = null;
+  bmFetchPricing().then(() => {
+    if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
+    if (typeof upUpdateCostHint === 'function') upUpdateCostHint();
+  });
+}
+
+// Show/hide the Limelight banner in Settings and update tier indicators.
+function _bmApplyLimelightUI() {
+  const banner = document.getElementById('stLimelightBanner');
+  if (banner) banner.style.display = bmUserIsLimelight ? 'flex' : 'none';
 }
 
 async function bmFetchBalance() {
@@ -18582,10 +18604,17 @@ function bmTokenBalanceSet(n) {
   bmTokenBalance = n;
   if (typeof igUpdateCostHint === 'function') igUpdateCostHint();
   // Unlimited test accounts carry a sentinel (~1e9). Show ∞ rather than a
-  // wall of 9s; normal balances render with thousands separators.
-  const display = (typeof n === 'number')
-    ? (n >= 100000000 ? '\u221E' : n.toLocaleString())
-    : String(n);
+  // wall of 9s. Limelight balances may be fractional — show 1 decimal place.
+  let display;
+  if (typeof n !== 'number') {
+    display = String(n);
+  } else if (n >= 100000000) {
+    display = '\u221E';
+  } else if (bmUserIsLimelight && !Number.isInteger(n)) {
+    display = n.toFixed(1);
+  } else {
+    display = n.toLocaleString();
+  }
   const el = document.getElementById('bmTokSetBalance');
   if (el) el.textContent = display;
   const ub = document.getElementById('bmUsageBalance');
@@ -18598,11 +18627,17 @@ function bmTokenBalanceSet(n) {
 
 // Mirrors tokensPerImage() in pricing.js, including the conservative rules:
 // unknown model -> defaultTokens; unknown variant / 'auto' quality -> MAX.
+// For Limelight users, uses limelightTokens from the pricing table when set.
 function bmTokensPerImage(modelId, st) {
   if (!bmPricing) return null;
   const key = (bmPricing.aliases && bmPricing.aliases[modelId]) || modelId;
   const row = bmPricing.models && bmPricing.models[key];
   if (!row) return bmPricing.defaultTokens || 4;
+  // Limelight: use the pre-computed limelightTokens field (flat per-model value)
+  // for the cost hint. Exact quoting happens server-side; this is display only.
+  if (bmUserIsLimelight && typeof row.limelightTokens === 'number') {
+    return row.limelightTokens;
+  }
   const maxOf = o => Math.max.apply(null, Object.values(o));
   if (row.kind === 'flat') return row.tokens;
   if (row.kind === 'resolution') return (st.res && row.byRes[st.res]) || maxOf(row.byRes);
@@ -18867,7 +18902,7 @@ function igInit() {
   document.getElementById('igMain').style.display = signedIn ? 'grid' : 'none';
   igUpdateCloudWarn(signedIn);
   if (!signedIn) return;
-  bmFetchPricing().then(() => igUpdateCostHint());
+  bmRefetchPricing();
   bmFetchBalance();
   if (igState.inited) { igRenderAll(); return; }
   igState.inited = true;
@@ -23360,6 +23395,11 @@ window.bmSignOut = () => {
   // gates generation spend. bm_last_user survives, so a DIFFERENT account
   // signing in later is still detected and swept by bmIdentitySwitch.
   if (typeof bmSetImgDbSignedOut === 'function') bmSetImgDbSignedOut();
+  // Reset Limelight state and clear cached pricing so a new sign-in re-fetches
+  // with the correct tier — avoids Limelight rates bleeding into the next session.
+  bmUserIsLimelight = false;
+  bmPricing = null;
+  _bmApplyLimelightUI();
   _bmBcPost({ type: 'USER_CHANGED', emailHash: null });
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: false } }));
 };
@@ -23688,6 +23728,11 @@ window.addEventListener('bm-auth-changed', bmUpdateAccountBtn);
 // view is open (igInit / settings render also call this, but not on every view).
 window.addEventListener('bm-auth-changed', (e) => {
   if (e.detail && e.detail.signedIn && typeof bmFetchBalance === 'function') bmFetchBalance();
+});
+// Re-fetch pricing with auth on sign-in so Limelight tier is detected
+// immediately (igInit also does this, but the user may land on another view).
+window.addEventListener('bm-auth-changed', (e) => {
+  if (e.detail && e.detail.signedIn && typeof bmRefetchPricing === 'function') bmRefetchPricing();
 });
 bmUpdateAccountBtn();
 
