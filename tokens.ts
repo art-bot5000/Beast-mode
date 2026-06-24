@@ -3,7 +3,8 @@
 // The spend side of the token economy. Design agreed June 2026:
 //   - Users pay the FIXED table price from pricing.js (known pre-flight);
 //     actual provider cost is logged for margin tracking, never billed.
-//   - 1 token = $0.01 retail. Balances and deltas are INTEGERS, always.
+//   - 1 token = $0.01 retail. Standard balances are integers; Limelight
+//     accounts use tenths (0.1 token = $0.001) so charges can be fractional.
 //   - HOLD → SETTLE → REFUND around every generation:
 //       hold    debit the full quoted batch before the provider call
 //       settle  keep tokens for images actually delivered, refund the rest
@@ -14,6 +15,14 @@
 //     purchase is just another { type:"grant" } entry.
 //   - All balance mutations go through one atomic compare-and-swap loop
 //     (versionstamp check + retry), so two concurrent tabs cannot overdraft.
+//
+// LIMELIGHT TIER:
+//   Limelight users share the same token pool ($0.01/token) but are charged
+//   at provider cost rounded up to the nearest $0.001, expressed in tenths of
+//   a token (0.1 token = $0.001). A $0.0013 generation → rounds to $0.002 →
+//   costs 0.2 tokens. Balances support one decimal place (stored as floats in
+//   KV JSON; existing integer balances are read correctly). Membership lives
+//   at ["limelight", emailHash] = { addedAt, addedBy }.
 //
 // SIGNUP GRANT is LAZY: the balance record is created with SIGNUP_GRANT on
 // first touch (first balance read or first hold) via an atomic
@@ -47,14 +56,19 @@ export const UNLIMITED_HASHES = new Set<string>([
 const UNLIMITED_BALANCE = 999_999_999; // sentinel shown to unlimited accounts
 
 export interface BalanceRec {
-  balance: number;
+  balance: number; // float for Limelight (e.g. 49.8), integer for standard
   updated: number;
+}
+
+export interface LimelightRec {
+  addedAt: number;
+  addedBy: string; // admin identifier (email or "admin")
 }
 
 export interface LedgerEntry {
   at: string;
   type: "grant" | "hold" | "settle" | "refund";
-  tokens: number; // SIGNED delta this entry applied to the balance
+  tokens: number; // SIGNED delta — may be fractional for Limelight
   ref?: string; // groups hold/settle/refund belonging to one generation
   model?: string;
   images?: number;
@@ -75,6 +89,46 @@ async function writeLedger(emailHash: string, entry: LedgerEntry): Promise<void>
   } catch (e) {
     console.error("LEDGER WRITE FAILED (balance already moved):", emailHash, entry.type, (e as Error).message);
   }
+}
+
+// ── LIMELIGHT MEMBERSHIP ─────────────────────────────────────────────────────
+
+/** True when this emailHash is in the Limelight tier. */
+export async function isLimelight(emailHash: string): Promise<boolean> {
+  const rec = await kv.get<LimelightRec>(["limelight", emailHash]);
+  return rec.value != null;
+}
+
+/** Add an emailHash to the Limelight tier. Idempotent. */
+export async function addLimelight(emailHash: string, addedBy: string): Promise<void> {
+  await kv.set(["limelight", emailHash], { addedAt: Date.now(), addedBy } as LimelightRec);
+}
+
+/** Remove an emailHash from the Limelight tier. No-op if not present. */
+export async function removeLimelight(emailHash: string): Promise<void> {
+  await kv.delete(["limelight", emailHash]);
+}
+
+/** List all Limelight members: [{ emailHash, addedAt, addedBy }]. */
+export async function listLimelight(): Promise<Array<{ emailHash: string; addedAt: number; addedBy: string }>> {
+  const out: Array<{ emailHash: string; addedAt: number; addedBy: string }> = [];
+  for await (const e of kv.list<LimelightRec>({ prefix: ["limelight"] })) {
+    const emailHash = String(e.key[1]);
+    out.push({ emailHash, addedAt: e.value.addedAt, addedBy: e.value.addedBy });
+  }
+  return out.sort((a, b) => b.addedAt - a.addedAt);
+}
+
+// ── BALANCE UTILITIES ────────────────────────────────────────────────────────
+
+/** Round a float balance to 1 decimal place (avoids floating-point drift). */
+function roundBalance(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/** True when the delta is a valid token amount (integer or one decimal place). */
+function isValidDelta(n: number): boolean {
+  return Number.isFinite(n) && n !== 0 && Math.round(n * 10) === n * 10;
 }
 
 // Read-only balance peek — NO lazy init. For admin listings etc., where
@@ -111,15 +165,16 @@ async function ensureBalance(emailHash: string): Promise<{ balance: number; vers
 }
 
 // The single mutation path: atomic compare-and-swap with retry.
+// Accepts fractional deltas (e.g. -0.2) for Limelight charges.
 async function adjust(
   emailHash: string,
   delta: number,
   opts: { allowNegative?: boolean } = {},
 ): Promise<{ ok: boolean; balance: number }> {
-  if (!Number.isInteger(delta)) return { ok: false, balance: NaN };
+  if (!isValidDelta(delta)) return { ok: false, balance: NaN };
   for (let i = 0; i < RETRIES; i++) {
     const cur = await ensureBalance(emailHash);
-    const next = cur.balance + delta;
+    const next = roundBalance(cur.balance + delta);
     if (next < 0 && !opts.allowNegative) return { ok: false, balance: cur.balance };
     const res = await kv.atomic()
       .check({ key: ["tokens", emailHash], versionstamp: cur.versionstamp })
@@ -140,6 +195,7 @@ export async function getBalance(emailHash: string): Promise<number> {
 /**
  * Debit the full quoted batch before the provider call.
  * ok:false + current balance when insufficient (balance untouched).
+ * total may be fractional for Limelight users (e.g. 0.2).
  */
 export async function holdTokens(
   emailHash: string,
@@ -150,7 +206,7 @@ export async function holdTokens(
   if (UNLIMITED_HASHES.has(emailHash)) {
     return { ok: true, balance: UNLIMITED_BALANCE, ref };
   }
-  if (!Number.isInteger(total) || total <= 0) return { ok: false, balance: NaN, ref };
+  if (!isValidDelta(-total)) return { ok: false, balance: NaN, ref };
   const r = await adjust(emailHash, -total);
   if (!r.ok) return { ok: false, balance: r.balance, ref };
   await writeLedger(emailHash, {
@@ -230,7 +286,7 @@ export async function grantTokens(
   tokens: number,
   note: string,
 ): Promise<{ ok: boolean; balance: number }> {
-  if (!Number.isInteger(tokens) || tokens === 0 || Math.abs(tokens) > 1_000_000) {
+  if (!isValidDelta(tokens) || Math.abs(tokens) > 1_000_000) {
     return { ok: false, balance: NaN };
   }
   const r = await adjust(emailHash, tokens, { allowNegative: true });

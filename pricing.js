@@ -220,6 +220,116 @@ export function quoteUpscale(modelId, opts = {}) {
   };
 }
 
+// ── LIMELIGHT PRICING ─────────────────────────────────────────────────────────
+// Limelight users are charged at provider cost rounded up to the nearest
+// $0.001, expressed in tenths of a standard token (1 token = $0.01,
+// 0.1 token = $0.001). Formula: ceil(costUsd × 1000) ÷ 100 tokens.
+//
+// Examples:
+//   FLUX.1 Schnell  $0.0019 → ceil(1.9) = 2 → 0.20 tokens
+//   FLUX.1 Dev      $0.0085 → ceil(8.5) = 9 → 0.09 tokens  (wait: 9/100=0.09)
+//   FLUX.2 [pro]    $0.03   → ceil(30)  = 30→ 0.30 tokens
+//   Nano Banana 2.5 $0.039  → ceil(39)  = 39→ 0.39 tokens
+//   NB Pro 4K       $0.24   → ceil(240) =240→ 2.40 tokens
+//
+// For unlisted/community models (no costUsd row), fall back to standard
+// DEFAULT_TOKENS — we can't undercharge when we don't know the cost.
+// Result is rounded to 1 decimal place (the ledger precision).
+
+/** Provider cost USD for a given model+opts, resolving variant. Null if unknown. */
+function providerCostUsd(modelId, opts = {}) {
+  const row = pricingFor(modelId);
+  if (!row || row.costUsd == null) return null;
+  if (typeof row.costUsd === 'number') return row.costUsd;
+  switch (row.kind) {
+    case 'resolution': {
+      const b = resBucket(opts);
+      return (b && row.costUsd[b]) || maxOf(row.costUsd);
+    }
+    case 'quality': {
+      const q = String(opts.quality || '').toLowerCase();
+      return row.costUsd[q] || maxOf(row.costUsd);
+    }
+    case 'speed': {
+      const s = String(opts.renderingSpeed || '').toUpperCase();
+      return row.costUsd[s] || row.costUsd.DEFAULT || maxOf(row.costUsd);
+    }
+    default: return null;
+  }
+}
+
+/** Provider cost USD for an upscale model+opts. Null if unknown. */
+function providerUpscaleCostUsd(modelId, opts = {}) {
+  const row = upscalePricingFor(modelId);
+  if (!row || row.costUsd == null) return null;
+  if (typeof row.costUsd === 'number') return row.costUsd;
+  if (row.kind === 'megapixels') {
+    const mp = Number(opts.targetMegapixels);
+    return (Number.isFinite(mp) && mp <= 4) ? row.costUsd.low : row.costUsd.high;
+  }
+  if (row.kind === 'resolution') {
+    const bucket = opts.resolution ? String(opts.resolution).toUpperCase() : null;
+    return (bucket && row.costUsd[bucket]) || maxOf(row.costUsd);
+  }
+  return null;
+}
+
+/**
+ * Tokens charged PER IMAGE for a Limelight user: ceil(costUsd × 1000) / 100.
+ * Falls back to standard tokensPerImage for unlisted models (conservative).
+ * Result always has at most 1 decimal place (e.g. 0.2, 2.4).
+ */
+export function limelightTokensPerImage(modelId, opts = {}) {
+  const cost = providerCostUsd(modelId, opts);
+  if (cost == null) return tokensPerImage(modelId, opts); // unlisted: use standard
+  // ceil to nearest $0.001, express in tokens ($0.01 each) → one decimal place
+  return Math.round(Math.ceil(cost * 1000) / 10) / 10; // keep 1dp clean
+}
+
+/**
+ * Full Limelight quote for a generation batch.
+ */
+export function quoteForLimelight(modelId, opts = {}, count = 1) {
+  const n = Math.min(10, Math.max(1, Math.floor(Number(count) || 1)));
+  const perImage = limelightTokensPerImage(modelId, opts);
+  const totalTokens = Math.round(perImage * n * 10) / 10; // keep 1dp
+  return {
+    modelId,
+    perImage,
+    count: n,
+    totalTokens,
+    retailUsd: +(totalTokens * TOKEN_USD).toFixed(4),
+    listed: !!pricingFor(modelId),
+    limelight: true,
+  };
+}
+
+/**
+ * Tokens charged PER UPSCALE for a Limelight user.
+ * Falls back to standard tokensPerUpscale for unlisted models.
+ */
+export function limelightTokensPerUpscale(modelId, opts = {}) {
+  const cost = providerUpscaleCostUsd(modelId, opts);
+  if (cost == null) return tokensPerUpscale(modelId, opts);
+  return Math.round(Math.ceil(cost * 1000) / 10) / 10;
+}
+
+/**
+ * Full Limelight quote for an upscale task.
+ */
+export function quoteUpscaleForLimelight(modelId, opts = {}) {
+  const perImage = limelightTokensPerUpscale(modelId, opts);
+  return {
+    modelId,
+    perImage,
+    count: 1,
+    totalTokens: perImage,
+    retailUsd: +(perImage * TOKEN_USD).toFixed(4),
+    listed: !!upscalePricingFor(modelId),
+    limelight: true,
+  };
+}
+
 /** Estimated provider USD for an upscale variant — ledger margin logging only. */
 export function estimatedUpscaleCostUsd(modelId, opts = {}) {
   const row = upscalePricingFor(modelId);
@@ -408,7 +518,7 @@ export function geminiUsageCostUsd(modelId, usageMetadata) {
  * needs to label the dropdown and show pre-flight quotes. Provider costs are
  * deliberately EXCLUDED (margin is not a client-side concern).
  */
-export function pricingTable() {
+export function pricingTable(forLimelight = false) {
   const models = {};
   for (const [id, row] of Object.entries(PRICING)) {
     const m = { label: row.label, kind: row.kind };
@@ -416,6 +526,9 @@ export function pricingTable() {
     if (row.kind === 'resolution') m.byRes = row.byRes;
     if (row.kind === 'quality') m.byQuality = row.byQuality;
     if (row.kind === 'speed') m.bySpeed = row.bySpeed;
+    // Include Limelight token cost alongside standard so the frontend can
+    // show the right pre-flight hint without a separate API call.
+    m.limelightTokens = limelightTokensPerImage(id, {});
     models[id] = m;
   }
   return {
@@ -423,5 +536,6 @@ export function pricingTable() {
     defaultTokens: DEFAULT_TOKENS,
     aliases: { ...ALIASES },
     models,
+    limelight: forLimelight, // tells the frontend which pricing to display
   };
 }

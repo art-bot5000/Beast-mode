@@ -27,7 +27,7 @@
 
 import { kv, type UserRecord } from "./auth.ts";
 import { emailEnabled, sendEmail } from "./email.ts";
-import { grantTokens, peekBalance } from "./tokens.ts";
+import { grantTokens, peekBalance, isLimelight, addLimelight, removeLimelight, listLimelight } from "./tokens.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -350,6 +350,34 @@ export async function handleAdmin(req: Request, path: string): Promise<Response>
       return auditLog(body);
     case "/admin/sign-out": {
       await kv.delete(["admintoken", body.adminToken as string]);
+      return json({ ok: true });
+    }
+    // ── Limelight tier management ───────────────────────────────────────────
+    case "/admin/limelight/list": {
+      const members = await listLimelight();
+      // Enrich with email by looking up the user record (best-effort).
+      const enriched = await Promise.all(members.map(async (m) => {
+        const user = await kv.get<UserRecord>(["user", m.emailHash]);
+        return { ...m, email: user.value?.email ?? null };
+      }));
+      return json({ ok: true, members: enriched });
+    }
+    case "/admin/limelight/add": {
+      const email = body.email;
+      if (!looksLikeEmail(email)) {
+        return json({ error: "Enter a valid email address", code: "bad_request" }, 400);
+      }
+      const emailHash = await emailToHash(email as string);
+      const existing = await kv.get<UserRecord>(["user", emailHash]);
+      await addLimelight(emailHash, "admin");
+      await audit("limelight.add", emailHash, ip, `email: ${email}`);
+      return json({ ok: true, emailHash, existed: !!existing.value });
+    }
+    case "/admin/limelight/remove": {
+      const remHash = body.emailHash;
+      if (typeof remHash !== "string") return json({ error: "emailHash required", code: "bad_request" }, 400);
+      await removeLimelight(remHash);
+      await audit("limelight.remove", remHash, ip, "");
       return json({ ok: true });
     }
     default:

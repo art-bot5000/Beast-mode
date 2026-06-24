@@ -64,8 +64,8 @@ if (missing.length) {
 // them directly. generate() picks the provider from the model-id prefix.
 import { generate, searchModels, upscale, UPSCALERS, findUpscaler, ProviderError } from "./index.js";
 import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
-import { pricingTable, quote, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
-import { getBalance, holdTokens, settleHold, refundHold, listLedger } from "./tokens.ts";
+import { pricingTable, quote, quoteForLimelight, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, quoteUpscaleForLimelight, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
+import { getBalance, holdTokens, settleHold, refundHold, listLedger, isLimelight, addLimelight, removeLimelight, listLimelight } from "./tokens.ts";
 import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
 import { storeImage, readImage, userUsage, listManifest, patchImageMeta, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
 import {
@@ -631,7 +631,10 @@ async function handler(req: Request): Promise<Response> {
       quality: body.quality as string | undefined,
       renderingSpeed: body.renderingSpeed as string | undefined,
     };
-    const q = quote(body.model as string, genOpts, genCount);
+    const userIsLimelight = await isLimelight(userHash);
+    const q = userIsLimelight
+      ? quoteForLimelight(body.model as string, genOpts, genCount)
+      : quote(body.model as string, genOpts, genCount);
     const hold = await holdTokens(userHash, q.totalTokens, { model: body.model as string });
     if (!hold.ok) {
       return json({
@@ -688,7 +691,10 @@ async function handler(req: Request): Promise<Response> {
       targetMegapixels: Number(body.targetMegapixels) || undefined,
       resolution: typeof body.resolution === "string" ? body.resolution : undefined,
     };
-    const q = quoteUpscale(upModel, upOpts);
+    const upIsLimelight = await isLimelight(userHash);
+    const q = upIsLimelight
+      ? quoteUpscaleForLimelight(upModel, upOpts)
+      : quoteUpscale(upModel, upOpts);
     const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
     if (!hold.ok) {
       return json({
@@ -736,6 +742,7 @@ async function handler(req: Request): Promise<Response> {
     catch { return json({ error: "Invalid JSON body", code: "bad_request" }, 400); }
 
     const kind = body.kind === "upscale" ? "upscale" : "generate";
+    const jobUserIsLimelight = await isLimelight(userHash);
 
     if (kind === "generate") {
       const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
@@ -746,7 +753,9 @@ async function handler(req: Request): Promise<Response> {
         quality: body.quality as string | undefined,
         renderingSpeed: body.renderingSpeed as string | undefined,
       };
-      const q = quote(body.model as string, genOpts, genCount);
+      const q = jobUserIsLimelight
+        ? quoteForLimelight(body.model as string, genOpts, genCount)
+        : quote(body.model as string, genOpts, genCount);
       const hold = await holdTokens(userHash, q.totalTokens, { model: body.model as string });
       if (!hold.ok) {
         return json({
@@ -774,7 +783,9 @@ async function handler(req: Request): Promise<Response> {
         targetMegapixels: Number(body.targetMegapixels) || undefined,
         resolution: typeof body.resolution === "string" ? body.resolution : undefined,
       };
-      const q = quoteUpscale(upModel, upOpts);
+      const q = jobUserIsLimelight
+        ? quoteUpscaleForLimelight(upModel, upOpts)
+        : quoteUpscale(upModel, upOpts);
       const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
       if (!hold.ok) {
         return json({
@@ -1173,7 +1184,22 @@ async function handler(req: Request): Promise<Response> {
   // the frontend labels the model dropdown and pre-flight quotes from this.
   // Charging happens in the ledger (next step) — this endpoint never mutates.
   if (path === "/api/pricing" && req.method === "GET") {
-    return json(pricingTable());
+    // Pricing table is public; include limelight flag when user is signed in.
+    const pricingAuthHeader = req.headers.get("authorization") || "";
+    const pricingToken = pricingAuthHeader.startsWith("Bearer ") ? pricingAuthHeader.slice(7) : null;
+    const pricingUser = pricingToken ? await verifySessionToken(pricingToken) : null;
+    const pricingIsLimelight = pricingUser ? await isLimelight(pricingUser) : false;
+    return json(pricingTable(pricingIsLimelight));
+  }
+
+  // ── User tier (Limelight status for the logged-in user) ─────────────────
+  if (path === "/api/user/tier" && req.method === "GET") {
+    const tierAuthHeader = req.headers.get("authorization") || "";
+    const tierToken = tierAuthHeader.startsWith("Bearer ") ? tierAuthHeader.slice(7) : null;
+    const tierUser = tierToken ? await verifySessionToken(tierToken) : null;
+    if (!tierUser) return json({ error: "Sign in required.", code: "auth_required" }, 401);
+    const limelightStatus = await isLimelight(tierUser);
+    return json({ ok: true, limelight: limelightStatus });
   }
 
   // ── Single-request quote: ?model=...&count=2&resolution=2K&quality=high
