@@ -1526,6 +1526,9 @@ img.bm-thumb-missing { background:var(--surface2); }
   .st-mob-back { display:flex; align-items:center; gap:6px; background:none; border:none; color:var(--muted); font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:700; letter-spacing:1px; cursor:pointer; padding:0 0 16px; }
   .st-mob-back:active { color:var(--accent); }
   /* Sections inside the mobile detail pane get standard padding */
+  /* Force visibility: sections are display:none unless .active, but the mobile
+     drill-down moves the node here without setting .active, so pin it visible. */
+  #stMobDetailBody .st-section { display:block; }
   #stMobDetailBody .settings-section { padding-bottom:12px; }
   #stMobDetailBody .st-section-head { margin-bottom:14px; }
 }
