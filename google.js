@@ -53,6 +53,63 @@ function parseDataUri(uri) {
   return { mimeType: m[1], data: m[2] };
 }
 
+/** Base64-encode bytes without blowing the call stack on large arrays. */
+function bytesToBase64(bytes) {
+  let bin = '';
+  const CHUNK = 0x8000; // 32 KiB per fromCharCode call
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+/**
+ * Resolve a single reference image to Gemini's inline form { mimeType, data }.
+ * Gemini has no URL-reference mechanism — bytes must be inlined as base64. So:
+ *   • data: URI  → parsed directly (the historical path).
+ *   • http(s) URL → fetched server-side and base64-encoded. This is the path
+ *     taken since reference images moved to direct-R2 upload: the client now
+ *     sends an R2 URL, and the bytes only ever transit this process on the
+ *     outbound hop to Google. Runware fetches URLs itself and never reaches
+ *     here, so this cost is Gemini-only.
+ * Throws ProviderError on a failed/oversized fetch rather than silently
+ * dropping the reference (the bug this replaces).
+ */
+async function resolveRefToInline(ref) {
+  if (typeof ref !== 'string' || !ref) return null;
+  const parsed = parseDataUri(ref);
+  if (parsed) return parsed;
+  if (!/^https?:\/\//i.test(ref)) return null; // not a data URI, not a URL → skip
+  // SSRF guard: only fetch from our own R2 public origin. referenceImages is a
+  // client-supplied field, and this is the one place the server dereferences
+  // it, so we never let it point the fetch at an arbitrary host. R2_PUBLIC_BASE
+  // is where /api/upload-url hands back gen-src/ URLs, so the legit path always
+  // matches; anything else is rejected.
+  const base = (process.env.R2_PUBLIC_BASE || '').replace(/\/+$/, '');
+  let allowed = false;
+  if (base) {
+    try { allowed = new URL(ref).origin === new URL(base).origin; } catch { allowed = false; }
+  }
+  if (!allowed) {
+    throw new ProviderError('Reference image URL is not from an allowed origin.', { provider: 'google', code: 'bad_request', status: 400 });
+  }
+  let res;
+  try {
+    res = await fetch(ref);
+  } catch (e) {
+    throw new ProviderError(`Could not fetch reference image: ${e.message}`, { provider: 'google', code: 'bad_request', status: 400 });
+  }
+  if (!res.ok) {
+    throw new ProviderError(`Reference image fetch failed (HTTP ${res.status})`, { provider: 'google', code: 'bad_request', status: 400 });
+  }
+  const mimeType = (res.headers.get('content-type') || 'image/png').split(';')[0].trim();
+  if (!/^image\//i.test(mimeType)) {
+    throw new ProviderError(`Reference URL is not an image (${mimeType})`, { provider: 'google', code: 'bad_request', status: 400 });
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return { mimeType, data: bytesToBase64(bytes) };
+}
+
 export const googleAdapter = {
   id: 'google',
 
@@ -76,13 +133,14 @@ export const googleAdapter = {
     }
     if (Array.isArray(req.referenceImages) && req.referenceImages.length) {
       for (const ref of req.referenceImages.slice(0, 6)) {
-        const parsed = typeof ref === 'string' ? parseDataUri(ref) : null;
-        if (parsed) {
-          parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } });
+        // Resolve each reference to inline base64. data: URIs parse directly;
+        // R2/http(s) URLs (the direct-upload path) are fetched server-side and
+        // encoded here. A failed fetch throws rather than silently dropping the
+        // reference, so a Gemini i2i run can never quietly degrade to text-only.
+        const inline = await resolveRefToInline(ref);
+        if (inline) {
+          parts.push({ inlineData: { mimeType: inline.mimeType, data: inline.data } });
         }
-        // Non-data-URI references (bare URLs) aren't inlinable without a fetch;
-        // we skip them rather than send something the API will reject. The
-        // frontend always sends downscaled data URIs, so this is the live path.
       }
     }
 
