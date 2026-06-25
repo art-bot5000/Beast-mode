@@ -19802,7 +19802,30 @@ async function igGenerate() {
     body.width = d[0]; body.height = d[1];
   }
 
-  if (m.i2i && igState.refs.length) body.referenceImages = igState.refs.map(r => r.data);
+  if (m.i2i && igState.refs.length) {
+    // Direct-to-R2: upload each reference's bytes straight to R2 and send only
+    // the public URLs, removing the base64 array from the /api/generate body
+    // (the inbound spike). data: URIs are uploaded; already-remote http(s)
+    // refs pass through untouched. Any failure aborts before the run starts.
+    try {
+      igStatus('\u25CC Uploading reference' + (igState.refs.length > 1 ? 's' : '') + '\u2026', false);
+      const urls = [];
+      for (const r of igState.refs) {
+        const d = r && r.data;
+        if (typeof d === 'string' && /^data:/i.test(d)) {
+          urls.push(await bmUploadToR2(d));
+        } else if (typeof d === 'string' && /^https?:\/\//i.test(d)) {
+          urls.push(d);
+        } else {
+          throw new Error('A reference image could not be read \u2014 re-select it.');
+        }
+      }
+      body.referenceImages = urls;
+    } catch (e) {
+      igStatus('\u2717 ' + (e && e.message ? e.message : 'Could not upload reference images.'), true);
+      return;
+    }
+  }
 
   if (m.seed) {
     const seedEl = document.getElementById('igSeed');
@@ -22758,6 +22781,20 @@ async function upRun() {
     if (!inputImage) { upStatus('\u2717 Could not read the source image. Try re-selecting or re-uploading it.', true); return; }
   }
 
+  // Direct-to-R2: if the source resolved to a data URI, upload the bytes
+  // straight to R2 and send only the public URL (the provider fetches it).
+  // This removes the multi-MB base64 string from the /api/upscale body — the
+  // inbound spike. Already-remote http(s) URLs pass through untouched.
+  if (typeof inputImage === 'string' && /^data:/i.test(inputImage)) {
+    try {
+      upStatus('\u25CC Uploading source\u2026', false);
+      inputImage = await bmUploadToR2(inputImage);
+    } catch (e) {
+      upStatus('\u2717 ' + (e && e.message ? e.message : 'Could not upload the source image.'), true);
+      return;
+    }
+  }
+
   const body = { model: m.id, inputImage: inputImage, outputFormat: upState.format };
   if (m.kind === 'megapixels') {
     body.targetMegapixels = upState.mp;
@@ -24041,6 +24078,63 @@ async function bmFetchImageBlob(src) {
     return null
   }
 }
+
+// ── Direct-to-R2 upload for generation sources (reference images + upscale
+// inputs). Replaces the old base64-in-JSON path that materialised multi-MB
+// strings inside the server's request body / JSON parse buffer / KV job stash
+// at once (the inbound memory spike). We ask the backend for a short-lived
+// presigned PUT, upload the raw bytes STRAIGHT to R2, and return the resulting
+// public URL — which the provider accepts as an image reference. The bytes
+// never pass through our Deno process.
+//
+// Input must be a data: URI (the upload flows already normalise to one). Throws
+// on any failure so callers can surface a clear error instead of silently
+// shipping nothing — this path is hard-required, not a soft fallback.
+async function bmUploadToR2(dataUri) {
+  if (typeof dataUri !== 'string' || !/^data:/i.test(dataUri)) {
+    throw new Error('bmUploadToR2 expects a data: URI');
+  }
+  const tok = (window.bmSession && window.bmSession.sessionToken) || null;
+  if (!tok) throw new Error('Not signed in.');
+
+  // Parse "data:<mime>;base64,<payload>" → mime + bytes (single decode).
+  const comma = dataUri.indexOf(',');
+  const header = dataUri.slice(5, comma);          // e.g. "image/png;base64"
+  const mime = (header.split(';')[0] || 'image/jpeg').toLowerCase();
+  const b64 = dataUri.slice(comma + 1);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+  // 1) Ask the backend for a presigned PUT (server owns the key).
+  const presignRes = await fetch('/api/upload-url', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contentType: mime }),
+  });
+  if (!presignRes.ok) {
+    let msg = 'Upload unavailable (HTTP ' + presignRes.status + ').';
+    try { const j = await presignRes.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  const { uploadUrl, publicUrl } = await presignRes.json();
+  if (!uploadUrl || !publicUrl) throw new Error('Upload URL missing from server.');
+
+  // 2) PUT the raw bytes STRAIGHT to R2. Content-Type must match what was
+  // signed (host-only signed headers, UNSIGNED-PAYLOAD), so the browser sets
+  // the body type and R2 stores it for the provider to read back.
+  const putRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': mime },
+    body: bytes,
+  });
+  if (!putRes.ok) {
+    throw new Error('Direct upload to storage failed (HTTP ' + putRes.status + ').');
+  }
+  // 3) Hand back the durable public URL the provider will fetch.
+  return publicUrl;
+}
+window.bmUploadToR2 = bmUploadToR2;
 
 // Fetch a permanently-stored image back from our own /data volume as a blob
 // URL. AUTHED: /api/img/<favId> requires the session bearer token (a plain

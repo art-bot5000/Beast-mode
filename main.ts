@@ -993,6 +993,55 @@ async function handler(req: Request): Promise<Response> {
     }
   }
 
+  // ── Generation-source direct upload (session-gated). Reference images and
+  // upscale sources used to travel as base64 inside the /api/generate and
+  // /api/upscale JSON bodies — a multi-MB string materialised in the request
+  // body, the JSON parse buffer, and (for upscale) a KV job-blob stash all at
+  // once: the documented INBOUND memory spike. Instead the browser asks for a
+  // short-lived presigned PUT, uploads the raw bytes STRAIGHT to R2 (never
+  // touching this process), and sends only the resulting public URL — which
+  // Runware already accepts as an image reference. The bytes never hit Deno.
+  //
+  // Server OWNS the key (never trust a caller path). Keys live under a
+  // gen-src/<userHash>/ prefix and are FIFO-trimmed; they are public-readable so
+  // the provider can fetch them. HARD-REQUIRE: with R2 unconfigured we 503 so
+  // the client surfaces a clear error rather than silently falling back to the
+  // base64 path this route exists to remove.
+  if (path === "/api/upload-url" && req.method === "POST") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in required.", code: "auth_required" }, 401);
+    if (!r2Enabled()) {
+      return json({ error: "Direct upload unavailable (storage not configured).", code: "r2_disabled" }, 503);
+    }
+    let body: Record<string, unknown>;
+    try { body = await req.json(); } catch { return json({ error: "Invalid JSON", code: "bad_request" }, 400); }
+    // Whitelist the content type to image/* and map to a safe extension. The
+    // browser sends its intended MIME; anything off-list is rejected.
+    const ct = String(body.contentType ?? "").toLowerCase();
+    const extByType: Record<string, string> = {
+      "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png",
+      "image/webp": "webp", "image/avif": "avif",
+    };
+    const ext = extByType[ct];
+    if (!ext) return json({ error: "Unsupported image type.", code: "bad_request" }, 400);
+    const id = crypto.randomUUID();
+    const key = `gen-src/${userHash}/${id}.${ext}`;
+    try {
+      const uploadUrl = await presignR2Put(key, 300);
+      // FIFO: keep this user's newest 200 generation sources. Fire-and-forget.
+      trimR2ToNewest(`gen-src/${userHash}/`, 200).catch((e) =>
+        console.warn("gen-src trim failed (non-fatal):", (e as Error).message)
+      );
+      const publicUrl = `${(process.env.R2_PUBLIC_BASE || "").replace(/\/$/, "")}/${key}`;
+      return json({ ok: true, uploadUrl, publicUrl, key });
+    } catch (e) {
+      console.warn("upload-url presign failed:", (e as Error).message);
+      return json({ error: "Could not prepare upload.", code: "presign_failed" }, 500);
+    }
+  }
+
   // ── PRIMARY IMAGE READ — stream a user's stored image bytes off /data.
   // SESSION-GATED: userHash comes ONLY from verifySessionToken, never the URL,
   // so a user can never read another user's favId. The path is /api/img/<favId>;
