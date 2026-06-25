@@ -208,12 +208,22 @@ async function runGenerateHeld(
     // library card references. We mint it here and return it on the img object.
     for (const img of result.images as Array<{ url?: string; b64?: string; mimeType?: string; favId?: string }>) {
       const favId = String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, "0");
+      // Hoisted to the loop scope so the soft-degrade catch can re-encode from
+      // the decoded bytes WITHOUT us having to keep the base64 string alive
+      // across the await below. This bounds peak resident memory in the direct
+      // Gemini (base64) path: in the common (success) case we hold only `bytes`
+      // during storeImage, not bytes + the original b64 string at once.
+      let bytes: Uint8Array | undefined;
+      let mime = "image/png";
       try {
-        let bytes: Uint8Array;
-        let mime: string;
         if (img.b64) {
           mime = img.mimeType || "image/png";
           bytes = decodeBase64(img.b64);
+          // Drop the base64 immediately — `bytes` is all storeImage needs, and
+          // keeping img.b64 would (a) double resident memory during the write
+          // and (b) risk the multi-MB string flowing toward the KV job result
+          // (stashResultBlobs / 64 KiB cap). The catch re-encodes from `bytes`.
+          delete img.b64; delete img.mimeType;
         } else if (img.url) {
           // Provider returned only a hosted URL — fetch the pristine bytes once.
           const res = await fetch(img.url);
@@ -237,14 +247,14 @@ async function runGenerateHeld(
         });
         img.favId = favId;
         (img as { lineage?: string }).lineage = genLineage; // echo back so client uses the SAME root
-        delete img.b64; delete img.mimeType;
       } catch (e) {
         // SOFT-DEGRADE (house pattern): on quota/disk failure keep the image
         // viewable this session as a data URI rather than failing the whole
         // generation. The library just won't have a durable server copy for it.
-        if (img.b64) {
-          img.url = `data:${img.mimeType || "image/png"};base64,${img.b64}`;
-          delete img.b64; delete img.mimeType;
+        // b64 was already dropped above, so re-encode from the decoded bytes —
+        // this only runs on the rare failure path, never in the hot success path.
+        if (bytes) {
+          img.url = `data:${mime};base64,${encodeBase64(bytes)}`;
         }
         console.warn("/data store failed, serving inline (no durable copy):", (e as Error).message);
       }
@@ -319,12 +329,17 @@ async function runUpscaleHeld(
     const out = result.image as { url?: string; b64?: string; favId?: string };
     if (out && (out.url || out.b64)) {
       const favId = String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, "0");
+      // Same memory discipline as the generate path: drop the base64 the moment
+      // it's decoded so we don't hold bytes + b64 across the storeImage await.
+      // Upscale outputs are the LARGEST images (4K+), so the peak matters most
+      // here. The catch re-encodes from `bytes` only on the rare failure path.
+      let bytes: Uint8Array | undefined;
+      let mime = "image/png";
       try {
-        let bytes: Uint8Array;
-        let mime: string;
         if (out.b64) {
           mime = "image/png";
           bytes = decodeBase64(out.b64);
+          delete out.b64;
         } else {
           const res = await fetch(out.url as string);
           if (!res.ok) throw new Error(`fetch upscale image: HTTP ${res.status}`);
@@ -344,9 +359,8 @@ async function runUpscaleHeld(
         });
         out.favId = favId;
         (out as { lineage?: string }).lineage = typeof body.lineage === "string" ? body.lineage as string : undefined;
-        delete out.b64;
       } catch (e) {
-        if (out.b64) { out.url = `data:image/png;base64,${out.b64}`; delete out.b64; }
+        if (bytes) { out.url = `data:${mime};base64,${encodeBase64(bytes)}`; }
         console.warn("/data store failed (upscale), serving inline:", (e as Error).message);
       }
     }
