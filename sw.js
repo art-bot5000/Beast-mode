@@ -1,6 +1,6 @@
 // Beast Mode // Service Worker
 
-const CACHE_NAME = 'beast-mode-v7.19'
+const CACHE_NAME = 'beast-mode-v7.20'
 
 const CACHE_URLS = [
   './',
