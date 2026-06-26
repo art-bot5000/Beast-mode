@@ -413,6 +413,9 @@ async function runUpscaleHeld(
 // or refunds it, then records the result on the job. Because the work lives in
 // KV, a refresh/disconnect/logout in the browser cannot interrupt it.
 let workerRunning = false;
+// Number of lanes currently inside runJob() (i.e. potentially holding image
+// bytes resident). Sampled by the [mem] logger in startWorker for OOM tuning.
+let activeJobs = 0;
 
 // In-process registry of the AbortController for each RUNNING job, keyed by
 // jobId. Lets the DELETE route cancel a job whose provider call is currently
@@ -563,6 +566,28 @@ function startWorker(): void {
   if (workerRunning) return;
   workerRunning = true;
 
+  // ── Tier 3: memory instrumentation. Sample RSS every 15s so we can SEE the
+  // peak resident memory vs. how many lanes are mid-runJob (i.e. holding image
+  // bytes), instead of inferring it from OOM-kills. `activeJobs` is incremented
+  // around runJob() below. Logs only while jobs are active OR roughly once a
+  // minute when idle, to keep the log readable. Deno.memoryUsage() is cheap.
+  let memSampleTick = 0;
+  const memTimer = setInterval(() => {
+    const noisyIdle = activeJobs === 0 && (memSampleTick++ % 4 !== 0);
+    if (noisyIdle) return;
+    try {
+      const m = Deno.memoryUsage();
+      const mb = (n: number) => (n / 1048576).toFixed(0);
+      console.log(
+        `[mem] rss=${mb(m.rss)}MB heapUsed=${mb(m.heapUsed)}MB ` +
+        `active=${activeJobs}/${WORKER_CONCURRENCY}`,
+      );
+    } catch { /* memoryUsage unavailable — ignore */ }
+  }, 15_000);
+  // Don't let the sampler keep the process alive on its own.
+  const _t = memTimer as unknown as { unref?: () => void };
+  if (typeof _t.unref === "function") _t.unref();
+
   // Bounded-concurrency dispatcher. We run WORKER_CONCURRENCY independent
   // claim→run lanes. Each lane loops: claim the oldest queued job and run it;
   // if the queue is empty, idle briefly then retry. claimNextJob()'s KV CAS
@@ -578,7 +603,12 @@ function startWorker(): void {
           await new Promise((r) => setTimeout(r, 1500 + laneId * 120));
           continue;
         }
-        await runJob(job);
+        activeJobs++;
+        try {
+          await runJob(job);
+        } finally {
+          activeJobs--;
+        }
         // No idle delay after real work: immediately try to claim the next job
         // so a backlog drains at full concurrency.
       } catch (e) {
@@ -590,6 +620,84 @@ function startWorker(): void {
 
   for (let i = 0; i < WORKER_CONCURRENCY; i++) lane(i);
   console.log(`Background job worker started (concurrency=${WORKER_CONCURRENCY}).`);
+}
+
+// ── Shared image-job enqueue ─────────────────────────────────────────────────
+// The ONE place a generate/upscale job is created. /api/jobs (the path the
+// client uses) and the legacy synchronous /api/generate + /api/upscale routes
+// all funnel through here, so image work has a SINGLE concurrency surface: the
+// worker lanes (WORKER_CONCURRENCY). Previously the sync routes ran
+// runGenerateHeld/runUpscaleHeld INLINE in the request handler, adding an
+// unbounded second surface (N inflight HTTP requests each holding a multi-MB
+// batch) on top of the 4 worker lanes — the root of the 512MB OOM. The token
+// HOLD is still taken here so a 402 stays synchronous; the heavy provider call
+// + image bytes now only ever run on a worker lane.
+async function enqueueImageJob(
+  userHash: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const kind = body.kind === "upscale" ? "upscale" : "generate";
+  const jobUserIsLimelight = await isLimelight(userHash);
+
+  if (kind === "generate") {
+    const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
+    const genOpts = {
+      resolution: body.resolution as string | undefined,
+      width: body.width as number | undefined,
+      height: body.height as number | undefined,
+      quality: body.quality as string | undefined,
+      renderingSpeed: body.renderingSpeed as string | undefined,
+    };
+    const q = jobUserIsLimelight
+      ? quoteForLimelight(body.model as string, genOpts, genCount)
+      : quote(body.model as string, genOpts, genCount);
+    const hold = await holdTokens(userHash, q.totalTokens, { model: body.model as string });
+    if (!hold.ok) {
+      return json({
+        error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
+        code: "insufficient_tokens",
+        needed: q.totalTokens,
+        balance: Number.isFinite(hold.balance) ? hold.balance : 0,
+      }, 402);
+    }
+    const promptSnip = String(body.prompt || "").slice(0, 80) || "Untitled";
+    const job = await enqueueJob({
+      userHash, kind, request: body,
+      holdRef: hold.ref, quotedTotal: q.totalTokens, perImage: q.perImage,
+      model: body.model as string,
+      label: (genCount > 1 ? `×${genCount} · ` : "") + promptSnip,
+    });
+    startWorker(); // idempotent — ensures the loop is running
+    return json({ jobId: job.id, status: job.status, balance: hold.balance });
+  } else {
+    const upModel = body.model as string;
+    if (!findUpscaler(upModel)) {
+      return json({ error: `Unknown upscaler "${upModel}".`, code: "bad_request" }, 400);
+    }
+    const upOpts = {
+      targetMegapixels: Number(body.targetMegapixels) || undefined,
+      resolution: typeof body.resolution === "string" ? body.resolution : undefined,
+    };
+    const q = jobUserIsLimelight
+      ? quoteUpscaleForLimelight(upModel, upOpts)
+      : quoteUpscale(upModel, upOpts);
+    const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
+    if (!hold.ok) {
+      return json({
+        error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
+        code: "insufficient_tokens",
+        needed: q.totalTokens,
+        balance: Number.isFinite(hold.balance) ? hold.balance : 0,
+      }, 402);
+    }
+    const job = await enqueueJob({
+      userHash, kind, request: body,
+      holdRef: hold.ref, quotedTotal: q.totalTokens, perImage: q.perImage,
+      model: upModel, label: `Upscale · ${upModel.split(":").pop() || upModel}`,
+    });
+    startWorker();
+    return json({ jobId: job.id, status: job.status, balance: hold.balance });
+  }
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────
@@ -612,9 +720,12 @@ async function handler(req: Request): Promise<Response> {
 
   // ── Generation proxy: the key is attached HERE, server-side, never sent down.
   if (path === "/api/generate" && req.method === "POST") {
-    // ── GATE: require a valid session token. This is what actually protects the
-    // Runware spend — only signed-in, verified users can reach generation.
-    // The browser sends it as `Authorization: Bearer <token>`.
+    // LEGACY synchronous route. The client no longer calls this — it submits via
+    // POST /api/jobs and polls. We keep the path alive for any external/legacy
+    // caller but now ENQUEUE through the shared helper instead of running the
+    // provider call inline, so all image work shares the single WORKER_CONCURRENCY
+    // budget (the inline path was the unbounded second memory surface behind the
+    // 512MB OOM). Returns a { jobId, status, balance } envelope, not the image.
     const authHeader = req.headers.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
     const userHash = await verifySessionToken(token);
@@ -632,42 +743,8 @@ async function handler(req: Request): Promise<Response> {
     } catch {
       return json({ error: "Invalid JSON body", code: "bad_request" }, 400);
     }
-
-    // ── TOKEN QUOTE + HOLD (Pass 3 ledger). The price is the fixed table
-    // price from pricing.js — known before the provider call. We hold the full
-    // requested batch up front (atomic CAS: concurrent tabs cannot overdraft),
-    // settle for what actually comes back, refund the rest.
-    const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
-    const genOpts = {
-      resolution: body.resolution as string | undefined,
-      width: body.width as number | undefined,
-      height: body.height as number | undefined,
-      quality: body.quality as string | undefined,
-      renderingSpeed: body.renderingSpeed as string | undefined,
-    };
-    const userIsLimelight = await isLimelight(userHash);
-    const q = userIsLimelight
-      ? quoteForLimelight(body.model as string, genOpts, genCount)
-      : quote(body.model as string, genOpts, genCount);
-    const hold = await holdTokens(userHash, q.totalTokens, { model: body.model as string });
-    if (!hold.ok) {
-      return json({
-        error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
-        code: "insufficient_tokens",
-        needed: q.totalTokens,
-        balance: Number.isFinite(hold.balance) ? hold.balance : 0,
-      }, 402);
-    }
-
-    try {
-      const res = await runGenerateHeld(userHash, body, q, hold.ref, genCount, genOpts);
-      return json(res);
-    } catch (e) {
-      // Hold already refunded inside runGenerateHeld on failure.
-      if (e instanceof ProviderError) return json({ error: e.message, code: e.code }, e.status);
-      console.error("generate failed", e);
-      return json({ error: "Internal error" }, 500);
-    }
+    body.kind = "generate";
+    return await enqueueImageJob(userHash, body);
   }
 
   // ── Image upscaling. Mirrors /api/generate's protections exactly: session
@@ -675,6 +752,10 @@ async function handler(req: Request): Promise<Response> {
   // with a full REFUND on any failure. Upscalers are a separate task family
   // with their own (cheaper) pricing table, and always produce ONE image.
   if (path === "/api/upscale" && req.method === "POST") {
+    // LEGACY synchronous route — mirrors /api/generate above. The client submits
+    // via POST /api/jobs and polls; this path now ENQUEUES through the shared
+    // helper rather than running runUpscaleHeld inline, so it shares the single
+    // WORKER_CONCURRENCY budget. Returns { jobId, status, balance }.
     const authHeader = req.headers.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
     const userHash = await verifySessionToken(token);
@@ -693,41 +774,8 @@ async function handler(req: Request): Promise<Response> {
     } catch {
       return json({ error: "Invalid JSON body", code: "bad_request" }, 400);
     }
-
-    const upModel = body.model as string;
-    if (!findUpscaler(upModel)) {
-      return json({ error: `Unknown upscaler "${upModel}".`, code: "bad_request" }, 400);
-    }
-
-    // ── TOKEN QUOTE + HOLD. P-Image is priced by target megapixels; Gemini
-    // upscalers are priced by output resolution; the others are flat.
-    const upOpts = {
-      targetMegapixels: Number(body.targetMegapixels) || undefined,
-      resolution: typeof body.resolution === "string" ? body.resolution : undefined,
-    };
-    const upIsLimelight = await isLimelight(userHash);
-    const q = upIsLimelight
-      ? quoteUpscaleForLimelight(upModel, upOpts)
-      : quoteUpscale(upModel, upOpts);
-    const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
-    if (!hold.ok) {
-      return json({
-        error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
-        code: "insufficient_tokens",
-        needed: q.totalTokens,
-        balance: Number.isFinite(hold.balance) ? hold.balance : 0,
-      }, 402);
-    }
-
-    try {
-      const res = await runUpscaleHeld(userHash, body, q, hold.ref, upModel, upOpts);
-      return json(res);
-    } catch (e) {
-      // Hold already refunded inside runUpscaleHeld on failure.
-      if (e instanceof ProviderError) return json({ error: e.message, code: e.code }, e.status);
-      console.error("upscale failed", e);
-      return json({ error: "Internal error" }, 500);
-    }
+    body.kind = "upscale";
+    return await enqueueImageJob(userHash, body);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -755,68 +803,10 @@ async function handler(req: Request): Promise<Response> {
     try { body = await req.json(); }
     catch { return json({ error: "Invalid JSON body", code: "bad_request" }, 400); }
 
-    const kind = body.kind === "upscale" ? "upscale" : "generate";
-    const jobUserIsLimelight = await isLimelight(userHash);
-
-    if (kind === "generate") {
-      const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
-      const genOpts = {
-        resolution: body.resolution as string | undefined,
-        width: body.width as number | undefined,
-        height: body.height as number | undefined,
-        quality: body.quality as string | undefined,
-        renderingSpeed: body.renderingSpeed as string | undefined,
-      };
-      const q = jobUserIsLimelight
-        ? quoteForLimelight(body.model as string, genOpts, genCount)
-        : quote(body.model as string, genOpts, genCount);
-      const hold = await holdTokens(userHash, q.totalTokens, { model: body.model as string });
-      if (!hold.ok) {
-        return json({
-          error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
-          code: "insufficient_tokens",
-          needed: q.totalTokens,
-          balance: Number.isFinite(hold.balance) ? hold.balance : 0,
-        }, 402);
-      }
-      const promptSnip = String(body.prompt || "").slice(0, 80) || "Untitled";
-      const job = await enqueueJob({
-        userHash, kind, request: body,
-        holdRef: hold.ref, quotedTotal: q.totalTokens, perImage: q.perImage,
-        model: body.model as string,
-        label: (genCount > 1 ? `×${genCount} · ` : "") + promptSnip,
-      });
-      startWorker(); // idempotent — ensures the loop is running
-      return json({ jobId: job.id, status: job.status, balance: hold.balance });
-    } else {
-      const upModel = body.model as string;
-      if (!findUpscaler(upModel)) {
-        return json({ error: `Unknown upscaler "${upModel}".`, code: "bad_request" }, 400);
-      }
-      const upOpts = {
-        targetMegapixels: Number(body.targetMegapixels) || undefined,
-        resolution: typeof body.resolution === "string" ? body.resolution : undefined,
-      };
-      const q = jobUserIsLimelight
-        ? quoteUpscaleForLimelight(upModel, upOpts)
-        : quoteUpscale(upModel, upOpts);
-      const hold = await holdTokens(userHash, q.totalTokens, { model: upModel });
-      if (!hold.ok) {
-        return json({
-          error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
-          code: "insufficient_tokens",
-          needed: q.totalTokens,
-          balance: Number.isFinite(hold.balance) ? hold.balance : 0,
-        }, 402);
-      }
-      const job = await enqueueJob({
-        userHash, kind, request: body,
-        holdRef: hold.ref, quotedTotal: q.totalTokens, perImage: q.perImage,
-        model: upModel, label: `Upscale · ${upModel.split(":").pop() || upModel}`,
-      });
-      startWorker();
-      return json({ jobId: job.id, status: job.status, balance: hold.balance });
-    }
+    // All three image-submit routes (this one + legacy /api/generate, /api/upscale)
+    // funnel through the same helper so quote→hold→enqueue logic lives in ONE place
+    // and there is a single concurrency surface (the worker lanes).
+    return await enqueueImageJob(userHash, body);
   }
 
   if (path === "/api/jobs" && req.method === "GET") {
