@@ -85,6 +85,45 @@ function showUpdateBanner(waitingWorker) {
   from { opacity:0; transform:translateX(-50%) translateY(12px); }
   to   { opacity:1; transform:translateX(-50%) translateY(0); }
 }
+
+/* ── WORKSPACE LOADING GATE ──────────────────────────────────────────────────
+   Full-screen opaque overlay shown after sign-in / on boot while the critical
+   workspace data loads (settings + colour/a11y, balance, storage, library
+   manifest, mode init, and the first screen of thumbnails). Themed via tokens
+   with hardcoded fallbacks so it renders correctly even before app.css loads. */
+#bmWorkspaceGate {
+  position: fixed; inset: 0; z-index: 100000;
+  display: none;
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 22px;
+  background: var(--bg, #06080a);
+  color: var(--text, #d4dde6);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+#bmWorkspaceGate.show { display: flex; }
+#bmWorkspaceGate .bm-gate-spinner {
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 3px solid var(--border, rgba(255,255,255,0.12));
+  border-top-color: var(--accent, #e8ff00);
+  animation: bmGateSpin 0.85s linear infinite;
+}
+@keyframes bmGateSpin { to { transform: rotate(360deg); } }
+#bmWorkspaceGate .bm-gate-label {
+  font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted, #7a8d9e); font-weight: 600;
+}
+#bmWorkspaceGate .bm-gate-continue {
+  margin-top: 4px; opacity: 0; pointer-events: none;
+  transition: opacity 0.4s ease;
+  background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.18));
+  color: var(--text, #d4dde6);
+  border-radius: 4px; padding: 9px 18px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 1.5px;
+  cursor: pointer;
+}
+#bmWorkspaceGate.allow-continue .bm-gate-continue { opacity: 1; pointer-events: auto; }
+#bmWorkspaceGate .bm-gate-continue:hover { border-color: var(--accent, #e8ff00); color: var(--accent, #e8ff00); }
 </style>
 <!-- ── PWA Share Target handler ───────────────────────────────────── -->
 <script>
@@ -168,6 +207,33 @@ handleShareTarget()
 <!-- BUILD:INLINE-CSS app.css -->
 </head>
 <body>
+
+<!-- ═══════════════════════ WORKSPACE LOADING GATE ═══════════════════════ -->
+<!-- Opaque full-screen overlay that holds the user out until the critical
+     workspace data has loaded (settings/colour/a11y, balance, storage, library
+     manifest, mode init, first screen of thumbnails). Shown pre-paint by the
+     IIFE below whenever a session is (being) restored, then dismissed by
+     bmWorkspaceGate.run(). A "Continue anyway" button appears after a short
+     delay; a hard timeout dismisses regardless so the gate can never trap. -->
+<div id="bmWorkspaceGate" role="status" aria-live="polite" aria-label="Loading your workspace">
+  <div class="bm-gate-spinner" aria-hidden="true"></div>
+  <div class="bm-gate-label">Loading your workspace…</div>
+  <button type="button" class="bm-gate-continue" onclick="window.bmWorkspaceGate && bmWorkspaceGate.dismiss('user')">Continue anyway</button>
+</div>
+<script>
+// Show the gate as early as possible (before first paint) if we already have a
+// persisted session, so the user never sees the un-hydrated app flash. The full
+// coordinator (bmWorkspaceGate) wires up later and takes over dismissal.
+;(function () {
+  try {
+    var saved = JSON.parse(localStorage.getItem('bm_app_session') || 'null');
+    if (saved && saved.sessionToken) {
+      var el = document.getElementById('bmWorkspaceGate');
+      if (el) el.classList.add('show');
+    }
+  } catch (e) {}
+})();
+</script>
 
 <!-- ═══════════════════════ MODALS (fixed, above all views) ═══════════════════════ -->
 
@@ -23615,6 +23681,115 @@ function bmIdentitySwitch(emailHash) {
   return false
 }
 
+// ── WORKSPACE LOADING GATE COORDINATOR ───────────────────────────────────────
+// Holds the opaque overlay (#bmWorkspaceGate) up after sign-in / on boot until
+// the critical workspace data has loaded, then dismisses. "Critical" = ZK
+// settings incl. colour + accessibility (via the manifest sync, which awaits
+// __bmDocRestorePromise), token balance, pricing/tier, storage meter, the
+// library image manifest, both mode inits, and the first screen of thumbnails
+// for whichever mode the user lands on.
+//
+// Robustness: every step is wrapped so a rejection or hang can never trap the
+// user. A "Continue anyway" button appears after CONTINUE_AFTER ms; a hard
+// HARD_TIMEOUT dismisses regardless. run() is idempotent per session so the
+// several bm-auth-changed handlers and the boot path can all call it safely —
+// only the first wins, the rest no-op.
+window.bmWorkspaceGate = (function () {
+  var CONTINUE_AFTER = 3000;   // show "Continue anyway" after this
+  var HARD_TIMEOUT   = 8000;   // dismiss no matter what after this
+  var THUMB_TIMEOUT  = 4000;   // sub-budget for first-screen thumbnails
+  var FIRST_SCREEN   = 12;     // how many thumbnails count as "first screen"
+
+  var running = false;
+  var done = false;
+  var contTimer = null, hardTimer = null;
+
+  function el() { return document.getElementById('bmWorkspaceGate'); }
+  function show() { var g = el(); if (g) g.classList.add('show'); }
+
+  function dismiss(reason) {
+    if (done) return;
+    done = true;
+    if (contTimer) { clearTimeout(contTimer); contTimer = null; }
+    if (hardTimer) { clearTimeout(hardTimer); hardTimer = null; }
+    var g = el();
+    if (g) { g.classList.remove('show'); g.classList.remove('allow-continue'); }
+    // A late re-render so the landing view reflects everything that loaded.
+    try { if (typeof bmRefreshCurrentModeThumbs === 'function') bmRefreshCurrentModeThumbs(); } catch (_) {}
+  }
+
+  // Wrap a possibly-throwing, possibly-async step so it always settles and never
+  // rejects the aggregate.
+  function step(fn) {
+    return new Promise(function (resolve) {
+      try { Promise.resolve(fn()).then(function () { resolve(); }, function () { resolve(); }); }
+      catch (_) { resolve(); }
+    });
+  }
+
+  // Decode the first screen of thumbnails for the landing mode, off-DOM, so the
+  // grid is painted (not popping in) when the gate lifts. Bounded by its own
+  // timeout; missing/locked images resolve immediately via bmApplyThumb.
+  function firstScreenThumbs() {
+    return new Promise(function (resolve) {
+      var settled = false;
+      var finish = function () { if (!settled) { settled = true; resolve(); } };
+      var budget = setTimeout(finish, THUMB_TIMEOUT);
+      try {
+        if (typeof favourites === 'undefined' || !Array.isArray(favourites) || !favourites.length
+            || typeof bmApplyThumb !== 'function') { clearTimeout(budget); return finish(); }
+        var list = favourites
+          .filter(function (f) { return f && (f.imageData || f.thumbKey || f.serverImageUrl); })
+          .slice(0, FIRST_SCREEN);
+        if (!list.length) { clearTimeout(budget); return finish(); }
+        Promise.all(list.map(function (f) {
+          var img = new Image();           // off-DOM warm of the resolve chain
+          return step(function () { return bmApplyThumb(img, f); });
+        })).then(function () { clearTimeout(budget); finish(); });
+      } catch (_) { clearTimeout(budget); finish(); }
+    });
+  }
+
+  function run() {
+    if (running) return;          // idempotent per session
+    running = true;
+    done = false;
+    show();
+
+    // "Continue anyway" affordance, then the hard backstop.
+    contTimer = setTimeout(function () {
+      var g = el(); if (g) g.classList.add('allow-continue');
+    }, CONTINUE_AFTER);
+    hardTimer = setTimeout(function () { dismiss('timeout'); }, HARD_TIMEOUT);
+
+    // Kick off the critical loaders. These are the same loads the individual
+    // bm-auth-changed handlers trigger; calling them here is safe (each guards
+    // on session and most are memoised / idempotent), and lets us AWAIT them
+    // instead of letting them pop in uncoordinated.
+    var critical = [
+      // ZK settings (colour + a11y) + library manifest. The manifest sync awaits
+      // __bmDocRestorePromise internally, so this one promise covers both.
+      step(function () { return (typeof bmSyncLibraryFromManifest === 'function') ? bmSyncLibraryFromManifest() : null; }),
+      step(function () { return (typeof window.__bmDocRestorePromise !== 'undefined') ? window.__bmDocRestorePromise : null; }),
+      step(function () { return (typeof bmFetchBalance === 'function') ? bmFetchBalance() : null; }),
+      step(function () { return (typeof bmFetchPricing === 'function') ? bmFetchPricing() : null; }),
+      step(function () { return (typeof bmRenderStorageMeter === 'function') ? bmRenderStorageMeter() : null; }),
+      step(function () { if (typeof igInit === 'function') igInit(); }),
+      step(function () { if (typeof upInit === 'function') upInit(); }),
+    ];
+
+    Promise.all(critical)
+      .then(function () { return firstScreenThumbs(); })  // images last — after favourites hydrate
+      .then(function () { dismiss('ready'); })
+      .catch(function () { dismiss('ready'); });
+  }
+
+  // Reset so a subsequent sign-in (after sign-out) re-gates.
+  function reset() { running = false; done = false; }
+
+  return { run: run, dismiss: dismiss, reset: reset, show: show };
+})();
+
 function setSession({ emailHash, email, dataKey, sessionToken }) {
   window.bmSession = { emailHash, email, dataKey, sessionToken };
   // Persist the SESSION TOKEN (opaque, 24h) so reloads stay signed in for API
@@ -23630,6 +23805,14 @@ function setSession({ emailHash, email, dataKey, sessionToken }) {
   window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email } }));
   // DATA KEY just became available — refresh any locked thumbnail placeholders.
   if (dataKey && typeof bmThumbsOnUnlock === 'function') bmThumbsOnUnlock();
+  // Hold the workspace gate up until the critical data has loaded. Deferred a
+  // tick so __bmDocRestorePromise (assigned just below) exists for the gate to
+  // await. reset() first so a sign-in AFTER a prior sign-out re-gates.
+  if (window.bmWorkspaceGate) {
+    bmWorkspaceGate.reset();
+    bmWorkspaceGate.show();
+    setTimeout(function () { bmWorkspaceGate.run(); }, 0);
+  }
   // DATA KEY available → pull authoritative state from Fly (source of truth) and
   // overlay it onto whatever localStorage already loaded, then re-render. Fly
   // wins where a doc exists; absent docs leave the local copy intact.
@@ -23655,6 +23838,8 @@ function setSession({ emailHash, email, dataKey, sessionToken }) {
 window.bmSignOut = () => {
   // Flush any pending offsite backup before we drop the session token.
   if (typeof bmSnapshotNow === 'function') { try { bmSnapshotNow(); } catch (e) {} }
+  // Hide + reset the workspace gate so the next sign-in re-gates from scratch.
+  if (window.bmWorkspaceGate) { bmWorkspaceGate.dismiss('signout'); bmWorkspaceGate.reset(); }
   window.bmSession = null;
   try { localStorage.removeItem('bm_app_session'); } catch (e) {}
   // Drop decrypted thumbnail object URLs (they belong to this session's key).
@@ -23693,6 +23878,10 @@ try {
     try { if (saved.emailHash) localStorage.setItem('bm_last_user', saved.emailHash); } catch (e) {}
     window.bmSession = { ...saved, dataKey: null };
     window.dispatchEvent(new CustomEvent('bm-auth-changed', { detail: { signedIn: true, email: saved.email } }));
+    // Hold the gate up on boot too (the pre-paint IIFE already showed it). On a
+    // plain refresh there's no dataKey, so __bmDocRestorePromise won't run and
+    // the gate just waits on balance/storage/manifest/mode-init/thumbnails.
+    if (window.bmWorkspaceGate) setTimeout(function () { bmWorkspaceGate.run(); }, 0);
   }
 } catch (e) {}
 window.bmIsSignedIn = () => !!window.bmSession;
