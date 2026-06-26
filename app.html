@@ -18638,6 +18638,22 @@ async function bmThumbSweep() {
   if (typeof favourites === 'undefined') return;
   _bmThumbSweeping = true;
   try {
+    // ── WAIT FOR THE ZK DOC TO LOAD BEFORE READING favourites ──────────────────
+    // ROOT-CAUSE FIX for "thumbnails regenerate on every cache-clear login":
+    // bmThumbsOnUnlock() fires this sweep the instant the DATA KEY arrives — but
+    // that's BEFORE bmDocRestoreAll() has populated favourites with their stored
+    // thumbKeys. The sweep would then see `!thumbKey` on every image and
+    // regenerate them all, even though the keys were milliseconds away. Awaiting
+    // the in-flight doc restore here (the same handle bmSyncLibraryFromManifest
+    // awaits) guarantees favourites carries its durable thumb pointers before we
+    // decide what needs regenerating. The re-entrancy guard above is already set,
+    // so concurrent callers during this await correctly no-op.
+    if (window.__bmDocRestorePromise && typeof window.__bmDocRestorePromise.then === 'function') {
+      try { await window.__bmDocRestorePromise; } catch (_) {}
+    }
+    // Re-check session after the await (user could have signed out meanwhile).
+    const s0 = window.bmSession;
+    if (!s0 || !s0.sessionToken || !s0.dataKey) return;
     // Pick up favs with no thumb yet, OR a thumb encoded by an older version of
     // bmMakeThumbBytes (so a size/quality bump self-heals the back-catalogue).
     // A stale-version fav still needs a resolvable source to re-encode from; the
