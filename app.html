@@ -9107,7 +9107,32 @@ async function bmDocRestoreAll() {
     bmDocLoad(BM_DOC_KEYS.PROMPT_HISTORY),
   ])
 
-  apply(prompts,  v => { if (Array.isArray(v)) favourites = v })
+  // (B) MERGE, don't wholesale-replace. A wholesale `favourites = v` let a
+  // STALE ZK doc (e.g. one written while LOCKED, so autosave's bmDocSave
+  // no-op'd) silently drop images the server still holds — they'd flash in from
+  // the manifest then vanish on the next restore. Now the doc WINS for entries
+  // it contains (authoritative content/order), but any in-memory fav the doc
+  // LACKS is preserved — chiefly manifest-rehydrated placeholders and freshly
+  // generated images not yet flushed to the doc. Server-backed images can no
+  // longer be lost to a stale doc.
+  apply(prompts,  v => {
+    if (!Array.isArray(v)) return;
+    const docIds = new Set(v.map(f => f && f.id != null ? Number(f.id) : null).filter(x => x != null));
+    // Survivors: current favs the doc doesn't know about. Keep only those that
+    // are genuinely backed somewhere (server URL / inline bytes / thumb / Drive
+    // / a rehydrated manifest placeholder) so we never resurrect true deletions
+    // — a deleted fav is absent from BOTH the doc and (post-delete) the manifest.
+    const survivors = (Array.isArray(favourites) ? favourites : []).filter(f => {
+      if (!f || f.id == null) return false;
+      if (docIds.has(Number(f.id))) return false; // doc has it → doc wins
+      return !!(f.rehydrated || f.serverImageUrl || f.thumbKey || f.driveImageId
+                || (typeof f.imageData === 'string' && f.imageData));
+    });
+    favourites = survivors.length ? [...v, ...survivors] : v;
+    if (survivors.length) {
+      favourites.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
+  })
   apply(presets,  v => { if (Array.isArray(v)) customPresets = v })
   apply(models,   v => { if (Array.isArray(v)) customModels = v })
   apply(folders,  v => { if (Array.isArray(v)) libFolders = v })
@@ -17835,6 +17860,18 @@ async function bmSyncLibraryFromManifest() {
         if (typeof bmRepairFamilyLinks === 'function') bmRepairFamilyLinks();
       }
       if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+      // (A) Persist the whole favourites array — including manifest-rehydrated
+      // placeholders — back into the authoritative ZK PROMPTS doc. WITHOUT this,
+      // added placeholders lived only in localStorage; the next bmDocRestoreAll()
+      // wholesale-replaced `favourites` from the still-stale doc and silently
+      // dropped them mid-session (the "images appear then vanish on the next
+      // re-render" bug). Best-effort + gated on the DATA KEY inside bmDocSave:
+      // when unlocked the doc now carries them and they survive every reload.
+      // When LOCKED this no-ops, but Part B's merge restore keeps them anyway.
+      if (added && typeof bmDocSave === 'function' && typeof BM_DOC_KEYS !== 'undefined'
+          && typeof bmDocReady === 'function' && bmDocReady()) {
+        try { bmDocSave(BM_DOC_KEYS.PROMPTS, favourites); } catch (_) {}
+      }
       if (typeof driveSavePrompt === 'function' && patched) {
         // Push the healed thumb pointers back into the ZK doc too, so the NEXT
         // login restores them directly from the doc (no manifest round-trip).
@@ -18465,7 +18502,24 @@ function bmDocReady() {
 // true on success. Best-effort: never throws (callers keep their local copy).
 async function bmDocSave(docKey, obj) {
   try {
-    if (!bmDocReady()) return false; // locked → localStorage only, no remote write
+    if (!bmDocReady()) {
+      // (C) Surface the silent-loss vector once per session. If we're signed in
+      // (have a session token) but LOCKED (no DATA KEY), a prompts-doc save can't
+      // encrypt — so library changes only reach localStorage and won't survive a
+      // cache clear. Warn the user ONCE so they can unlock and re-sync, instead
+      // of discovering missing images later. Other doc keys stay silent.
+      try {
+        const s = window.bmSession;
+        if (docKey === BM_DOC_KEYS.PROMPTS && s && s.sessionToken && !s.dataKey
+            && !window.__bmLockedSaveWarned) {
+          window.__bmLockedSaveWarned = true;
+          if (typeof pbPasteToast === 'function') {
+            pbPasteToast('Library locked — unlock to sync new images across devices');
+          }
+        }
+      } catch (_) {}
+      return false; // locked → localStorage only, no remote write
+    }
     const sess = window.bmSession;
     const plain = new TextEncoder().encode(JSON.stringify(obj));
     const iv = crypto.getRandomValues(new Uint8Array(12));
