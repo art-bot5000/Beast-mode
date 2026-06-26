@@ -1099,6 +1099,12 @@ async function handler(req: Request): Promise<Response> {
         pinnedProtect: typeof body.pinnedProtect === "boolean" ? body.pinnedProtect : undefined,
         igSettings: (body.igSettings && typeof body.igSettings === "object" && !Array.isArray(body.igSettings))
           ? body.igSettings as Record<string, unknown> : undefined,
+        // Encrypted-thumbnail pointer (R2 key + public IV + mime/version). Empty
+        // string for thumbKey clears the pointer. ZK-safe: ciphertext stays in R2.
+        thumbKey: typeof body.thumbKey === "string" ? body.thumbKey : undefined,
+        thumbIv: typeof body.thumbIv === "string" ? body.thumbIv : undefined,
+        thumbMime: typeof body.thumbMime === "string" ? body.thumbMime : undefined,
+        thumbVer: typeof body.thumbVer === "number" ? body.thumbVer : undefined,
       });
       return json({ ok, patched: ok });
     } catch (e) {

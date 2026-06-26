@@ -86,6 +86,19 @@ interface ImgMeta {
   // Lets the token usage history panel link a ledger entry back to the saved
   // image even after rehydration on a new device (where fav.tokenRef is absent).
   tokenRef?: string;
+  // ── Encrypted-thumbnail pointer (durable restore) ───────────────────────────
+  // The thumbnail CIPHERTEXT lives in R2, AES-GCM-encrypted under the account
+  // DATA KEY (zero-knowledge — the server never sees plaintext). These fields are
+  // only the POINTER to it: the R2 object key, the public AES-GCM IV, and the
+  // mime/version. Storing them here does NOT break the ZK boundary (the IV is
+  // public by design; the key names an opaque blob). Registering them means the
+  // login MANIFEST can hand a rehydrated image its existing thumb so the client
+  // DECRYPTS it instead of re-decoding + re-encrypting the full original — the
+  // root cause of the "thumbnails regenerate + RAM spike on every fresh login".
+  thumbKey?: string;
+  thumbIv?: string;
+  thumbMime?: string;
+  thumbVer?: number;
 }
 
 // Hard cap on how many families a single source image records (FIFO — oldest
@@ -317,12 +330,12 @@ async function globalUsageBytes(): Promise<number> {
 // ── manifest for login re-hydration ──────────────────────────────────────────
 // Returns the lightweight index the client uses to rebuild its library on
 // login: favId + metadata, NO bytes. The client lazy-loads bytes via /api/img.
-export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string }>> {
+export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string; thumbKey?: string; thumbIv?: string; thumbMime?: string; thumbVer?: number }>> {
   const items = await listMeta(userHash);
   return items
     .map((x) => {
       const m = x.meta;
-      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string } =
+      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string; thumbKey?: string; thumbIv?: string; thumbMime?: string; thumbVer?: number } =
         { favId: x.favId, ext: m.ext, bytes: m.bytes, mime: m.mime, createdAt: m.createdAt };
       // Only attach upscale fields that are actually set, to keep the manifest lean.
       if (m.isUpscale) base.isUpscale = true;
@@ -340,6 +353,12 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
       // igSettings — lets Restore and the info panel work on rehydrated favs.
       if (m.igSettings && typeof m.igSettings === "object") base.igSettings = m.igSettings;
       if (typeof m.tokenRef === "string" && m.tokenRef) base.tokenRef = m.tokenRef;
+      // Encrypted-thumbnail pointer — lets the client decrypt the existing thumb
+      // on rehydration instead of regenerating it (the RAM-spike fix).
+      if (typeof m.thumbKey === "string" && m.thumbKey) base.thumbKey = m.thumbKey;
+      if (typeof m.thumbIv === "string" && m.thumbIv) base.thumbIv = m.thumbIv;
+      if (typeof m.thumbMime === "string" && m.thumbMime) base.thumbMime = m.thumbMime;
+      if (typeof m.thumbVer === "number" && m.thumbVer > 0) base.thumbVer = m.thumbVer;
       return base;
     })
     .sort((a, b) => b.createdAt - a.createdAt); // newest first, matches library order
@@ -355,7 +374,7 @@ export async function listManifest(userHash: string): Promise<Array<{ favId: str
 export async function patchImageMeta(
   userHash: string,
   favId: string,
-  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodesAppend?: string[]; pinnedProtect?: boolean; igSettings?: Record<string, unknown>; tokenRef?: string },
+  patch: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodesAppend?: string[]; pinnedProtect?: boolean; igSettings?: Record<string, unknown>; tokenRef?: string; thumbKey?: string; thumbIv?: string; thumbMime?: string; thumbVer?: number },
 ): Promise<boolean> {
   const id = favIdSafe(favId);
   const k = await kv();
@@ -378,6 +397,17 @@ export async function patchImageMeta(
     if (serialised.length <= 4096) next.igSettings = patch.igSettings;
   }
   if (typeof patch.tokenRef === "string" && patch.tokenRef) next.tokenRef = patch.tokenRef;
+  // Encrypted-thumbnail pointer (R2 key + public IV + mime/version). Persisting
+  // these lets the login manifest restore the thumb so the client decrypts the
+  // existing image rather than regenerating it. thumbKey === "" clears them.
+  if (patch.thumbKey === "") {
+    delete next.thumbKey; delete next.thumbIv; delete next.thumbMime; delete next.thumbVer;
+  } else {
+    if (typeof patch.thumbKey === "string" && patch.thumbKey) next.thumbKey = patch.thumbKey;
+    if (typeof patch.thumbIv === "string" && patch.thumbIv) next.thumbIv = patch.thumbIv;
+    if (typeof patch.thumbMime === "string" && patch.thumbMime) next.thumbMime = patch.thumbMime;
+    if (typeof patch.thumbVer === "number" && patch.thumbVer > 0) next.thumbVer = Math.round(patch.thumbVer);
+  }
   // i2i family: the OUTPUT records its own code + sources; a SOURCE appends the
   // new code to its membership list (merge + FIFO cap, so concurrent registers
   // from a batch accumulate rather than clobber).
