@@ -7,7 +7,7 @@ RUN npm install
 # The app is a single large HTML file plus the service worker, manifest, icons,
 # and the model-dropdown helper. (Unlike stckrm there are no separate JS modules
 # to minify on the frontend — the app logic lives inside the HTML.)
-COPY app.html app.css app.js admin.html sw.js manifest.json bm-auth-crypto.js ./
+COPY app.html app.css app.js admin.html sw.js manifest.json bm-auth-crypto.js bm-doc.js ./
 COPY icon192.png icon512.png ./
 COPY fonts/ ./fonts/
 
@@ -28,6 +28,7 @@ RUN mkdir -p public && \
     cp admin.html public/admin.html && \
     cp manifest.json public/manifest.json && \
     cp bm-auth-crypto.js public/bm-auth-crypto.js && \
+    cp bm-doc.js public/bm-doc.js && \
     cp icon192.png public/icon192.png && \
     cp icon512.png public/icon512.png && \
     cp -r fonts public/fonts

@@ -18554,117 +18554,19 @@ const BM_DOC_KEYS = {
   STYLES: 'styles',
 };
 
-// True when we have a session token AND the DATA KEY (i.e. unlocked). Doc
-// save/load both require the key — without it we can neither encrypt nor
-// decrypt, so callers fall back to localStorage only.
-function bmDocReady() {
-  const s = window.bmSession;
-  return !!(s && s.sessionToken && s.dataKey);
-}
-
-// Encrypt + PUT one doc to Fly. `obj` is any JSON-serialisable value. Returns
-// true on success. Best-effort: never throws (callers keep their local copy).
-async function bmDocSave(docKey, obj) {
-  try {
-    if (!bmDocReady()) {
-      // (C) Surface the silent-loss vector once per session. If we're signed in
-      // (have a session token) but LOCKED (no DATA KEY), a prompts-doc save can't
-      // encrypt — so library changes only reach localStorage and won't survive a
-      // cache clear. Warn the user ONCE so they can unlock and re-sync, instead
-      // of discovering missing images later. Other doc keys stay silent.
-      try {
-        const s = window.bmSession;
-        if (docKey === BM_DOC_KEYS.PROMPTS && s && s.sessionToken && !s.dataKey
-            && !window.__bmLockedSaveWarned) {
-          window.__bmLockedSaveWarned = true;
-          if (typeof pbPasteToast === 'function') {
-            pbPasteToast('Library locked — unlock to sync new images across devices');
-          }
-        }
-      } catch (_) {}
-      return false; // locked → localStorage only, no remote write
-    }
-    const sess = window.bmSession;
-    const plain = new TextEncoder().encode(JSON.stringify(obj));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ctBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sess.dataKey, plain);
-    const res = await fetch('/api/data/' + encodeURIComponent(docKey), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sess.sessionToken },
-      body: JSON.stringify({ iv: _b64FromBytes(iv), ct: _b64FromBytes(new Uint8Array(ctBuf)) }),
-    });
-    if (!res.ok) return false;
-    bmScheduleSnapshot(); // debounced offsite backup
-    return true;
-  } catch (e) { return false; }
-}
-
-// GET + decrypt one doc from Fly. Returns the parsed object, or null when
-// absent / locked / on any failure (caller falls back to localStorage).
-async function bmDocLoad(docKey) {
-  try {
-    if (!bmDocReady()) return null;
-    const sess = window.bmSession;
-    const res = await fetch('/api/data/' + encodeURIComponent(docKey), {
-      headers: { 'Authorization': 'Bearer ' + sess.sessionToken },
-    });
-    if (res.status === 404) return null; // no doc yet
-    if (!res.ok) return null;
-    const pd = await res.json().catch(() => null);
-    if (!pd || !pd.iv || !pd.ct) return null;
-    const iv = _bytesFromB64(pd.iv);
-    const ct = _bytesFromB64(pd.ct);
-    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sess.dataKey, ct);
-    return JSON.parse(new TextDecoder().decode(plainBuf));
-  } catch (e) { return null; }
-}
-
-// List the server-side doc index (docKey + ver + updatedAt, no ciphertext).
-async function bmDocList() {
-  try {
-    if (!bmDocReady()) return [];
-    const sess = window.bmSession;
-    const res = await fetch('/api/data', { headers: { 'Authorization': 'Bearer ' + sess.sessionToken } });
-    if (!res.ok) return [];
-    const pd = await res.json().catch(() => null);
-    return (pd && Array.isArray(pd.docs)) ? pd.docs : [];
-  } catch (e) { return []; }
-}
-
-// Restore one doc from its R2 snapshot into Fly (recovery). Returns true if a
-// snapshot existed and was restored server-side.
-async function bmDocRestoreFromR2(docKey) {
-  try {
-    if (!bmDocReady()) return false;
-    const sess = window.bmSession;
-    const res = await fetch('/api/data/' + encodeURIComponent(docKey) + '/restore', {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + sess.sessionToken },
-    });
-    if (!res.ok) return false;
-    const pd = await res.json().catch(() => ({}));
-    return !!pd.restored;
-  } catch (e) { return false; }
-}
-
-// ── Debounced R2 snapshot (decision 2: periodic, all-docs, NOT write-through) ─
-let _bmSnapTimer = null;
-function bmScheduleSnapshot() {
-  if (_bmSnapTimer) clearTimeout(_bmSnapTimer);
-  _bmSnapTimer = setTimeout(() => { _bmSnapTimer = null; bmSnapshotNow(); }, 90000); // 90s after last write
-}
-async function bmSnapshotNow() {
-  try {
-    if (!bmDocReady()) return;
-    const sess = window.bmSession;
-    await fetch('/api/data/snapshot', {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + sess.sessionToken }, keepalive: true,
-    });
-  } catch (e) { /* best-effort */ }
-}
-// Flush a pending snapshot on logout / tab close so a backup isn't lost.
-window.addEventListener('beforeunload', () => {
-  if (_bmSnapTimer) { clearTimeout(_bmSnapTimer); _bmSnapTimer = null; bmSnapshotNow(); }
-});
+// ── bm-doc.js bridge ─────────────────────────────────────────────────────────
+// The ZK doc transport (bmDocReady/Save/Load/List/RestoreFromR2 + the debounced
+// R2 snapshot) was extracted to ./bm-doc.js (library-subsystem-map.md §6.1).
+// That classic external script element runs in its own function scope, so it reads
+// these inline-scope helpers off `window`. Publish them here, once, after their
+// definitions (BM_DOC_KEYS above; _b64FromBytes/_bytesFromB64/pbPasteToast
+// defined earlier in this script). bm-doc.js publishes the doc functions back
+// onto `window`, so the ~36 bare call sites in this file keep resolving via the
+// global object unchanged.
+window.BM_DOC_KEYS    = BM_DOC_KEYS;
+window._b64FromBytes  = _b64FromBytes;
+window._bytesFromB64  = _bytesFromB64;
+window.pbPasteToast   = pbPasteToast;
 
 // Resolve the best thumbnail source for an <img>, async. Order:
 //   encrypted R2 thumb (if unlocked) -> local IndexedDB cache -> fav.imageData.
@@ -23899,6 +23801,14 @@ try {
 } catch (e) {}
 
 </script>
+
+<!-- ZK doc transport, extracted from the inline script above
+     (library-subsystem-map.md §6.1). Classic script: defines the doc functions
+     in its own scope and publishes them onto `window`. Loaded AFTER the inline
+     script so the helpers it reads (window._b64FromBytes/_bytesFromB64/
+     pbPasteToast/BM_DOC_KEYS) are already bridged. NOT type=module — it has no
+     imports and the ~36 call sites reference it as bare globals. -->
+<script src="./bm-doc.js"></script>
 
 
 <!-- ===== AUTH UI (Pass 1) ===== -->
