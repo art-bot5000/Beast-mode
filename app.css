@@ -74,6 +74,10 @@
   --border: rgba(255,255,255,0.07);
   --accent: #e8ff00;
   --accent2: #ff4d00;
+  /* Mid-grey backdrop for library-bar image thumbnails (Image Gen + Upscaler).
+     Replaces a harsh hardcoded #000 so letterboxed/contained thumbs sit on a
+     neutral grey instead of black. Themed: dark grey here, light grey below. */
+  --thumb-bg: #2a2f36;
   /* Theme colours — switched via .theme-X class on body */
 }
 /* ── INTERFACE COLOUR THEMES ─────────────────────────────────────── */
@@ -406,6 +410,7 @@ body.light {
   --text: #1a2332;
   --muted: #7a8a99;
   --radius: 3px;
+  --thumb-bg: #d8dde3;   /* light-mode grey for libbar image thumbnails */
 }
 body.light { background:var(--bg);color:var(--text); }
 body.light::before { background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.025) 2px,rgba(0,0,0,0.025) 4px); }
@@ -3354,7 +3359,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .up-libbar-thumb {
   position:relative; flex:0 0 auto; width:84px; height:84px;
   border-radius:6px; border:2px solid transparent; overflow:hidden;
-  cursor:pointer; background:#000;
+  cursor:pointer; background:var(--thumb-bg, #2a2f36);
 }
 .up-libbar-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .up-libbar-thumb.sel { border-color:var(--accent); }
@@ -3866,9 +3871,10 @@ body.up-group-modal-open { overflow:hidden; }
 .ig-results { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; position:relative; z-index:2; }
 .ig-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; position:relative; z-index:2; }
 .ig-card img { width:100%; display:block; cursor:zoom-in; }
+.ig-card.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
 .ig-card-meta { padding:8px 10px; font-size:11px; color:var(--muted); display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:space-between; }
-.ig-card-actions { display:flex; gap:4px; padding:0 10px 10px; flex-wrap:wrap; }
-.ig-card-actions .btn { font-size:10px; padding:4px 8px; }
+.ig-card-actions { display:flex; gap:6px; padding:8px 10px; justify-content:center; }
+.ig-card-actions .btn { font-size:13px; padding:5px 12px; line-height:1; }
 .ig-note { font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4; }
 .ig-gate { text-align:center; padding:60px 20px; }
 #igStatus { font-family:'IBM Plex Sans',sans-serif; font-size:12px; letter-spacing:1px; margin-top:10px; min-height:16px; }
@@ -3930,9 +3936,9 @@ body.up-group-modal-open { overflow:hidden; }
 .ig-libbar-thumb {
   position:relative; flex:0 0 auto; width:84px; height:84px;
   border-radius:6px; border:2px solid transparent; overflow:hidden;
-  cursor:pointer; background:#000;
+  cursor:pointer; background:var(--thumb-bg, #2a2f36);
 }
-.ig-libbar-thumb img { width:100%; height:100%; object-fit:contain; display:block; background:#000; }
+.ig-libbar-thumb img { width:100%; height:100%; object-fit:contain; display:block; background:var(--thumb-bg, #2a2f36); }
 .ig-libbar-thumb.sel { border-color:var(--accent); }
 .ig-libbar-thumb .ig-libbar-selnum {
   position:absolute; left:4px; top:4px;
@@ -4026,8 +4032,12 @@ body.up-group-modal-open { overflow:hidden; }
     grid-template-rows:auto; padding-bottom:0; height:calc(100vh - 16px);
     align-items:start;
   }
+  /* Gap between the preview stage's bottom edge and the top of the bottom image
+     picker, kept consistent across BOTH pin states so the boundary lands "just
+     above" the bar whether it's minimised (34px peek) or pinned (full height). */
+  #viewImagegen { --ig-stage-gap:12px; }
   #viewImagegen .ig-area-settings {
-    align-self:stretch; height:calc(100vh - 32px - var(--ig-libbar-h, 140px));
+    align-self:stretch; height:calc(100vh - 32px - var(--ig-stage-gap, 12px) - var(--ig-libbar-h, 140px));
     overflow-y:auto; min-height:0;
     scrollbar-width:thin; scrollbar-color:var(--border) transparent;
   }
@@ -4035,7 +4045,7 @@ body.up-group-modal-open { overflow:hidden; }
   #viewImagegen .ig-area-settings::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
   #viewImagegen .ig-area-rail {
-    align-self:stretch; height:calc(100vh - 32px - var(--ig-libbar-h, 140px));
+    align-self:stretch; height:calc(100vh - 32px - var(--ig-stage-gap, 12px) - var(--ig-libbar-h, 140px));
     display:flex; flex-direction:column; min-height:0;
   }
   #viewImagegen .ig-rail {
@@ -4047,8 +4057,9 @@ body.up-group-modal-open { overflow:hidden; }
   #viewImagegen .ig-area-center { display:block; align-self:start; padding-top:0; }
 
   #viewImagegen .ig-stage {
-    height:calc(100vh - 32px - var(--ig-libbar-h, 140px));
+    height:calc(100vh - 32px - var(--ig-stage-gap, 12px) - var(--ig-libbar-h, 140px));
     min-height:0; max-height:none;
+    transition:height .18s ease;
   }
 
   /* Fixed bottom library bar. */

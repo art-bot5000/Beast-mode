@@ -20398,81 +20398,41 @@ function igAddResultCard(image, model, prompt, tokens, batchSize) {
   // opens it full-size in a new tab.
   img.style.cursor = 'pointer';
   img.title = 'Click to preview · double-click to open';
-  img.onclick = () => { if (typeof igStageShow === 'function') igStageShow(image.url); };
+  img.onclick = () => {
+    if (typeof igStageShow === 'function') igStageShow(image.url);
+    try {
+      grid.querySelectorAll('.ig-card.sel').forEach(c => c.classList.remove('sel'));
+      card.classList.add('sel');
+    } catch (_) {}
+  };
   img.ondblclick = () => window.open(_openUrl, '_blank', 'noopener');
 
-  const meta = document.createElement('div');
-  meta.className = 'ig-card-meta';
-  const left = document.createElement('span');
-  left.textContent = model.label + (Number.isFinite(image.seed) ? (' \u00B7 seed ' + image.seed) : '');
-  const right = document.createElement('span');
-  if (tokens && typeof tokens.perImage === 'number') right.innerHTML = '<i class="ti ti-flask" aria-hidden="true"></i> ' + tokens.perImage;
-  meta.appendChild(left); meta.appendChild(right);
-
+  // Minimal action row: ONLY fullscreen (open) + download. The model/seed
+  // caption and the Upscale / Seed / Use-as-ref buttons were removed — they
+  // crowded the rail and overflowed once several images were generated. Those
+  // actions remain available from the center stage and the Library.
   const actions = document.createElement('div');
   actions.className = 'ig-card-actions';
 
-  // Open full-size in a new tab (single-click on the image now previews instead).
   const open = document.createElement('button');
   open.className = 'btn btn-ghost';
-  open.textContent = '\u2922';
+  open.textContent = '\u2922';                 // fullscreen / open glyph
   open.title = 'Open full size in a new tab';
   open.onclick = () => window.open(_openUrl, '_blank', 'noopener');
   actions.appendChild(open);
 
   const dl = document.createElement('button');
   dl.className = 'btn btn-ghost';
-  dl.textContent = '\u2B07 SAVE';
+  dl.textContent = '\u2B07';                    // download glyph (label removed)
+  dl.title = 'Download';
   dl.onclick = () => igDownload(image.url);
   actions.appendChild(dl);
 
-  // Upscale: send this generated image straight into the Upscaler.
-  const up = document.createElement('button');
-  up.className = 'btn btn-ghost';
-  up.innerHTML = '<i class="ti ti-arrows-maximize" aria-hidden="true"></i> UPSCALE';
-  up.title = 'Upscale this image';
-  up.onclick = () => {
-    if (typeof switchView === 'function') switchView('upscaler');
-    // Recover the library favId from the result URL (/api/img/<favId>) so the
-    // resulting upscale links to its original via upscaledFromId — otherwise it
-    // saves as an orphan and never groups under the original in the rail.
-    let upFavId = null;
-    const mu = (typeof image.url === 'string') ? image.url.match(/\/api\/img\/(\d+)/) : null;
-    if (mu) upFavId = Number(mu[1]);
-    setTimeout(() => {
-      if (typeof upLoadExternalImage === 'function') upLoadExternalImage(image.url, upFavId);
-    }, 0);
-  };
-  actions.appendChild(up);
-
-  if (Number.isFinite(image.seed) && model.seed) {
-    const rs = document.createElement('button');
-    rs.className = 'btn btn-ghost';
-    rs.textContent = '\u21BA SEED';
-    rs.title = 'Reuse this seed';
-    rs.onclick = () => { document.getElementById('igSeed').value = image.seed; igStatus('Seed ' + image.seed + ' loaded.', false); };
-    actions.appendChild(rs);
-  }
-  if (model.i2i) {
-    const ur = document.createElement('button');
-    ur.className = 'btn btn-ghost';
-    ur.textContent = '\u2295 USE AS REF';
-    ur.title = 'Use this image as a reference for the next generation';
-    ur.onclick = () => {
-      const mm = igModel();
-      if (!mm.i2i) { igStatus('\u2717 Current model does not support image-to-image.', true); return; }
-      if (igState.refs.length >= (mm.maxRefs || 1)) { igStatus('\u2717 Reference limit reached for this model.', true); return; }
-      igState.refs.push({ data: image.url });
-      igRenderAll();
-      igStatus('Reference added \u2014 generate to iterate.', false);
-    };
-    actions.appendChild(ur);
-  }
-
   card.appendChild(img);
-  card.appendChild(meta);
   card.appendChild(actions);
   grid.prepend(card);
+  // Newest card becomes the selected one.
+  try { grid.querySelectorAll('.ig-card.sel').forEach(c => c.classList.remove('sel')); card.classList.add('sel'); } catch (_) {}
 
   // Mirror the newest result into the large center stage.
   if (typeof igStageShow === 'function') igStageShow(image.url);
