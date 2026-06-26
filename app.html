@@ -17605,6 +17605,14 @@ function bmRefreshCurrentModeThumbs() {
     const v = (typeof currentView !== 'undefined') ? currentView : null;
     if (v === 'library' && typeof renderFavs === 'function') renderFavs();
     if (v === 'upscaler' && typeof upRenderLibBar === 'function') upRenderLibBar();
+    // Image Gen's bottom picker bar (igLibBar) is its equivalent of the library
+    // grid / upscaler bar. It was previously left out here, so after the gate
+    // lifted the bar stayed blank until a manual mode-switch re-rendered it
+    // (the "ig bottom bar blank" bug). Rebuilding it here re-creates every <img>
+    // fresh, which ALSO recovers any card that settled into the terminal
+    // "bm-thumb-missing" greyed-out state during the gate, before its server
+    // bytes were reachable (the "image greyed out" bug).
+    if (v === 'imagegen' && typeof igRenderLibBar === 'function') igRenderLibBar();
     // Kick the background thumb generator (it self-guards on session/dataKey).
     if (typeof bmThumbSweep === 'function') { try { bmThumbSweep(); } catch (_) {} }
   } catch (_) {}
@@ -18501,8 +18509,20 @@ async function bmThumbSweep() {
     // bmMakeThumbBytes (so a size/quality bump self-heals the back-catalogue).
     // A stale-version fav still needs a resolvable source to re-encode from; the
     // source-resolution step below skips it harmlessly if none is available.
+    // IMPORTANT: include favs whose only source is a durable server URL
+    // (serverImageUrl, or an imageData that IS an /api/img URL) — these are
+    // upscale outputs and re-hydrated images that carry NO inline bytes. The
+    // old `f.imageData &&` predicate excluded them, so upscales never got a
+    // thumbnail and fell back to a full authed fetch on every view (the
+    // "upscales take a few seconds, no thumbnail" bug). The source-resolution
+    // loop below already handles fetching their bytes from the server.
+    const _hasResolvableSrc = (f) => !!(f && (
+      f.imageData ||
+      f.serverImageUrl ||
+      (typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0)
+    ));
     const targets = favourites.filter((f) =>
-      f && f.imageData && (!f.thumbKey || (f.thumbVer || 0) < THUMB_VER));
+      _hasResolvableSrc(f) && (!f.thumbKey || (f.thumbVer || 0) < THUMB_VER));
     // Newest-first: the most recently created images get their thumbnails
     // generated first, so a user landing on Library/Upscaler sees their latest
     // work resolve immediately rather than waiting through the back-catalogue.
@@ -23686,8 +23706,8 @@ function bmIdentitySwitch(emailHash) {
 // the critical workspace data has loaded, then dismisses. "Critical" = ZK
 // settings incl. colour + accessibility (via the manifest sync, which awaits
 // __bmDocRestorePromise), token balance, pricing/tier, storage meter, the
-// library image manifest, both mode inits, and the first screen of thumbnails
-// for whichever mode the user lands on.
+// library image manifest, both mode inits, and the first 12 thumbnails of each
+// mode's picker (Library / Upscaler / Image Gen), warmed as a deduped union.
 //
 // Robustness: every step is wrapped so a rejection or hang can never trap the
 // user. A "Continue anyway" button appears after CONTINUE_AFTER ms; a hard
@@ -23696,9 +23716,11 @@ function bmIdentitySwitch(emailHash) {
 // only the first wins, the rest no-op.
 window.bmWorkspaceGate = (function () {
   var CONTINUE_AFTER = 3000;   // show "Continue anyway" after this
-  var HARD_TIMEOUT   = 8000;   // dismiss no matter what after this
-  var THUMB_TIMEOUT  = 4000;   // sub-budget for first-screen thumbnails
-  var FIRST_SCREEN   = 12;     // how many thumbnails count as "first screen"
+  var HARD_TIMEOUT   = 9000;   // dismiss no matter what after this (backstop)
+  var THUMB_TIMEOUT  = 5000;   // sub-budget for the per-mode thumbnail warm
+  var PER_MODE       = 12;     // warm the latest 12 PER mode (Library / Upscaler
+                               // / Image Gen) — ~36 total, deduped across the
+                               // heavy overlap between the three pickers.
 
   var running = false;
   var done = false;
@@ -23716,6 +23738,13 @@ window.bmWorkspaceGate = (function () {
     if (g) { g.classList.remove('show'); g.classList.remove('allow-continue'); }
     // A late re-render so the landing view reflects everything that loaded.
     try { if (typeof bmRefreshCurrentModeThumbs === 'function') bmRefreshCurrentModeThumbs(); } catch (_) {}
+    // Safety re-renders AFTER the gate lifts: the background thumb sweep keeps
+    // generating thumbnails and late server fetches keep resolving, so a card
+    // that settled into the terminal "missing" (greyed-out) state during the
+    // gate gets rebuilt fresh here and recovers. Rebuilding re-arms onerror and
+    // re-runs the resolve chain, which by now usually succeeds.
+    setTimeout(function () { try { if (typeof bmRefreshCurrentModeThumbs === 'function') bmRefreshCurrentModeThumbs(); } catch (_) {} }, 1200);
+    setTimeout(function () { try { if (typeof bmRefreshCurrentModeThumbs === 'function') bmRefreshCurrentModeThumbs(); } catch (_) {} }, 3500);
   }
 
   // Wrap a possibly-throwing, possibly-async step so it always settles and never
@@ -23730,6 +23759,14 @@ window.bmWorkspaceGate = (function () {
   // Decode the first screen of thumbnails for the landing mode, off-DOM, so the
   // grid is painted (not popping in) when the gate lifts. Bounded by its own
   // timeout; missing/locked images resolve immediately via bmApplyThumb.
+  // Warm the first screen of EACH mode's image picker — the latest 12 for
+  // Library, Upscaler, and Image Gen respectively — so whichever mode the user
+  // opens first is already painted (not popping in). The three pickers share the
+  // same image predicate and newest-first order today, so their first-12 sets
+  // overlap heavily; we compute each mode's slice and warm the DEDUPED UNION
+  // (~12–36 unique images) rather than 36 from the top, which both honours the
+  // per-mode intent and avoids redundant fetches if the predicates ever diverge.
+  // All bounded by THUMB_TIMEOUT; locked/missing images resolve immediately.
   function firstScreenThumbs() {
     return new Promise(function (resolve) {
       var settled = false;
@@ -23738,11 +23775,37 @@ window.bmWorkspaceGate = (function () {
       try {
         if (typeof favourites === 'undefined' || !Array.isArray(favourites) || !favourites.length
             || typeof bmApplyThumb !== 'function') { clearTimeout(budget); return finish(); }
-        var list = favourites
-          .filter(function (f) { return f && (f.imageData || f.thumbKey || f.serverImageUrl); })
-          .slice(0, FIRST_SCREEN);
-        if (!list.length) { clearTimeout(budget); return finish(); }
-        Promise.all(list.map(function (f) {
+
+        // Image predicate shared by all three pickers (igRenderLibBar /
+        // upRenderLibBar / renderLibrary's grid).
+        var hasImg = function (f) { return f && (f.imageData || f.thumbKey || f.serverImageUrl); };
+        // Newest-first, matching every picker's default sort.
+        var byNewest = function (a, b) { return ((b.createdAt || b.id) || 0) - ((a.createdAt || a.id) || 0); };
+
+        // Per-mode first-12 slices:
+        //  • Library   — all images (the __all__ grid skips prompts).
+        //  • Upscaler  — all images (its bar shows every saved image).
+        //  • Image Gen — all images (timeline view) for the typical landing.
+        // These predicates are identical today, but kept separate so a future
+        // mode-specific filter (e.g. Image-Gen showing only generated/uploaded)
+        // is a one-line change here.
+        var allImages = favourites.filter(hasImg).slice().sort(byNewest);
+        var library  = allImages.slice(0, PER_MODE);
+        var upscaler = allImages.slice(0, PER_MODE);
+        var imagegen = allImages.slice(0, PER_MODE);
+
+        // Deduped union by fav id, preserving newest-first order.
+        var seen = {};
+        var union = [];
+        [library, upscaler, imagegen].forEach(function (set) {
+          set.forEach(function (f) {
+            var k = String(f.id);
+            if (!seen[k]) { seen[k] = true; union.push(f); }
+          });
+        });
+        if (!union.length) { clearTimeout(budget); return finish(); }
+
+        Promise.all(union.map(function (f) {
           var img = new Image();           // off-DOM warm of the resolve chain
           return step(function () { return bmApplyThumb(img, f); });
         })).then(function () { clearTimeout(budget); finish(); });
@@ -23762,25 +23825,42 @@ window.bmWorkspaceGate = (function () {
     }, CONTINUE_AFTER);
     hardTimer = setTimeout(function () { dismiss('timeout'); }, HARD_TIMEOUT);
 
-    // Kick off the critical loaders. These are the same loads the individual
+    // PHASE 1 — data loaders only. These are the same loads the individual
     // bm-auth-changed handlers trigger; calling them here is safe (each guards
-    // on session and most are memoised / idempotent), and lets us AWAIT them
-    // instead of letting them pop in uncoordinated.
-    var critical = [
+    // on session, most are memoised / idempotent) and lets us AWAIT them.
+    // CRUCIALLY this no longer includes igInit/upInit: those render each mode's
+    // image bar, and running them in parallel with the manifest sync painted the
+    // bar against an empty `favourites` (the blank Image-Gen bar bug). Mode init
+    // now runs in PHASE 2, after favourites has hydrated.
+    var dataLoaders = [
       // ZK settings (colour + a11y) + library manifest. The manifest sync awaits
-      // __bmDocRestorePromise internally, so this one promise covers both.
+      // __bmDocRestorePromise internally, so this one promise covers both, and
+      // it's what populates `favourites` from the server.
       step(function () { return (typeof bmSyncLibraryFromManifest === 'function') ? bmSyncLibraryFromManifest() : null; }),
       step(function () { return (typeof window.__bmDocRestorePromise !== 'undefined') ? window.__bmDocRestorePromise : null; }),
       step(function () { return (typeof bmFetchBalance === 'function') ? bmFetchBalance() : null; }),
       step(function () { return (typeof bmFetchPricing === 'function') ? bmFetchPricing() : null; }),
       step(function () { return (typeof bmRenderStorageMeter === 'function') ? bmRenderStorageMeter() : null; }),
-      step(function () { if (typeof igInit === 'function') igInit(); }),
-      step(function () { if (typeof upInit === 'function') upInit(); }),
     ];
 
-    Promise.all(critical)
-      .then(function () { return firstScreenThumbs(); })  // images last — after favourites hydrate
-      .then(function () { dismiss('ready'); })
+    Promise.all(dataLoaders)
+      // PHASE 2 — favourites is now hydrated. Initialise both modes so their
+      // controls + image bars build against the real, populated library.
+      .then(function () {
+        return Promise.all([
+          step(function () { if (typeof igInit === 'function') igInit(); }),
+          step(function () { if (typeof upInit === 'function') upInit(); }),
+        ]);
+      })
+      // PHASE 3 — warm the latest 36 thumbnails so the landing grid/bar is
+      // painted (not popping in) when the gate lifts.
+      .then(function () { return firstScreenThumbs(); })
+      // PHASE 4 — one explicit render of the landing mode's image surface so the
+      // freshly-warmed (now cached) thumbnails show immediately, then dismiss.
+      .then(function () {
+        try { if (typeof bmRefreshCurrentModeThumbs === 'function') bmRefreshCurrentModeThumbs(); } catch (_) {}
+        dismiss('ready');
+      })
       .catch(function () { dismiss('ready'); });
   }
 
