@@ -45,4 +45,4 @@ primary_region = 'lhr'
   # Google's response is several MB resident at once; 256mb OOM-killed the
   # process (Exit 137) mid-request, surfacing to the client as a 502.
   size = 'shared-cpu-1x'
-  memory = '512mb'
+  memory = '1024mb'
