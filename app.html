@@ -19668,11 +19668,28 @@ async function bmSaveUploadToLibrary(origDataUri, previewDataUri, info) {
           fav.serverImageUrl = pd.url;
           if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
           if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+          // DIAG (temporary): confirm the durable store actually landed.
+          if (typeof pbPasteToast === 'function') pbPasteToast('Upload stored \u2713 ' + pd.url);
         } else if (pd && pd.code === 'storage_full_user') {
-          if (typeof bmToast === 'function') bmToast('Storage full — upload saved locally only.', true);
+          if (typeof pbPasteToast === 'function') pbPasteToast('Storage full — upload saved locally only.');
+        } else {
+          // DIAG (temporary): the durable store FAILED. Surface why instead of
+          // swallowing it, so a missing upload after refresh is explained.
+          if (typeof pbPasteToast === 'function') {
+            pbPasteToast('Upload NOT stored \u2014 HTTP ' + res.status
+              + (pd && (pd.code || pd.error) ? ' (' + (pd.code || pd.error) + ')' : ''));
+          }
+        }
+      } else {
+        // DIAG (temporary): the store block was skipped entirely.
+        if (typeof pbPasteToast === 'function') {
+          pbPasteToast('Upload store skipped \u2014 ' + (!tok ? 'no session token' : 'source not a data: URI'));
         }
       }
-    } catch (e) { /* durable push best-effort; local copy still works */ }
+    } catch (e) {
+      // DIAG (temporary): network/JS error in the durable push.
+      if (typeof pbPasteToast === 'function') pbPasteToast('Upload store error \u2014 ' + (e && e.message ? e.message : 'unknown'));
+    }
     // Register lineage + isUpload on the server record (now that the imgmeta
     // record exists from storeImage above, this patch succeeds and the Uploads
     // folder + i2i family membership reform cross-device).
