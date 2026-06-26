@@ -17683,16 +17683,46 @@ async function bmSyncLibraryFromManifest() {
     // bare placeholder here.
     const have = new Set();
     const haveIds = new Set();
+    const byId = new Map();   // id → existing fav, so the manifest can PATCH (not
+                              // just skip) an already-known fav that's missing a
+                              // durable field it now carries (e.g. thumb pointer).
     for (const f of favourites) {
       if (!f) continue;
       if (f.serverImageUrl) have.add(f.serverImageUrl);
-      if (f.id != null) haveIds.add(Number(f.id));
+      if (f.id != null) { haveIds.add(Number(f.id)); byId.set(Number(f.id), f); }
     }
     let added = 0;
+    let patched = 0;
     for (const m of images) {
       const url = '/api/img/' + m.favId;
       const mid = Number(m.favId);
-      if (have.has(url) || (Number.isFinite(mid) && haveIds.has(mid))) continue;
+      const known = (have.has(url) || (Number.isFinite(mid) && haveIds.has(mid)));
+      if (known) {
+        // Already in favourites (from the authoritative ZK doc). DON'T replace it
+        // with a bare placeholder — but DO heal a missing/stale thumb pointer
+        // from the manifest. This is the fix for "thumbnails still regenerate on
+        // the 2nd cache-clear login": the server had the registered pointer, but
+        // the ZK-doc fav loaded WITHOUT it, and the old code skipped it here so
+        // the pointer never reached the fav — leaving the sweep to regenerate.
+        // Now the durable server pointer flows back onto the existing fav, the
+        // sweep's `!thumbKey` filter passes, and no regeneration happens.
+        const ex = Number.isFinite(mid) ? byId.get(mid) : null;
+        if (ex && typeof m.thumbKey === 'string' && m.thumbKey) {
+          const needsThumb = !ex.thumbKey || (ex.thumbVer || 0) < (m.thumbVer || 0);
+          if (needsThumb) {
+            ex.thumbKey = m.thumbKey;
+            if (typeof m.thumbIv === 'string') ex.thumbIv = m.thumbIv;
+            if (typeof m.thumbMime === 'string') ex.thumbMime = m.thumbMime;
+            if (typeof m.thumbVer === 'number') ex.thumbVer = m.thumbVer;
+            ex._thumbPatched = true;  // flag for the ZK-doc resave below
+            // Drop any stale decrypted blob so bmThumbDecrypt re-fetches the
+            // restored thumb rather than returning a cached miss.
+            try { if (typeof _thumbUrlCache !== 'undefined' && _thumbUrlCache[ex.id]) { URL.revokeObjectURL(_thumbUrlCache[ex.id]); delete _thumbUrlCache[ex.id]; } } catch (_) {}
+            patched++;
+          }
+        }
+        continue;
+      }
       // Lightweight placeholder fav — bmApplyThumb lazy-loads the bytes. Prompt
       // text isn't here (it lives in the ZK store / Drive-synced prompt files);
       // a re-hydrated image shows with no prompt until that side syncs, which is
@@ -17759,17 +17789,32 @@ async function bmSyncLibraryFromManifest() {
       favourites.push(fav);
       added++;
     }
-    if (added) {
-      favourites.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    // Persist + re-render if we ADDED placeholders OR PATCHED thumb pointers onto
+    // existing favs. The patched case is the 2nd-login thumbnail-restore fix:
+    // without saving here, the healed pointer would live only in memory and be
+    // lost on the next reload, regenerating the thumbnail again.
+    if (added || patched) {
+      if (added) favourites.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       // The manifest is what finally delivers familySrcIds/familyCode (and
       // upscale lineage) after a fresh login or cache clear. Re-run the
       // idempotent repairs HERE, the moment that data lands, so families and
       // upscale groups are stitched before the grid renders — instead of
       // waiting for some incidental later trigger to re-run them (the cause of
       // the "family view missing for a while after sign-in" lag).
-      if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
-      if (typeof bmRepairFamilyLinks === 'function') bmRepairFamilyLinks();
+      if (added) {
+        if (typeof bmRepairUpscaleLinks === 'function') bmRepairUpscaleLinks();
+        if (typeof bmRepairFamilyLinks === 'function') bmRepairFamilyLinks();
+      }
       if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+      if (typeof driveSavePrompt === 'function' && patched) {
+        // Push the healed thumb pointers back into the ZK doc too, so the NEXT
+        // login restores them directly from the doc (no manifest round-trip).
+        try {
+          for (const f of favourites) {
+            if (f && f.rehydrated !== true && f.thumbKey && f._thumbPatched) { driveSavePrompt(f); delete f._thumbPatched; }
+          }
+        } catch (_) {}
+      }
       if (typeof renderFavs === 'function') renderFavs();
       if (typeof updateLibBadge === 'function') updateLibBadge();
     }
