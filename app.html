@@ -3362,6 +3362,7 @@ const VIRTUAL_FOLDERS   = [
   { id:'__images__',  name:'🖼 Generated Images', color:'#38b6ff',  virtual:true },
   { id:'__i2i__',     name:'⇄ Image 2 Image',     color:'#ff7ac6',  virtual:true },
   { id:'__upscales__',name:'✦ Upscales',          color:'#caff00',  virtual:true },
+  { id:'__batchupscales__',name:'❖ Batch Upscales', color:'#7cffd4', virtual:true },
   { id:'__uploads__', name:'⤓ Uploads',           color:'#9d7bff',  virtual:true },
   { id:'__prompts__', name:'⬡ Prompts',           color:'var(--accent)', virtual:true },
 ]
@@ -6586,6 +6587,7 @@ function renderLibrary() {
   else if (libActiveFolderId === '__images__')   items = items.filter(f => bmFavKind(f) === 'image')
   else if (libActiveFolderId === '__i2i__')      items = items.filter(f => bmFavIsI2I(f))
   else if (libActiveFolderId === '__upscales__') items = items.filter(f => bmFavKind(f) === 'upscale')
+  else if (libActiveFolderId === '__batchupscales__') items = items.filter(f => !!f.batchUpscale)
   else if (libActiveFolderId === '__uploads__')  items = items.filter(f => !!f.isUpload)
   else if (libActiveFolderId === '__prompts__')  items = items.filter(f => bmFavKind(f) === 'prompt')
   else if (!String(libActiveFolderId).startsWith('__')) items = items.filter(f => f.folderId === libActiveFolderId)
@@ -7429,6 +7431,8 @@ function renderFolderSidebar() {
         ? favourites.filter(f => bmFavIsI2I(f)).length
       : folder.id === '__upscales__'
         ? favourites.filter(f => bmFavKind(f) === 'upscale').length
+      : folder.id === '__batchupscales__'
+        ? favourites.filter(f => !!f.batchUpscale).length
       : folder.id === '__uploads__'
         ? favourites.filter(f => !!f.isUpload).length
       : folder.id === '__prompts__'
@@ -17093,6 +17097,7 @@ const bmQueue = (() => {
         if (_mu) _srvFavId = Number(_mu[1]);
         const upExtra = {
           isUpscale: true,
+          batchUpscale: !!meta.batchUpscale,
           serverFavId: _srvFavId,
           lineage: (typeof im.lineage === 'string' ? im.lineage : null),
           upscaledFromId: _srcFavId,
@@ -18106,6 +18111,10 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
       // generation saves and legacy favourites omit them and render as plain
       // non-upscaled images.
       isUpscale: !!(extra && extra.isUpscale),
+      // True only for upscales produced as part of a multi-image (2+) batch run.
+      // Drives membership of the "Batch upscales" virtual folder; otherwise these
+      // favs behave exactly like any other upscale (also in the Upscales folder).
+      batchUpscale: !!(extra && extra.batchUpscale),
       upscaledFromId: (extra && extra.upscaledFromId != null) ? extra.upscaledFromId : null,
       upscaleMeta: (extra && extra.upscaleMeta) ? extra.upscaleMeta : null,
       outW: (extra && typeof extra.outW === 'number') ? extra.outW : null,
@@ -18723,6 +18732,7 @@ async function bmThumbSweep() {
         if (fid === '__images__') return (typeof bmFavKind === 'function') && bmFavKind(f) === 'image';
         if (fid === '__i2i__') return (typeof bmFavIsI2I === 'function') && bmFavIsI2I(f);
         if (fid === '__upscales__') return (typeof bmFavKind === 'function') && bmFavKind(f) === 'upscale';
+        if (fid === '__batchupscales__') return !!f.batchUpscale;
         if (fid === '__uploads__') return !!f.isUpload;
         if (fid === '__prompts__') return (typeof bmFavKind === 'function') && bmFavKind(f) === 'prompt';
         if (!String(fid).startsWith('__')) return f.folderId === fid;
@@ -21077,6 +21087,9 @@ const upState = {
   srcData: null,       // data URI (upload/library) or URL string (url tab)
   srcIsUrl: false,
   srcFavId: null,      // fav id when source is a library/bottom-bar pick (else null)
+  batchIds: new Set(), // ticked fav ids for a batch upscale (max BATCH_MAX); when
+                       // size>=2 the run fans out into N independent queue jobs
+                       // sharing the current model + settings.
   srcW: 0,             // natural width of the loaded source (0 = unknown)
   srcH: 0,             // natural height of the loaded source
   srcMp: 0,            // source megapixels (w*h/1e6), 0 = unknown
@@ -21093,6 +21106,10 @@ const upState = {
 // upscaled dimensions; we use this to disable factor choices that would exceed
 // it. Conservative single value covering the curated diffusion upscalers.
 const UP_MAX_SIDE = 8192;
+
+// Maximum images selectable for a single batch upscale. Each ticked image runs
+// as its own queue job (shared model + settings), so this caps the fan-out.
+const BATCH_MAX = 10;
 
 function upInit() {
   const signedIn = !!(window.bmSession && window.bmSession.sessionToken);
@@ -21372,7 +21389,18 @@ function upUpdateCostHint() {
   const m = upModel();
   if (!btn || upState.busy || !m) return;
   const tok = upCurrentTokenCost();
-  btn.innerHTML = bmRunBtnLabel('UPSCALE', (tok != null) ? tok : null);
+  const n = (upState.batchIds && upState.batchIds.size) ? upState.batchIds.size : 0;
+  if (n >= 2 && tok != null) {
+    // Batch label: "BATCH · <flask> X × Y = Z" where X = image count, Y = per-
+    // image token cost for the current model + settings, Z = X×Y total. The flask
+    // glyph stands in for the token logo (same icon used by the single-run cost).
+    const total = +(tok * n).toFixed(1);
+    btn.innerHTML = 'BATCH \u00B7 <span class="run-cost">'
+      + '<i class="ti ti-flask" aria-hidden="true"></i> '
+      + n + ' \u00D7 ' + tok + ' = ' + total + '</span>';
+  } else {
+    btn.innerHTML = bmRunBtnLabel('UPSCALE', (tok != null) ? tok : null);
+  }
   upSyncMobileRunBtn();
 }
 
@@ -21578,7 +21606,9 @@ function upRenderLibBar() {
   if (hint) hint.textContent = withImg.length + ' image' + (withImg.length === 1 ? '' : 's');
   withImg.forEach(f => {
     const cell = document.createElement('div');
-    cell.className = 'up-libbar-thumb' + (upState.srcFavId === f.id ? ' sel' : '');
+    cell.className = 'up-libbar-thumb'
+      + (upState.srcFavId === f.id ? ' sel' : '')
+      + (upState.batchIds.has(f.id) ? ' ticked' : '');
     cell.dataset.favId = f.id;
     const img = document.createElement('img');
     img.alt = f.title || ''; img.loading = 'lazy';
@@ -21605,6 +21635,24 @@ function upRenderLibBar() {
       cell.appendChild(upl);
     }
     cell.onclick = () => { upSelectFav(f); };
+    // Batch tick — top-right checkbox. Ticking selects this image into the batch
+    // (max BATCH_MAX). Clicking the tick must NOT trigger the cell's select-into-
+    // preview onclick, so it stops propagation. When exactly one image is ticked
+    // it also drives the preview (a single tick == a single select).
+    const tick = document.createElement('input');
+    tick.type = 'checkbox';
+    tick.className = 'up-libbar-tick';
+    tick.checked = upState.batchIds.has(f.id);
+    tick.title = 'Select for batch upscale';
+    tick.setAttribute('aria-label', 'Select ' + (f.title || 'image') + ' for batch upscale');
+    // Disable unticked boxes once the cap is reached so the ceiling is obvious.
+    if (!tick.checked && upState.batchIds.size >= BATCH_MAX) tick.disabled = true;
+    tick.onclick = (e) => { e.stopPropagation(); };
+    tick.onchange = (e) => {
+      e.stopPropagation();
+      upToggleBatch(f, tick.checked);
+    };
+    cell.appendChild(tick);
     // Mobile: the SELECTED (enlarged) thumb is the gesture target for opening
     // the connected-upscale group modal — swipe-up OR long-press. A plain tap
     // still selects (handled above); the gesture handlers guard against firing
@@ -21618,6 +21666,61 @@ function upRenderLibBar() {
     const sel = bar.querySelector('.up-libbar-thumb.sel');
     if (sel) requestAnimationFrame(() => sel.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }));
   }
+  upUpdateBatchUI();
+}
+
+// ── Batch selection ──────────────────────────────────────────────────────────
+// Add/remove a fav from the batch set (capped at BATCH_MAX). When exactly one
+// image ends up ticked, it also drives the preview (a single tick behaves like a
+// single select). Refreshes the bar's tick/disabled states and the cost label.
+function upToggleBatch(f, on) {
+  if (!f) return;
+  if (on) {
+    if (upState.batchIds.size >= BATCH_MAX && !upState.batchIds.has(f.id)) {
+      // Cap hit — revert the just-checked box and flag it on the status line.
+      const bar = document.getElementById('upLibBar');
+      const box = bar && bar.querySelector('.up-libbar-thumb[data-fav-id="' + f.id + '"] .up-libbar-tick');
+      if (box) box.checked = false;
+      upStatus('\u2717 Up to ' + BATCH_MAX + ' images can be batched at once.', true);
+      return;
+    }
+    upState.batchIds.add(f.id);
+  } else {
+    upState.batchIds.delete(f.id);
+  }
+  // Single tick == single select: load that one image into the preview/source.
+  if (upState.batchIds.size === 1) {
+    const onlyId = upState.batchIds.values().next().value;
+    const onlyFav = (typeof favourites !== 'undefined')
+      ? favourites.find(x => x && x.id === onlyId) : null;
+    if (onlyFav && onlyFav.id !== upState.srcFavId && typeof upSelectFav === 'function') {
+      upSelectFav(onlyFav);
+    }
+  }
+  upUpdateBatchUI();
+}
+
+// Refresh per-thumb tick state (checked + cap-disable + .ticked border) without a
+// full re-render, then update the Upscale button label (batch vs single cost).
+function upUpdateBatchUI() {
+  const bar = document.getElementById('upLibBar');
+  if (bar) {
+    const capped = upState.batchIds.size >= BATCH_MAX;
+    bar.querySelectorAll('.up-libbar-thumb').forEach(cell => {
+      const id = Number(cell.dataset.favId);
+      const on = upState.batchIds.has(id) || upState.batchIds.has(cell.dataset.favId);
+      cell.classList.toggle('ticked', on);
+      const box = cell.querySelector('.up-libbar-tick');
+      if (box) { box.checked = on; box.disabled = (!on && capped); }
+    });
+  }
+  if (typeof upUpdateCostHint === 'function') upUpdateCostHint();
+}
+
+// Clear the whole batch selection (used by Reset / Clear-source).
+function upClearBatch() {
+  if (upState.batchIds && upState.batchIds.size) upState.batchIds.clear();
+  if (typeof upUpdateBatchUI === 'function') upUpdateBatchUI();
 }
 
 // Attach swipe-up + double-tap recognisers to a selected bottom-bar thumb.
@@ -23050,6 +23153,8 @@ function upClearSource(keepUrlText) {
   // Drop bottom-bar highlight.
   const bar = document.getElementById('upLibBar');
   if (bar) bar.querySelectorAll('.up-libbar-thumb.sel').forEach(x => x.classList.remove('sel'));
+  // Clearing the source also drops any batch tick selection (fresh start).
+  if (typeof upClearBatch === 'function') upClearBatch();
   if (!keepUrlText) {
     const u = document.getElementById('upSrcUrlInput'); if (u) u.value = '';
     document.querySelectorAll('#upLibraryGrid img.sel').forEach(x => x.classList.remove('sel'));
@@ -23192,7 +23297,217 @@ function bmQueueJump() {
 window.bmQueueJump = bmQueueJump;
 
 // ── Run ─────────────────────────────────────────────────────────────────────
+// Build the /api/upscale request body for ONE source. Pulls model params from
+// the shared settings (model kind, MP/factor/resolution, prompt/seed/etc.) and
+// stamps the per-source lineage + dimensions. srcW/srcH are the measured source
+// size (Gemini aspect-ratio derivation); srcFavId is the parent fav id (lineage
+// linkage). Extracted from upRun so the single-run and batch paths build bodies
+// identically.
+function upBuildBody(m, inputImage, srcW, srcH, srcFavId) {
+  const body = { model: m.id, inputImage: inputImage, outputFormat: upState.format };
+  if (m.kind === 'megapixels') {
+    body.targetMegapixels = upState.mp;
+    if (document.getElementById('upEnhance').checked) body.enhanceDetails = true;
+    if (document.getElementById('upRealism').checked) body.realism = true;
+  } else if (m.kind === 'gemini-upscale') {
+    body.resolution = upState.resolution;
+    if (srcW > 0 && srcH > 0) {
+      const supported = ['1:1','3:2','2:3','4:3','3:4','4:5','5:4','16:9','9:16','21:9'];
+      const ratio = srcW / srcH;
+      const nearest = supported.reduce((best, ar) => {
+        const [aw2, ah2] = ar.split(':').map(Number);
+        return Math.abs(aw2/ah2 - ratio) < Math.abs(best[0]/best[1] - ratio) ? ar.split(':').map(Number) : best;
+      }, [1, 1]);
+      body.aspectRatio = Array.isArray(nearest) ? nearest.join(':') : '1:1';
+    } else {
+      body.aspectRatio = '1:1';
+    }
+    const pp = (document.getElementById('upPrompt').value || '').trim();
+    if (pp) body.positivePrompt = pp;
+  } else {
+    body.upscaleFactor = upState.factor;
+    const pp = (document.getElementById('upPrompt').value || '').trim();
+    const np = (document.getElementById('upNegative').value || '').trim();
+    if (pp) body.positivePrompt = pp;
+    if (np) body.negativePrompt = np;
+    const st = parseInt(document.getElementById('upSteps').value, 10);
+    const cf = parseFloat(document.getElementById('upCfg').value);
+    const seedUpEl = document.getElementById('upSeed');
+    let sd = parseInt(seedUpEl.value, 10);
+    if (!Number.isFinite(sd) || sd < 0) {
+      // Per-source random seed when blank. In a batch each image gets its OWN
+      // random seed (different grain), matching how single runs behave per click.
+      sd = Math.floor(Math.random() * 2147483647);
+    }
+    if (Number.isFinite(st) && st >= 1 && st <= 60) body.steps = st;
+    if (Number.isFinite(cf) && cf >= 0 && cf <= 20) body.CFGScale = cf;
+    body.seed = sd;
+    if (m.sampler && Number.isFinite(m.sampler.strength)) body.strength = m.sampler.strength;
+  }
+  // Durable grouping: child lineage = parent.lineage + "-N"; resolve from srcFavId.
+  try {
+    const parentFav = (srcFavId != null && typeof favourites !== 'undefined')
+      ? favourites.find(x => x && Number(x.id) === Number(srcFavId)) : null;
+    if (parentFav) {
+      if (!(typeof parentFav.lineage === 'string' && parentFav.lineage) && typeof bmNewLineageRoot === 'function') {
+        parentFav.lineage = bmNewLineageRoot();
+      }
+      if (typeof parentFav.lineage === 'string' && parentFav.lineage && typeof bmNextChildLineage === 'function') {
+        body.lineage = bmNextChildLineage(parentFav.lineage);
+      }
+      body.upscaledFromId = String(srcFavId);
+      if (typeof parentFav.lineage === 'string' && parentFav.lineage
+          && Number.isFinite(Number(parentFav.id)) && typeof bmRegisterUpscaleMeta === 'function') {
+        try { bmRegisterUpscaleMeta(parentFav.id, { lineage: parentFav.lineage }); } catch (_) {}
+      }
+    }
+    if (typeof bmNewLineageRoot === 'function' && !body.lineage) body.lineage = bmNewLineageRoot();
+  } catch (_) {}
+  return body;
+}
+
+// Build the enqueue meta for ONE upscale job from its body + source. isBatch
+// stamps batchUpscale so the result lands in the "Batch upscales" virtual folder
+// (set only for true 2+ batches).
+function upBuildMeta(m, body, inputImage, srcFavId, srcData, srcW, srcH, isBatch) {
+  const label = 'Upscaled \u00B7 ' + m.label + (
+    m.kind === 'megapixels' ? (' \u00B7 ' + upState.mp + 'MP') :
+    m.kind === 'gemini-upscale' ? (' \u00B7 ' + upState.resolution) :
+    (' \u00B7 ' + upState.factor + '\u00D7')
+  );
+  return {
+    prompt: label, fullText: '', model: m.id,
+    srcFavId: srcFavId,
+    upKind: m.kind,
+    tokens: upCurrentTokenCost(),
+    batchUpscale: !!isBatch,
+    upFactor: (m.kind === 'megapixels' || m.kind === 'gemini-upscale') ? null : upState.factor,
+    upMp: (m.kind === 'megapixels') ? upState.mp : null,
+    srcImageData: inputImage || srcData || null,
+    srcW: srcW || null,
+    srcH: srcH || null,
+    upParams: {
+      outputFormat: body.outputFormat || null,
+      upscaleFactor: (body.upscaleFactor != null) ? body.upscaleFactor : null,
+      targetMegapixels: (body.targetMegapixels != null) ? body.targetMegapixels : null,
+      positivePrompt: body.positivePrompt || null,
+      negativePrompt: body.negativePrompt || null,
+      steps: (body.steps != null) ? body.steps : null,
+      CFGScale: (body.CFGScale != null) ? body.CFGScale : null,
+      seed: (body.seed != null) ? body.seed : null,
+      strength: (body.strength != null) ? body.strength : null,
+      enhanceDetails: body.enhanceDetails || null,
+      realism: body.realism || null,
+    },
+  };
+}
+
+// Resolve a fav to the input the upscaler accepts: a data URI or public URL,
+// uploaded to R2 when it's data: (keeps the multi-MB blob out of the job body).
+async function upResolveSourceForFav(fav) {
+  let src = fav.imageData;
+  if (!src || (typeof src === 'string' && src.indexOf('/api/img/') === 0)) {
+    const serverUrl = fav.serverImageUrl
+      || ((typeof src === 'string' && src.indexOf('/api/img/') === 0) ? src : null);
+    if (serverUrl) src = serverUrl;
+  }
+  let inputImage = src;
+  if (typeof upResolveInputImage === 'function') {
+    inputImage = await upResolveInputImage(src);
+    if (!inputImage) throw new Error('Could not read a source image.');
+  }
+  if (typeof inputImage === 'string' && /^data:/i.test(inputImage)) {
+    inputImage = await bmUploadToR2(inputImage);
+  }
+  return inputImage;
+}
+
+// Batch upscale: every ticked image runs as its own queue job with the shared
+// model + settings. Sources are resolved + uploaded sequentially (a Promise.all
+// over base64 uploads risks OOM), then each is enqueued. The queue drains each
+// independently into the library; results carry batchUpscale:true so they also
+// appear in the "Batch upscales" folder.
+async function upRunBatch() {
+  if (upState.busy) return;
+  const m = upModel();
+  if (!m) { upStatus('\u2717 No model available.', true); return; }
+  if (!window.bmSession || !window.bmSession.sessionToken) {
+    if (typeof openAuthModal === 'function') openAuthModal('login');
+    upInit();
+    return;
+  }
+  const all = (typeof favourites !== 'undefined') ? favourites : [];
+  const favs = Array.from(upState.batchIds)
+    .map(id => all.find(x => x && x.id === id))
+    .filter(Boolean)
+    .slice(0, BATCH_MAX);
+  if (favs.length < 2) { upStatus('\u2717 Select at least two images for a batch.', true); return; }
+
+  upState.busy = true;
+  const btn = document.getElementById('upRunBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  upSyncMobileRunBtn();
+
+  let queued = 0, failed = 0, lastErr = '';
+  for (let i = 0; i < favs.length; i++) {
+    const fav = favs[i];
+    upStatus('\u25CC BATCH UPSCALING\u2026 (' + (i + 1) + '/' + favs.length + ')', false);
+    let inputImage;
+    try {
+      inputImage = await upResolveSourceForFav(fav);
+    } catch (e) {
+      failed++; lastErr = (e && e.message) ? e.message : 'source error'; continue;
+    }
+    const sw = (typeof fav.outW === 'number') ? fav.outW : (fav.srcW || 0);
+    const sh = (typeof fav.outH === 'number') ? fav.outH : (fav.srcH || 0);
+    const body = upBuildBody(m, inputImage, sw, sh, fav.id);
+    const meta = upBuildMeta(m, body, inputImage, fav.id, fav.imageData, sw, sh, true);
+    try {
+      const r = await bmQueue.enqueueUpscale(body, meta);
+      if (r && r.ok) {
+        queued++;
+        bmQueue.onJob(r.jobId, {
+          onDone: () => {
+            if (typeof upRenderLibBar === 'function') upRenderLibBar();
+            upUpdateCloudWarn();
+          },
+          onFail: () => {},
+        });
+      } else {
+        failed++;
+        if (r && r.code === 'insufficient_tokens') {
+          lastErr = 'Not enough tokens for the rest of the batch.';
+          if (typeof r.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(r.balance);
+          break; // stop early — no point trying further jobs
+        } else if (r && r.code === 'auth_required') {
+          if (typeof openAuthModal === 'function') openAuthModal('login');
+          lastErr = 'Session expired — please sign in again.'; break;
+        } else {
+          lastErr = (r && r.error) ? r.error : 'queue error';
+        }
+      }
+    } catch (e) {
+      failed++; lastErr = (e && e.message) ? e.message : 'network error';
+    }
+  }
+
+  upState.busy = false;
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  upUpdateCostHint();
+  if (queued > 0) {
+    if (typeof upFlashSentToQueue === 'function') upFlashSentToQueue();
+    if (typeof bmQueueJump === 'function') bmQueueJump();
+    // Clear the selection now the batch is on its way.
+    if (typeof upClearBatch === 'function') upClearBatch();
+  }
+  const tail = failed ? (' \u00B7 ' + failed + ' failed' + (lastErr ? (' (' + lastErr + ')') : '')) : '';
+  if (queued > 0) upStatus('\u2713 SENT ' + queued + ' TO QUEUE' + tail, failed > 0);
+  else upStatus('\u2717 Batch failed' + (lastErr ? (' \u2014 ' + lastErr) : '') + '.', true);
+}
+
 async function upRun() {
+  // Batch path: 2+ ticked images each run as their own job with shared settings.
+  if (upState.batchIds && upState.batchIds.size >= 2) { return upRunBatch(); }
   if (upState.busy) return;
   const m = upModel();
   if (!m) { upStatus('\u2717 No model available.', true); return; }

@@ -3372,6 +3372,31 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .up-libbar-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .up-libbar-thumb.sel { border-color:var(--accent); }
+/* Batch tick — a checkbox sits top-right of each bottom-bar thumb. Ticking up to
+   10 images runs them as a batch with shared settings; clicking the thumb body
+   (outside the tick) keeps the existing single select-into-preview behaviour. */
+.up-libbar-tick {
+  position:absolute; top:3px; right:3px; z-index:3;
+  width:20px; height:20px; margin:0; padding:0; cursor:pointer;
+  -webkit-appearance:none; appearance:none;
+  border:2px solid rgba(255,255,255,.85); border-radius:5px;
+  background:rgba(0,0,0,.45); box-shadow:0 1px 3px rgba(0,0,0,.5);
+  transition:background .12s, border-color .12s;
+}
+.up-libbar-tick:hover { border-color:var(--accent); }
+.up-libbar-tick:checked {
+  background:var(--accent,#00ffb0); border-color:var(--accent,#00ffb0);
+}
+/* Tick glyph — drawn via a ::after check so we don't depend on the subsetted
+   icon font for a native checkbox state. */
+.up-libbar-tick:checked::after {
+  content:''; position:absolute; left:5px; top:1px;
+  width:5px; height:10px; border:solid #000; border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+}
+/* Disabled (cap reached) ticks dim so the 10-image ceiling reads clearly. */
+.up-libbar-tick:disabled { opacity:.35; cursor:not-allowed; }
+.up-libbar-thumb.ticked { border-color:var(--accent); }
 /* "+ New" button — far-left libbar item, sized to match the thumbnails. */
 .up-libbar-new {
   flex:0 0 auto; width:84px; height:84px;
