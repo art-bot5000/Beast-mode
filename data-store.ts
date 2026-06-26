@@ -52,6 +52,13 @@ interface ImgMeta {
   bytes: number;
   mime: string;
   createdAt: number;
+  // True for user-UPLOADED images (not generated/upscaled in-app). Lets the
+  // login manifest restore the "Uploads" library folder membership durably, and
+  // lets an uploaded image participate in i2i families like any generated image.
+  // Previously uploads got NO image-store record at all (they only lived in the
+  // ZK doc + a gen-src R2 key), so a lost ZK-doc save meant a lost upload — the
+  // data-loss bug this field is part of fixing.
+  isUpload?: boolean;
   // Durable upscale linkage + dimensions. These let the login manifest rebuild
   // upscale groups (original ↔ upscales ↔ upscales-of-upscales) and report
   // correct resolutions even when the client's ZK library doc is unavailable or
@@ -207,7 +214,7 @@ export async function storeImage(
   bytes: Uint8Array,
   mime: string,
   createdAt?: number,
-  extraMeta?: { isUpscale?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; tokenRef?: string },
+  extraMeta?: { isUpscale?: boolean; isUpload?: boolean; upscaledFromId?: string | null; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; tokenRef?: string },
 ): Promise<string> {
   const id = favIdSafe(favId);
   const ext = extSafe(mime.split("/")[1]);
@@ -252,6 +259,7 @@ export async function storeImage(
   // lineage; the client never needs a second call for it to survive a relogin.
   if (extraMeta) {
     if (extraMeta.isUpscale === true) meta.isUpscale = true;
+    if (extraMeta.isUpload === true) meta.isUpload = true;
     if (typeof extraMeta.upscaledFromId === "string" && extraMeta.upscaledFromId) {
       try { meta.upscaledFromId = favIdSafe(extraMeta.upscaledFromId); } catch { /* ignore bad parent id */ }
     }
@@ -330,15 +338,16 @@ async function globalUsageBytes(): Promise<number> {
 // ── manifest for login re-hydration ──────────────────────────────────────────
 // Returns the lightweight index the client uses to rebuild its library on
 // login: favId + metadata, NO bytes. The client lazy-loads bytes via /api/img.
-export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string; thumbKey?: string; thumbIv?: string; thumbMime?: string; thumbVer?: number }>> {
+export async function listManifest(userHash: string): Promise<Array<{ favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; isUpload?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string; thumbKey?: string; thumbIv?: string; thumbMime?: string; thumbVer?: number }>> {
   const items = await listMeta(userHash);
   return items
     .map((x) => {
       const m = x.meta;
-      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string; thumbKey?: string; thumbIv?: string; thumbMime?: string; thumbVer?: number } =
+      const base: { favId: string; ext: string; bytes: number; mime: string; createdAt: number; isUpscale?: boolean; isUpload?: boolean; upscaledFromId?: string; outW?: number; outH?: number; upMp?: number; upFactor?: number; upModel?: string; lineage?: string; familyCode?: string; familySrcIds?: string[]; familyCodes?: string[]; igSettings?: Record<string, unknown>; tokenRef?: string; thumbKey?: string; thumbIv?: string; thumbMime?: string; thumbVer?: number } =
         { favId: x.favId, ext: m.ext, bytes: m.bytes, mime: m.mime, createdAt: m.createdAt };
       // Only attach upscale fields that are actually set, to keep the manifest lean.
       if (m.isUpscale) base.isUpscale = true;
+      if (m.isUpload) base.isUpload = true;
       if (m.upscaledFromId != null) base.upscaledFromId = m.upscaledFromId;
       if (typeof m.outW === "number") base.outW = m.outW;
       if (typeof m.outH === "number") base.outH = m.outH;

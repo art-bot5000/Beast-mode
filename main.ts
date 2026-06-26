@@ -67,7 +67,7 @@ import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
 import { pricingTable, quote, quoteForLimelight, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, quoteUpscaleForLimelight, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger, isLimelight, addLimelight, removeLimelight, listLimelight } from "./tokens.ts";
 import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
-import { storeImage, readImage, userUsage, listManifest, patchImageMeta, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
+import { storeImage, readImage, deleteImage, userUsage, listManifest, patchImageMeta, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
 import {
   putDoc, getDoc, deleteDoc, listDocs, isAllowedDocKey,
   snapshotAllToR2, snapshotDocToR2, restoreDocFromR2, dataDocsEnabled,
@@ -997,6 +997,46 @@ async function handler(req: Request): Promise<Response> {
   // the provider can fetch them. HARD-REQUIRE: with R2 unconfigured we 503 so
   // the client surfaces a clear error rather than silently falling back to the
   // base64 path this route exists to remove.
+  // ── PERSIST AN UPLOADED IMAGE INTO THE PRIMARY IMAGE STORE ─────────────────
+  // Uploads used to live ONLY in the ZK doc + a transient gen-src R2 key, with
+  // NO imgmeta record — so they never appeared in the login manifest, and a lost
+  // ZK-doc save meant a permanently lost upload (the data-loss bug). This routes
+  // an upload through the SAME durable path as generated images (storeImage →
+  // /data + imgmeta), giving it a stable /api/img/<favId> URL that the manifest
+  // re-hydrates on any device. Marked isUpload so the "Uploads" folder reforms,
+  // and lineage is stored so the image can join i2i families like a generated
+  // one. Session-gated; bytes arrive base64 in the JSON body (uploads are capped
+  // client-side at 15 MB and downscaled, so this stays well within limits).
+  if (path === "/api/store-upload" && req.method === "POST") {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in required.", code: "auth_required" }, 401);
+    let body: Record<string, unknown>;
+    try { body = await req.json(); } catch { return json({ error: "Invalid JSON", code: "bad_request" }, 400); }
+    const favId = String(body.favId ?? "").replace(/[^0-9]/g, "").slice(0, 32);
+    if (!favId) return json({ error: "favId required", code: "bad_request" }, 400);
+    const ct = String(body.mime ?? "").toLowerCase();
+    const okType = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif"].includes(ct);
+    if (!okType) return json({ error: "Unsupported image type.", code: "bad_request" }, 400);
+    const b64 = String(body.b64 ?? "");
+    if (!b64) return json({ error: "image data required", code: "bad_request" }, 400);
+    let bytes: Uint8Array;
+    try { bytes = decodeBase64(b64); } catch { return json({ error: "Invalid image data", code: "bad_request" }, 400); }
+    const lineage = (typeof body.lineage === "string" && body.lineage) ? body.lineage : undefined;
+    try {
+      const url = await storeImage(userHash, favId, bytes, ct, undefined, { isUpload: true, lineage });
+      return json({ ok: true, url, favId });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg === "storage_full_user" || msg === "storage_full_global") {
+        return json({ ok: false, error: "storage_full", code: msg }, 507);
+      }
+      console.warn("store-upload failed:", msg);
+      return json({ ok: false, error: "store_failed" }, 500);
+    }
+  }
+
   if (path === "/api/upload-url" && req.method === "POST") {
     const authHeader = req.headers.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -1051,6 +1091,26 @@ async function handler(req: Request): Promise<Response> {
         "cache-control": "private, max-age=31536000, immutable",
       },
     });
+  }
+
+  // DELETE /api/img/<favId> — permanently remove an image from this user's
+  // store: deletes the bytes on /data, drops the imgmeta record (so the login
+  // manifest no longer re-hydrates it), and decrements the storage meter. This
+  // is the FIX for "deleted images come back": the client used to delete only
+  // its local copy + the Drive prompt, so the next manifest sync re-added the
+  // image. Idempotent: deleting an already-gone image is a clean 200.
+  if (path.startsWith("/api/img/") && req.method === "DELETE") {
+    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const userHash = await verifySessionToken(token);
+    if (!userHash) return json({ error: "Sign in required.", code: "auth_required" }, 401);
+    const favId = path.slice("/api/img/".length);
+    try {
+      await deleteImage(userHash, favId);
+      return json({ ok: true });
+    } catch (e) {
+      console.warn("image delete failed:", (e as Error).message);
+      return json({ ok: false, error: "delete_failed" }, 500);
+    }
   }
 
   // ── Library manifest for login re-hydration. Returns the lightweight index
