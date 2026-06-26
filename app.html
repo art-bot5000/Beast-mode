@@ -18656,13 +18656,71 @@ async function bmThumbSweep() {
     ));
     const targets = favourites.filter((f) =>
       _hasResolvableSrc(f) && (!f.thumbKey || (f.thumbVer || 0) < THUMB_VER));
-    // Newest-first: the most recently created images get their thumbnails
-    // generated first, so a user landing on Library/Upscaler sees their latest
-    // work resolve immediately rather than waiting through the back-catalogue.
-    targets.sort((a, b) => ((b.createdAt || b.id) || 0) - ((a.createdAt || a.id) || 0));
+    // ── ORDER BY WHAT THE USER IS ACTUALLY LOOKING AT ──────────────────────────
+    // Previously this sorted newest-first GLOBALLY, ignoring the active mode — so
+    // if you were in the Upscaler (which only shows upscales) the sweep would
+    // still start on the newest GENERATED image, which isn't even on screen,
+    // making regeneration look random. Now we prioritise the images visible in
+    // the CURRENT mode/folder (newest-first), then the rest of the library
+    // (newest-first) as the tail — so on a wipe-and-regenerate, the thumbnails
+    // you're staring at fill in first.
+    const _newest = (a, b) => ((b.createdAt || b.id) || 0) - ((a.createdAt || a.id) || 0);
+    // Is this fav visible in the mode the user is currently viewing?
+    const _bmInViewFav = (f) => {
+      if (!f) return false;
+      const v = (typeof currentView !== 'undefined') ? currentView : null;
+      // Image Gen + Upscaler bars both show every image (same predicate).
+      if (v === 'imagegen' || v === 'upscaler') {
+        return !!(f.imageData || f.thumbKey || f.serverImageUrl);
+      }
+      // Library honours the active folder filter so e.g. browsing the Upscales
+      // folder regenerates upscales first. Mirrors renderLibrary's classifier.
+      if (v === 'library') {
+        const fid = (typeof libActiveFolderId !== 'undefined') ? libActiveFolderId : '__all__';
+        if (fid === '__all__') return true;
+        if (fid === '__starred__') return !!f.starred;
+        if (fid === '__pinned__') return !!f.pinned;
+        if (fid === '__images__') return (typeof bmFavKind === 'function') && bmFavKind(f) === 'image';
+        if (fid === '__i2i__') return (typeof bmFavIsI2I === 'function') && bmFavIsI2I(f);
+        if (fid === '__upscales__') return (typeof bmFavKind === 'function') && bmFavKind(f) === 'upscale';
+        if (fid === '__uploads__') return !!f.isUpload;
+        if (fid === '__prompts__') return (typeof bmFavKind === 'function') && bmFavKind(f) === 'prompt';
+        if (!String(fid).startsWith('__')) return f.folderId === fid;
+        return true;
+      }
+      return false; // other views (generator, builder, etc.) — no in-view bias
+    };
+    // Two-tier stable sort: in-view first (newest-first), then the rest
+    // (newest-first). Partitioning then concatenating keeps it simple + stable.
+    const _inView = [], _rest = [];
+    for (const f of targets) { (_bmInViewFav(f) ? _inView : _rest).push(f); }
+    _inView.sort(_newest);
+    _rest.sort(_newest);
+    targets.length = 0;
+    for (const f of _inView) targets.push(f);
+    for (const f of _rest) targets.push(f);
     if (!targets.length) return;
     let made = 0;
-    for (const f of targets) {
+    // Mode-aware queue: `targets` is consumed from the front. We remember the
+    // mode it was ordered for; if the user switches modes mid-sweep, we re-sort
+    // the REMAINING items so the newly-viewed mode's images jump the queue. This
+    // is why a static for-of loop wasn't enough — the sweep's re-entrancy guard
+    // means a mode switch can't start a fresh sweep, so the running one must
+    // adapt instead.
+    let _sortedForView = (typeof currentView !== 'undefined') ? currentView : null;
+    const _resortRemaining = () => {
+      const iv = [], rest = [];
+      for (const f of targets) { (_bmInViewFav(f) ? iv : rest).push(f); }
+      iv.sort(_newest); rest.sort(_newest);
+      targets.length = 0;
+      for (const f of iv) targets.push(f);
+      for (const f of rest) targets.push(f);
+    };
+    while (targets.length) {
+      // If the viewed mode changed since we last ordered, re-prioritise the rest.
+      const _nowView = (typeof currentView !== 'undefined') ? currentView : null;
+      if (_nowView !== _sortedForView) { _sortedForView = _nowView; _resortRemaining(); }
+      const f = targets.shift();
       // Bail if the session went away mid-sweep (sign-out / lock).
       const s = window.bmSession;
       if (!s || !s.sessionToken || !s.dataKey) break;
@@ -18694,11 +18752,14 @@ async function bmThumbSweep() {
       try { await bmThumbUpload(f, src); } catch (e) { /* best-effort */ }
       if (f.thumbKey) {
         made++;
-        // Periodically refresh open surfaces so thumbs appear progressively.
+        // Periodically refresh the surface the user is ACTUALLY viewing so thumbs
+        // appear progressively in front of them (was upscaler-only before).
         if (made % 8 === 0) {
-          if (typeof renderFavs === 'function') renderFavs();
-          if (typeof currentView !== 'undefined' && currentView === 'upscaler'
-              && typeof upRenderLibBar === 'function') upRenderLibBar();
+          const v = (typeof currentView !== 'undefined') ? currentView : null;
+          if (v === 'library' && typeof renderFavs === 'function') renderFavs();
+          else if (v === 'upscaler' && typeof upRenderLibBar === 'function') upRenderLibBar();
+          else if (v === 'imagegen' && typeof igRenderLibBar === 'function') igRenderLibBar();
+          else if (typeof renderFavs === 'function') renderFavs();
         }
       }
       // Throttle between encodes. Back off harder while the workspace gate is
@@ -18712,9 +18773,11 @@ async function bmThumbSweep() {
       await _bmSleep(_gateUp ? 400 : 150);
     }
     if (made) {
-      if (typeof renderFavs === 'function') renderFavs();
-      if (typeof currentView !== 'undefined' && currentView === 'upscaler'
-          && typeof upRenderLibBar === 'function') upRenderLibBar();
+      const v = (typeof currentView !== 'undefined') ? currentView : null;
+      if (v === 'library' && typeof renderFavs === 'function') renderFavs();
+      else if (v === 'upscaler' && typeof upRenderLibBar === 'function') upRenderLibBar();
+      else if (v === 'imagegen' && typeof igRenderLibBar === 'function') igRenderLibBar();
+      else if (typeof renderFavs === 'function') renderFavs();
     }
   } finally {
     _bmThumbSweeping = false;
