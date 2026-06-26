@@ -4844,6 +4844,17 @@ function deleteFav(id){
   lsSave(LS.FAVS, favourites)
   renderFavs()
   driveDeletePrompt(id)
+  // Delete the server image record too, or the login manifest re-adds it on the
+  // next sync (the "deleted images come back" bug). Fire-and-forget; idempotent.
+  try {
+    const tok = (window.bmSession && window.bmSession.sessionToken) || null;
+    if (tok && id != null) {
+      fetch('/api/img/' + encodeURIComponent(String(id)), {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + tok },
+      }).catch(() => {});
+    }
+  } catch (_) {}
 }
 
 function copyFav(id){
@@ -6494,9 +6505,19 @@ function libSelectCard(id) {
 function libBulkDelete() {
   if (!libSelected.size) return
   if (!confirm(`Delete ${libSelected.size} prompt${libSelected.size>1?'s':''}? This cannot be undone.`)) return
+  const tok = (window.bmSession && window.bmSession.sessionToken) || null;
   libSelected.forEach(id => {
     favourites = favourites.filter(f => f.id !== id)
     driveDeletePrompt(id)
+    // Server-side delete so the manifest doesn't re-add it on next login.
+    try {
+      if (tok && id != null) {
+        fetch('/api/img/' + encodeURIComponent(String(id)), {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + tok },
+        }).catch(() => {});
+      }
+    } catch (_) {}
   })
   lsSave(LS.FAVS, favourites)
   libSelected.clear()
@@ -17753,6 +17774,9 @@ async function bmSyncLibraryFromManifest() {
           mp: (m.upMp != null) ? m.upMp : null,
         };
       }
+      // Uploaded image — restore the flag so it lands back in the Uploads folder
+      // and can still serve as an i2i family source after a fresh login.
+      if (m.isUpload) fav.isUpload = true;
       if (typeof m.outW === 'number') fav.outW = m.outW;
       if (typeof m.outH === 'number') fav.outH = m.outH;
       if (typeof m.lineage === 'string' && m.lineage) fav.lineage = m.lineage;
@@ -19588,23 +19612,43 @@ async function bmSaveUploadToLibrary(origDataUri, previewDataUri, info) {
     if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
     // Cache the downscaled preview for instant card display.
     if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, previewDataUri || origDataUri);
-    // Push ORIGINAL bytes to R2 for a durable URL that survives relogin/new
-    // device, then register lineage + the durable URL on the server record.
+    // ── DURABLE PERSISTENCE ───────────────────────────────────────────────────
+    // Store the ORIGINAL bytes through the SAME path generated images use
+    // (/api/store-upload → storeImage → /data + imgmeta). This is the fix for
+    // lost uploads: it gives the upload a real manifest entry + a stable
+    // /api/img/<favId> URL, so it re-hydrates on any device even if the ZK doc
+    // save is lost. Previously uploads only hit a transient gen-src R2 key with
+    // no manifest record, so they vanished when the ZK doc didn't persist.
     try {
-      if (typeof bmUploadToR2 === 'function') {
-        const publicUrl = await bmUploadToR2(origDataUri);
-        if (publicUrl) {
-          fav.serverImageUrl = publicUrl;
+      const tok = (window.bmSession && window.bmSession.sessionToken) || null;
+      if (tok && /^data:/i.test(origDataUri)) {
+        const comma = origDataUri.indexOf(',');
+        const header = origDataUri.slice(5, comma);
+        const mime = (header.split(';')[0] || 'image/jpeg').toLowerCase();
+        const b64 = origDataUri.slice(comma + 1);
+        const res = await fetch('/api/store-upload', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ favId: String(fav.id), mime, b64, lineage: fav.lineage || null }),
+        });
+        const pd = await res.json().catch(() => ({}));
+        if (res.ok && pd && pd.ok && pd.url) {
+          // Point the fav at its durable server URL (stable /api/img/<favId>).
+          fav.imageData = pd.url;
+          fav.serverImageUrl = pd.url;
           if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
           if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+        } else if (pd && pd.code === 'storage_full_user') {
+          if (typeof bmToast === 'function') bmToast('Storage full — upload saved locally only.', true);
         }
       }
     } catch (e) { /* durable push best-effort; local copy still works */ }
+    // Register lineage + isUpload on the server record (now that the imgmeta
+    // record exists from storeImage above, this patch succeeds and the Uploads
+    // folder + i2i family membership reform cross-device).
     try {
       if (fav.id != null && typeof bmRegisterUpscaleMeta === 'function') {
-        const patch = { lineage: fav.lineage || null, isUpload: true };
-        if (fav.serverImageUrl) patch.serverImageUrl = fav.serverImageUrl;
-        bmRegisterUpscaleMeta(fav.id, patch);
+        bmRegisterUpscaleMeta(fav.id, { lineage: fav.lineage || null });
       }
     } catch (_) {}
     // Zero-knowledge thumbnail from the preview bytes (best-effort).
