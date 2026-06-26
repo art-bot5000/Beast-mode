@@ -9003,6 +9003,48 @@ function setDriveBackupEnabled(on) {
   if (t) t.checked = !!on;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ██ LIBRARY PERSISTENCE SUBSYSTEM — INDEX & INVARIANT ██
+// ═══════════════════════════════════════════════════════════════════════════
+// The image library (`favourites`) is persisted across THREE stores and FOUR
+// code paths that MUST agree. They are physically scattered through this file
+// (the cause of the "images vanish after cache-clear" bug); this index keeps
+// them findable. See also: library-subsystem-map.md (full global/state map).
+//
+//   CORE INVARIANT
+//   ──────────────
+//   1. Every path that ADDS or CHANGES a fav must reach the ZK PROMPTS doc
+//      via bmDocSave('prompts', favourites). If it only writes localStorage,
+//      the change dies on the next cache clear.
+//   2. The RESTORE path must NEVER drop a fav the server still backs. It MERGES
+//      the ZK doc over in-memory survivors — it does not wholesale-replace.
+//
+//   THE THREE PATHS THAT MUST STAY IN SYNC (edit one → check the other two):
+//     • autoSaveGeneratedImage()      ~18113  WRITE  (new gen/upscale → fav)
+//     • bmDocRestoreAll()             ~9092   RESTORE (ZK doc → favourites, MERGE)
+//     • bmSyncLibraryFromManifest()   ~17708  RECONCILE (server manifest → favs)
+//
+//   STORES
+//     • localStorage  LS.FAVS            — fast, wiped by cache clear
+//     • ZK PROMPTS doc  ('prompts')      — authoritative; needs DATA KEY (unlock)
+//     • server /data + /api/manifest     — durable bytes + rehydration source
+//
+//   SUBSYSTEM FUNCTION INDEX (region letters match the map doc)
+//     C  9006  lsSave / lsLoad / lsSaveAll / lsRestoreAll
+//     C  9072  bmDocSaveAll()          — multi-domain (prompts+presets+folders…)
+//     C  9092  bmDocRestoreAll()       — multi-domain RESTORE w/ prompts MERGE
+//     D 17693  bmRegisterUpscaleMeta() — durable server-side meta backstop
+//     D 17708  bmSyncLibraryFromManifest()
+//     E 18113  autoSaveGeneratedImage()
+//     E 18496  bmDocReady / bmDocSave / bmDocLoad / bmDocRestoreFromR2
+//     B  5740  driveSavePrompt()       — per-fav save → bmDocSave('prompts')
+//     A  4843  deleteFav()
+//     F 25149  bmFindDeadImageFavs / bmReconcileDeadImages (destructive, gated)
+//
+//   GOTCHA: bmDocSave() no-ops silently when LOCKED (no DATA KEY). Library
+//   changes then reach localStorage only. A one-time toast warns the user
+//   (see bmDocSave). The MERGE restore is the safety net that survives this.
+// ═══════════════════════════════════════════════════════════════════════════
 function lsSave(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch(e) {}
 }
@@ -9089,6 +9131,14 @@ async function bmDocSaveAll() {
 // source of truth: when a doc exists server-side it WINS over localStorage. When
 // a doc is absent (404 → null) we keep whatever lsRestoreAll already loaded.
 // Returns true if at least one doc was applied (so the caller can re-render).
+// ╔═ LIBRARY SUBSYSTEM · RESTORE PATH ═════════════════════════════════════════
+// ║ ZK docs → in-memory state at login/unlock. MULTI-DOMAIN (prompts, presets,
+// ║ models, folders, particles, settings) — do NOT move into a library-only
+// ║ module. The prompts apply MERGES (never wholesale-replaces) so a stale/
+// ║ locked doc can't drop server-backed images. Paired with WRITE
+// ║ autoSaveGeneratedImage() ~18113 and RECONCILE bmSyncLibraryFromManifest()
+// ║ ~17708. Full index: search "LIBRARY PERSISTENCE SUBSYSTEM — INDEX".
+// ╚════════════════════════════════════════════════════════════════════════════
 async function bmDocRestoreAll() {
   if (!bmDocReady()) return false
   let applied = false
@@ -17705,6 +17755,14 @@ async function bmRegisterUpscaleMeta(favId, patch) {
 window.bmRegisterUpscaleMeta = bmRegisterUpscaleMeta;
 
 let _bmManifestSyncing = false;
+// ╔═ LIBRARY SUBSYSTEM · RECONCILE PATH ═══════════════════════════════════════
+// ║ Server /api/manifest → favourites: re-adds images the ZK doc lacks as
+// ║ rehydrated placeholders (the cross-device / post-cache-clear backstop).
+// ║ AWAITS __bmDocRestorePromise first so it never shadows authoritative ZK-doc
+// ║ favs, and now ALSO writes added placeholders back to the ZK doc (Part A).
+// ║ Paired with WRITE autoSaveGeneratedImage() ~18113 and RESTORE
+// ║ bmDocRestoreAll() ~9092. Full index: search "LIBRARY PERSISTENCE SUBSYSTEM".
+// ╚════════════════════════════════════════════════════════════════════════════
 async function bmSyncLibraryFromManifest() {
   if (_bmManifestSyncing) return;
   const tok = window.bmSession && window.bmSession.sessionToken;
@@ -18110,6 +18168,12 @@ async function generateImage() {
 // `pristine` (optional): a data: URI of the ORIGINAL image bytes (Gemini direct
 // models). When present, the Drive upload + local cache use it instead of
 // re-fetching the hosted URL — immune to R2 public-URL fetch problems.
+// ╔═ LIBRARY SUBSYSTEM · WRITE PATH ═══════════════════════════════════════════
+// ║ New generation/upscale → durable fav. Must reach the ZK PROMPTS doc (via
+// ║ driveSavePrompt → bmDocSave). Paired with bmDocRestoreAll() ~9092 (RESTORE)
+// ║ and bmSyncLibraryFromManifest() ~17708 (RECONCILE). Edit here → check both.
+// ║ Full index: search "LIBRARY PERSISTENCE SUBSYSTEM — INDEX".
+// ╚════════════════════════════════════════════════════════════════════════════
 function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tokenRef, tokenCost, extra) {
   try {
     let full = fullText;
