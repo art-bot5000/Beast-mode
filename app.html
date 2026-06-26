@@ -3296,6 +3296,7 @@ const VIRTUAL_FOLDERS   = [
   { id:'__images__',  name:'🖼 Generated Images', color:'#38b6ff',  virtual:true },
   { id:'__i2i__',     name:'⇄ Image 2 Image',     color:'#ff7ac6',  virtual:true },
   { id:'__upscales__',name:'✦ Upscales',          color:'#caff00',  virtual:true },
+  { id:'__uploads__', name:'⤓ Uploads',           color:'#9d7bff',  virtual:true },
   { id:'__prompts__', name:'⬡ Prompts',           color:'var(--accent)', virtual:true },
 ]
 // True when this fav is an image-to-image OUTPUT that has associated source
@@ -6498,6 +6499,7 @@ function renderLibrary() {
   else if (libActiveFolderId === '__images__')   items = items.filter(f => bmFavKind(f) === 'image')
   else if (libActiveFolderId === '__i2i__')      items = items.filter(f => bmFavIsI2I(f))
   else if (libActiveFolderId === '__upscales__') items = items.filter(f => bmFavKind(f) === 'upscale')
+  else if (libActiveFolderId === '__uploads__')  items = items.filter(f => !!f.isUpload)
   else if (libActiveFolderId === '__prompts__')  items = items.filter(f => bmFavKind(f) === 'prompt')
   else if (!String(libActiveFolderId).startsWith('__')) items = items.filter(f => f.folderId === libActiveFolderId)
 
@@ -7340,6 +7342,8 @@ function renderFolderSidebar() {
         ? favourites.filter(f => bmFavIsI2I(f)).length
       : folder.id === '__upscales__'
         ? favourites.filter(f => bmFavKind(f) === 'upscale').length
+      : folder.id === '__uploads__'
+        ? favourites.filter(f => !!f.isUpload).length
       : folder.id === '__prompts__'
         ? favourites.filter(f => bmFavKind(f) === 'prompt').length
         : favourites.filter(f => f.folderId === folder.id).length
@@ -19181,31 +19185,129 @@ function igRefFilesPicked(files) {
   const room = (m.maxRefs || 1) - igState.refs.length;
   Array.from(files).slice(0, Math.max(0, room)).forEach(f => {
     if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) return;
-    igDownscaleToDataUri(f, 1536, dataUri => {
-      if (igState.refs.length >= (m.maxRefs || 1)) return;
-      igState.refs.push({ data: dataUri });
-      igRenderAll();
+    if (f.size > BM_UPLOAD_MAX_BYTES) {
+      igStatus('\u2717 "' + (f.name || 'image') + '" is over the 15\u00A0MB upload limit.', true);
+      return;
+    }
+    // Keep the ORIGINAL bytes for the durable library copy; downscale a copy for
+    // the i2i pipeline. The library fav is created on upload so Restore works.
+    bmFileToDataUri(f).then(origDataUri => {
+      igDownscaleToDataUri(f, 1536, async (dataUri, dinfo) => {
+        if (igState.refs.length >= (m.maxRefs || 1)) return;
+        if (dinfo && dinfo.didScale) {
+          igStatus('\u2139 "' + (f.name || 'Image') + '" was ' + dinfo.origW + '\u00D7' + dinfo.origH
+            + 'px \u2014 downscaled to ' + dinfo.w + '\u00D7' + dinfo.h + 'px to fit the pipeline (full-res copy saved to your library).', false);
+        }
+        const favId = await bmSaveUploadToLibrary(origDataUri, dataUri, dinfo);
+        if (igState.refs.length >= (m.maxRefs || 1)) return;
+        igState.refs.push(favId != null ? { data: dataUri, favId } : { data: dataUri });
+        igRenderAll();
+      });
+    }).catch(() => {
+      igStatus('\u2717 Could not read "' + (f.name || 'image') + '".', true);
     });
   });
   document.getElementById('igRefFile').value = '';
 }
 
 // Downscale client-side so data-URI payloads stay small (max side 1536px, JPEG).
+// Callback receives (dataUri, info) where info = { didScale, origW, origH, w, h }.
+// Existing callers that ignore the second arg are unaffected.
 function igDownscaleToDataUri(file, maxSide, cb) {
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
     URL.revokeObjectURL(url);
-    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-    const w = Math.max(1, Math.round(img.width * scale));
-    const h = Math.max(1, Math.round(img.height * scale));
+    const origW = img.width, origH = img.height;
+    const scale = Math.min(1, maxSide / Math.max(origW, origH));
+    const w = Math.max(1, Math.round(origW * scale));
+    const h = Math.max(1, Math.round(origH * scale));
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     c.getContext('2d').drawImage(img, 0, 0, w, h);
-    cb(c.toDataURL('image/jpeg', 0.9));
+    cb(c.toDataURL('image/jpeg', 0.9), { didScale: scale < 1, origW, origH, w, h });
   };
   img.onerror = () => { URL.revokeObjectURL(url); };
   img.src = url;
+}
+
+// Read a File as a raw (full-resolution) data: URI — used to keep the ORIGINAL
+// bytes for the library copy of an upload (downscaling happens only on use).
+function bmFileToDataUri(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Could not read file.'));
+    r.readAsDataURL(file);
+  });
+}
+
+// 15 MB hard cap on uploads (applies to Image Gen refs and Upscaler sources).
+const BM_UPLOAD_MAX_BYTES = 15 * 1024 * 1024;
+
+// Save an uploaded image to the library as its own fav, tagged isUpload, so it
+// exists in storage BEFORE it's used in a generation or upscale. This is what
+// makes Restore work for uploads: i2i families and upscale lineage point at a
+// real favId instead of an ad-hoc blob that lives nowhere. Stores the ORIGINAL
+// full-res bytes (pushed to R2 for a durable, cross-device serverImageUrl) and
+// caches a downscaled preview for the card thumbnail. Returns the new favId, or
+// null on failure (caller still proceeds with the in-memory image).
+async function bmSaveUploadToLibrary(origDataUri, previewDataUri, info) {
+  try {
+    if (typeof favourites === 'undefined') return null;
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const lineage = (typeof bmNewLineageRoot === 'function') ? bmNewLineageRoot() : null;
+    const fav = {
+      text: '', promptOnly: '',
+      mode: 'image',
+      isUpload: true,
+      id,
+      title: 'Uploaded image',
+      model: null,
+      rating: 0, starred: false, pinned: false, folderId: null,
+      versions: [],
+      imageData: origDataUri,           // full-res original (resolvable bytes)
+      createdAt: Date.now(), updatedAt: Date.now(),
+      particles: null,
+      tokenRef: null, tokenCost: null,
+      isUpscale: false, upscaledFromId: null, upscaleMeta: null,
+      lineage,
+      origW: (info && info.origW) || null,
+      origH: (info && info.origH) || null,
+    };
+    favourites.unshift(fav);
+    if (typeof renderFavs === 'function') renderFavs();
+    if (typeof updateLibBadge === 'function') updateLibBadge();
+    if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+    if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+    // Cache the downscaled preview for instant card display.
+    if (typeof bmCacheImage === 'function') bmCacheImage(fav.id, previewDataUri || origDataUri);
+    // Push ORIGINAL bytes to R2 for a durable URL that survives relogin/new
+    // device, then register lineage + the durable URL on the server record.
+    try {
+      if (typeof bmUploadToR2 === 'function') {
+        const publicUrl = await bmUploadToR2(origDataUri);
+        if (publicUrl) {
+          fav.serverImageUrl = publicUrl;
+          if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites);
+          if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+        }
+      }
+    } catch (e) { /* durable push best-effort; local copy still works */ }
+    try {
+      if (fav.id != null && typeof bmRegisterUpscaleMeta === 'function') {
+        const patch = { lineage: fav.lineage || null, isUpload: true };
+        if (fav.serverImageUrl) patch.serverImageUrl = fav.serverImageUrl;
+        bmRegisterUpscaleMeta(fav.id, patch);
+      }
+    } catch (_) {}
+    // Zero-knowledge thumbnail from the preview bytes (best-effort).
+    if (typeof bmThumbUpload === 'function') bmThumbUpload(fav, previewDataUri || origDataUri);
+    return fav.id;
+  } catch (e) {
+    console.warn('save upload to library failed (image still usable):', e);
+    return null;
+  }
 }
 
 // ── IMAGE MARKUP (vector annotation → reference + prompt seed) ──────────────
@@ -21006,12 +21108,31 @@ function upSrcFilePicked(files) {
   if (!files || !files.length) return;
   const f = files[0];
   if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) { upStatus('\u2717 Unsupported file type.', true); return; }
-  // Downscale a touch for transport; 2048 keeps plenty of detail for the
-  // upscaler to work from while capping the data-URI payload.
-  igDownscaleToDataUri(f, 2048, dataUri => {
-    upState.srcData = dataUri; upState.srcIsUrl = false;
-    upState.srcFavId = null;
-    upShowAdHocSource(dataUri);   // load into the big preview + rail
+  if (f.size > BM_UPLOAD_MAX_BYTES) { upStatus('\u2717 Image is over the 15\u00A0MB upload limit.', true); return; }
+  // Keep the ORIGINAL bytes for the durable library copy (Restore re-upscales
+  // from the best source); downscale a copy for transport. 2048 keeps plenty of
+  // detail for the upscaler. Saving on upload is what makes Restore work.
+  bmFileToDataUri(f).then(origDataUri => {
+    igDownscaleToDataUri(f, 2048, async (dataUri, dinfo) => {
+      if (dinfo && dinfo.didScale) {
+        upStatus('\u2139 Image was ' + dinfo.origW + '\u00D7' + dinfo.origH
+          + 'px \u2014 downscaled to ' + dinfo.w + '\u00D7' + dinfo.h + 'px for the upscaler (full-res copy saved to your library).', false);
+      }
+      const favId = await bmSaveUploadToLibrary(origDataUri, dataUri, dinfo);
+      upState.srcData = dataUri; upState.srcIsUrl = false;
+      upState.srcFavId = (favId != null) ? favId : null;
+      // Render through the saved fav when we have one so the source is a real
+      // library item (badge, grouping, restore lineage) rather than ad-hoc.
+      const savedFav = (favId != null && typeof favourites !== 'undefined')
+        ? favourites.find(x => x && Number(x.id) === Number(favId)) : null;
+      if (savedFav && typeof upSelectFav === 'function') {
+        upSelectFav(savedFav);
+      } else {
+        upShowAdHocSource(dataUri);   // fallback: in-memory only
+      }
+    });
+  }).catch(() => {
+    upStatus('\u2717 Could not read that image.', true);
   });
   document.getElementById('upSrcFile').value = '';
 }
