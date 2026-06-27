@@ -4889,8 +4889,8 @@ function renderFavs(){
     const ellipsis = _src.length > 180 ? '…' : ''
     return `
     <div class="fav-item">
-      <span class="fav-tag">${f.mode.toUpperCase()}</span>
-      <span class="fav-tag" style="background:color-mix(in srgb,#ff6a00 15%,transparent);color:#ff9a40;">${f.preset.toUpperCase()}</span>
+      <span class="fav-tag">${(f.mode || 'image').toUpperCase()}</span>
+      <span class="fav-tag" style="background:color-mix(in srgb,#ff6a00 15%,transparent);color:#ff9a40;">${(f.preset || 'upload').toUpperCase()}</span>
       <span class="fav-text">${display}${ellipsis}</span>
       <div class="fav-actions">
         <button class="fav-restore" onclick="restoreFav(${f.id})">⬆ RESTORE</button>
@@ -19620,6 +19620,7 @@ async function bmSaveUploadToLibrary(origDataUri, previewDataUri, info) {
     const fav = {
       text: '', promptOnly: '',
       mode: 'image',
+      preset: 'upload',
       isUpload: true,
       id,
       title: 'Uploaded image',
