@@ -1383,6 +1383,21 @@ handleShareTarget()
   </div>
 </div>
 
+<!-- ═══════════════════════ IMAGE INFO MODAL ═══════════════════════ -->
+<!-- Shared image Information panel (opened from the ⋮ menu on any bottom-bar
+     thumbnail, in both upscaler and image-gen). Shows model + prompt + settings,
+     and the source image(s) used for image-to-image generations. Built by
+     bmImageInfoModal(fav). -->
+<div class="bm-info-modal" id="bmInfoModal" onclick="if(event.target===this)bmInfoClose()">
+  <div class="bm-info-card">
+    <div class="bm-info-head">
+      <span class="bm-info-title" id="bmInfoTitle">// IMAGE INFO</span>
+      <button class="bm-info-x" type="button" onclick="bmInfoClose()" aria-label="Close">✕</button>
+    </div>
+    <div class="bm-info-body" id="bmInfoBody"></div>
+  </div>
+</div>
+
 <!-- ═══════════════════════ QUEUE VIEW ═══════════════════════ -->
 <!-- Full-page view of the durable background job queue. Populated by the queue
      client (bmQueue.renderView). Survives refresh/logout — the list is fetched
@@ -20980,14 +20995,8 @@ function igRenderLibBar() {
     else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
     else { img.src = f.imageData; }
     cell.appendChild(img);
-    // Selection order badge moves to TOP-LEFT so it never collides with the
-    // bottom-right tickbox.
-    if (i2i && selIdx >= 0) {
-      const num = document.createElement('div');
-      num.className = 'ig-libbar-selnum';
-      num.textContent = String(selIdx + 1);
-      cell.appendChild(num);
-    }
+    // Selection order is now shown INSIDE the tick (top-left), so the separate
+    // top-left selnum badge is no longer rendered.
     // A small "family" dot cues that this generated image has a source set to
     // open (purely informational; code itself stays internal).
     if (i2i && igFavHasFamily(f)) {
@@ -20997,10 +21006,12 @@ function igRenderLibBar() {
       cell.appendChild(fam);
     }
     if (i2i) {
-      // Tickbox (bottom-right) is the ONLY way to toggle i2i ref selection.
+      // Tickbox (top-left) toggles i2i ref selection and shows the blend ORDER
+      // (1,2,3…) when selected.
       const tick = document.createElement('button');
       tick.type = 'button';
       tick.className = 'ig-libbar-tick' + (selIdx >= 0 ? ' checked' : '');
+      if (selIdx >= 0) tick.dataset.selnum = String(selIdx + 1);
       tick.title = (selIdx >= 0) ? 'Deselect reference' : 'Select as reference';
       tick.setAttribute('role', 'checkbox');
       tick.setAttribute('aria-checked', selIdx >= 0 ? 'true' : 'false');
@@ -21015,10 +21026,254 @@ function igRenderLibBar() {
     } else {
       cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
     }
+    if (typeof bmThumbMenuDecorate === 'function') bmThumbMenuDecorate(cell, f, 'ig');
     bar.appendChild(cell);
   });
 }
 window.igRenderLibBar = igRenderLibBar;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Thumbnail context menu (⋮) for the upscaler + image-gen bottom bars, plus the
+// shared image Information modal. Decorates each rendered cell with a kebab that
+// opens an upward popover; menu contents differ per mode. Reuses existing
+// primitives (restoreFav, deleteFav, bmOpenFull, igLibToggleRef, upToggleBatch).
+// ═══════════════════════════════════════════════════════════════════════════
+const BM_UPSCALE_MAX_MP = 8; // mirrors the upscaler's hardMax ceiling.
+
+// Estimate a fav's megapixels from captured dimensions (uploads carry origW/H;
+// generated/upscaled carry upscaleMeta or width/height). Returns 0 if unknown.
+function bmFavMegapixels(f) {
+  if (!f) return 0;
+  const w = f.origW || f.width || (f.upscaleMeta && f.upscaleMeta.outW) || 0;
+  const h = f.origH || f.height || (f.upscaleMeta && f.upscaleMeta.outH) || 0;
+  if (w > 0 && h > 0) return (w * h) / 1e6;
+  return 0;
+}
+
+// Close any open thumb menu.
+function bmThumbMenuClose() {
+  document.querySelectorAll('.bm-thumb-menu').forEach(n => n.remove());
+  document.removeEventListener('click', bmThumbMenuClose);
+  window.removeEventListener('resize', bmThumbMenuClose);
+  window.removeEventListener('scroll', bmThumbMenuClose, true);
+}
+
+// Build + position the popover above the kebab. `items` is an array of
+// { ic, label, tag, dis, on, danger, run } (or { sep:true } / { hd:'TEXT' }).
+function bmThumbMenuOpen(kebabEl, header, items) {
+  bmThumbMenuClose();
+  const menu = document.createElement('div');
+  menu.className = 'bm-thumb-menu';
+  if (header) {
+    const h = document.createElement('div');
+    h.className = 'bm-thumb-menu-hd'; h.textContent = header;
+    menu.appendChild(h);
+  }
+  items.forEach(it => {
+    if (it.sep) { const s = document.createElement('div'); s.className = 'bm-thumb-msep'; menu.appendChild(s); return; }
+    const r = document.createElement('div');
+    r.className = 'bm-thumb-mi' + (it.dis ? ' dis' : '') + (it.on ? ' on' : '') + (it.danger ? ' danger' : '');
+    r.innerHTML = '<i class="ti ' + it.ic + '"></i>' + it.label + (it.tag ? '<small>' + it.tag + '</small>' : '');
+    if (!it.dis && typeof it.run === 'function') {
+      r.onclick = (e) => { e.stopPropagation(); bmThumbMenuClose(); it.run(); };
+    } else {
+      r.onclick = (e) => e.stopPropagation();
+    }
+    menu.appendChild(r);
+  });
+  // Off-screen measure, then place ABOVE the kebab, clamped to the viewport.
+  menu.style.left = '-9999px'; menu.style.top = '0';
+  document.body.appendChild(menu);
+  const kb = kebabEl.getBoundingClientRect();
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  let left = kb.right - mw;                       // right-align to the kebab
+  left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
+  let top = kb.top - mh - 6;                       // above the thumb
+  if (top < 8) top = kb.bottom + 6;                // flip below if no room above
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  // Defer the outside-click listener so this very click doesn't close it.
+  setTimeout(() => {
+    document.addEventListener('click', bmThumbMenuClose);
+    window.addEventListener('resize', bmThumbMenuClose);
+    window.addEventListener('scroll', bmThumbMenuClose, true);
+  }, 0);
+}
+
+// Send a fav into the upscaler as the source and switch to it.
+function bmThumbUpscale(f) {
+  if (typeof switchView === 'function') switchView('upscaler');
+  setTimeout(() => {
+    if (typeof upSelectFav === 'function') upSelectFav(f);
+  }, 60);
+}
+
+// Attach a kebab to a freshly-built bottom-bar cell. `mode` is 'up' | 'ig'.
+function bmThumbMenuDecorate(cell, f, mode) {
+  if (!cell || !f) return;
+  const kebab = document.createElement('button');
+  kebab.type = 'button';
+  kebab.className = 'bm-thumb-kebab';
+  kebab.title = 'More actions';
+  kebab.setAttribute('aria-label', 'Image actions');
+  kebab.innerHTML = '<i class="ti ti-dots-vertical"></i>';
+  kebab.onclick = (e) => {
+    e.stopPropagation();
+    const items = [];
+    if (mode === 'ig') {
+      const m = (typeof igModel === 'function') ? igModel() : null;
+      const i2i = !!(m && m.i2i);
+      const mp = bmFavMegapixels(f);
+      const atMax = mp > 0 && mp >= BM_UPSCALE_MAX_MP;
+      items.push({ ic: 'ti-arrow-up-right', label: 'Upscale', tag: atMax ? 'At max' : '',
+        run: () => bmThumbUpscale(f) });
+      if (i2i) {
+        const selected = (typeof igRefIndexForFav === 'function') && igRefIndexForFav(f.id) >= 0;
+        items.push({ ic: selected ? 'ti-photo-minus' : 'ti-photo-plus',
+          label: selected ? 'Remove from image to image' : 'Add to image to image',
+          on: selected, run: () => { if (typeof igLibToggleRef === 'function') igLibToggleRef(f); } });
+      }
+      items.push({ ic: 'ti-arrow-back-up', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
+      items.push({ ic: 'ti-info-circle', label: 'Information', run: () => bmImageInfoModal(f) });
+      items.push({ sep: true });
+      items.push({ ic: 'ti-trash', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
+      bmThumbMenuOpen(kebab, 'Image gen', items);
+    } else {
+      const ticked = !!(typeof upState !== 'undefined' && upState.batchIds && upState.batchIds.has(f.id));
+      items.push({ ic: 'ti-arrow-back-up', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
+      items.push({ ic: 'ti-info-circle', label: 'Information', run: () => bmImageInfoModal(f) });
+      items.push({ sep: true });
+      items.push({ ic: ticked ? 'ti-square-minus' : 'ti-checkbox',
+        label: ticked ? 'Remove from batch' : 'Add to batch', on: ticked,
+        run: () => { if (typeof upToggleBatch === 'function') { upToggleBatch(f, !ticked); if (typeof upRenderLibBar === 'function') upRenderLibBar(); } } });
+      items.push({ sep: true });
+      items.push({ ic: 'ti-trash', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
+      bmThumbMenuOpen(kebab, 'Upscaler', items);
+    }
+  };
+  cell.appendChild(kebab);
+}
+window.bmThumbMenuDecorate = bmThumbMenuDecorate;
+
+// Delete a fav from the library (destructive), then refresh both bars.
+function bmThumbDelete(f) {
+  if (!f) return;
+  if (typeof confirm === 'function' && !confirm('Delete this image from your library? This cannot be undone.')) return;
+  if (typeof deleteFav === 'function') deleteFav(f.id);
+  if (typeof upRenderLibBar === 'function') upRenderLibBar();
+  if (typeof igRenderLibBar === 'function') igRenderLibBar();
+}
+
+// ── Image Information modal ──────────────────────────────────────────────────
+// Shows model + prompt + settings, and (for i2i outputs) the source images used.
+function bmImageInfoModal(f) {
+  if (!f) return;
+  const modal = document.getElementById('bmInfoModal');
+  if (!modal) return;
+  const body = document.getElementById('bmInfoBody');
+  const titleEl = document.getElementById('bmInfoTitle');
+  const isUpscale = !!(f.isUpscale || f.upscaleMeta);
+  const ig = (f.igSettings && typeof f.igSettings === 'object') ? f.igSettings : null;
+  titleEl.textContent = isUpscale ? 'Upscale info' : (ig ? 'Generation info' : 'Image info');
+
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let html = '';
+
+  // Preview (full image via the durable resolver — set after render).
+  html += '<img id="bmInfoPreview" class="bm-info-preview" alt="">';
+
+  // Prompt.
+  const prompt = (ig && ig.prompt) || f.promptOnly || (f.upscaleMeta && f.upscaleMeta.params && f.upscaleMeta.params.positivePrompt) || '';
+  if (prompt) {
+    html += '<div class="bm-info-section-title">Prompt</div>';
+    html += '<div class="bm-info-prompt">' + esc(prompt) + '</div>';
+  }
+  const negative = (ig && ig.negative) || (f.upscaleMeta && f.upscaleMeta.params && f.upscaleMeta.params.negativePrompt) || '';
+  if (negative) {
+    html += '<div class="bm-info-section-title">Negative prompt</div>';
+    html += '<div class="bm-info-prompt">' + esc(negative) + '</div>';
+  }
+
+  // Settings grid.
+  const fields = [];
+  const modelLabel = (() => {
+    if (isUpscale) return (typeof bmUpscalerLabel === 'function' && f.upscaleMeta && f.upscaleMeta.model) ? bmUpscalerLabel(f.upscaleMeta.model) : (f.model || 'Upscaler');
+    if (ig && ig.modelId && typeof IG_MODELS !== 'undefined') { const mm = IG_MODELS.find(x => x.id === ig.modelId); if (mm) return mm.label; }
+    return f.model || '—';
+  })();
+  fields.push(['Model', modelLabel]);
+  if (isUpscale) {
+    const um = f.upscaleMeta || {};
+    if (um.mp != null) fields.push(['Target MP', um.mp + ' MP']);
+    if (um.factor != null) fields.push(['Factor', um.factor + '×']);
+    const p = um.params || {};
+    if (p.seed != null && p.seed !== '') fields.push(['Seed', p.seed]);
+    if (p.steps != null && p.steps !== '') fields.push(['Steps', p.steps]);
+    if (p.CFGScale != null && p.CFGScale !== '') fields.push(['CFG', p.CFGScale]);
+  } else if (ig) {
+    if (ig.ar) fields.push(['Aspect', ig.ar]);
+    if (ig.res) fields.push(['Resolution', ig.res]);
+    if (ig.quality) fields.push(['Quality', ig.quality]);
+    if (ig.speed) fields.push(['Speed', ig.speed]);
+    if (ig.seed) fields.push(['Seed', ig.seed]);
+    if (ig.steps) fields.push(['Steps', ig.steps]);
+    if (ig.cfg) fields.push(['CFG', ig.cfg]);
+  }
+  const mp = bmFavMegapixels(f);
+  if (mp > 0) fields.push(['Size', mp.toFixed(1) + ' MP']);
+  if (fields.length) {
+    html += '<div class="bm-info-section-title">Settings</div><div class="bm-info-grid">';
+    fields.forEach(([k, v]) => { html += '<div class="bm-info-field"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'; });
+    html += '</div>';
+  }
+
+  // Source images used (i2i refs or upscale source).
+  let srcIds = [];
+  if (Array.isArray(f.srcFavIds)) srcIds = f.srcFavIds.slice();
+  if (f.upscaledFromId != null) srcIds.push(f.upscaledFromId);
+  srcIds = Array.from(new Set(srcIds.map(Number).filter(id => !isNaN(id))));
+  if (srcIds.length) {
+    html += '<div class="bm-info-section-title">' + (isUpscale ? 'Source image' : 'Images used (image to image)') + '</div>';
+    html += '<div class="bm-info-srcs" id="bmInfoSrcs"></div>';
+  }
+
+  body.innerHTML = html;
+  modal.classList.add('open');
+
+  // Resolve the full preview image (authed) after the DOM exists.
+  const prev = document.getElementById('bmInfoPreview');
+  if (prev) {
+    const url = f.serverImageUrl || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : f.imageData) || ('/api/img/' + f.id);
+    if (typeof bmSetImgSrc === 'function') bmSetImgSrc(prev, url); else prev.src = url;
+  }
+  // Resolve source thumbnails.
+  if (srcIds.length) {
+    const wrap = document.getElementById('bmInfoSrcs');
+    srcIds.forEach(id => {
+      const sf = (typeof favourites !== 'undefined') ? favourites.find(x => x && Number(x.id) === id) : null;
+      const im = document.createElement('img');
+      im.className = 'bm-info-src'; im.alt = '';
+      if (sf) {
+        im.title = sf.title || ('#' + id);
+        if (typeof bmApplyThumb === 'function') bmApplyThumb(im, sf);
+        else if (typeof bmSetImgSrc === 'function') bmSetImgSrc(im, sf.serverImageUrl || ('/api/img/' + id));
+        im.onclick = () => { bmInfoClose(); if (typeof bmOpenFull === 'function') bmOpenFull(sf); };
+      } else {
+        im.title = 'Source #' + id + ' (no longer in library)';
+        im.style.opacity = '.4';
+      }
+      wrap.appendChild(im);
+    });
+    if (!wrap.children.length) wrap.innerHTML = '<div class="bm-info-empty">Sources are no longer in your library.</div>';
+  }
+}
+window.bmImageInfoModal = bmImageInfoModal;
+
+function bmInfoClose() {
+  const modal = document.getElementById('bmInfoModal');
+  if (modal) modal.classList.remove('open');
+}
+window.bmInfoClose = bmInfoClose;
 
 // ── i2i FAMILY VIEW ──────────────────────────────────────────────────────────
 // Clicking a generated i2i image in the bottom bar opens its "family": the bar
@@ -21950,6 +22205,7 @@ function upRenderLibBar() {
     // still selects (handled above); the gesture handlers guard against firing
     // on a simple tap by tracking movement / hold duration.
     if (upState.srcFavId === f.id) upAttachThumbGestures(cell, f);
+    if (typeof bmThumbMenuDecorate === 'function') bmThumbMenuDecorate(cell, f, 'up');
     bar.appendChild(cell);
   });
   // Scroll the selected thumb into view so on restore from Library

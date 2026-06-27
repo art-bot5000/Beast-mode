@@ -3376,7 +3376,7 @@ img.bm-thumb-missing { background:var(--surface2); }
    10 images runs them as a batch with shared settings; clicking the thumb body
    (outside the tick) keeps the existing single select-into-preview behaviour. */
 .up-libbar-tick {
-  position:absolute; top:3px; right:3px; z-index:3;
+  position:absolute; top:3px; left:3px; z-index:3;
   width:20px; height:20px; margin:0; padding:0; cursor:pointer;
   -webkit-appearance:none; appearance:none;
   border:2px solid rgba(255,255,255,.85); border-radius:5px;
@@ -3408,7 +3408,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .up-libbar-new:hover { color:var(--accent); border-color:var(--accent);
   background:color-mix(in srgb, var(--accent) 8%, transparent); }
 .up-libbar-thumb .up-libbar-up {
-  position:absolute; left:4px; bottom:4px;
+  position:absolute; right:4px; top:4px;
   display:flex; align-items:center; justify-content:center;
   min-width:16px; height:16px; padding:0 4px;
   font-size:10px; line-height:1; color:#000;
@@ -3982,12 +3982,13 @@ body.up-group-modal-open { overflow:hidden; }
   background:var(--accent,#caff00); border-radius:3px;
   box-shadow:0 1px 3px rgba(0,0,0,.5); pointer-events:none;
 }
-/* Tickbox (bottom-right) — toggles i2i reference selection. The rest of the
-   thumb opens the family view, so the tick is the ONLY selection affordance. */
+/* Tickbox — TOP-LEFT, matches the upscaler bar. When selected it shows the i2i
+   ORDER number inside the box (refs are blended in order). The rest of the thumb
+   opens the family view; the tick + the kebab menu are the selection affordances. */
 .ig-libbar-tick {
-  position:absolute; right:4px; bottom:4px;
-  width:20px; height:20px; padding:0; cursor:pointer;
-  border:1.5px solid rgba(255,255,255,.7); border-radius:4px;
+  position:absolute; left:3px; top:3px; z-index:3;
+  min-width:20px; height:20px; padding:0 3px; cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.7); border-radius:5px;
   background:rgba(8,10,12,.55); backdrop-filter:blur(2px);
   display:flex; align-items:center; justify-content:center;
   transition:background .12s, border-color .12s;
@@ -3996,14 +3997,107 @@ body.up-group-modal-open { overflow:hidden; }
 .ig-libbar-tick:hover { border-color:var(--accent); }
 .ig-libbar-tick.checked { background:var(--accent); border-color:var(--accent); }
 .ig-libbar-tick.checked::after {
-  content:'\2713'; width:auto; height:auto; background:transparent;
-  color:#000; font-size:13px; font-weight:800; line-height:1;
+  content:attr(data-selnum); width:auto; height:auto; background:transparent;
+  color:#000; font-size:11px; font-weight:800; line-height:1;
 }
 /* Small dot cueing a generated image has an i2i source set to open. */
 .ig-libbar-famdot {
-  position:absolute; right:6px; top:6px; width:7px; height:7px; border-radius:50%;
+  position:absolute; left:6px; bottom:6px; width:7px; height:7px; border-radius:50%;
   background:var(--accent,#caff00); box-shadow:0 0 0 2px rgba(8,10,12,.6); pointer-events:none;
 }
+/* ── Thumbnail kebab + context menu (upscaler + image-gen bottom bars) ──────── */
+.bm-thumb-kebab {
+  position:absolute; right:3px; bottom:3px; z-index:4;
+  width:21px; height:21px; padding:0; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(255,255,255,.25); border-radius:5px;
+  background:rgba(8,10,12,.7); color:#dfe6ec; font-size:14px; line-height:1;
+  transition:border-color .12s, color .12s, background .12s;
+}
+.bm-thumb-kebab:hover { border-color:var(--accent); color:var(--accent); }
+.bm-thumb-menu {
+  position:fixed; z-index:30000; min-width:204px;
+  background:var(--surface,#141a21); border:1px solid var(--border,#2a333d);
+  border-radius:10px; padding:5px; box-shadow:0 -10px 34px rgba(0,0,0,.6);
+  font-size:13px;
+}
+.bm-thumb-menu-hd {
+  font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:9px; letter-spacing:1px;
+  color:var(--muted,#5d6b78); padding:6px 9px 3px; text-transform:uppercase;
+}
+.bm-thumb-mi {
+  display:flex; align-items:center; gap:9px; padding:8px 9px;
+  border-radius:7px; color:var(--text,#dce3ea); cursor:pointer;
+}
+.bm-thumb-mi i { font-size:16px; width:18px; text-align:center; color:var(--muted,#8a96a2); }
+.bm-thumb-mi:hover { background:color-mix(in srgb,var(--accent) 12%, transparent); }
+.bm-thumb-mi:hover i { color:var(--accent); }
+.bm-thumb-mi.on i { color:var(--accent); }
+.bm-thumb-mi.dis { color:#586470; cursor:not-allowed; }
+.bm-thumb-mi.dis i { color:#3a444e; }
+.bm-thumb-mi small {
+  margin-left:auto; font-family:'IBM Plex Mono',ui-monospace,monospace;
+  font-size:9.5px; color:var(--muted,#5d6b78); text-transform:uppercase;
+}
+.bm-thumb-mi.danger { color:#e8847c; }
+.bm-thumb-mi.danger i { color:#c2554c; }
+.bm-thumb-mi.danger:hover { background:color-mix(in srgb,#e24b4a 16%, transparent); }
+.bm-thumb-msep { height:1px; background:var(--border,#222a33); margin:4px 6px; }
+/* ── Image info modal ──────────────────────────────────────────────────────── */
+.bm-info-modal {
+  display:none; position:fixed; inset:0; z-index:25000;
+  background:rgba(0,0,0,.85); align-items:flex-start; justify-content:center;
+  padding:24px 16px; overflow-y:auto;
+}
+.bm-info-modal.open { display:flex; }
+.bm-info-card {
+  width:100%; max-width:560px; background:var(--surface,#141a21);
+  border:1px solid var(--border,#2a333d); border-radius:14px; padding:0; overflow:hidden;
+  height:max-content;
+}
+.bm-info-head {
+  display:flex; align-items:center; gap:12px; padding:16px 18px;
+  border-bottom:1px solid var(--border,#222a33);
+}
+.bm-info-head .bm-info-title {
+  font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:14px; letter-spacing:.5px;
+  color:var(--accent); text-transform:uppercase; flex:1;
+}
+.bm-info-x {
+  background:none; border:none; color:var(--muted,#8a96a2); font-size:20px; cursor:pointer;
+  padding:2px 6px; line-height:1;
+}
+.bm-info-x:hover { color:var(--text,#fff); }
+.bm-info-body { padding:16px 18px; }
+.bm-info-preview {
+  width:100%; max-height:280px; object-fit:contain; border-radius:9px;
+  background:var(--thumb-bg,#2a2f36); margin-bottom:14px; display:block;
+}
+.bm-info-section-title {
+  font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:9px; letter-spacing:1px;
+  color:var(--muted,#6b7682); text-transform:uppercase; margin:14px 0 7px;
+}
+.bm-info-prompt {
+  background:var(--surface2,#0e1318); border:1px solid var(--border,#222a33); border-radius:8px;
+  padding:10px 12px; font-size:13px; line-height:1.5; color:var(--text,#dce3ea);
+  white-space:pre-wrap; word-break:break-word; max-height:160px; overflow-y:auto;
+}
+.bm-info-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
+.bm-info-field {
+  background:var(--surface2,#0e1318); border:1px solid var(--border,#222a33);
+  border-radius:8px; padding:8px 10px;
+}
+.bm-info-field .k {
+  font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:9px; letter-spacing:.6px;
+  color:var(--muted,#6b7682); text-transform:uppercase; display:block; margin-bottom:3px;
+}
+.bm-info-field .v { font-size:13px; color:var(--text,#e8edf2); word-break:break-word; }
+.bm-info-srcs { display:flex; gap:8px; flex-wrap:wrap; }
+.bm-info-src {
+  width:64px; height:64px; border-radius:8px; object-fit:cover;
+  border:1px solid var(--border,#2a333d); background:var(--thumb-bg,#2a2f36); cursor:pointer;
+}
+.bm-info-empty { font-size:12.5px; color:var(--muted,#6b7682); }
 /* ── Family view (bottom-bar takeover) ── */
 .ig-fam-btn {
   flex:0 0 auto; height:84px; padding:0 14px; cursor:pointer;
