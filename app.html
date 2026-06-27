@@ -1198,7 +1198,7 @@ handleShareTarget()
              (bottom-bar-driven) library pane; the visible upload/URL UI moved
              into #upStageEmpty. -->
         <div id="upSourceBlock">
-        <input type="file" id="upSrcFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="upSrcFilePicked(this.files)">
+        <input type="file" id="upSrcFile" accept="image/png,image/jpeg,image/webp" multiple style="display:none;" onchange="upSrcFilePicked(this.files)">
         <div id="upSrcLibrary" style="display:none;">
           <div class="up-libgrid" id="upLibraryGrid"></div>
           <div class="ig-note" id="upLibraryEmpty" style="display:none;">Select images from the bar at the bottom of the screen.</div>
@@ -1286,7 +1286,7 @@ handleShareTarget()
                or paste an image URL below. -->
           <div class="up-stage-empty" id="upStageEmpty">
             <div class="up-stage-empty-drop" onclick="document.getElementById('upSrcFile').click()">
-              ⬆ DROP AN IMAGE OR CLICK TO UPLOAD
+              ⬆ DROP IMAGES OR CLICK TO UPLOAD (UP TO 10)
             </div>
             <div class="up-stage-empty-or">— or —</div>
             <div class="up-stage-empty-url" onclick="event.stopPropagation()">
@@ -21482,33 +21482,59 @@ window.upCloseSettingsModal = upCloseSettingsModal;
 
 function upSrcFilePicked(files) {
   if (!files || !files.length) return;
-  const f = files[0];
-  if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) { upStatus('\u2717 Unsupported file type.', true); return; }
-  if (f.size > BM_UPLOAD_MAX_BYTES) { upStatus('\u2717 Image is over the 15\u00A0MB upload limit.', true); return; }
-  // Keep the ORIGINAL bytes for the durable library copy (Restore re-upscales
-  // from the best source); downscale a copy for transport. 2048 keeps plenty of
-  // detail for the upscaler. Saving on upload is what makes Restore work.
-  bmFileToDataUri(f).then(origDataUri => {
-    igDownscaleToDataUri(f, 2048, async (dataUri, dinfo) => {
-      if (dinfo && dinfo.didScale) {
-        upStatus('\u2139 Image was ' + dinfo.origW + '\u00D7' + dinfo.origH
-          + 'px \u2014 downscaled to ' + dinfo.w + '\u00D7' + dinfo.h + 'px for the upscaler (full-res copy saved to your library).', false);
-      }
-      const favId = await bmSaveUploadToLibrary(origDataUri, dataUri, dinfo);
-      upState.srcData = dataUri; upState.srcIsUrl = false;
-      upState.srcFavId = (favId != null) ? favId : null;
-      // Render through the saved fav when we have one so the source is a real
-      // library item (badge, grouping, restore lineage) rather than ad-hoc.
-      const savedFav = (favId != null && typeof favourites !== 'undefined')
-        ? favourites.find(x => x && Number(x.id) === Number(favId)) : null;
-      if (savedFav && typeof upSelectFav === 'function') {
-        upSelectFav(savedFav);
-      } else {
-        upShowAdHocSource(dataUri);   // fallback: in-memory only
-      }
+  // Multi-upload: accept up to BATCH_MAX images at once. Each is saved to the
+  // library as its own isUpload fav (so it persists + appears in the bottom bar
+  // immediately), and the LAST valid one is selected into the stage as the
+  // active upscale source. Mirrors igRefFilesPicked's per-file loop, adapted to
+  // the upscaler's single-source stage.
+  const picked = Array.from(files)
+    .filter(f => /^image\/(png|jpe?g|webp)$/i.test(f.type))
+    .slice(0, BATCH_MAX);
+  if (!picked.length) { upStatus('\u2717 Unsupported file type.', true); document.getElementById('upSrcFile').value = ''; return; }
+  const overCount = Array.from(files).length - picked.length;
+  let lastIdx = picked.length - 1;
+  picked.forEach((f, idx) => {
+    if (f.size > BM_UPLOAD_MAX_BYTES) {
+      upStatus('\u2717 \"' + (f.name || 'image') + '\" is over the 15\u00A0MB upload limit.', true);
+      if (idx === lastIdx) lastIdx--; // don't try to select a skipped file
+      return;
+    }
+    // Keep the ORIGINAL bytes for the durable library copy (Restore re-upscales
+    // from the best source); downscale a copy for transport. 2048 keeps plenty of
+    // detail for the upscaler. Saving on upload is what makes Restore work.
+    bmFileToDataUri(f).then(origDataUri => {
+      igDownscaleToDataUri(f, 2048, async (dataUri, dinfo) => {
+        if (dinfo && dinfo.didScale && picked.length === 1) {
+          upStatus('\u2139 Image was ' + dinfo.origW + '\u00D7' + dinfo.origH
+            + 'px \u2014 downscaled to ' + dinfo.w + '\u00D7' + dinfo.h + 'px for the upscaler (full-res copy saved to your library).', false);
+        }
+        const favId = await bmSaveUploadToLibrary(origDataUri, dataUri, dinfo);
+        // Refresh the upscaler's own bottom bar NOW so the upload appears
+        // immediately (renderFavs inside bmSaveUploadToLibrary updates the
+        // generic library view, not this strip — that was the "only shows after
+        // a mode switch" bug).
+        if (typeof upRenderLibBar === 'function') upRenderLibBar();
+        // Select the LAST picked image into the stage as the active source.
+        if (idx === lastIdx) {
+          upState.srcData = dataUri; upState.srcIsUrl = false;
+          upState.srcFavId = (favId != null) ? favId : null;
+          const savedFav = (favId != null && typeof favourites !== 'undefined')
+            ? favourites.find(x => x && Number(x.id) === Number(favId)) : null;
+          if (savedFav && typeof upSelectFav === 'function') {
+            upSelectFav(savedFav);
+          } else {
+            upShowAdHocSource(dataUri);   // fallback: in-memory only
+          }
+          if (picked.length > 1) {
+            upStatus('\u2139 ' + picked.length + ' images uploaded to your library'
+              + (overCount > 0 ? ' (max ' + BATCH_MAX + ' at once; ' + overCount + ' skipped)' : '')
+              + '. Tick images in the bar to batch-upscale.', false);
+          }
+        }
+      });
+    }).catch(() => {
+      upStatus('\u2717 Could not read \"' + (f.name || 'image') + '\".', true);
     });
-  }).catch(() => {
-    upStatus('\u2717 Could not read that image.', true);
   });
   document.getElementById('upSrcFile').value = '';
 }
@@ -21612,19 +21638,19 @@ function upRenderLibBar() {
   if (!bar) return;
   bar.innerHTML = '';
 
-  // "+ New" button — always the far-left item on every screen size. Clears the
-  // current source/preview back to the dropzone so a new image can be loaded.
+  // "+" button — far-left item on every screen size. Opens the multi-image
+  // file picker so up to BATCH_MAX images can be uploaded straight into the
+  // library + bottom bar (they appear immediately; the last becomes the active
+  // source). The empty-stage dropzone remains available for drag/drop.
   const plus = document.createElement('button');
   plus.type = 'button';
   plus.className = 'up-libbar-new';
-  plus.title = 'New — clear the preview to load another image';
-  plus.setAttribute('aria-label', 'New image');
+  plus.title = 'Upload images (up to ' + BATCH_MAX + ')';
+  plus.setAttribute('aria-label', 'Upload images');
   plus.textContent = '+';
   plus.onclick = () => {
-    if (typeof upClearSource === 'function') upClearSource();
-    // Also clear Results so the user starts fresh
-    const grid = document.getElementById('upResults');
-    if (grid) grid.innerHTML = '';
+    const inp = document.getElementById('upSrcFile');
+    if (inp) { inp.value = ''; inp.click(); }
   };
   bar.appendChild(plus);
 
