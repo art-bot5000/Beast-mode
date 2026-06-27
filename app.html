@@ -17047,11 +17047,64 @@ const bmQueue = (() => {
       return { ok: false, code: data.code, error: data.error, needed: data.needed, balance: data.balance };
     }
     if (typeof data.balance === 'number' && typeof bmTokenBalanceSet === 'function') bmTokenBalanceSet(data.balance);
-    if (data.jobId) jobMeta[data.jobId] = meta || {};
+    if (data.jobId) {
+      const m = meta || {};
+      // Stash the exact payload + kind so a FAILED job can be retried with
+      // identical settings, and (for a failed job, which has no fav) so RESTORE
+      // can reload its recipe into the composer. _retries carries the same-
+      // settings retry count (capped at RETRY_MAX). In-memory only — resets on
+      // refresh, which also resets the retry cap, by design.
+      m._payload = payload;
+      m._kind = payload && payload.kind;
+      if (typeof m._retries !== 'number') m._retries = 0;
+      jobMeta[data.jobId] = m;
+    }
     start(); // make sure we're polling for the result
     render();
     return { ok: true, jobId: data.jobId, status: data.status, balance: data.balance };
   }
+
+  // Max same-settings retries on a failed job. After this, Retry is disabled and
+  // the user must Restore (load settings into the composer) and change something.
+  const RETRY_MAX = 3;
+
+  // Retry a FAILED job by re-submitting its captured payload verbatim. Honors the
+  // per-session retry cap. Surfaces an explanation if the balance is too low
+  // rather than failing silently. Returns a result object for the caller/UI.
+  async function retryJob(jobId) {
+    const m = jobMeta[jobId];
+    if (!m || !m._payload) {
+      return { ok: false, error: 'Original settings for this job are no longer available (they reset on refresh). Use Restore to rebuild them.' };
+    }
+    if ((m._retries || 0) >= RETRY_MAX) {
+      return { ok: false, code: 'retry_capped', error: 'Retried ' + RETRY_MAX + ' times with the same settings. Use Restore to change something first.' };
+    }
+    // Carry the retry count + recipe forward onto the NEW job's meta.
+    const nextMeta = { ...m, _retries: (m._retries || 0) + 1 };
+    delete nextMeta._payload; // re-added by enqueue from the fresh payload
+    const r = await enqueue({ ...m._payload }, nextMeta);
+    if (!r.ok) {
+      if (r.code === 'insufficient_tokens') {
+        return { ok: false, code: 'insufficient_tokens',
+          error: 'Not enough tokens to retry — needs ' + r.needed + ', you have ' + r.balance + '.' };
+      }
+      if (r.code === 'rate_limit') {
+        return { ok: false, code: 'rate_limit', error: r.error || 'Rate limit reached — wait a moment and retry.' };
+      }
+      return { ok: false, code: r.code, error: r.error || 'Could not retry this job.' };
+    }
+    return { ok: true, jobId: r.jobId };
+  }
+
+  // How many same-settings retries remain for a failed job (0 = capped).
+  function retriesLeft(jobId) {
+    const m = jobMeta[jobId];
+    const used = (m && typeof m._retries === 'number') ? m._retries : 0;
+    return Math.max(0, RETRY_MAX - used);
+  }
+
+  // The captured recipe for a (failed) job, for Restore-into-composer.
+  function metaFor(jobId) { return jobMeta[jobId] || null; }
 
   function enqueueGenerate(body, meta) {
     return enqueue({ ...body, kind: 'generate' }, meta);
@@ -17422,6 +17475,59 @@ const bmQueue = (() => {
       }
     }
 
+    // FAILED jobs: surface the FULL failure reason (not just the one-line status
+    // chip), so the user understands what went wrong rather than a bare "Failed".
+    if (job.status === 'failed') {
+      const reason = (job.error && (job.error.message || job.error.code))
+        ? (job.error.message || job.error.code)
+        : 'The generation failed, but the provider gave no reason. This is usually a transient provider error — retrying often works.';
+      const rsn = document.createElement('div');
+      rsn.className = 'bm-q-fail-reason';
+      rsn.textContent = '\u26a0 ' + reason
+        + (job.error && job.error.code && job.error.message ? ' (' + job.error.code + ')' : '');
+      card.appendChild(rsn);
+    }
+
+    // Action row — Restore (done + failed) and Retry (failed only).
+    if (job.status === 'done' || job.status === 'failed') {
+      const actions = document.createElement('div');
+      actions.className = 'bm-q-actions';
+
+      // RESTORE — load this job's settings back into the composer.
+      const restoreBtn = document.createElement('button');
+      restoreBtn.type = 'button';
+      restoreBtn.className = 'bm-q-act bm-q-act-restore';
+      restoreBtn.textContent = '\u21ba RESTORE';
+      restoreBtn.title = 'Load this job\u2019s settings back into the composer';
+      restoreBtn.onclick = (e) => { e.stopPropagation(); bmQueueRestore(job); };
+      actions.appendChild(restoreBtn);
+
+      // RETRY — failed jobs only, capped at RETRY_MAX same-settings attempts.
+      if (job.status === 'failed') {
+        const left = (bmQueue.retriesLeft ? bmQueue.retriesLeft(job.id) : 0);
+        const retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.className = 'bm-q-act bm-q-act-retry';
+        const haveSettings = !!(bmQueue.metaFor && bmQueue.metaFor(job.id) && bmQueue.metaFor(job.id)._payload);
+        if (!haveSettings) {
+          retryBtn.textContent = '\u21bb RETRY';
+          retryBtn.disabled = true;
+          retryBtn.title = 'Settings for this job reset on refresh — use Restore to rebuild and run again';
+        } else if (left <= 0) {
+          retryBtn.textContent = '\u21bb RETRY';
+          retryBtn.disabled = true;
+          retryBtn.title = 'Retried ' + bmQueue.RETRY_MAX + ' times with the same settings. Use Restore to change something first.';
+        } else {
+          retryBtn.textContent = '\u21bb RETRY (' + left + ')';
+          retryBtn.title = 'Re-run with the same settings (' + left + ' of ' + bmQueue.RETRY_MAX + ' left)';
+          retryBtn.onclick = (e) => { e.stopPropagation(); bmQueueRetry(job, retryBtn); };
+        }
+        actions.appendChild(retryBtn);
+      }
+
+      card.appendChild(actions);
+    }
+
     if (job.status === 'done' || job.status === 'failed') {
       const x = document.createElement('button');
       x.className = 'bm-q-dismiss'; x.textContent = '✕'; x.title = 'Dismiss';
@@ -17556,7 +17662,7 @@ const bmQueue = (() => {
       /* Full Queue view cards */
       .bm-queue-view-list { display:flex; flex-direction:column; gap:10px; max-width:760px; }
       .bm-queue-empty { color:var(--muted,#999); padding:24px 0; }
-      .bm-q-card { display:flex; align-items:center; gap:12px; position:relative;
+      .bm-q-card { display:flex; align-items:center; gap:12px; position:relative; flex-wrap:wrap;
         background:var(--surface,#161616); border:1px solid var(--border,#333); border-radius:12px; padding:12px 14px; }
       .bm-q-card-main { display:flex; align-items:center; gap:12px; flex:1; min-width:0; }
       .bm-q-card-text { min-width:0; }
@@ -17568,6 +17674,19 @@ const bmQueue = (() => {
       .bm-q-dismiss:hover { color:#f85149; }
       .bm-q-card.q-running { border-color:color-mix(in srgb,var(--accent,#7c5cff) 50%,var(--border,#333)); }
       .bm-q-card.q-failed { border-color:color-mix(in srgb,#f85149 40%,var(--border,#333)); }
+      /* Full failure reason — its own full-width line under the status. */
+      .bm-q-fail-reason { flex-basis:100%; order:5; font-size:12.5px; line-height:1.45;
+        color:#ffb4ae; background:color-mix(in srgb,#f85149 10%,transparent);
+        border:1px solid color-mix(in srgb,#f85149 22%,transparent); border-radius:8px;
+        padding:7px 10px; margin-top:2px; word-break:break-word; }
+      /* Restore / Retry action row — full-width, below the reason. */
+      .bm-q-actions { flex-basis:100%; order:6; display:flex; gap:8px; margin-top:2px; }
+      .bm-q-act { font:inherit; font-size:12px; font-weight:700; letter-spacing:.4px;
+        cursor:pointer; border-radius:8px; padding:6px 12px; border:1px solid var(--border,#333);
+        background:var(--surface2,#1e1e1e); color:var(--text,#eee); }
+      .bm-q-act:hover:not(:disabled) { border-color:var(--accent,#7c5cff); }
+      .bm-q-act:disabled { opacity:.45; cursor:not-allowed; }
+      .bm-q-act-retry:not(:disabled) { border-color:color-mix(in srgb,var(--accent,#7c5cff) 50%,var(--border,#333)); }
       /* Active / History section grouping */
       .bm-q-section { display:flex; flex-direction:column; gap:10px; }
       .bm-q-section + .bm-q-section { margin-top:18px; }
@@ -17615,7 +17734,7 @@ const bmQueue = (() => {
   return {
     enqueueGenerate, enqueueUpscale, onJob,
     start, stop, resume, poll, render, renderView, renderInto, dismiss, clearAll,
-    favIdFor,
+    favIdFor, retryJob, retriesLeft, metaFor, RETRY_MAX,
     get jobs() { return lastJobs; },
   };
 })();
@@ -17627,23 +17746,132 @@ const bmQueue = (() => {
 function bmOpenQueueJobEntry(job) {
   if (!job || job.status !== 'done') return;
   let favId = (typeof bmQueue !== 'undefined' && bmQueue.favIdFor) ? bmQueue.favIdFor(job.id) : null;
-  if (favId == null && typeof favourites !== 'undefined') {
-    const url = (job.result && ((job.result.images && job.result.images[0] && job.result.images[0].url) ||
-                (job.result.image && job.result.image.url))) || null;
-    if (url) {
-      const hit = favourites.find(f => f && f.imageData === url);
-      if (hit) favId = hit.id;
-    }
+  const url = (job.result && ((job.result.images && job.result.images[0] && job.result.images[0].url) ||
+              (job.result.image && job.result.image.url))) || null;
+  if (favId == null && typeof favourites !== 'undefined' && url) {
+    // Match the result URL against the library. A rehydrated fav may carry the
+    // URL on serverImageUrl with imageData:null, so check BOTH (matching only
+    // imageData was why the click sometimes resolved nothing and fell through).
+    const hit = favourites.find(f => f && (f.imageData === url || f.serverImageUrl === url));
+    if (hit) favId = hit.id;
   }
-  if (favId == null) return;
+  // Resolve the fav object so we can open the real lightbox viewer.
+  const fav = (favId != null && typeof favourites !== 'undefined')
+    ? favourites.find(f => f && Number(f.id) === Number(favId)) : null;
   // Close the mobile queue modal if it's open.
   if (typeof bmQueueModalClose === 'function') bmQueueModalClose();
   if (typeof switchView === 'function') switchView('library');
   setTimeout(() => {
-    if (typeof openImageModal === 'function') openImageModal(favId);
+    // Open the FULL-SIZE image in the lightbox (bmOpenFull resolves the durable
+    // /api/img source). Previously this called openImageModal — which is the
+    // "Add Reference Image" UPLOAD dialog, not a viewer — so the thumbnail click
+    // wrongly opened a blank upload modal. Fall back to bmOpenFull-by-url only if
+    // no fav resolved.
+    if (fav && typeof bmOpenFull === 'function') { bmOpenFull(fav); return; }
+    if (url && typeof bmFetchServerImage === 'function' && typeof openLightbox === 'function') {
+      bmFetchServerImage(url).then(blob => { if (blob) openLightbox(blob); }).catch(() => {});
+    }
   }, 60);
 }
 window.bmOpenQueueJobEntry = bmOpenQueueJobEntry;
+
+// RESTORE a queue job's settings into the composer.
+//  • DONE job  → restore from its saved library fav (restoreFav handles the
+//    full recipe, including upscale source + igSettings).
+//  • FAILED job → no fav exists, so restore from the captured meta/payload:
+//    switch to the right mode and apply the recipe we stashed at enqueue time.
+function bmQueueRestore(job) {
+  if (!job) return;
+  if (typeof bmQueueModalClose === 'function') bmQueueModalClose();
+
+  if (job.status === 'done') {
+    let favId = (typeof bmQueue !== 'undefined' && bmQueue.favIdFor) ? bmQueue.favIdFor(job.id) : null;
+    if (favId == null && typeof favourites !== 'undefined') {
+      const url = (job.result && ((job.result.images && job.result.images[0] && job.result.images[0].url) ||
+                  (job.result.image && job.result.image.url))) || null;
+      if (url) {
+        const hit = favourites.find(f => f && (f.imageData === url || f.serverImageUrl === url));
+        if (hit) favId = hit.id;
+      }
+    }
+    if (favId != null && typeof restoreFav === 'function') { restoreFav(favId); return; }
+    // Fall through to meta-based restore if no fav resolved.
+  }
+
+  // FAILED (or done-without-fav): restore from captured recipe.
+  const meta = (typeof bmQueue !== 'undefined' && bmQueue.metaFor) ? bmQueue.metaFor(job.id) : null;
+  const kind = (meta && meta._kind) || job.kind;
+  if (!meta) {
+    if (typeof bmToastTop === 'function') bmToastTop('Settings for this job reset on refresh — nothing to restore.', true);
+    else if (typeof pbPasteToast === 'function') pbPasteToast('Settings for this job reset on refresh — nothing to restore.');
+    return;
+  }
+
+  if (kind === 'generate') {
+    if (typeof switchView === 'function') switchView('imagegen');
+    setTimeout(() => {
+      if (meta.igSettings && typeof igApplySettings === 'function') {
+        igApplySettings(meta.igSettings);
+        if (typeof igStatus === 'function') igStatus('\u21ba Restored settings from a failed job — adjust and generate again.', false);
+      } else if (meta.prompt && typeof igApplySettings === 'function') {
+        igApplySettings({ prompt: meta.prompt });
+      }
+    }, 80);
+    return;
+  }
+
+  if (kind === 'upscale') {
+    if (typeof switchView === 'function') switchView('upscaler');
+    setTimeout(() => {
+      const p = meta._payload || {};
+      const setV = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+      if (typeof upState !== 'undefined') {
+        if (p.model && upState.models && upState.models.some(m => m.id === p.model)) {
+          upState.modelId = p.model;
+          const sel = document.getElementById('upModel'); if (sel) sel.value = p.model;
+          if (typeof upModelChanged === 'function') upModelChanged();
+        }
+        if (p.mp != null) upState.mp = Number(p.mp);
+        if (p.factor != null) upState.factor = Number(p.factor);
+      }
+      setV('upSeed', p.seed); setV('upSteps', p.steps); setV('upCfg', p.CFGScale);
+      setV('upPrompt', p.positivePrompt); setV('upNegative', p.negativePrompt);
+      // Try to reload the original source fav if we captured one.
+      const srcId = (meta.srcFavIds && meta.srcFavIds[0]) || p.srcFavId;
+      if (srcId != null && typeof favourites !== 'undefined' && typeof upSelectFav === 'function') {
+        const src = favourites.find(x => x && Number(x.id) === Number(srcId));
+        if (src) upSelectFav(src);
+      }
+      if (typeof upRenderAll === 'function') upRenderAll();
+      if (typeof upStatus === 'function') upStatus('\u21ba Restored settings from a failed job — adjust and upscale again.', false);
+    }, 80);
+    return;
+  }
+}
+window.bmQueueRestore = bmQueueRestore;
+
+// RETRY a failed job with identical settings (capped at RETRY_MAX). Surfaces the
+// reason on failure (e.g. not enough tokens) rather than failing silently.
+async function bmQueueRetry(job, btnEl) {
+  if (!job || job.status !== 'failed') return;
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '\u21bb \u2026'; }
+  const r = (typeof bmQueue !== 'undefined' && bmQueue.retryJob)
+    ? await bmQueue.retryJob(job.id)
+    : { ok: false, error: 'Queue unavailable.' };
+  const notify = (msg, isErr) => {
+    if (typeof bmToastTop === 'function') bmToastTop(msg, !!isErr);
+    else if (typeof pbPasteToast === 'function') pbPasteToast(msg);
+  };
+  if (r.ok) {
+    notify('\u21bb Re-queued with the same settings.', false);
+    if (typeof bmQueueJump === 'function') bmQueueJump();
+  } else {
+    notify('\u2717 ' + (r.error || 'Could not retry.'), true);
+    // Re-render so the button reflects the (possibly now-capped) state.
+    if (typeof bmQueue !== 'undefined' && bmQueue.render) bmQueue.render();
+  }
+}
+window.bmQueueRetry = bmQueueRetry;
 
 // ── Mobile queue modal (opened from the top-bar Queue button) ────────────────
 function bmQueueModalOpen() {
