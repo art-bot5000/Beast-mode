@@ -6809,7 +6809,8 @@ function buildLibCard(f) {
     img.alt = f.title || buildAutoTitle(f)
     img.loading = 'lazy'
     img.dataset.favId = f.id
-    if (typeof bmApplyThumb === 'function') bmApplyThumb(img, f)
+    if (typeof bmLazyThumb === 'function') bmLazyThumb(img, f)
+    else if (typeof bmApplyThumb === 'function') bmApplyThumb(img, f)
     img.onerror = () => { if (img.src && typeof bmImageFallback === 'function') bmImageFallback(img, f) }
     img.onclick = e => { e.stopPropagation(); if (typeof bmOpenFull === 'function') bmOpenFull(f); else openLightbox(img.src) }
     imgWrap.appendChild(img)
@@ -7023,6 +7024,12 @@ function buildLibCard(f) {
     mkBtn.textContent = '✎ MARKUP'; mkBtn.title = 'Open this image in the vector editor'
     mkBtn.onclick = e => { e.stopPropagation(); markupFav(f) }
     statusRow.appendChild(mkBtn)
+
+    const shBtn = document.createElement('button')
+    shBtn.type = 'button'; shBtn.className = 'img-status-pill img-status-action'
+    shBtn.textContent = '\u2191 SHARE'; shBtn.title = 'Share this image'
+    shBtn.onclick = e => { e.stopPropagation(); if (typeof bmShareFavImage === 'function') bmShareFavImage(f) }
+    statusRow.appendChild(shBtn)
 
     // Spacer pushes star + pin to the far right
     const srSpacer = document.createElement('div'); srSpacer.style.flex = '1'
@@ -18844,6 +18851,49 @@ window._b64FromBytes  = _b64FromBytes;
 window._bytesFromB64  = _bytesFromB64;
 window.pbPasteToast   = pbPasteToast;
 
+// ── LAZY THUMBNAIL RESOLUTION ────────────────────────────────────────────────
+// Eagerly calling bmApplyThumb for every card on render kicks off a decrypt /
+// authed-fetch per image up front — slow on a big library (the native
+// loading="lazy" attr only defers a URL already in src, but here the src comes
+// from this async resolver, so it ran for all N cards regardless). Instead we
+// register each <img> with a single shared IntersectionObserver and only
+// resolve when the card scrolls within ~600px of the viewport. Images already
+// on screen at first paint resolve on the observer's initial async callback, so
+// the first screenful fills with no manual "first N" batch and no blank flash
+// beyond a frame. Works for the vertical library grid AND the horizontal
+// IG/Upscaler bottom bars (rootMargin applies on every side).
+let _bmThumbIO = null;
+// favId -> fav object, for the currently-registered (unresolved) images. Keyed
+// so a re-render that rebuilds the same fav's <img> just re-registers cleanly.
+const _bmThumbPending = new WeakMap();
+function _bmGetThumbIO() {
+  if (_bmThumbIO || typeof IntersectionObserver === 'undefined') return _bmThumbIO;
+  _bmThumbIO = new IntersectionObserver((entries, obs) => {
+    for (const ent of entries) {
+      if (!ent.isIntersecting) continue;
+      const img = ent.target;
+      obs.unobserve(img);
+      const fav = _bmThumbPending.get(img);
+      _bmThumbPending.delete(img);
+      if (fav && typeof bmApplyThumb === 'function') {
+        try { bmApplyThumb(img, fav); } catch (e) { /* best-effort */ }
+      }
+    }
+  }, { root: null, rootMargin: '600px 0px 600px 0px', threshold: 0.01 });
+  return _bmThumbIO;
+}
+// Register an <img> for lazy thumbnail resolution. Falls back to resolving
+// immediately when IntersectionObserver is unavailable (old WebKit) so the
+// image still loads — just without the deferral win.
+function bmLazyThumb(imgEl, fav) {
+  if (!imgEl || !fav) return;
+  const io = _bmGetThumbIO();
+  if (!io) { if (typeof bmApplyThumb === 'function') bmApplyThumb(imgEl, fav); return; }
+  _bmThumbPending.set(imgEl, fav);
+  io.observe(imgEl);
+}
+window.bmLazyThumb = bmLazyThumb;
+
 // Resolve the best thumbnail source for an <img>, async. Order:
 //   encrypted R2 thumb (if unlocked) -> local IndexedDB cache -> fav.imageData.
 // Sets the element's src when resolved; applies a lock placeholder when an
@@ -21024,7 +21074,8 @@ function igRenderLibBar() {
     cell.dataset.favId = f.id;
     const img = document.createElement('img');
     img.alt = f.title || ''; img.loading = 'lazy'; img.dataset.favId = f.id;
-    if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, f); }
+    if (typeof bmLazyThumb === 'function') { bmLazyThumb(img, f); }
+    else if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, f); }
     else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
     else { img.src = f.imageData; }
     cell.appendChild(img);
@@ -21178,7 +21229,7 @@ function bmThumbMenuDecorate(cell, f, mode) {
       if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
-      items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFav === 'function') bmShareFav(f); } });
+      items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFavImage === 'function') bmShareFavImage(f); } });
       items.push({ sep: true });
       items.push({ uni: '\u2715', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
       bmThumbMenuOpen(kebab, 'Image gen', items);
@@ -21187,7 +21238,7 @@ function bmThumbMenuDecorate(cell, f, mode) {
       if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
-      items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFav === 'function') bmShareFav(f); } });
+      items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFavImage === 'function') bmShareFavImage(f); } });
       items.push({ sep: true });
       items.push({ ic: 'ti-stack-2',
         label: ticked ? 'Remove from batch' : 'Add to batch', on: ticked,
@@ -21621,6 +21672,51 @@ async function bmShareFav(f) {
   } catch (e) { toast('Could not save share card', 'error'); }
 }
 window.bmShareFav = bmShareFav;
+
+// Share the FULL IMAGE only (no card, no settings). Resolves the fav's full
+// bytes through the same durable chain as the card share, re-encodes to a PNG
+// blob via canvas (CORS-anonymous load keeps the canvas untainted), then uses
+// the native share sheet with the file attached, falling back to a download.
+async function bmShareFavImage(f) {
+  if (!f) return;
+  const toast = (msg) => { try { if (typeof pbPasteToast === 'function') pbPasteToast(msg); } catch (e) {} };
+  toast('Preparing image\u2026');
+  let blob = null;
+  try {
+    const img = await _bmShareLoadImg(f, { thumb: false });
+    if (img && img.naturalWidth) {
+      const cv = document.createElement('canvas');
+      cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      cv.getContext('2d').drawImage(img, 0, 0);
+      blob = await new Promise((resolve) => cv.toBlob(b => resolve(b), 'image/png'));
+      try { cv.width = 0; cv.height = 0; } catch (_) {}
+    }
+  } catch (e) { blob = null; }
+  if (!blob) { toast('Could not load this image'); return; }
+
+  const fname = 'beast-mode-' + (f.id != null ? f.id : Date.now()) + '.png';
+  const file = (typeof File === 'function') ? new File([blob], fname, { type: 'image/png' }) : null;
+
+  // Prefer native share with the file attached (mobile); fall back to download.
+  if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Beast Mode', text: 'Made with Beast Mode' });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;   // user cancelled — not an error
+    }
+  }
+  // Download fallback.
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Image downloaded');
+  } catch (e) { toast('Could not save image'); }
+}
+window.bmShareFavImage = bmShareFavImage;
 
 function bmInfoClose() {
   const modal = document.getElementById('bmInfoModal');
@@ -22515,7 +22611,10 @@ function upRenderLibBar() {
     img.dataset.favId = f.id;
     // Load the small encrypted thumbnail (fast) via bmApplyThumb; the full image
     // is only fetched when the item is clicked into the stage (upSelectFav).
-    if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, f); }
+    // Deferred through bmLazyThumb so off-screen strip items don't all resolve
+    // at once on render.
+    if (typeof bmLazyThumb === 'function') { bmLazyThumb(img, f); }
+    else if (typeof bmApplyThumb === 'function') { bmApplyThumb(img, f); }
     else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
     else { img.src = f.imageData; }
     cell.appendChild(img);
