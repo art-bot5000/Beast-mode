@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Prompt Lab // Generator // Library</title>
-<meta name="description" content="Beast Mode — an AI image generation and upscaling studio with a prompt builder, multi-provider rendering, and a durable library of saved favourites.">
+<meta name="description" content="Generator by artbot5000 — an AI image generation and upscaling studio with a prompt builder, multi-provider rendering, and a durable library of saved favourites.">
 <!-- ── PWA ──────────────────────────────────────────────────────── -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -66,7 +66,7 @@ function showUpdateBanner(waitingWorker) {
   ].join(';')
   banner.innerHTML = `
     <span style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--accent,#00ffb0);white-space:nowrap;">⊛ UPDATE READY</span>
-    <span style="font-size:11px;color:#aaa;letter-spacing:.5px;flex:1;">A new version of Beast Mode is available.</span>
+    <span style="font-size:11px;color:#aaa;letter-spacing:.5px;flex:1;">A new version of Generator by artbot5000 is available.</span>
     <button id="bmUpdateBtn" style="background:var(--accent,#00ffb0);border:none;border-radius:3px;padding:6px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;color:#000;white-space:nowrap;flex-shrink:0;">UPDATE NOW</button>
     <button id="bmUpdateDismiss" style="background:none;border:none;cursor:pointer;color:#666;font-size:18px;padding:0 2px;flex-shrink:0;line-height:1;">×</button>
   `
@@ -476,7 +476,7 @@ handleShareTarget()
 <div class="mobile-topbar">
   <div class="mobile-topbar-brand">
     <span class="mobile-topbar-mark">⌬</span>
-    <span class="mobile-topbar-brandtext">BEAST MODE</span>
+    <span class="mobile-topbar-brandtext">GENERATOR</span>
   </div>
   <button class="mobile-topbar-queue" id="mobileQueueBtn" onclick="bmQueueModalOpen()" aria-label="Queue" type="button">
     <span class="mobile-topbar-queue-ic">⧗</span>
@@ -512,7 +512,7 @@ handleShareTarget()
 <nav class="mode-nav" id="modeNav">
   <div class="mode-nav-brand">
     <span class="brand-mark"><i class="ti ti-hexagon"></i></span>
-    <span class="brand-text">BEAST MODE</span>
+    <span class="brand-text">GENERATOR</span>
     <span class="version">V4.0</span>
   </div>
 
@@ -1023,7 +1023,7 @@ handleShareTarget()
     <!-- Sign-in gate: server enforces auth on /api/generate; this gives a clean UX. -->
     <div id="igAuthGate" class="ig-panel ig-gate" style="display:none;">
       <div style="font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:1.5px;color:var(--accent);margin-bottom:10px;">SIGN IN TO GENERATE</div>
-      <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Image generation runs through your Beast Mode account.<br>Sign in (free) to unlock the multi-model engine.</div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Image generation runs through your artbot5000 account.<br>Sign in (free) to unlock the multi-model engine.</div>
       <button class="btn btn-primary" onclick="if(typeof openAuthModal==='function')openAuthModal('login')">⊙ SIGN IN / CREATE ACCOUNT</button>
     </div>
 
@@ -1172,7 +1172,7 @@ handleShareTarget()
   <div class="view-inner">
     <div id="upAuthGate" class="ig-panel ig-gate" style="display:none;">
       <div style="font-family:'IBM Plex Mono',sans-serif;font-size:24px;letter-spacing:1.5px;color:var(--accent);margin-bottom:10px;">SIGN IN TO UPSCALE</div>
-      <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Upscaling runs through your Beast Mode account.<br>Sign in (free) to unlock the resolution engine.</div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:18px;">Upscaling runs through your artbot5000 account.<br>Sign in (free) to unlock the resolution engine.</div>
       <button class="btn btn-primary" onclick="if(typeof openAuthModal==='function')openAuthModal('login')">⊙ SIGN IN / CREATE ACCOUNT</button>
     </div>
 
@@ -16889,7 +16889,7 @@ document.addEventListener('viewSwitched', e => {
 <div id="syncGateModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;">
   <div class="modal-card" style="max-width:480px;width:100%;">
     <div class="modal-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
-      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);line-height:1;">⌬ Beast Mode</div>
+      <div style="font-family:'IBM Plex Mono',sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);line-height:1;">⌬ Generator by artbot5000</div>
       <div style="font-size:10px;letter-spacing:2px;color:var(--muted);">YOUR STYLE, YOUR EXPERTISE, YOUR PROMPT.</div>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
@@ -16900,7 +16900,7 @@ document.addEventListener('viewSwitched', e => {
           <span class="sync-gate-icon" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);">⊙</span>
           <div style="flex:1;">
             <div style="font-weight:700;letter-spacing:.5px;color:var(--accent);">Sign in / Create account</div>
-            <div style="font-size:10px;opacity:.7;margin-top:2px;">Your Beast Mode account — required for image generation</div>
+            <div style="font-size:10px;opacity:.7;margin-top:2px;">Your artbot5000 account — required for image generation</div>
           </div>
         </button>
         <div style="background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:5px;padding:10px 14px;">
@@ -25585,7 +25585,7 @@ function bmNavSignOut() {
   if (typeof closeModeNav === 'function') closeModeNav();
   if (!window.bmSession) { alert('You are not signed in.'); return; }
   const who = window.bmSession.email ? `\n\nSigned in as ${window.bmSession.email}.` : '';
-  if (confirm('Sign out of your Beast Mode account?' + who)) {
+  if (confirm('Sign out of your artbot5000 account?' + who)) {
     if (typeof window.bmSignOut === 'function') window.bmSignOut();
   }
 }
