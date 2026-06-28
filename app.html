@@ -7206,6 +7206,13 @@ function libOpenInfo(favId) {
     ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-flask" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
   </div>`
 
+  // ── Share ─────────────────────────────────────────────────────────────
+  html += `<div class="lib-info-share-row">
+    <button type="button" class="lib-info-share-btn" id="libInfoShareBtn">
+      <span aria-hidden="true">\u2191</span> SHARE
+    </button>
+  </div>`
+
   // ── Prompt ────────────────────────────────────────────────────────────
   html += `<div class="lib-info-section">
     <div class="lib-info-label">PROMPT</div>
@@ -7254,6 +7261,10 @@ function libOpenInfo(favId) {
 
   body.innerHTML = html
   modal.style.display = 'flex'
+
+  // Wire the Share button (builds a client-side share card from this fav).
+  const _shareBtn = document.getElementById('libInfoShareBtn')
+  if (_shareBtn) _shareBtn.onclick = () => { if (typeof bmShareFav === 'function') bmShareFav(f) }
 
   // Hydrate source thumbnails after the DOM exists. Reuse bmApplyThumb so the
   // encrypted R2 thumb / authed /api/img path resolves exactly as on the cards.
@@ -21075,6 +21086,9 @@ function bmFavMegapixels(f) {
 // Close any open thumb menu.
 function bmThumbMenuClose() {
   document.querySelectorAll('.bm-thumb-menu').forEach(n => n.remove());
+  // Release the transient "stay open while the kebab menu is up" hold on an
+  // unpinned bottom bar (#5). Never touches the saved pin preference.
+  document.body.classList.remove('ig-lib-hold', 'up-lib-hold');
   document.removeEventListener('click', bmThumbMenuClose);
   window.removeEventListener('resize', bmThumbMenuClose);
   window.removeEventListener('scroll', bmThumbMenuClose, true);
@@ -21084,6 +21098,10 @@ function bmThumbMenuClose() {
 // { ic, label, tag, dis, on, danger, run } (or { sep:true } / { hd:'TEXT' }).
 function bmThumbMenuOpen(kebabEl, header, items) {
   bmThumbMenuClose();
+  // Keep an unpinned bottom bar visually open for the menu's lifetime (#5).
+  // Header identifies the bar; the class is cleared in bmThumbMenuClose.
+  if (header === 'Image gen') document.body.classList.add('ig-lib-hold');
+  else if (header === 'Upscaler') document.body.classList.add('up-lib-hold');
   const menu = document.createElement('div');
   menu.className = 'bm-thumb-menu';
   if (header) {
@@ -21157,15 +21175,19 @@ function bmThumbMenuDecorate(cell, f, mode) {
         items.push({ ic: 'ti-photo', label: selected ? 'Remove from image to image' : 'Add to image to image',
           on: selected, run: () => { if (typeof igLibToggleRef === 'function') igLibToggleRef(f); } });
       }
-      items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
+      if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
+      items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
+      items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFav === 'function') bmShareFav(f); } });
       items.push({ sep: true });
       items.push({ uni: '\u2715', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
       bmThumbMenuOpen(kebab, 'Image gen', items);
     } else {
       const ticked = !!(typeof upState !== 'undefined' && upState.batchIds && upState.batchIds.has(f.id));
-      items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
+      if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
+      items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
+      items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFav === 'function') bmShareFav(f); } });
       items.push({ sep: true });
       items.push({ ic: 'ti-stack-2',
         label: ticked ? 'Remove from batch' : 'Add to batch', on: ticked,
@@ -21198,13 +21220,14 @@ function bmImageInfoModal(f) {
   const titleEl = document.getElementById('bmInfoTitle');
   const isUpscale = !!(f.isUpscale || f.upscaleMeta);
   const ig = (f.igSettings && typeof f.igSettings === 'object') ? f.igSettings : null;
-  titleEl.textContent = isUpscale ? 'Upscale info' : (ig ? 'Generation info' : 'Image info');
+  titleEl.textContent = isUpscale ? '// UPSCALE INFO' : (ig ? '// GENERATION DETAILS' : '// IMAGE INFO');
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let html = '';
 
   // Preview (full image via the durable resolver — set after render).
   html += '<img id="bmInfoPreview" class="bm-info-preview" alt="">';
+  html += '<div class="bm-info-share-row"><button type="button" class="bm-info-share-btn" id="bmInfoShareBtn"><span aria-hidden="true">\u2191</span> SHARE</button></div>';
 
   // Prompt.
   const prompt = (ig && ig.prompt) || f.promptOnly || (f.upscaleMeta && f.upscaleMeta.params && f.upscaleMeta.params.positivePrompt) || '';
@@ -21264,6 +21287,10 @@ function bmImageInfoModal(f) {
   body.innerHTML = html;
   modal.classList.add('open');
 
+  // Wire the Share button (client-side share card).
+  const _bmShareBtn = document.getElementById('bmInfoShareBtn');
+  if (_bmShareBtn) _bmShareBtn.onclick = () => { if (typeof bmShareFav === 'function') bmShareFav(f); };
+
   // Resolve the full preview image (authed) after the DOM exists.
   const prev = document.getElementById('bmInfoPreview');
   if (prev) {
@@ -21292,6 +21319,308 @@ function bmImageInfoModal(f) {
   }
 }
 window.bmImageInfoModal = bmImageInfoModal;
+
+// ── IMAGE SHARE CARD (client-side, zero-knowledge safe) ──────────────────────
+// Renders a self-contained share image: the picture + its generation settings +
+// thumbnails of the i2i source images / upscale source. Everything is composed
+// on a <canvas> in the browser from already-decrypted bytes (resolved through
+// the same durable chain the library cards use), so nothing leaves the device
+// except the final PNG the user explicitly shares. No backend, no public link.
+//
+// Entry point: bmShareFav(f) — wired into the library info card, the thumb-menu
+// info modal, and both bottom-bar kebab menus.
+
+// Resolve a fav's FULL image to a loaded HTMLImageElement (or null). Reuses the
+// library resolution chain via a throwaway <img> + bmApplyThumb; falls back to
+// the authed /api/img fetch for re-hydrated favs that carry only serverImageUrl.
+function _bmShareLoadImg(fav, opts) {
+  const wantFull = !(opts && opts.thumb);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    let settled = false;
+    const done = (ok) => { if (settled) return; settled = true; resolve(ok ? img : null); };
+    img.onload = () => done(true);
+    img.onerror = () => done(false);
+    (async () => {
+      try {
+        // Prefer full bytes for the hero image; thumbs are fine for sources.
+        if (wantFull) {
+          const serverUrl = fav.serverImageUrl
+            || ((typeof fav.imageData === 'string' && fav.imageData.indexOf('/api/img/') === 0) ? fav.imageData : null);
+          if (serverUrl && typeof bmFetchServerImage === 'function') {
+            const u = await bmFetchServerImage(serverUrl);
+            if (u) { img.src = u; return; }
+          }
+          if (typeof bmGetCachedImage === 'function') {
+            const c = await bmGetCachedImage(fav.id);
+            if (c) { img.src = c; return; }
+          }
+          if (fav.imageData && !(typeof fav.imageData === 'string' && fav.imageData.indexOf('/api/img/') === 0)) {
+            img.src = fav.imageData; return;
+          }
+        }
+        // Thumb path (and full-image fallback): let bmApplyThumb drive the src.
+        if (typeof bmApplyThumb === 'function') { await bmApplyThumb(img, fav); if (img.src) return; }
+        done(false);
+      } catch (e) { done(false); }
+    })();
+  });
+}
+
+// Pull a normalised { prompt, negative, rows[[k,v]], srcFavs[] } view of a fav,
+// reusing the same logic the two info modals already apply.
+function _bmShareInfo(f) {
+  const isUpscale = !!(f.isUpscale || f.upscaleMeta);
+  const ig = (f.igSettings && typeof f.igSettings === 'object') ? f.igSettings : null;
+  const prompt = (ig && ig.prompt) || f.promptOnly
+    || (f.upscaleMeta && f.upscaleMeta.params && f.upscaleMeta.params.positivePrompt) || '';
+  const negative = (ig && ig.negative)
+    || (f.upscaleMeta && f.upscaleMeta.params && f.upscaleMeta.params.negativePrompt) || '';
+  const rows = [];
+  const modelLabel = (() => {
+    if (isUpscale) return (typeof bmUpscalerLabel === 'function' && f.upscaleMeta && f.upscaleMeta.model)
+      ? bmUpscalerLabel(f.upscaleMeta.model) : (f.model || 'Upscaler');
+    if (ig && ig.modelId && typeof IG_MODELS !== 'undefined') {
+      const mm = IG_MODELS.find(x => x.id === ig.modelId); if (mm) return mm.label;
+    }
+    return (typeof bmModelLabel === 'function' && f.model) ? bmModelLabel(f.model) : (f.model || '—');
+  })();
+  rows.push(['Model', modelLabel]);
+  if (isUpscale) {
+    const um = f.upscaleMeta || {}; const p = um.params || {};
+    if (um.mp != null) rows.push(['Target MP', um.mp + ' MP']);
+    if (um.factor != null) rows.push(['Factor', um.factor + '\u00D7']);
+    if (p.seed != null && p.seed !== '') rows.push(['Seed', p.seed]);
+    if (p.steps != null && p.steps !== '') rows.push(['Steps', p.steps]);
+    if (p.CFGScale != null && p.CFGScale !== '') rows.push(['CFG', p.CFGScale]);
+  } else if (ig) {
+    if (ig.ar) rows.push(['Aspect', ig.ar]);
+    if (ig.res) rows.push(['Resolution', ig.res]);
+    if (ig.quality) rows.push(['Quality', ig.quality]);
+    if (ig.speed) rows.push(['Speed', ig.speed]);
+    if (ig.seed) rows.push(['Seed', ig.seed]);
+    if (ig.steps) rows.push(['Steps', ig.steps]);
+    if (ig.cfg) rows.push(['CFG', ig.cfg]);
+  }
+  const mp = (typeof bmFavMegapixels === 'function') ? bmFavMegapixels(f) : 0;
+  if (mp > 0) rows.push(['Size', mp.toFixed(1) + ' MP']);
+
+  // Source favs: i2i refs (srcFavIds / familySrcIds) or upscale source.
+  let srcIds = [];
+  if (Array.isArray(f.srcFavIds)) srcIds = srcIds.concat(f.srcFavIds);
+  if (Array.isArray(f.familySrcIds)) srcIds = srcIds.concat(f.familySrcIds);
+  if (f.upscaledFromId != null) srcIds.push(f.upscaledFromId);
+  srcIds = Array.from(new Set(srcIds.map(Number).filter(id => !isNaN(id))));
+  const srcFavs = (typeof favourites !== 'undefined')
+    ? srcIds.map(id => favourites.find(x => x && Number(x.id) === id)).filter(Boolean) : [];
+  const typeLabel = isUpscale ? 'Upscale'
+    : (ig ? ((Array.isArray(f.familySrcIds) && f.familySrcIds.length) ? 'Image \u2192 Image' : 'Text \u2192 Image')
+          : 'Image');
+  return { isUpscale, prompt, negative, rows, srcFavs, typeLabel };
+}
+
+// Word-wrap helper for canvas text. Returns an array of lines.
+function _bmShareWrap(ctx, text, maxW) {
+  const out = [];
+  String(text || '').split(/\n/).forEach(para => {
+    const words = para.split(/\s+/); let line = '';
+    words.forEach(w => {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { out.push(line); line = w; }
+      else line = test;
+    });
+    out.push(line);
+  });
+  return out;
+}
+
+// Compose the share card on a canvas and return a Blob (PNG).
+async function _bmShareRender(f) {
+  const info = _bmShareInfo(f);
+  const hero = await _bmShareLoadImg(f, { thumb: false });
+
+  const W = 1080;
+  const PAD = 48;
+  const colW = W - PAD * 2;
+
+  // Hero block sizing (cap height so portrait images don't dominate).
+  let heroH = 0, heroW = colW, heroDrawW = colW;
+  if (hero && hero.naturalWidth) {
+    const ratio = hero.naturalHeight / hero.naturalWidth;
+    heroDrawW = colW;
+    heroH = Math.min(Math.round(colW * ratio), 720);
+    heroW = Math.round(heroH / ratio);
+    if (heroW > colW) { heroW = colW; heroH = Math.round(colW * ratio); }
+  }
+
+  // Measure dynamic text height with a scratch context.
+  const scratch = document.createElement('canvas').getContext('2d');
+  const promptFont = '500 26px "IBM Plex Sans", system-ui, sans-serif';
+  const labelFont = '700 16px "IBM Plex Mono", monospace';
+  const rowFont = '500 22px "IBM Plex Sans", system-ui, sans-serif';
+
+  let y = PAD;
+  y += 52;                                   // brand header
+  if (hero) y += 24 + heroH;                 // hero
+  y += 28;                                    // type tag row
+  // prompt
+  scratch.font = promptFont;
+  const promptLines = info.prompt ? _bmShareWrap(scratch, info.prompt, colW - 28) : [];
+  if (promptLines.length) y += 24 + 8 + promptLines.length * 36 + 24;
+  const negLines = info.negative ? _bmShareWrap(scratch, info.negative, colW - 28) : [];
+  if (negLines.length) y += 24 + 8 + negLines.length * 36 + 24;
+  // settings rows
+  if (info.rows.length) y += 24 + 8 + info.rows.length * 40 + 16;
+  // sources
+  const srcN = Math.min(info.srcFavs.length, 6);
+  const SRC = 150, SRC_GAP = 14;
+  const perRow = Math.floor((colW + SRC_GAP) / (SRC + SRC_GAP)) || 1;
+  const srcRows = srcN ? Math.ceil(srcN / perRow) : 0;
+  if (srcN) y += 24 + 12 + srcRows * (SRC + 28) + 8;
+  y += PAD;                                   // bottom pad
+  const H = Math.max(y, 480);
+
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+
+  // Background — match the app surface.
+  ctx.fillStyle = '#0a0e12'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#0e1318';
+  if (typeof ctx.roundRect === 'function') {
+    ctx.beginPath(); ctx.roundRect(PAD / 2, PAD / 2, W - PAD, H - PAD, 18); ctx.fill();
+  }
+
+  let cy = PAD;
+  // Brand header.
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#caff00';
+  ctx.font = '700 30px "IBM Plex Mono", monospace';
+  ctx.fillText('// BEAST MODE', PAD, cy + 30);
+  ctx.fillStyle = '#6b7682';
+  ctx.font = '500 18px "IBM Plex Mono", monospace';
+  const stamp = new Date().toISOString().slice(0, 10);
+  ctx.textAlign = 'right'; ctx.fillText(stamp, W - PAD, cy + 28); ctx.textAlign = 'left';
+  cy += 52;
+
+  // Hero image.
+  if (hero) {
+    cy += 24;
+    const hx = PAD + Math.round((colW - heroW) / 2);
+    if (typeof ctx.roundRect === 'function') {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(hx, cy, heroW, heroH, 12); ctx.clip();
+      ctx.drawImage(hero, hx, cy, heroW, heroH); ctx.restore();
+    } else {
+      ctx.drawImage(hero, hx, cy, heroW, heroH);
+    }
+    cy += heroH;
+  }
+
+  // Type tag.
+  cy += 28;
+  ctx.font = labelFont; ctx.fillStyle = '#9aa6b2';
+  ctx.fillText(info.typeLabel.toUpperCase(), PAD, cy);
+
+  const drawLabel = (txt) => {
+    cy += 24; ctx.font = labelFont; ctx.fillStyle = '#6b7682';
+    ctx.fillText(txt, PAD, cy); cy += 8;
+  };
+  const drawBox = (lines, font, lineH) => {
+    const boxH = lines.length * lineH + 20;
+    ctx.fillStyle = '#0b1116';
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath(); ctx.roundRect(PAD, cy, colW, boxH, 8); ctx.fill();
+    } else { ctx.fillRect(PAD, cy, colW, boxH); }
+    ctx.font = font; ctx.fillStyle = '#dce3ea';
+    let ty = cy + 10 + lineH * 0.7;
+    lines.forEach(l => { ctx.fillText(l, PAD + 14, ty); ty += lineH; });
+    cy += boxH + 24;
+  };
+
+  if (promptLines.length) { drawLabel('PROMPT'); drawBox(promptLines, promptFont, 36); }
+  if (negLines.length) { drawLabel('NEGATIVE PROMPT'); drawBox(negLines, promptFont, 36); }
+
+  if (info.rows.length) {
+    drawLabel('SETTINGS');
+    const boxH = info.rows.length * 40 + 16;
+    ctx.fillStyle = '#0b1116';
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath(); ctx.roundRect(PAD, cy, colW, boxH, 8); ctx.fill();
+    } else { ctx.fillRect(PAD, cy, colW, boxH); }
+    let ry = cy + 8 + 28;
+    info.rows.forEach(([k, v]) => {
+      ctx.font = labelFont; ctx.fillStyle = '#6b7682';
+      ctx.fillText(String(k).toUpperCase(), PAD + 14, ry);
+      ctx.font = rowFont; ctx.fillStyle = '#dce3ea';
+      ctx.textAlign = 'right';
+      ctx.fillText(String(v), W - PAD - 14, ry);
+      ctx.textAlign = 'left';
+      ry += 40;
+    });
+    cy += boxH + 24;
+  }
+
+  // Source thumbnails.
+  if (srcN) {
+    drawLabel('SOURCE IMAGES \u00B7 ' + srcN);
+    cy += 4;
+    const thumbs = await Promise.all(info.srcFavs.slice(0, srcN).map(sf => _bmShareLoadImg(sf, { thumb: true })));
+    let col = 0, rowY = cy;
+    for (let i = 0; i < srcN; i++) {
+      const tx = PAD + col * (SRC + SRC_GAP);
+      ctx.fillStyle = '#0b1116';
+      if (typeof ctx.roundRect === 'function') {
+        ctx.save(); ctx.beginPath(); ctx.roundRect(tx, rowY, SRC, SRC, 10); ctx.fill(); ctx.clip();
+      }
+      const tImg = thumbs[i];
+      if (tImg && tImg.naturalWidth) {
+        // cover-fit
+        const r = Math.max(SRC / tImg.naturalWidth, SRC / tImg.naturalHeight);
+        const dw = tImg.naturalWidth * r, dh = tImg.naturalHeight * r;
+        ctx.drawImage(tImg, tx + (SRC - dw) / 2, rowY + (SRC - dh) / 2, dw, dh);
+      }
+      if (typeof ctx.roundRect === 'function') ctx.restore();
+      col++;
+      if (col >= perRow) { col = 0; rowY += SRC + 28; }
+    }
+  }
+
+  return await new Promise((resolve) => cv.toBlob(b => resolve(b), 'image/png'));
+}
+
+// Public entry: build the card and share/download it.
+async function bmShareFav(f) {
+  if (!f) return;
+  const toast = (msg, kind) => { try { if (typeof pbPasteToast === 'function') pbPasteToast(msg, kind); } catch (e) {} };
+  toast('Building share card\u2026', 'info');
+  let blob = null;
+  try { blob = await _bmShareRender(f); } catch (e) { blob = null; }
+  if (!blob) { toast('Could not build share card', 'error'); return; }
+
+  const fname = 'beast-mode-' + (f.id != null ? f.id : Date.now()) + '-share.png';
+  const file = (typeof File === 'function') ? new File([blob], fname, { type: 'image/png' }) : null;
+
+  // Prefer native share with the file attached (mobile); fall back to download.
+  if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Beast Mode', text: 'Made with Beast Mode' });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;   // user cancelled — not an error
+    }
+  }
+  // Download fallback.
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Share card downloaded', 'ok');
+  } catch (e) { toast('Could not save share card', 'error'); }
+}
+window.bmShareFav = bmShareFav;
 
 function bmInfoClose() {
   const modal = document.getElementById('bmInfoModal');

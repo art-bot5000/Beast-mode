@@ -3598,6 +3598,12 @@ img.bm-thumb-missing { background:var(--surface2); }
     transform:translateY(0);
     box-shadow:0 -10px 28px rgba(0,0,0,.6);
   }
+  /* #5: while a thumb kebab menu is open, keep an unpinned bar fully open
+     (same overlay look as :hover) regardless of pointer position. */
+  body.up-lib-min.up-lib-hold #viewUpscaler .up-area-library {
+    transform:translateY(0);
+    box-shadow:0 -10px 28px rgba(0,0,0,.6);
+  }
 
   /* Queue widget sits physically ABOVE the bar and moves up with it. Its
      z-index drops below the bar (150) here so the bar's pin control is always
@@ -4080,6 +4086,18 @@ body.up-group-modal-open { overflow:hidden; }
   font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:9px; letter-spacing:1px;
   color:var(--muted,#6b7682); text-transform:uppercase; margin:14px 0 7px;
 }
+.bm-info-share-row { margin:0 0 14px; }
+.lib-info-share-row { margin:0 0 18px; }
+.bm-info-share-btn, .lib-info-share-btn {
+  display:inline-flex; align-items:center; gap:7px;
+  font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:12px; letter-spacing:1.5px;
+  color:var(--accent); background:transparent; border:1px solid var(--accent);
+  border-radius:5px; padding:7px 16px; cursor:pointer; transition:all .15s;
+}
+.bm-info-share-btn:hover, .lib-info-share-btn:hover {
+  color:#000; background:var(--accent); border-color:var(--accent);
+}
+.bm-info-share-btn span, .lib-info-share-btn span { font-size:14px; line-height:1; }
 .bm-info-prompt {
   background:var(--surface2,#0e1318); border:1px solid var(--border,#222a33); border-radius:8px;
   padding:10px 12px; font-size:13px; line-height:1.5; color:var(--text,#dce3ea);
@@ -4207,6 +4225,11 @@ body.up-group-modal-open { overflow:hidden; }
     transform:translateY(calc(100% - 34px));
   }
   body.ig-lib-min #viewImagegen .ig-area-library:hover {
+    transform:translateY(0); box-shadow:0 -10px 28px rgba(0,0,0,.6);
+  }
+  /* #5: while a thumb kebab menu is open, keep an unpinned bar fully open
+     (same overlay look as :hover) regardless of pointer position. */
+  body.ig-lib-min.ig-lib-hold #viewImagegen .ig-area-library {
     transform:translateY(0); box-shadow:0 -10px 28px rgba(0,0,0,.6);
   }
 
