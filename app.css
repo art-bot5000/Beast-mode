@@ -4002,7 +4002,7 @@ body.up-group-modal-open { overflow:hidden; }
 }
 /* Small dot cueing a generated image has an i2i source set to open. */
 .ig-libbar-famdot {
-  position:absolute; left:6px; bottom:6px; width:7px; height:7px; border-radius:50%;
+  position:absolute; right:6px; top:6px; width:7px; height:7px; border-radius:50%;
   background:var(--accent,#caff00); box-shadow:0 0 0 2px rgba(8,10,12,.6); pointer-events:none;
 }
 /* ── Thumbnail kebab + context menu (upscaler + image-gen bottom bars) ──────── */
@@ -4015,6 +4015,7 @@ body.up-group-modal-open { overflow:hidden; }
   transition:border-color .12s, color .12s, background .12s;
 }
 .bm-thumb-kebab:hover { border-color:var(--accent); color:var(--accent); }
+.bm-thumb-kebab .bm-kebab-dots { font-size:17px; font-weight:700; line-height:0; letter-spacing:0; transform:translateY(-1px); }
 .bm-thumb-menu {
   position:fixed; z-index:30000; min-width:204px;
   background:var(--surface,#141a21); border:1px solid var(--border,#2a333d);
@@ -4030,6 +4031,8 @@ body.up-group-modal-open { overflow:hidden; }
   border-radius:7px; color:var(--text,#dce3ea); cursor:pointer;
 }
 .bm-thumb-mi i { font-size:16px; width:18px; text-align:center; color:var(--muted,#8a96a2); }
+.bm-thumb-mi .bm-mi-uni { font-size:16px; width:18px; text-align:center; color:var(--muted,#8a96a2); display:inline-block; line-height:1; }
+.bm-thumb-mi:hover .bm-mi-uni { color:var(--accent); }
 .bm-thumb-mi:hover { background:color-mix(in srgb,var(--accent) 12%, transparent); }
 .bm-thumb-mi:hover i { color:var(--accent); }
 .bm-thumb-mi.on i { color:var(--accent); }

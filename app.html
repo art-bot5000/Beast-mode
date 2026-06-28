@@ -5079,7 +5079,29 @@ function restoreFav(id) {
     switchView('imagegen')
     const applyIg = () => {
       if (typeof igApplySettings === 'function') igApplySettings(f.igSettings)
-      if (typeof igStatus === 'function') igStatus('\u2713 Restored generation settings', false)
+      // Re-select the SOURCE images that were used for this image-to-image
+      // generation, so Restore reproduces the full recipe (settings + refs), not
+      // just the text/params. Only meaningful on an i2i model; igLibToggleRef
+      // resolves each source's bytes and honours the model's maxRefs cap.
+      const srcIds = Array.isArray(f.srcFavIds) ? Array.from(new Set(f.srcFavIds.map(Number).filter(id => !isNaN(id)))) : []
+      const m = (typeof igModel === 'function') ? igModel() : null
+      if (srcIds.length && m && m.i2i) {
+        let added = 0
+        srcIds.forEach(id => {
+          const sf = (typeof favourites !== 'undefined') ? favourites.find(x => x && Number(x.id) === id) : null
+          if (!sf) return
+          // Skip if already selected (igApplySettings clears refs, but be safe).
+          if (typeof igRefIndexForFav === 'function' && igRefIndexForFav(id) >= 0) return
+          if (typeof igLibToggleRef === 'function') { igLibToggleRef(sf); added++ }
+        })
+        if (typeof igStatus === 'function') {
+          const missing = srcIds.length - added
+          igStatus('\u2713 Restored generation settings' + (added ? ' + ' + added + ' source image' + (added === 1 ? '' : 's') : '')
+            + (missing > 0 ? ' (' + missing + ' source' + (missing === 1 ? '' : 's') + ' no longer in your library)' : ''), false)
+        }
+      } else if (typeof igStatus === 'function') {
+        igStatus('\u2713 Restored generation settings', false)
+      }
     }
     // igInit (run by switchView) is idempotent; defer so the controls exist.
     if (typeof igState !== 'undefined' && igState.inited) applyIg()
@@ -21073,7 +21095,10 @@ function bmThumbMenuOpen(kebabEl, header, items) {
     if (it.sep) { const s = document.createElement('div'); s.className = 'bm-thumb-msep'; menu.appendChild(s); return; }
     const r = document.createElement('div');
     r.className = 'bm-thumb-mi' + (it.dis ? ' dis' : '') + (it.on ? ' on' : '') + (it.danger ? ' danger' : '');
-    r.innerHTML = '<i class="ti ' + it.ic + '"></i>' + it.label + (it.tag ? '<small>' + it.tag + '</small>' : '');
+    const glyph = it.uni
+      ? '<span class="bm-mi-uni" aria-hidden="true">' + it.uni + '</span>'
+      : '<i class="ti ' + it.ic + '"></i>';
+    r.innerHTML = glyph + it.label + (it.tag ? '<small>' + it.tag + '</small>' : '');
     if (!it.dis && typeof it.run === 'function') {
       r.onclick = (e) => { e.stopPropagation(); bmThumbMenuClose(); it.run(); };
     } else {
@@ -21116,7 +21141,7 @@ function bmThumbMenuDecorate(cell, f, mode) {
   kebab.className = 'bm-thumb-kebab';
   kebab.title = 'More actions';
   kebab.setAttribute('aria-label', 'Image actions');
-  kebab.innerHTML = '<i class="ti ti-dots-vertical"></i>';
+  kebab.innerHTML = '<span class="bm-kebab-dots" aria-hidden="true">\u22EE</span>';
   kebab.onclick = (e) => {
     e.stopPropagation();
     const items = [];
@@ -21125,29 +21150,28 @@ function bmThumbMenuDecorate(cell, f, mode) {
       const i2i = !!(m && m.i2i);
       const mp = bmFavMegapixels(f);
       const atMax = mp > 0 && mp >= BM_UPSCALE_MAX_MP;
-      items.push({ ic: 'ti-arrow-up-right', label: 'Upscale', tag: atMax ? 'At max' : '',
+      items.push({ ic: 'ti-arrows-maximize', label: 'Upscale', tag: atMax ? 'At max' : '',
         run: () => bmThumbUpscale(f) });
       if (i2i) {
         const selected = (typeof igRefIndexForFav === 'function') && igRefIndexForFav(f.id) >= 0;
-        items.push({ ic: selected ? 'ti-photo-minus' : 'ti-photo-plus',
-          label: selected ? 'Remove from image to image' : 'Add to image to image',
+        items.push({ ic: 'ti-photo', label: selected ? 'Remove from image to image' : 'Add to image to image',
           on: selected, run: () => { if (typeof igLibToggleRef === 'function') igLibToggleRef(f); } });
       }
-      items.push({ ic: 'ti-arrow-back-up', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
-      items.push({ ic: 'ti-info-circle', label: 'Information', run: () => bmImageInfoModal(f) });
+      items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
+      items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ sep: true });
-      items.push({ ic: 'ti-trash', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
+      items.push({ uni: '\u2715', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
       bmThumbMenuOpen(kebab, 'Image gen', items);
     } else {
       const ticked = !!(typeof upState !== 'undefined' && upState.batchIds && upState.batchIds.has(f.id));
-      items.push({ ic: 'ti-arrow-back-up', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
-      items.push({ ic: 'ti-info-circle', label: 'Information', run: () => bmImageInfoModal(f) });
+      items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
+      items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ sep: true });
-      items.push({ ic: ticked ? 'ti-square-minus' : 'ti-checkbox',
+      items.push({ ic: 'ti-stack-2',
         label: ticked ? 'Remove from batch' : 'Add to batch', on: ticked,
         run: () => { if (typeof upToggleBatch === 'function') { upToggleBatch(f, !ticked); if (typeof upRenderLibBar === 'function') upRenderLibBar(); } } });
       items.push({ sep: true });
-      items.push({ ic: 'ti-trash', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
+      items.push({ uni: '\u2715', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
       bmThumbMenuOpen(kebab, 'Upscaler', items);
     }
   };
