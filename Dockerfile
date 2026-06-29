@@ -33,13 +33,17 @@ RUN mkdir -p public && \
     cp icon512.png public/icon512.png && \
     cp -r fonts public/fonts
 
-# ── Stage 2: Deno runtime + Caddy (Brotli build) ─────────────────────────────
+# ── Stage 2: Deno runtime + stock Caddy ──────────────────────────────────────
+# Caddy is the official stock binary copied from the caddy image (pulled from
+# Docker Hub, which the build can already reach). We dropped the caddy-brotli
+# module + the caddyserver.com download API: that endpoint stalls/0-bytes, and
+# Brotli is handled at the Cloudflare edge anyway. curl is still installed for
+# the start.sh /ping healthcheck (plain-HTTP localhost, so no ca-certificates).
 FROM denoland/deno:2.3.1
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/ueffel/caddy-brotli" \
-      -o /usr/local/bin/caddy && \
-    chmod +x /usr/local/bin/caddy
+COPY --from=caddy:2 /usr/bin/caddy /usr/local/bin/caddy
+RUN apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 update && \
+    apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 install -y --no-install-recommends curl && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /build/public/ ./public/
 
