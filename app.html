@@ -516,6 +516,18 @@ handleShareTarget()
     <span class="version">V4.0</span>
   </div>
 
+  <!-- Project switcher (spec §5a). Sets projActiveId; "Default" clears it.
+       Rebuilt by projRenderNav(). Mobile reuses this same nav as the slide-out;
+       the dedicated mobile "PROJECTS" section is rendered into #projMobileWrap. -->
+  <div class="proj-nav" id="projNavWrap">
+    <button class="proj-nav-toggle" id="projNavToggle" onclick="projToggleNav()" aria-expanded="false" aria-haspopup="true">
+      <span class="proj-nav-dot" id="projNavDot"></span>
+      <span class="proj-nav-label" id="projNavLabel">DEFAULT</span>
+      <span class="proj-nav-caret" aria-hidden="true">▾</span>
+    </button>
+    <div class="proj-nav-menu" id="projNavMenu" hidden></div>
+  </div>
+
   <div class="mode-nav-tabs">
     <button class="nav-tab" id="navImagegen" onclick="switchView('imagegen')">
       <span class="tab-icon"><i class="ti ti-sparkles"></i></span>
@@ -543,6 +555,17 @@ handleShareTarget()
       <span class="tab-label">QUEUE</span>
       <span class="tab-badge" id="queueNavBadge" style="display:none">0</span>
     </button>
+  </div>
+
+  <!-- Mobile-only PROJECTS section (spec §8): label + dropdown below Queue with
+       extra spacing. Hidden on desktop (the title-bar .proj-nav serves there).
+       Populated by projRenderMobile(); the ＋ opens the New Project modal. -->
+  <div class="proj-mobile" id="projMobileWrap">
+    <div class="proj-mobile-head">
+      <span class="proj-mobile-title">PROJECTS</span>
+      <button class="proj-mobile-add" type="button" onclick="projOpenNewModal({seedFavIds:[]})" title="New project" aria-label="New project">+</button>
+    </div>
+    <select class="proj-mobile-select" id="projMobileSelect" onchange="projMobileSelectChange(this.value)" aria-label="Active project"></select>
   </div>
 
   <!-- Footer: Settings, then an account card. Card rows (top→bottom):
@@ -621,6 +644,15 @@ handleShareTarget()
              by renderFolderSidebar() in lock-step with the desktop chip list. -->
         <select class="lib-folder-mobile-select" id="libFolderMobileSelect" onchange="libFolderSelectMobile(this.value)" aria-label="Folder"></select>
         <div id="libFolderList"></div>
+
+        <!-- Projects switcher (spec §3). Separate axis from folders: selecting a
+             project sets projActiveId (compose-scope), NOT libActiveFolderId.
+             Populated by projRenderLibList() in lock-step with the title-bar dropdown. -->
+        <div class="lib-folder-header" style="margin-top:18px;">
+          <span class="lib-folder-title">PROJECTS</span>
+          <button class="lib-folder-add" onclick="projOpenNewModal({seedFavIds:[]})" title="New project">+</button>
+        </div>
+        <div id="libProjList"></div>
       </div>
 
       <!-- Main content -->
@@ -639,6 +671,8 @@ handleShareTarget()
           <span id="libBulkCount" style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:1px;flex:1;"></span>
           <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkStar()">★ STAR ALL</button>
           <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkMove()">📁 MOVE</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkAddToProject()">◈ ADD TO…</button>
+          <button class="btn btn-ghost" id="libBulkRemoveProjBtn" style="font-size:11px;display:none;" onclick="libBulkRemoveFromProject()">− REMOVE FROM PROJECT</button>
           <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkExport()"><i class="ti ti-download"></i>EXPORT</button>
           <button class="btn btn-ghost danger" style="font-size:11px;" onclick="libBulkDelete()">✕ DELETE</button>
           <button class="btn btn-ghost" style="font-size:11px;" onclick="libToggleSelectMode()">CANCEL</button>
@@ -2048,8 +2082,31 @@ handleShareTarget()
   </div>
 </div>
 
-<!-- ═══════════════════════════════ LIBRARY CARD INFO ═══════════════════════════════ -->
-<!-- Generation details: full prompt, the settings used, and (for image-to-image
+<!-- ═══════════════════════════════ NEW PROJECT (spec §5f) ═══════════════════════════════ -->
+<!-- Source-agnostic: opened from the title-bar +, a kebab, the multi-select bar,
+     or the Library Projects +. Receives a fav-id list; on confirm creates the
+     project, stamps each seed fav, persists, and re-renders. -->
+<div id="projNewModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)projCloseNewModal()">
+  <div class="modal-card" style="max-width:440px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">// NEW PROJECT</div>
+      <button class="modal-close" onclick="projCloseNewModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:6px;">PROJECT NAME</div>
+      <input type="text" id="projNewName" maxlength="60" placeholder="e.g. Client X, Portfolio…" autocomplete="off"
+             onkeydown="if(event.key==='Enter')projConfirmNewModal();if(event.key==='Escape')projCloseNewModal()"
+             style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;letter-spacing:.5px;margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:8px;">COLOUR</div>
+      <div id="projNewSwatches" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
+      <div id="projNewSeedNote" style="font-size:11px;color:var(--muted);opacity:.7;margin-top:6px;"></div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:0 20px 20px;">
+      <button class="btn btn-ghost" style="font-size:12px;" onclick="projCloseNewModal()">CANCEL</button>
+      <button class="btn btn-primary" style="font-size:12px;" onclick="projConfirmNewModal()">CREATE PROJECT</button>
+    </div>
+  </div>
+</div>
      outputs) thumbnails of the source images. Populated by libOpenInfo(favId). -->
 <div id="libInfoModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;">
   <div class="modal-card" style="max-width:620px;width:100%;max-height:88vh;display:flex;flex-direction:column;">
@@ -3370,6 +3427,36 @@ const FOLDERS_FILE      = 'beast-mode-folders.json'
 let libFolders          = []        // [{id, name, color}]
 let libDriveFoldersId   = null
 let libActiveFolderId   = '__all__' // category/virtual folder or a real folderId
+// ── PROJECTS ──────────────────────────────────────────────────────
+// A Project is a saved named view over `favourites`. Membership is a link,
+// not a copy: fav.projects = [projId,…]. `projects` is the list metadata,
+// `projActiveId` is device-local UI state (null = Default profile).
+let projects            = []        // [{ id, name, color, icon, createdAt }]
+let projActiveId        = null      // null = Default; else a project id (UI-only, not in ZK doc)
+// Membership helpers (two choke-points, per spec §4):
+//  • projStampNew  — fresh gen/upscale/upload adds: stamp the active project (if any)
+//  • projInherit   — variant/markup adds: always union parent.projects, plus active
+function projStampNew(fav) {
+  if (projActiveId && fav) fav.projects = [...new Set([...(fav.projects||[]), projActiveId])]
+  return fav
+}
+function projInherit(child, parent) {
+  if (!child) return child
+  const ids = new Set([...(child.projects||[]), ...((parent && parent.projects)||[])])
+  if (projActiveId) ids.add(projActiveId)
+  if (ids.size) child.projects = [...ids]
+  return child
+}
+function projById(id) { return projects.find(p => p && p.id === id) || null }
+function projCount(id) { return (Array.isArray(favourites)?favourites:[]).filter(f => Array.isArray(f.projects) && f.projects.includes(id)).length }
+// Persist the project LIST (metadata) + mirror membership-bearing favourites.
+// projects rides its own ZK doc key; fav.projects rides the existing prompts doc.
+function projDocSave() {
+  try { lsSave(LS.PROJECTS, projects) } catch(e) {}
+  if (typeof bmDocSave === 'function' && typeof bmDocReady === 'function' && bmDocReady()) {
+    try { bmDocSave(BM_DOC_KEYS.PROJECTS, projects) } catch(e) {}
+  }
+}
 const VIRTUAL_FOLDERS   = [
   { id:'__all__',     name:'⬢ All',               color:'var(--accent)', virtual:true },
   { id:'__starred__', name:'⭐ Starred',          color:'#ffcc00',  virtual:true },
@@ -5641,6 +5728,7 @@ async function driveRestoreAll() {
   renderFavs()
   renderLibrary()
   renderFolderSidebar()
+  if (typeof projRenderAll === 'function') projRenderAll()
   if (typeof pbRenderLibBar === 'function') pbRenderLibBar()
   if (currentView === 'settings') renderSettingsView()
   updateLocalWarning()
@@ -6412,6 +6500,9 @@ function doSaveFav(imageData, model, title, rating) {
     // Particle structure from Prompt Lab (if saved from there)
     particles: (particles && particles.length) ? particles : null,
   }
+  // Project membership (§4): mirrors the folderId stamp above — a manual save
+  // made inside a project joins it. No parent here, so stamp (not inherit).
+  try { if (typeof projStampNew === 'function') projStampNew(fav) } catch (_) {}
   favourites.unshift(fav)
   renderFavs()
   updateLibBadge()
@@ -6523,6 +6614,9 @@ function libToggleSelectMode() {
     btn.classList.toggle('active', libSelectMode)
   }
   if (bar) bar.style.display = libSelectMode ? 'flex' : 'none'
+  // Conditional "Remove from project" (§6): only when a project is active.
+  const rmBtn = document.getElementById('libBulkRemoveProjBtn')
+  if (rmBtn) rmBtn.style.display = (libSelectMode && projActiveId) ? '' : 'none'
   renderLibrary()
 }
 
@@ -6588,6 +6682,47 @@ function libBulkMove() {
   libToggleSelectMode()
 }
 
+// Multi-select → Add to Project (§5b). Mirrors libBulkMove's prompt-driven
+// chooser: New Project (top) + existing projects. Source-agnostic fav-id list.
+function libBulkAddToProject() {
+  if (!libSelected.size) return
+  const ids = [...libSelected].map(String)
+  const opts = [{ id: '__new__', name: '+ New Project' }, ...projects]
+  const names = opts.map((p, i) => `${i+1}. ${p.name}`).join('\n')
+  const choice = prompt(`Add ${ids.length} image${ids.length>1?'s':''} to:\n\n${names}\n\nEnter number:`)
+  const idx = parseInt(choice) - 1
+  if (isNaN(idx) || idx < 0 || idx >= opts.length) return
+  const target = opts[idx]
+  if (target.id === '__new__') {
+    projOpenNewModal({ seedFavIds: ids })
+  } else {
+    ids.forEach(id => {
+      const f = favourites.find(x => String(x.id) === id)
+      if (f) { f.projects = [...new Set([...(f.projects||[]), target.id])]; f.updatedAt = Date.now(); driveSavePrompt(f) }
+    })
+    if (typeof lsSaveAll === 'function') lsSaveAll()
+    if (typeof projRenderAll === 'function') projRenderAll()
+  }
+  libSelected.clear()
+  libToggleSelectMode()
+}
+
+// Multi-select → Remove from the ACTIVE project (§6). Button hidden unless a
+// project is active.
+function libBulkRemoveFromProject() {
+  if (!libSelected.size || !projActiveId) return
+  const ids = [...libSelected].map(String)
+  ids.forEach(id => {
+    const f = favourites.find(x => String(x.id) === id)
+    if (f && Array.isArray(f.projects)) { f.projects = f.projects.filter(pid => pid !== projActiveId); f.updatedAt = Date.now(); driveSavePrompt(f) }
+  })
+  if (typeof lsSaveAll === 'function') lsSaveAll()
+  if (typeof projRenderAll === 'function') projRenderAll()
+  libSelected.clear()
+  libToggleSelectMode()
+  if (typeof renderLibrary === 'function') renderLibrary()
+}
+
 function libBulkExport() {
   const selected = favourites.filter(f => libSelected.has(f.id))
   const text = selected.map((f, i) =>
@@ -6616,6 +6751,12 @@ function renderLibrary() {
   if (bannerCount) bannerCount.textContent = `${needsCount} prompt${needsCount !== 1 ? 's' : ''} waiting to be converted`
 
   let items = [...favourites]
+
+  // Active-project base scope (spec §3 — compose, not override). Applied BEFORE
+  // the folder switch so "project ∩ starred" etc. work. null = Default = no scope.
+  if (projActiveId) {
+    items = items.filter(f => Array.isArray(f.projects) && f.projects.includes(projActiveId))
+  }
 
   // Folder filter — virtual category folders classify by kind; real folders by id.
   if (libActiveFolderId === '__all__') { /* no filter — show everything */ }
@@ -6681,6 +6822,17 @@ function renderLibrary() {
         <div class="lib-empty-cta" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="switchView('generator')" style="font-size:13px;"><i class="ti ti-settings"></i>GO TO GENERATOR</button>
           <button class="btn btn-outline" onclick="switchView('builder');setTimeout(pbOpenImport,300)" style="font-size:13px;">⬆ IMPORT PROMPT</button>
+        </div>
+      `
+    } else if (projActiveId && !favourites.some(f => Array.isArray(f.projects) && f.projects.includes(projActiveId))) {
+      // Active project genuinely has no member images yet (spec §9).
+      empty.innerHTML = `
+        <span class="lib-empty-icon">◈</span>
+        <div class="lib-empty-title">NO IMAGES YET</div>
+        <div class="lib-empty-sub">Generate inside this project or add some from your Library.</div>
+        <div class="lib-empty-cta" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="switchView('imagegen')" style="font-size:13px;">GO TO IMAGE GEN</button>
+          <button class="btn btn-outline" onclick="projSetActive(null)" style="font-size:13px;">VIEW ALL (DEFAULT)</button>
         </div>
       `
     } else {
@@ -7025,13 +7177,9 @@ function buildLibCard(f) {
     mkBtn.onclick = e => { e.stopPropagation(); markupFav(f) }
     statusRow.appendChild(mkBtn)
 
-    const shBtn = document.createElement('button')
-    shBtn.type = 'button'; shBtn.className = 'img-status-pill img-status-action'
-    shBtn.textContent = '\u2191 SHARE'; shBtn.title = 'Share this image'
-    shBtn.onclick = e => { e.stopPropagation(); if (typeof bmShareFavImage === 'function') bmShareFavImage(f) }
-    statusRow.appendChild(shBtn)
+    // Share moved into the kebab (§5e). Upscale + Markup stay one-tap above.
 
-    // Spacer pushes star + pin to the far right
+    // Spacer pushes star + pin + kebab to the far right
     const srSpacer = document.createElement('div'); srSpacer.style.flex = '1'
     statusRow.appendChild(srSpacer)
 
@@ -7064,6 +7212,26 @@ function buildLibCard(f) {
       renderFolderSidebar()
     }
     statusRow.appendChild(srPin)
+
+    // Card kebab (§5e): Share + Add to Project + conditional Remove from project.
+    // Sits far-right of the pin; reuses the shared popover engine.
+    const srKebab = document.createElement('button')
+    srKebab.type = 'button'
+    srKebab.className = 'lib-sr-kebab'
+    srKebab.title = 'More actions'
+    srKebab.setAttribute('aria-label', 'Image actions')
+    srKebab.innerHTML = '<span aria-hidden="true">\u22EE</span>'
+    srKebab.onclick = e => {
+      e.stopPropagation()
+      const items = []
+      items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFavImage === 'function') bmShareFavImage(f) } })
+      items.push({ uni: '\u25C8', label: 'Add to Project', run: () => bmThumbProjectMenu(srKebab, f) })
+      if (projActiveId && Array.isArray(f.projects) && f.projects.includes(projActiveId)) {
+        items.push({ uni: '\u2212', label: 'Remove from project', run: () => projRemoveFromActive(f) })
+      }
+      bmThumbMenuOpen(srKebab, 'Image', items)
+    }
+    statusRow.appendChild(srKebab)
 
     card.appendChild(statusRow)
   }
@@ -7394,6 +7562,9 @@ function _markupFavSave(f, result) {
       markupOfId: f.id,
     }
 
+    // Project membership (Q1/§4): a markup inherits its source image's projects
+    // (unioned with the active project, if one is open).
+    try { if (typeof projInherit === 'function') projInherit(newFav, f) } catch (_) {}
     if (typeof favourites !== 'undefined') favourites.unshift(newFav)
     if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.FAVS, favourites)
     if (typeof driveSavePrompt === 'function') driveSavePrompt(newFav)
@@ -7514,6 +7685,244 @@ function renderFolderSidebar() {
     }
   })
   list.appendChild(frag)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ██ PROJECTS — RENDER & SWITCHING ██  (spec §3, §5a, §8)
+// ═══════════════════════════════════════════════════════════════════════════
+// Projects are a saved scope over `favourites` (fav.projects[]). Selecting one
+// sets projActiveId (compose base-scope), distinct from libActiveFolderId.
+const PROJ_COLORS = ['#ff6b6b','#ffa94d','#ffd43b','#69db7c','#4dabf7','#cc5de8','#f783ac','#a9e34b']
+let _projColorIdx = 0
+
+// Re-render every project surface after a state change (active/list/membership).
+function projRenderAll() {
+  projRenderNav()
+  projRenderLibList()
+  projRenderMobile()
+}
+
+// Mobile slide-out PROJECTS dropdown (spec §8). Native select element mirroring
+// the title-bar dropdown: Default + each project + New Project sentinel.
+function projRenderMobile() {
+  const sel = document.getElementById('projMobileSelect')
+  if (!sel) return
+  sel.innerHTML = ''
+  const defOpt = document.createElement('option')
+  defOpt.value = '__default__'; defOpt.textContent = 'Default'
+  if (!projActiveId) defOpt.selected = true
+  sel.appendChild(defOpt)
+  projects.forEach(p => {
+    const opt = document.createElement('option')
+    opt.value = p.id
+    opt.textContent = (p.name || 'Project') + ' (' + projCount(p.id) + ')'
+    if (p.id === projActiveId) opt.selected = true
+    sel.appendChild(opt)
+  })
+  const newOpt = document.createElement('option')
+  newOpt.value = '__new__'; newOpt.textContent = '+ New Project…'
+  sel.appendChild(newOpt)
+}
+// Mobile dropdown change: Default clears, __new__ opens the modal (and reverts
+// the select to the current active so it doesn't stick on the sentinel), else
+// switch to the chosen project.
+function projMobileSelectChange(val) {
+  if (val === '__new__') {
+    projRenderMobile() // revert selection to current active
+    projOpenNewModal({ seedFavIds: [] })
+    return
+  }
+  projSetActive(val === '__default__' ? null : val)
+}
+
+// Switch the active project (id or null=Default). Persists projActiveId locally
+// and re-renders the scoped surfaces (Library + Gen + Upscaler grids).
+function projSetActive(id) {
+  projActiveId = id || null
+  try {
+    if (projActiveId) localStorage.setItem(LS.PROJ_ACTIVE, projActiveId)
+    else localStorage.removeItem(LS.PROJ_ACTIVE)
+  } catch(e) {}
+  projCloseNav()
+  projRenderAll()
+  if (typeof renderLibrary === 'function') renderLibrary()
+  if (typeof igRenderLibBar === 'function') igRenderLibBar()
+  if (typeof upRenderLibBar === 'function') upRenderLibBar()
+}
+
+// Title-bar dropdown (desktop + mobile slide-out share this nav).
+function projToggleNav() {
+  const menu = document.getElementById('projNavMenu')
+  const btn  = document.getElementById('projNavToggle')
+  if (!menu) return
+  const open = menu.hasAttribute('hidden')
+  if (open) { projRenderNav(); menu.removeAttribute('hidden'); btn && btn.setAttribute('aria-expanded','true') }
+  else { projCloseNav() }
+}
+function projCloseNav() {
+  const menu = document.getElementById('projNavMenu')
+  const btn  = document.getElementById('projNavToggle')
+  if (menu) menu.setAttribute('hidden','')
+  if (btn) btn.setAttribute('aria-expanded','false')
+}
+// Dismiss the title-bar project dropdown on outside-click / Escape.
+document.addEventListener('click', e => {
+  const wrap = e.target.closest && e.target.closest('#projNavWrap')
+  if (!wrap) projCloseNav()
+})
+document.addEventListener('keydown', e => { if (e.key === 'Escape') projCloseNav() })
+
+// Build the title-bar dropdown contents + the toggle's current-state label/dot.
+function projRenderNav() {
+  const menu = document.getElementById('projNavMenu')
+  const label = document.getElementById('projNavLabel')
+  const dot   = document.getElementById('projNavDot')
+  const active = projActiveId ? projById(projActiveId) : null
+  if (label) label.textContent = active ? (active.name || 'PROJECT').toUpperCase() : 'DEFAULT'
+  if (dot) dot.style.background = active ? (active.color || 'var(--muted)') : 'transparent'
+  if (!menu) return
+  menu.innerHTML = ''
+  // Default row (always top) — clears projActiveId.
+  const def = document.createElement('button')
+  def.type = 'button'
+  def.className = 'proj-nav-item' + (!projActiveId ? ' active' : '')
+  def.innerHTML = `<span class="proj-nav-dot" style="background:transparent;border:1px solid var(--border);"></span><span class="proj-nav-item-name">Default</span>`
+  def.onclick = () => projSetActive(null)
+  menu.appendChild(def)
+  // One row per project (selecting sets active; ✕ deletes — §7).
+  projects.forEach(p => {
+    const row = document.createElement('div')
+    row.className = 'proj-nav-item' + (p.id === projActiveId ? ' active' : '')
+    row.innerHTML = `
+      <span class="proj-nav-dot" style="background:${p.color || 'var(--muted)'}"></span>
+      <span class="proj-nav-item-name">${projEsc(p.name || 'Project')}</span>
+      <span class="proj-nav-count">${projCount(p.id)}</span>
+      <span class="proj-nav-del" title="Delete project">×</span>`
+    row.querySelector('.proj-nav-item-name').onclick = () => projSetActive(p.id)
+    row.querySelector('.proj-nav-dot').onclick = () => projSetActive(p.id)
+    row.querySelector('.proj-nav-count').onclick = () => projSetActive(p.id)
+    row.querySelector('.proj-nav-del').onclick = (e) => { e.stopPropagation(); projDelete(p.id) }
+    menu.appendChild(row)
+  })
+  // + New Project (opens the source-agnostic modal — §5f)
+  const add = document.createElement('button')
+  add.type = 'button'
+  add.className = 'proj-nav-item proj-nav-new'
+  add.innerHTML = `<span class="proj-nav-dot" style="background:transparent;">+</span><span class="proj-nav-item-name">New Project</span>`
+  add.onclick = () => { projCloseNav(); projOpenNewModal({ seedFavIds: [] }) }
+  menu.appendChild(add)
+}
+
+// Library left-list Projects switcher (mirrors folder rows; sets projActiveId).
+function projRenderLibList() {
+  const list = document.getElementById('libProjList')
+  if (!list) return
+  list.innerHTML = ''
+  const frag = document.createDocumentFragment()
+  // Default row
+  const def = document.createElement('div')
+  def.className = 'lib-folder-item' + (!projActiveId ? ' active' : '')
+  def.innerHTML = `
+    <span class="lib-folder-dot" style="background:transparent;border:1px solid var(--border);"></span>
+    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Default</span>
+    <span class="lib-folder-count">${favourites.length}</span>`
+  def.onclick = () => projSetActive(null)
+  frag.appendChild(def)
+  projects.forEach(p => {
+    const item = document.createElement('div')
+    item.className = 'lib-folder-item' + (p.id === projActiveId ? ' active' : '')
+    item.innerHTML = `
+      <span class="lib-folder-dot" style="background:${p.color || 'var(--muted)'}"></span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${projEsc(p.name || 'Project')}</span>
+      <span class="lib-folder-count">${projCount(p.id)}</span>
+      <span class="lib-folder-del" title="Delete project">×</span>`
+    item.querySelector(':scope > span:nth-child(2)').onclick = () => projSetActive(p.id)
+    item.querySelector('.lib-folder-dot').onclick = () => projSetActive(p.id)
+    item.querySelector('.lib-folder-count').onclick = () => projSetActive(p.id)
+    item.querySelector('.lib-folder-del').onclick = (e) => { e.stopPropagation(); projDelete(p.id) }
+    frag.appendChild(item)
+  })
+  list.appendChild(frag)
+}
+
+// Minimal HTML-escape for project names rendered via innerHTML.
+function projEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+  ))
+}
+
+// ── New Project modal (spec §5f) — source-agnostic: takes a fav-id list. ──────
+let _projNewSeedIds = []
+let _projNewColor = null
+function projOpenNewModal(opts) {
+  const modal = document.getElementById('projNewModal')
+  if (!modal) { return } // DOM missing — fail closed rather than throw
+  _projNewSeedIds = (opts && Array.isArray(opts.seedFavIds)) ? opts.seedFavIds.map(String) : []
+  _projNewColor = PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
+  const nameEl = document.getElementById('projNewName')
+  if (nameEl) { nameEl.value = (opts && opts.name) ? opts.name : '' }
+  // Colour swatches
+  const sw = document.getElementById('projNewSwatches')
+  if (sw) {
+    sw.innerHTML = ''
+    PROJ_COLORS.forEach(c => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'proj-swatch' + (c === _projNewColor ? ' sel' : '')
+      b.style.background = c
+      b.title = c
+      b.onclick = () => {
+        _projNewColor = c
+        sw.querySelectorAll('.proj-swatch').forEach(x => x.classList.remove('sel'))
+        b.classList.add('sel')
+      }
+      sw.appendChild(b)
+    })
+  }
+  const note = document.getElementById('projNewSeedNote')
+  if (note) note.textContent = _projNewSeedIds.length
+    ? `${_projNewSeedIds.length} image${_projNewSeedIds.length>1?'s':''} will be added to this project.`
+    : ''
+  modal.style.display = 'flex'
+  setTimeout(() => { if (nameEl) nameEl.focus() }, 30)
+}
+function projCloseNewModal() {
+  const modal = document.getElementById('projNewModal')
+  if (modal) modal.style.display = 'none'
+  _projNewSeedIds = []
+}
+function projConfirmNewModal() {
+  const nameEl = document.getElementById('projNewName')
+  const name = nameEl ? nameEl.value.trim() : ''
+  if (!name) { if (nameEl) nameEl.focus(); return }
+  const color = _projNewColor || PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
+  _projColorIdx++
+  const proj = { id: 'proj_' + Date.now().toString(36), name, color, icon: null, createdAt: Date.now() }
+  projects.push(proj)
+  const seeds = _projNewSeedIds.slice()
+  seeds.forEach(fid => {
+    const f = favourites.find(x => String(x.id) === fid)
+    if (f) { f.projects = [...new Set([...(f.projects||[]), proj.id])]; f.updatedAt = Date.now(); if (typeof driveSavePrompt === 'function') driveSavePrompt(f) }
+  })
+  projDocSave()
+  if (typeof lsSaveAll === 'function') lsSaveAll()
+  projCloseNewModal()
+  // Enter the new project so the user sees their seeded images immediately.
+  projSetActive(proj.id)
+}
+function projDelete(id) {
+  const p = projById(id)
+  if (!p) return
+  const ok = (typeof confirm === 'function') ? confirm(
+    `Delete project "${p.name || ''}"? This can't be undone. Your images and their settings are NOT deleted — they stay in your Library.`) : true
+  if (!ok) return
+  projects = projects.filter(x => x.id !== id)
+  favourites.forEach(f => { if (Array.isArray(f.projects) && f.projects.includes(id)) f.projects = f.projects.filter(pid => pid !== id) })
+  if (projActiveId === id) projActiveId = null
+  projDocSave()
+  if (typeof lsSaveAll === 'function') lsSaveAll()
+  projSetActive(projActiveId) // re-renders + persists active fallback
 }
 
 // Mobile folder dropdown change handler — same effect as tapping a chip.
@@ -8010,6 +8419,10 @@ function iterSaveVariant(btn, srcFavId) {
     starred: false,
     createdAt: Date.now(), updatedAt: Date.now(),
   }
+  // Project membership (Q1/§4): a particle variant inherits its source's
+  // projects. projInherit also rebuilds the array, de-aliasing the ref the
+  // spread above shares with srcFav.
+  try { if (typeof projInherit === 'function') projInherit(fav, srcFav) } catch (_) {}
   favourites.unshift(fav)
   driveSavePrompt(fav)
   renderLibrary()
@@ -8785,6 +9198,7 @@ window.addEventListener('load', () => {
   renderFavs()
   renderLibrary()
   renderFolderSidebar()
+  if (typeof projRenderAll === 'function') projRenderAll()
   if (typeof pbRenderLibBar === 'function') pbRenderLibBar()
 
   // 2. Init cloud — Drive connects only on explicit user action now (Settings).
@@ -9038,6 +9452,8 @@ const LS = {
   PRESETS:   'bm_state_presets',
   MODELS:    'bm_state_models',
   FOLDERS:   'bm_state_folders',
+  PROJECTS:  'bm_state_projects',
+  PROJ_ACTIVE: 'bm_proj_active',
   PB_LIBS:   'bm_state_pb_libraries',
   PB_FAVS:   'bm_state_pb_favs',
   SETTINGS:  'bm_state_settings',
@@ -9114,6 +9530,8 @@ function lsSaveAll() {
   lsSave(LS.PRESETS, customPresets)
   lsSave(LS.MODELS,  customModels)
   lsSave(LS.FOLDERS, libFolders)
+  lsSave(LS.PROJECTS, projects)
+  try { if (projActiveId) localStorage.setItem(LS.PROJ_ACTIVE, projActiveId); else localStorage.removeItem(LS.PROJ_ACTIVE) } catch(e) {}
   lsSave(LS.PB_LIBS, pbLibraries)
   lsSave(LS.PB_FAVS, pbFavParticles)
   lsSave(PB_FORMULA_PRESETS_KEY, pbFormulaPresets)
@@ -9138,6 +9556,14 @@ function lsRestoreAll() {
 
   const savedFolders = lsLoad(LS.FOLDERS)
   if (Array.isArray(savedFolders)) libFolders = savedFolders
+
+  const savedProjects = lsLoad(LS.PROJECTS)
+  if (Array.isArray(savedProjects)) projects = savedProjects
+  try {
+    const pa = localStorage.getItem(LS.PROJ_ACTIVE)
+    // Only restore if the project still exists; otherwise fall back to Default.
+    projActiveId = (pa && projects.some(p => p && p.id === pa)) ? pa : null
+  } catch(e) { projActiveId = null }
 
   const savedLibs = lsLoad(LS.PB_LIBS)
   if (Array.isArray(savedLibs)) {
@@ -9173,6 +9599,7 @@ async function bmDocSaveAll() {
     bmDocSave(BM_DOC_KEYS.CUSTOM_PRESETS,  customPresets),
     bmDocSave(BM_DOC_KEYS.MODELS,          customModels),
     bmDocSave(BM_DOC_KEYS.FOLDERS,         libFolders),
+    bmDocSave(BM_DOC_KEYS.PROJECTS,        projects),
     bmDocSave(BM_DOC_KEYS.PARTICLE_LIBRARIES, pbLibraries),
     bmDocSave(BM_DOC_KEYS.FAV_PARTICLES,   pbFavParticles),
     bmDocSave(BM_DOC_KEYS.FORMULA_PRESETS, pbFormulaPresets),
@@ -9199,7 +9626,7 @@ async function bmDocRestoreAll() {
   let applied = false
   const apply = (v, fn) => { if (v !== null && v !== undefined) { fn(v); applied = true } }
 
-  const [prompts, presets, models, folders, libs, favs, fpresets, settings, personalParticles, history] = await Promise.all([
+  const [prompts, presets, models, folders, libs, favs, fpresets, settings, personalParticles, history, projs] = await Promise.all([
     bmDocLoad(BM_DOC_KEYS.PROMPTS),
     bmDocLoad(BM_DOC_KEYS.CUSTOM_PRESETS),
     bmDocLoad(BM_DOC_KEYS.MODELS),
@@ -9210,6 +9637,7 @@ async function bmDocRestoreAll() {
     bmDocLoad(BM_DOC_KEYS.SETTINGS),
     bmDocLoad(BM_DOC_KEYS.PERSONAL_PARTICLES),
     bmDocLoad(BM_DOC_KEYS.PROMPT_HISTORY),
+    bmDocLoad(BM_DOC_KEYS.PROJECTS),
   ])
 
   // (B) MERGE, don't wholesale-replace. A wholesale `favourites = v` let a
@@ -9241,6 +9669,16 @@ async function bmDocRestoreAll() {
   apply(presets,  v => { if (Array.isArray(v)) customPresets = v })
   apply(models,   v => { if (Array.isArray(v)) customModels = v })
   apply(folders,  v => { if (Array.isArray(v)) libFolders = v })
+  apply(projs,    v => {
+    if (Array.isArray(v)) projects = v
+    // projActiveId was validated against LS-only projects in lsRestoreAll; the
+    // server doc may add projects LS lacked. Re-resolve from localStorage so a
+    // device-local active project synced from another device survives.
+    try {
+      const pa = localStorage.getItem(LS.PROJ_ACTIVE)
+      if (pa && projects.some(p => p && p.id === pa)) projActiveId = pa
+    } catch(e) {}
+  })
   apply(libs,     v => {
     if (Array.isArray(v)) v.forEach((saved, i) => {
       if (i < pbLibraries.length) {
@@ -18564,6 +19002,17 @@ function autoSaveGeneratedImage(prompt, fullText, imageUrl, model, pristine, tok
         bmRegisterUpscaleMeta(fav.id, metaPatch);
       }
     } catch (_) {}
+    // Project membership (spec §4): a fresh gen stamps the active project; an
+    // upscale is parent-derived, so it inherits the source image's projects
+    // (Q1) — unioned with the active project if one is open.
+    try {
+      if (typeof projInherit === 'function' && fav.upscaledFromId != null) {
+        const parent = favourites.find(x => String(x.id) === String(fav.upscaledFromId));
+        projInherit(fav, parent);
+      } else if (typeof projStampNew === 'function') {
+        projStampNew(fav);
+      }
+    } catch (_) {}
     if (typeof favourites !== 'undefined') {
       favourites.unshift(fav);
       if (typeof renderFavs === 'function') renderFavs();
@@ -18835,6 +19284,7 @@ const BM_DOC_KEYS = {
   FAV_PARTICLES: 'fav-particles',
   FORMULA_PRESETS: 'formula-presets',
   STYLES: 'styles',
+  PROJECTS: 'projects',
 };
 
 // ── bm-doc.js bridge ─────────────────────────────────────────────────────────
@@ -19962,6 +20412,8 @@ async function bmSaveUploadToLibrary(origDataUri, previewDataUri, info) {
       origW: (info && info.origW) || null,
       origH: (info && info.origH) || null,
     };
+    // Project membership (spec §4): an upload made inside a project joins it.
+    try { if (typeof projStampNew === 'function') projStampNew(fav); } catch (_) {}
     favourites.unshift(fav);
     if (typeof renderFavs === 'function') renderFavs();
     if (typeof updateLibBadge === 'function') updateLibBadge();
@@ -21052,8 +21504,10 @@ function igRenderLibBar() {
 
   // Library images that actually have a picture (same predicate as buildLibCard
   // / upRenderLibBar). favourites is newest-first already.
+  // Active-project scope (spec §4): inside a project, show only its images.
   const withImg = (typeof favourites !== 'undefined' ? favourites : [])
-    .filter(f => f && (f.imageData || f.thumbKey || f.serverImageUrl));
+    .filter(f => f && (f.imageData || f.thumbKey || f.serverImageUrl))
+    .filter(f => !projActiveId || (Array.isArray(f.projects) && f.projects.includes(projActiveId)));
 
   if (!withImg.length) {
     if (empty) empty.style.display = 'block';
@@ -21164,9 +21618,11 @@ function bmThumbMenuOpen(kebabEl, header, items) {
     if (it.sep) { const s = document.createElement('div'); s.className = 'bm-thumb-msep'; menu.appendChild(s); return; }
     const r = document.createElement('div');
     r.className = 'bm-thumb-mi' + (it.dis ? ' dis' : '') + (it.on ? ' on' : '') + (it.danger ? ' danger' : '');
-    const glyph = it.uni
-      ? '<span class="bm-mi-uni" aria-hidden="true">' + it.uni + '</span>'
-      : '<i class="ti ' + it.ic + '"></i>';
+    const glyph = it.dot
+      ? '<span class="bm-mi-dot" aria-hidden="true" style="background:' + it.dot + '"></span>'
+      : (it.uni
+        ? '<span class="bm-mi-uni" aria-hidden="true">' + it.uni + '</span>'
+        : '<i class="ti ' + it.ic + '"></i>');
     r.innerHTML = glyph + it.label + (it.tag ? '<small>' + it.tag + '</small>' : '');
     if (!it.dis && typeof it.run === 'function') {
       r.onclick = (e) => { e.stopPropagation(); bmThumbMenuClose(); it.run(); };
@@ -21229,6 +21685,10 @@ function bmThumbMenuDecorate(cell, f, mode) {
       if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
+      items.push({ uni: '\u25C8', label: 'Add to Project', run: () => bmThumbProjectMenu(kebab, f, 'Image gen') });
+      if (projActiveId && Array.isArray(f.projects) && f.projects.includes(projActiveId)) {
+        items.push({ uni: '\u2212', label: 'Remove from project', run: () => projRemoveFromActive(f) });
+      }
       items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFavImage === 'function') bmShareFavImage(f); } });
       items.push({ sep: true });
       items.push({ uni: '\u2715', label: 'Remove', danger: true, run: () => bmThumbDelete(f) });
@@ -21238,6 +21698,10 @@ function bmThumbMenuDecorate(cell, f, mode) {
       if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
+      items.push({ uni: '\u25C8', label: 'Add to Project', run: () => bmThumbProjectMenu(kebab, f, 'Upscaler') });
+      if (projActiveId && Array.isArray(f.projects) && f.projects.includes(projActiveId)) {
+        items.push({ uni: '\u2212', label: 'Remove from project', run: () => projRemoveFromActive(f) });
+      }
       items.push({ uni: '\u2191', label: 'Share', run: () => { if (typeof bmShareFavImage === 'function') bmShareFavImage(f); } });
       items.push({ sep: true });
       items.push({ ic: 'ti-stack-2',
@@ -21251,6 +21715,44 @@ function bmThumbMenuDecorate(cell, f, mode) {
   cell.appendChild(kebab);
 }
 window.bmThumbMenuDecorate = bmThumbMenuDecorate;
+
+// ── Project membership actions for the Gen/Upscaler kebabs (spec §5c/§5d/§6) ──
+// "Add to Project" opens a second popover: New Project + one row per project.
+// Selecting links the fav; ticked rows show current membership.
+function bmThumbProjectMenu(kebabEl, f, parentHeader) {
+  const items = [];
+  items.push({ uni: '+', label: 'New Project',
+    run: () => projOpenNewModal({ seedFavIds: [String(f.id)] }) });
+  (typeof projects !== 'undefined' ? projects : []).forEach(p => {
+    const member = Array.isArray(f.projects) && f.projects.includes(p.id);
+    items.push({ dot: p.color, label: p.name || 'Project', on: member,
+      run: () => { projToggleFavMembership(f, p.id); } });
+  });
+  // Reuse the parent header so bmThumbMenuOpen re-applies the same bottom-bar
+  // hold class ('Image gen' / 'Upscaler'); falls back to a plain header.
+  bmThumbMenuOpen(kebabEl, parentHeader || 'Add to project', items);
+}
+// Link/unlink a single fav to a project, persist, and refresh scoped surfaces.
+function projToggleFavMembership(f, projId) {
+  if (!f || !projId) return;
+  const has = Array.isArray(f.projects) && f.projects.includes(projId);
+  f.projects = has
+    ? f.projects.filter(id => id !== projId)
+    : [...new Set([...(f.projects || []), projId])];
+  f.updatedAt = Date.now();
+  if (typeof lsSaveAll === 'function') lsSaveAll();
+  if (typeof driveSavePrompt === 'function') driveSavePrompt(f);
+  if (typeof projRenderAll === 'function') projRenderAll();
+  if (typeof renderLibrary === 'function') renderLibrary();
+  if (typeof igRenderLibBar === 'function') igRenderLibBar();
+  if (typeof upRenderLibBar === 'function') upRenderLibBar();
+}
+// Remove a fav from the project relevant to the current context (§6). The
+// "scoped" project is the active one; only shown when the fav is a member.
+function projRemoveFromActive(f) {
+  if (!f || !projActiveId) return;
+  projToggleFavMembership(f, projActiveId); // it's a member (caller guards), so this removes
+}
 
 // Delete a fav from the library (destructive), then refresh both bars.
 function bmThumbDelete(f) {
@@ -22591,8 +23093,10 @@ function upRenderLibBar() {
   // serverImageUrl + thumbKey with imageData:null; filtering on imageData alone
   // hid the ENTIRE library here. bmApplyThumb resolves all three sources (thumb
   // -> cache -> /api/img authed -> inline), and upSelectFav loads full size on tap.
+  // Active-project scope (spec §4): inside a project, show only its images.
   const withImg = (typeof favourites !== 'undefined' ? favourites : [])
-    .filter(f => f && (f.imageData || f.thumbKey || f.serverImageUrl));
+    .filter(f => f && (f.imageData || f.thumbKey || f.serverImageUrl))
+    .filter(f => !projActiveId || (Array.isArray(f.projects) && f.projects.includes(projActiveId)));
   if (!withImg.length) {
     if (empty) empty.style.display = 'block';
     if (hint) hint.textContent = '';

@@ -57,6 +57,7 @@ const ALLOWED_DOC_KEYS = new Set<string>([
   "fav-particles",    // beast-mode-fav-particles.json
   "formula-presets",  // beast-mode-formula-presets.json
   "styles",           // customised styles
+  "projects",         // project list metadata [{id,name,color,icon,createdAt}]
 ]);
 
 let _kv: Deno.Kv | null = null;
