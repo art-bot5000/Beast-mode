@@ -1105,6 +1105,12 @@ handleShareTarget()
           <div class="ig-note">Image-to-image: the model uses these as visual references / edit sources. Use <b>Markup image</b> to mark regions by colour and seed change instructions.</div>
         </div>
 
+        <!-- Shown in place of the upload box for models that don't support i2i.
+             You can still tick images in the bottom bar to add them to a project. -->
+        <div id="igNoI2INote" class="ig-note" style="display:none;border:1px dashed var(--border);border-radius:6px;padding:12px;margin-bottom:4px;">
+          This model doesn't support image-to-image, so there's no reference upload. You can still tick images in the bar below to add them to a project.
+        </div>
+
         <div class="ig-label">ASPECT RATIO</div>
         <select class="ig-select" id="igAspectSelect" onchange="igState.ar=this.value;igRenderAll()"></select>
 
@@ -2105,6 +2111,51 @@ handleShareTarget()
       <button class="btn btn-ghost" style="font-size:12px;" onclick="projCloseNewModal()">CANCEL</button>
       <button class="btn btn-primary" style="font-size:12px;" onclick="projConfirmNewModal()">CREATE PROJECT</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SWITCH TO PROJECT? ═══════════════════════════════ -->
+<!-- Shown after images are added to a project (when projSwitchPref === 'ask').
+     Yes/No, plus a remember-my-choice row. Selection is already cleared by the
+     time this appears. -->
+<div id="projSwitchModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20002;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)projSwitchModalChoose(false)">
+  <div class="modal-card" style="max-width:420px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">// SWITCH TO PROJECT?</div>
+      <button class="modal-close" onclick="projSwitchModalChoose(false)">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="projSwitchMsg" style="font-size:13px;color:var(--text);letter-spacing:.3px;line-height:1.5;margin-bottom:16px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:18px;">
+        <button class="btn btn-primary" style="flex:1;font-size:13px;" onclick="projSwitchModalChoose(true)">YES, SWITCH</button>
+        <button class="btn btn-ghost" style="flex:1;font-size:13px;" onclick="projSwitchModalChoose(false)">NO, STAY</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;margin-bottom:8px;">FOR NEXT TIME</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" style="flex:1;font-size:11px;" onclick="projSwitchSetPref('always')">MAKE THIS THE DEFAULT</button>
+        <button class="btn btn-outline" style="flex:1;font-size:11px;" onclick="projSwitchSetPref('ask')">ASK EVERY TIME</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ FIRST PROJECT WELCOME ═══════════════════════════════ -->
+<!-- Full-screen takeover shown once, on creating the user's very first project.
+     Gated by projWelcomeSeen (persisted in the settings doc). -->
+<div id="projWelcomeOverlay" style="display:none;position:fixed;inset:0;z-index:20003;background:var(--bg,#0c0f12);align-items:center;justify-content:center;padding:24px;">
+  <div style="max-width:560px;width:100%;text-align:center;">
+    <div style="font-size:48px;line-height:1;color:var(--accent);margin-bottom:24px;">◈</div>
+    <div style="font-family:'IBM Plex Mono',sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:20px;">// Your First Project</div>
+    <div style="font-size:15px;color:var(--text);line-height:1.7;letter-spacing:.3px;margin-bottom:16px;">
+      A project is a blank space — room for an idea to grow without the noise of everything else.
+    </div>
+    <div style="font-size:15px;color:var(--text);line-height:1.7;letter-spacing:.3px;margin-bottom:16px;">
+      You choose which creations belong here. Everything else stays waiting for you in <b>Default</b>, exactly where you left it. Nothing is moved or lost — a project is just a focused view you build by hand.
+    </div>
+    <div style="font-size:15px;color:var(--muted);line-height:1.7;letter-spacing:.3px;margin-bottom:32px;">
+      Generate inside it, or add images from your Library whenever something fits. Let the space fill up at its own pace.
+    </div>
+    <button class="btn btn-primary" style="font-size:14px;padding:12px 32px;letter-spacing:1px;" onclick="projWelcomeDismiss()">START CREATING</button>
   </div>
 </div>
      outputs) thumbnails of the source images. Populated by libOpenInfo(favId). -->
@@ -3433,6 +3484,8 @@ let libActiveFolderId   = '__all__' // category/virtual folder or a real folderI
 // `projActiveId` is device-local UI state (null = Default profile).
 let projects            = []        // [{ id, name, color, icon, createdAt }]
 let projActiveId        = null      // null = Default; else a project id (UI-only, not in ZK doc)
+let projSwitchPref      = 'ask'     // 'ask' | 'always' | 'never' — post-add switch behaviour (settings doc)
+let projWelcomeSeen     = false     // first-project welcome takeover shown once (settings doc)
 // Membership helpers (two choke-points, per spec §4):
 //  • projStampNew  — fresh gen/upscale/upload adds: stamp the active project (if any)
 //  • projInherit   — variant/markup adds: always union parent.projects, plus active
@@ -4645,6 +4698,11 @@ function applySettings(s) {
     if (typeof bmUpdateTextSizeBtns === 'function') bmUpdateTextSizeBtns()
   }
 
+  // Projects: post-add "switch to project?" preference + first-project welcome
+  // seen flag (cross-device). Only apply when present so older saves don't reset.
+  if (typeof s.projSwitchPref === 'string' && ['ask','always','never'].includes(s.projSwitchPref)) projSwitchPref = s.projSwitchPref
+  if (typeof s.projWelcomeSeen === 'boolean') projWelcomeSeen = s.projWelcomeSeen
+
   updateTunerSummary()
 }
 
@@ -4671,6 +4729,9 @@ function captureSettings() {
     // Accessibility prefs (cross-device).
     a11yContrast: document.body.classList.contains('high-contrast'),
     a11yTextSize: document.body.getAttribute('data-textsize') || 'm',
+    // Projects prefs (cross-device).
+    projSwitchPref: (typeof projSwitchPref !== 'undefined') ? projSwitchPref : 'ask',
+    projWelcomeSeen: (typeof projWelcomeSeen !== 'undefined') ? !!projWelcomeSeen : false,
   }
 }
 
@@ -6695,6 +6756,13 @@ function libBulkAddToProject() {
   const target = opts[idx]
   if (target.id === '__new__') {
     projOpenNewModal({ seedFavIds: ids })
+    libSelected.clear()
+    libToggleSelectMode()
+    return
+  }
+  // Shared add path: single persist + post-add "switch to project?" flow.
+  if (typeof projAddManyToProject === 'function') {
+    projAddManyToProject(ids, target.id, null)
   } else {
     ids.forEach(id => {
       const f = favourites.find(x => String(x.id) === id)
@@ -7855,10 +7923,12 @@ function projEsc(s) {
 // ── New Project modal (spec §5f) — source-agnostic: takes a fav-id list. ──────
 let _projNewSeedIds = []
 let _projNewColor = null
+let _projNewFromSurface = null
 function projOpenNewModal(opts) {
   const modal = document.getElementById('projNewModal')
   if (!modal) { return } // DOM missing — fail closed rather than throw
   _projNewSeedIds = (opts && Array.isArray(opts.seedFavIds)) ? opts.seedFavIds.map(String) : []
+  _projNewFromSurface = (opts && opts.fromSurface) ? opts.fromSurface : null
   _projNewColor = PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
   const nameEl = document.getElementById('projNewName')
   if (nameEl) { nameEl.value = (opts && opts.name) ? opts.name : '' }
@@ -7896,6 +7966,7 @@ function projConfirmNewModal() {
   const nameEl = document.getElementById('projNewName')
   const name = nameEl ? nameEl.value.trim() : ''
   if (!name) { if (nameEl) nameEl.focus(); return }
+  const isFirstEver = projects.length === 0
   const color = _projNewColor || PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
   _projColorIdx++
   const proj = { id: 'proj_' + Date.now().toString(36), name, color, icon: null, createdAt: Date.now() }
@@ -7907,9 +7978,15 @@ function projConfirmNewModal() {
   })
   projDocSave()
   if (typeof lsSaveAll === 'function') lsSaveAll()
+  // Clear any tickbox selection the seeds came from (deselect-after-add).
+  const surface = _projNewFromSurface
+  if (surface && typeof bmSelClear === 'function') bmSelClear(surface)
   projCloseNewModal()
   // Enter the new project so the user sees their seeded images immediately.
   projSetActive(proj.id)
+  // First project ever → one-time welcome takeover (sits above the now-active
+  // project view; dismissing reveals it).
+  if (isFirstEver && typeof projMaybeShowWelcome === 'function') projMaybeShowWelcome()
 }
 function projDelete(id) {
   const p = projById(id)
@@ -19673,7 +19750,11 @@ const IG_MODELS = [
   { id:'runware:civitai:101055@128078', label:'SDXL 1.0 (base)', family:'SDXL', dims:IG_OPEN_DIMS, seed:true, sampler:{steps:30,cfg:7}, negative:true, cost:'<1 token / image', note:'Classic SDXL base. Negative prompt supported.' },
 ];
 
-const igState = { modelId: IG_MODELS[0].id, ar: '1:1', res: null, refs: [], quality: 'auto', speed: 'DEFAULT', busy: false, inited: false };
+const igState = { modelId: IG_MODELS[0].id, ar: '1:1', res: null, refs: [], quality: 'auto', speed: 'DEFAULT', busy: false, inited: false,
+  // Selection intent (locked on first tick, reset when selection empties):
+  //   null | 'i2i' (fills refs up to maxRefs) | 'project' (unlimited, project-add)
+  selectMode: null,
+  projSel: new Set() };
 
 // ── TOKEN PRICING (client mirror of the server's pricing.js) ────────────────
 // The table is fetched once; quotes are computed locally so every chip click
@@ -20226,6 +20307,8 @@ function igRenderAll() {
   // Conditional sections.
   document.getElementById('igNegativeWrap').style.display = m.negative ? 'block' : 'none';
   document.getElementById('igRefsWrap').style.display = m.i2i ? 'block' : 'none';
+  const noI2I = document.getElementById('igNoI2INote');
+  if (noI2I) noI2I.style.display = m.i2i ? 'none' : 'block';
   document.getElementById('igQualityWrap').style.display = m.quality ? 'block' : 'none';
   document.getElementById('igSpeedWrap').style.display = m.speed ? 'block' : 'none';
   document.getElementById('igSamplerWrap').style.display = m.sampler ? 'block' : 'none';
@@ -21413,6 +21496,7 @@ function igLibToggleRef(f) {
   if (existing >= 0) {
     igState.refs.splice(existing, 1);
     if (!igState.refs.length && igState.ar === 'AUTO') igState.ar = '1:1';
+    if (!igState.refs.length && (!igState.projSel || igState.projSel.size === 0)) igState.selectMode = null;
     igRenderRefs();
     if (typeof igRenderAspectChips === 'function') igRenderAspectChips();
     igLibUpdateSelection();
@@ -21427,6 +21511,7 @@ function igLibToggleRef(f) {
     if (!data) { igStatus('\u2717 Could not load that image.', true); return; }
     if (igState.refs.length >= (m.maxRefs || 1)) return;
     igState.refs.push({ data, favId: f.id });
+    igState.selectMode = 'i2i';
     igRenderRefs();
     if (typeof igRenderAspectChips === 'function') igRenderAspectChips();
     igLibUpdateSelection();
@@ -21450,7 +21535,9 @@ function igLibUpdateSelection() {
   const bar = document.getElementById('igLibBar');
   if (!bar || igFamily.open) { igRenderLibBar(); return; }
   const m = igModel();
-  if (!(m && m.i2i)) { igRenderLibBar(); return; }
+  // Project-mode (or non-i2i) selection is rendered by the full bar builder
+  // (project ticks aren't numbered refs), so defer to it.
+  if (igState.selectMode === 'project' || !(m && m.i2i)) { igRenderLibBar(); return; }
   bar.querySelectorAll('.ig-libbar-thumb').forEach(cell => {
     const favId = cell.dataset.favId;
     const selIdx = igState.refs.findIndex(r => r && String(r.favId) === String(favId));
@@ -21511,20 +21598,26 @@ function igRenderLibBar() {
 
   if (!withImg.length) {
     if (empty) empty.style.display = 'block';
-    if (hint) hint.textContent = i2i ? 'Tick to select up to ' + (m.maxRefs || 1) + ' reference' + ((m.maxRefs || 1) === 1 ? '' : 's') : '';
+    if (hint) hint.textContent = '';
     return;
   }
   if (empty) empty.style.display = 'none';
   if (hint) {
-    hint.textContent = i2i
-      ? (igState.refs.length + ' / ' + (m.maxRefs || 1) + ' selected \u00B7 tap image for its source set')
-      : (withImg.length + ' image' + (withImg.length === 1 ? '' : 's') + ' \u00B7 timeline');
+    if (igState.selectMode === 'project' && igState.projSel) {
+      hint.textContent = igState.projSel.size + ' selected \u00B7 use the \u22EE menu to add to a project';
+    } else if (igState.selectMode === 'i2i') {
+      hint.textContent = igState.refs.length + ' / ' + (m.maxRefs || 1) + ' references selected';
+    } else {
+      hint.textContent = withImg.length + ' image' + (withImg.length === 1 ? '' : 's') + ' \u00B7 tick to select';
+    }
   }
 
   withImg.forEach(f => {
     const cell = document.createElement('div');
-    const selIdx = i2i ? igRefIndexForFav(f.id) : -1;
-    cell.className = 'ig-libbar-thumb' + (selIdx >= 0 ? ' sel' : '');
+    const refIdx = i2i ? igRefIndexForFav(f.id) : -1;
+    const inProjSel = igState.projSel && igState.projSel.has(f.id);
+    const selected = refIdx >= 0 || inProjSel;
+    cell.className = 'ig-libbar-thumb' + (selected ? ' sel' : '');
     cell.dataset.favId = f.id;
     const img = document.createElement('img');
     img.alt = f.title || ''; img.loading = 'lazy'; img.dataset.favId = f.id;
@@ -21533,42 +21626,71 @@ function igRenderLibBar() {
     else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); }
     else { img.src = f.imageData; }
     cell.appendChild(img);
-    // Selection order is now shown INSIDE the tick (top-left), so the separate
-    // top-left selnum badge is no longer rendered.
     // A small "family" dot cues that this generated image has a source set to
-    // open (purely informational; code itself stays internal).
+    // open (purely informational).
     if (i2i && igFavHasFamily(f)) {
       const fam = document.createElement('div');
       fam.className = 'ig-libbar-famdot';
       fam.title = 'Made with image-to-image — tap to see its sources';
       cell.appendChild(fam);
     }
-    if (i2i) {
-      // Tickbox (top-left) toggles i2i ref selection and shows the blend ORDER
-      // (1,2,3…) when selected.
-      const tick = document.createElement('button');
-      tick.type = 'button';
-      tick.className = 'ig-libbar-tick' + (selIdx >= 0 ? ' checked' : '');
-      if (selIdx >= 0) tick.dataset.selnum = String(selIdx + 1);
-      tick.title = (selIdx >= 0) ? 'Deselect reference' : 'Select as reference';
-      tick.setAttribute('role', 'checkbox');
-      tick.setAttribute('aria-checked', selIdx >= 0 ? 'true' : 'false');
-      tick.onclick = (e) => { e.stopPropagation(); igLibToggleRef(f); };
-      cell.appendChild(tick);
-      // Tapping anywhere else on the cell opens the family/source view if this
-      // image has one (one tap, not two). If it has no family, show in stage.
-      cell.onclick = () => {
-        if (igFavHasFamily(f)) igOpenFamilyForOutput(f);
-        else igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
-      };
-    } else {
-      cell.onclick = () => igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
-    }
+    // Tickbox is now present on EVERY model (not just i2i). Its meaning depends
+    // on the locked selection intent; the first tick opens the chooser.
+    const tick = document.createElement('button');
+    tick.type = 'button';
+    tick.className = 'ig-libbar-tick' + (selected ? ' checked' : '');
+    if (refIdx >= 0) tick.dataset.selnum = String(refIdx + 1);
+    else tick.removeAttribute('data-selnum');
+    tick.title = selected ? 'Deselect' : 'Select';
+    tick.setAttribute('role', 'checkbox');
+    tick.setAttribute('aria-checked', selected ? 'true' : 'false');
+    tick.onclick = (e) => { e.stopPropagation(); igLibTickClick(f, tick); };
+    cell.appendChild(tick);
+    // Tapping elsewhere on the cell opens the family/source view (i2i) or stage.
+    cell.onclick = () => {
+      if (i2i && igFavHasFamily(f)) igOpenFamilyForOutput(f);
+      else igStageShow(f.serverImageUrl || ('/api/img/' + f.id));
+    };
     if (typeof bmThumbMenuDecorate === 'function') bmThumbMenuDecorate(cell, f, 'ig');
     bar.appendChild(cell);
   });
 }
 window.igRenderLibBar = igRenderLibBar;
+
+// Tickbox click handler for the Image Gen bottom bar. Implements the locked
+// first-tick intent (i2i refs vs project), the maxRefs ceiling with toast, and
+// project (unlimited) selection.
+function igLibTickClick(f, tickEl) {
+  const m = (typeof igModel === 'function') ? igModel() : null;
+  const i2i = !!(m && m.i2i);
+  // Deselect always works regardless of intent.
+  if (igRefIndexForFav(f.id) >= 0) { igLibToggleRef(f); return; }
+  if (igState.projSel && igState.projSel.has(f.id)) { bmSelToggleProject('ig', f); return; }
+  // New selection. If no intent yet, open the chooser anchored to the tick.
+  if (!igState.selectMode) {
+    bmSelIntentChooser(tickEl, 'ig', (mode) => {
+      if (mode === 'i2i') {
+        if (!i2i) return; // guarded in chooser (greyed), belt-and-braces
+        igState.selectMode = 'i2i';
+        igLibToggleRef(f);
+      } else {
+        bmSelToggleProject('ig', f); // sets selectMode='project'
+      }
+    });
+    return;
+  }
+  // Intent already locked — route to it.
+  if (igState.selectMode === 'i2i') {
+    if (igState.refs.length >= (m.maxRefs || 1)) {
+      if (typeof pbPasteToast === 'function') pbPasteToast('Model image limit reached — start a Project selection to add more');
+      return;
+    }
+    igLibToggleRef(f);
+  } else {
+    bmSelToggleProject('ig', f);
+  }
+}
+window.igLibTickClick = igLibTickClick;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Thumbnail context menu (⋮) for the upscaler + image-gen bottom bars, plus the
@@ -21685,7 +21807,7 @@ function bmThumbMenuDecorate(cell, f, mode) {
       if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
-      items.push({ uni: '\u25C8', label: 'Add to Project', run: () => bmThumbProjectMenu(kebab, f, 'Image gen') });
+      items.push({ uni: '\u25C8', label: (typeof bmSelActive === 'function' && bmSelActive('ig') && igState.selectMode === 'project') ? ('Add to Project (' + igState.projSel.size + ')') : 'Add to Project', run: () => bmThumbProjectMenu(kebab, f, 'Image gen', 'ig') });
       if (projActiveId && Array.isArray(f.projects) && f.projects.includes(projActiveId)) {
         items.push({ uni: '\u2212', label: 'Remove from project', run: () => projRemoveFromActive(f) });
       }
@@ -21698,7 +21820,7 @@ function bmThumbMenuDecorate(cell, f, mode) {
       if (!f.isUpload) items.push({ ic: 'ti-refresh', label: 'Restore settings', run: () => { if (typeof restoreFav === 'function') restoreFav(f.id); } });
       items.push({ uni: '\u24D8', label: 'Information', run: () => bmImageInfoModal(f) });
       items.push({ ic: 'ti-download', label: 'Download', run: () => { if (typeof upDownloadFav === 'function') upDownloadFav(f); } });
-      items.push({ uni: '\u25C8', label: 'Add to Project', run: () => bmThumbProjectMenu(kebab, f, 'Upscaler') });
+      items.push({ uni: '\u25C8', label: (typeof bmSelActive === 'function' && bmSelActive('up') && upState.selectMode === 'project') ? ('Add to Project (' + upState.projSel.size + ')') : 'Add to Project', run: () => bmThumbProjectMenu(kebab, f, 'Upscaler', 'up') });
       if (projActiveId && Array.isArray(f.projects) && f.projects.includes(projActiveId)) {
         items.push({ uni: '\u2212', label: 'Remove from project', run: () => projRemoveFromActive(f) });
       }
@@ -21718,22 +21840,105 @@ window.bmThumbMenuDecorate = bmThumbMenuDecorate;
 
 // ── Project membership actions for the Gen/Upscaler kebabs (spec §5c/§5d/§6) ──
 // "Add to Project" opens a second popover: New Project + one row per project.
-// Selecting links the fav; ticked rows show current membership.
-function bmThumbProjectMenu(kebabEl, f, parentHeader) {
+// Selection-aware: if a project-selection is active on `surface`, the action
+// applies to EVERY ticked image; otherwise just this fav.
+function bmThumbProjectMenu(kebabEl, f, parentHeader, surface) {
+  const targets = (surface && typeof bmSelProjectTargets === 'function')
+    ? bmSelProjectTargets(surface, f) : [String(f.id)];
+  const multi = targets.length > 1;
   const items = [];
-  items.push({ uni: '+', label: 'New Project',
-    run: () => projOpenNewModal({ seedFavIds: [String(f.id)] }) });
+  items.push({ uni: '+', label: multi ? 'New Project (' + targets.length + ')' : 'New Project',
+    run: () => projOpenNewModal({ seedFavIds: targets, fromSurface: surface || null }) });
   (typeof projects !== 'undefined' ? projects : []).forEach(p => {
-    const member = Array.isArray(f.projects) && f.projects.includes(p.id);
-    items.push({ dot: p.color, label: p.name || 'Project', on: member,
-      run: () => { projToggleFavMembership(f, p.id); } });
+    // For a multi-selection, "member" means ALL targets already in the project.
+    const member = multi
+      ? targets.every(id => { const t = favourites.find(x => String(x.id) === id); return t && Array.isArray(t.projects) && t.projects.includes(p.id); })
+      : (Array.isArray(f.projects) && f.projects.includes(p.id));
+    items.push({ dot: p.color, label: (p.name || 'Project') + (multi ? '  (+' + targets.length + ')' : ''), on: member,
+      run: () => {
+        if (multi) projAddManyToProject(targets, p.id, surface);
+        else projToggleFavMembership(f, p.id, { afterAdd: true });
+      } });
   });
-  // Reuse the parent header so bmThumbMenuOpen re-applies the same bottom-bar
-  // hold class ('Image gen' / 'Upscaler'); falls back to a plain header.
   bmThumbMenuOpen(kebabEl, parentHeader || 'Add to project', items);
 }
+
+// Add many favs to a project at once (multi-select kebab path). Persists once,
+// then runs the post-add "switch to project?" flow and clears the selection.
+function projAddManyToProject(favIds, projId, surface) {
+  if (!Array.isArray(favIds) || !favIds.length || !projId) return;
+  favIds.forEach(id => {
+    const f = favourites.find(x => String(x.id) === String(id));
+    if (f) { f.projects = [...new Set([...(f.projects || []), projId])]; f.updatedAt = Date.now(); if (typeof driveSavePrompt === 'function') driveSavePrompt(f); }
+  });
+  if (typeof lsSaveAll === 'function') lsSaveAll();
+  if (typeof projRenderAll === 'function') projRenderAll();
+  if (surface && typeof bmSelClear === 'function') bmSelClear(surface);
+  if (typeof projAfterAdd === 'function') projAfterAdd(projId);
+}
+
+// Post-add "switch to the project?" flow (honours the saved preference).
+//   projSwitchPref: 'ask'    → show the modal
+//                   'always' → switch silently
+//                   'never'  → don't switch
+// In every case the selection is already cleared by the caller. Skips the
+// prompt when the project is already active.
+function projAfterAdd(projId) {
+  if (!projId || projId === projActiveId) return;
+  if (projSwitchPref === 'always') { projSetActive(projId); return; }
+  if (projSwitchPref === 'never') { return; }
+  projOpenSwitchModal(projId);
+}
+
+// "Switch to project?" modal. Stashes the target id; Yes switches, No stays.
+let _projSwitchTargetId = null
+function projOpenSwitchModal(projId) {
+  const modal = document.getElementById('projSwitchModal')
+  if (!modal) { return }
+  _projSwitchTargetId = projId
+  const p = projById(projId)
+  const msg = document.getElementById('projSwitchMsg')
+  if (msg) msg.textContent = p ? ('Added to "' + (p.name || 'project') + '". Switch to it now?') : 'Switch to the project now?'
+  modal.style.display = 'flex'
+}
+function projSwitchModalClose() {
+  const modal = document.getElementById('projSwitchModal')
+  if (modal) modal.style.display = 'none'
+  _projSwitchTargetId = null
+}
+function projSwitchModalChoose(yes) {
+  const target = _projSwitchTargetId
+  projSwitchModalClose()
+  if (yes && target) projSetActive(target)
+}
+// Remember-my-choice. 'always' = always switch (and apply now to the pending
+// target); 'ask' = keep asking. Persisted via the settings doc.
+function projSwitchSetPref(pref) {
+  if (pref !== 'always' && pref !== 'ask') return
+  projSwitchPref = pref
+  // Persist through the settings doc (debounced) + local mirror.
+  try { if (typeof bmDocSave === 'function' && typeof bmDocReady === 'function' && bmDocReady() && typeof captureSettings === 'function') bmDocSave(BM_DOC_KEYS.SETTINGS, captureSettings()) } catch (e) {}
+  try { if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.SETTINGS, captureSettings()) } catch (e) {}
+  // If they chose "make default", honour it immediately for the pending target.
+  if (pref === 'always') { const t = _projSwitchTargetId; projSwitchModalClose(); if (t) projSetActive(t); }
+}
+
+// First-project welcome takeover. Shown once (projWelcomeSeen), then persisted.
+function projMaybeShowWelcome() {
+  if (projWelcomeSeen) return
+  const ov = document.getElementById('projWelcomeOverlay')
+  if (!ov) return
+  ov.style.display = 'flex'
+}
+function projWelcomeDismiss() {
+  const ov = document.getElementById('projWelcomeOverlay')
+  if (ov) ov.style.display = 'none'
+  projWelcomeSeen = true
+  try { if (typeof bmDocSave === 'function' && typeof bmDocReady === 'function' && bmDocReady() && typeof captureSettings === 'function') bmDocSave(BM_DOC_KEYS.SETTINGS, captureSettings()) } catch (e) {}
+  try { if (typeof lsSave === 'function' && typeof LS !== 'undefined') lsSave(LS.SETTINGS, captureSettings()) } catch (e) {}
+}
 // Link/unlink a single fav to a project, persist, and refresh scoped surfaces.
-function projToggleFavMembership(f, projId) {
+function projToggleFavMembership(f, projId, opts) {
   if (!f || !projId) return;
   const has = Array.isArray(f.projects) && f.projects.includes(projId);
   f.projects = has
@@ -21746,12 +21951,118 @@ function projToggleFavMembership(f, projId) {
   if (typeof renderLibrary === 'function') renderLibrary();
   if (typeof igRenderLibBar === 'function') igRenderLibBar();
   if (typeof upRenderLibBar === 'function') upRenderLibBar();
+  // Single-add via a kebab opts into the post-add "switch to project?" flow.
+  // Removals and the project-list membership toggles do not.
+  if (!has && opts && opts.afterAdd && typeof projAfterAdd === 'function') projAfterAdd(projId);
 }
 // Remove a fav from the project relevant to the current context (§6). The
 // "scoped" project is the active one; only shown when the fav is a member.
 function projRemoveFromActive(f) {
   if (!f || !projActiveId) return;
   projToggleFavMembership(f, projActiveId); // it's a member (caller guards), so this removes
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ██ TICKBOX SELECTION INTENT (Image Gen + Upscaler) ██
+// ═══════════════════════════════════════════════════════════════════════════
+// One tickbox per surface serves two purposes. The FIRST tick on an empty
+// selection opens a chooser: the model-native role (i2i refs / batch upscale)
+// vs "Add to Project". The chosen intent is LOCKED for the life of the
+// selection — no switching — and resets only when the selection empties.
+//   • Image Gen native role = 'i2i'   (fills igState.refs up to maxRefs)
+//   • Upscaler  native role = 'batch' (fills upState.batchIds up to BATCH_MAX)
+//   • 'project' = unlimited; ticked ids collect in <state>.projSel for the
+//     kebab's "Add to Project" to consume.
+
+// Resolve the per-surface bits so the chooser/toggle logic is surface-agnostic.
+function bmSelCtx(surface) {
+  if (surface === 'ig') {
+    const m = (typeof igModel === 'function') ? igModel() : null;
+    return {
+      state: igState,
+      nativeMode: 'i2i',
+      nativeLabel: 'Image to image',
+      nativeAllowed: !!(m && m.i2i),
+      nativeCap: (m && m.maxRefs) || 1,
+      nativeSize: () => igState.refs.length,
+      render: () => { if (typeof igRenderLibBar === 'function') igRenderLibBar(); },
+    };
+  }
+  return {
+    state: upState,
+    nativeMode: 'batch',
+    nativeLabel: 'Batch upscale',
+    nativeAllowed: true,
+    nativeCap: BATCH_MAX,
+    nativeSize: () => (upState.batchIds ? upState.batchIds.size : 0),
+    render: () => { if (typeof upRenderLibBar === 'function') upRenderLibBar(); },
+  };
+}
+
+// True when ANY selection (native or project) is currently active on a surface.
+function bmSelActive(surface) {
+  const c = bmSelCtx(surface);
+  return !!c.state.selectMode &&
+    (c.nativeSize() > 0 || (c.state.projSel && c.state.projSel.size > 0));
+}
+
+// First-tick chooser. Anchored above the tick like the kebab popover. Calls
+// `onPick(mode)` with 'i2i'|'batch' or 'project'.
+function bmSelIntentChooser(anchorEl, surface, onPick) {
+  if (typeof bmThumbMenuClose === 'function') bmThumbMenuClose();
+  const c = bmSelCtx(surface);
+  const items = [];
+  items.push({
+    ic: surface === 'ig' ? 'ti-photo' : 'ti-stack-2',
+    label: c.nativeLabel,
+    dis: !c.nativeAllowed,
+    tag: c.nativeAllowed ? '' : 'Not supported',
+    run: () => onPick(c.nativeMode),
+  });
+  items.push({ uni: '\u25C8', label: 'Add to Project', run: () => onPick('project') });
+  if (typeof bmThumbMenuOpen === 'function') {
+    bmThumbMenuOpen(anchorEl, surface === 'ig' ? 'Image gen' : 'Upscaler', items);
+  }
+}
+
+// Toggle a fav's project-selection membership on a surface (unlimited).
+function bmSelToggleProject(surface, f) {
+  const c = bmSelCtx(surface);
+  if (!c.state.projSel) c.state.projSel = new Set();
+  if (c.state.projSel.has(f.id)) {
+    c.state.projSel.delete(f.id);
+    if (c.state.projSel.size === 0 && c.nativeSize() === 0) c.state.selectMode = null;
+  } else {
+    c.state.projSel.add(f.id);
+    c.state.selectMode = 'project';
+  }
+  c.render();
+}
+
+// Clear ALL selection on a surface (both axes) and reset the locked intent.
+function bmSelClear(surface) {
+  const c = bmSelCtx(surface);
+  c.state.selectMode = null;
+  if (c.state.projSel) c.state.projSel.clear();
+  if (surface === 'ig') {
+    igState.refs = [];
+    if (typeof igRenderRefs === 'function') igRenderRefs();
+    if (typeof igRenderAspectChips === 'function') igRenderAspectChips();
+  } else if (upState.batchIds) {
+    upState.batchIds.clear();
+    if (typeof upUpdateBatchUI === 'function') upUpdateBatchUI();
+  }
+  c.render();
+}
+
+// The ids the kebab's "Add to Project" should act on for a given fav: if a
+// project-selection is active, ALL ticked ids; otherwise just this fav.
+function bmSelProjectTargets(surface, f) {
+  const c = bmSelCtx(surface);
+  if (c.state.selectMode === 'project' && c.state.projSel && c.state.projSel.size) {
+    return [...c.state.projSel].map(String);
+  }
+  return [String(f.id)];
 }
 
 // Delete a fav from the library (destructive), then refresh both bars.
@@ -22562,6 +22873,10 @@ const upState = {
   batchIds: new Set(), // ticked fav ids for a batch upscale (max BATCH_MAX); when
                        // size>=2 the run fans out into N independent queue jobs
                        // sharing the current model + settings.
+  // Selection intent (locked on first tick, reset when selection empties):
+  //   null | 'batch' (fills batchIds up to BATCH_MAX) | 'project' (unlimited)
+  selectMode: null,
+  projSel: new Set(),
   srcW: 0,             // natural width of the loaded source (0 = unknown)
   srcH: 0,             // natural height of the loaded source
   srcMp: 0,            // source megapixels (w*h/1e6), 0 = unknown
@@ -23106,9 +23421,10 @@ function upRenderLibBar() {
   if (hint) hint.textContent = withImg.length + ' image' + (withImg.length === 1 ? '' : 's');
   withImg.forEach(f => {
     const cell = document.createElement('div');
+    const upInProjSel = upState.projSel && upState.projSel.has(f.id);
     cell.className = 'up-libbar-thumb'
       + (upState.srcFavId === f.id ? ' sel' : '')
-      + (upState.batchIds.has(f.id) ? ' ticked' : '');
+      + ((upState.batchIds.has(f.id) || upInProjSel) ? ' ticked' : '');
     cell.dataset.favId = f.id;
     const img = document.createElement('img');
     img.alt = f.title || ''; img.loading = 'lazy';
@@ -23145,15 +23461,15 @@ function upRenderLibBar() {
     const tick = document.createElement('input');
     tick.type = 'checkbox';
     tick.className = 'up-libbar-tick';
-    tick.checked = upState.batchIds.has(f.id);
-    tick.title = 'Select for batch upscale';
-    tick.setAttribute('aria-label', 'Select ' + (f.title || 'image') + ' for batch upscale');
-    // Disable unticked boxes once the cap is reached so the ceiling is obvious.
-    if (!tick.checked && upState.batchIds.size >= BATCH_MAX) tick.disabled = true;
+    tick.checked = upState.batchIds.has(f.id) || (upState.projSel && upState.projSel.has(f.id));
+    tick.title = 'Select';
+    tick.setAttribute('aria-label', 'Select ' + (f.title || 'image'));
+    // Cap only applies to the BATCH intent; project selection is unlimited.
+    if (!tick.checked && upState.selectMode === 'batch' && upState.batchIds.size >= BATCH_MAX) tick.disabled = true;
     tick.onclick = (e) => { e.stopPropagation(); };
     tick.onchange = (e) => {
       e.stopPropagation();
-      upToggleBatch(f, tick.checked);
+      upLibTickClick(f, tick);
     };
     cell.appendChild(tick);
     // Mobile: the SELECTED (enlarged) thumb is the gesture target for opening
@@ -23174,6 +23490,37 @@ function upRenderLibBar() {
 }
 
 // ── Batch selection ──────────────────────────────────────────────────────────
+// Upscaler tickbox click handler. Mirrors igLibTickClick: first tick opens the
+// intent chooser (batch upscale vs add to project); intent is then locked until
+// the selection empties. Because a checkbox toggles its own .checked before
+// this fires, we always re-render from authoritative state rather than trust it.
+function upLibTickClick(f, tickEl) {
+  // Deselect always works.
+  if (upState.batchIds.has(f.id)) { upToggleBatch(f, false); return; }
+  if (upState.projSel && upState.projSel.has(f.id)) { bmSelToggleProject('up', f); return; }
+  // New selection. No intent yet → chooser (revert the optimistic check first).
+  if (!upState.selectMode) {
+    if (tickEl) tickEl.checked = false;
+    bmSelIntentChooser(tickEl, 'up', (mode) => {
+      if (mode === 'batch') { upState.selectMode = 'batch'; upToggleBatch(f, true); }
+      else { bmSelToggleProject('up', f); }
+    });
+    return;
+  }
+  // Intent locked.
+  if (upState.selectMode === 'batch') {
+    if (upState.batchIds.size >= BATCH_MAX) {
+      if (tickEl) tickEl.checked = false;
+      if (typeof pbPasteToast === 'function') pbPasteToast('Model image limit reached — start a Project selection to add more');
+      return;
+    }
+    upToggleBatch(f, true);
+  } else {
+    bmSelToggleProject('up', f);
+  }
+}
+window.upLibTickClick = upLibTickClick;
+
 // Add/remove a fav from the batch set (capped at BATCH_MAX). When exactly one
 // image ends up ticked, it also drives the preview (a single tick behaves like a
 // single select). Refreshes the bar's tick/disabled states and the cost label.
@@ -23189,8 +23536,10 @@ function upToggleBatch(f, on) {
       return;
     }
     upState.batchIds.add(f.id);
+    upState.selectMode = 'batch';
   } else {
     upState.batchIds.delete(f.id);
+    if (upState.batchIds.size === 0 && (!upState.projSel || upState.projSel.size === 0)) upState.selectMode = null;
   }
   // Single tick == single select: load that one image into the preview/source.
   if (upState.batchIds.size === 1) {
