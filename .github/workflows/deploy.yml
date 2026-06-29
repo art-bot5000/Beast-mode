@@ -58,8 +58,11 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io (production)
-        # --no-cache: avoids the remote builder reusing cached minify output,
-        # which silently ships a stale frontend (the scar inherited from stckrm).
+        # Layer caching is safe here: the COPY of app.html/app.css/etc. is hashed
+        # by file content, so any frontend change busts that layer AND the minify
+        # step downstream of it. (Dropped --no-cache, which forced full rebuilds
+        # and hours-long Depot builds; content-hash invalidation covers the stale-
+        # minify scar inherited from stckrm without the rebuild cost.)
         run: flyctl deploy --config fly.toml --remote-only --strategy rolling
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

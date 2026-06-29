@@ -16,10 +16,10 @@ jobs:
       - name: Check required files exist
         run: |
           REQUIRED=(
-            beast-mode-mech-my-ride-v4.html
+            app.html app.css app.js
             sw.js manifest.json
             icon192.png icon512.png
-            main.ts auth.ts oauth.ts bm-auth-crypto.js deno.json start.sh Caddyfile
+            main.ts auth.ts deno.json start.sh Caddyfile
             fly.staging.toml
           )
           MISSING=()
@@ -35,9 +35,9 @@ jobs:
       - name: Check backend JS/TS syntax
         run: |
           # Provider modules are plain ES modules — node --check validates syntax.
-          node --check index.js   && echo "✅ index.js OK"
-          node --check runware.js  && echo "✅ runware.js OK"
-          node --check catalog.js  && echo "✅ catalog.js OK"
+          node --check providers/index.js   && echo "✅ providers/index.js OK"
+          node --check providers/runware.js  && echo "✅ providers/runware.js OK"
+          node --check providers/catalog.js  && echo "✅ providers/catalog.js OK"
 
   deploy:
     name: Deploy to staging
@@ -48,9 +48,10 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io (staging)
-        # --no-cache: same scar as stckrm — the remote builder will otherwise
-        # reuse cached minify output and silently ship a stale frontend.
-        run: flyctl deploy --config fly.staging.toml --remote-only --strategy rolling --ha=false --no-cache
+        # Layer caching is safe: the COPY of app.html/app.css/etc. is content-
+        # hashed, so a frontend change busts that layer and the minify step below
+        # it. (Dropped --no-cache to avoid forced full rebuilds / slow Depot builds.)
+        run: flyctl deploy --config fly.staging.toml --remote-only --strategy rolling --ha=false
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
