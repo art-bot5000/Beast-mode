@@ -2323,7 +2323,6 @@ handleShareTarget()
     <button class="btn btn-primary" style="font-size:14px;padding:12px 32px;letter-spacing:1px;" onclick="projWelcomeDismiss()">START CREATING</button>
   </div>
 </div>
-     outputs) thumbnails of the source images. Populated by libOpenInfo(favId). -->
 <div id="libInfoModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20000;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;">
   <div class="modal-card" style="max-width:620px;width:100%;max-height:88vh;display:flex;flex-direction:column;">
     <div class="modal-header">
@@ -8031,10 +8030,11 @@ function projRenderNav() {
   if (dot) {
     if (active && active.icon && PROJ_ICONS.indexOf(active.icon) !== -1) {
       dot.style.background = 'transparent'
-      dot.innerHTML = `<i class="ti ti-${active.icon}" style="color:${active.color || 'var(--muted)'};font-size:12px;line-height:1;"></i>`
+      dot.innerHTML = `<i class="ti ti-${active.icon}" style="color:${active.color || 'var(--muted)'};font-size:18px;line-height:1;"></i>`
     } else {
-      dot.innerHTML = ''
-      dot.style.background = active ? (active.color || 'var(--muted)') : 'var(--accent)'
+      dot.style.background = 'transparent'
+      // Inner pip carries the colour so the 20px box stays a clean centring frame.
+      dot.innerHTML = `<span class="proj-nav-pip" style="background:${active ? (active.color || 'var(--muted)') : 'var(--accent)'};"></span>`
     }
   }
   if (!menu) return
@@ -26638,9 +26638,14 @@ window.bmWorkspaceGate = (function () {
     ];
 
     Promise.all(dataLoaders)
-      // PHASE 2 — favourites is now hydrated. Initialise both modes so their
-      // controls + image bars build against the real, populated library.
+      // PHASE 2 — favourites + projects are now hydrated. Render the project
+      // switcher FIRST (cheap, user-facing chrome) so it's painted the instant
+      // the gate lifts — ahead of the heavier thumbnail warm. Settings already
+      // applied during the ZK restore (applySettings), so the load priority is
+      // settings → projects → thumbnails as intended. Then initialise both modes
+      // so their controls + image bars build against the real, populated library.
       .then(function () {
+        try { if (typeof projRenderAll === 'function') projRenderAll(); } catch (_) {}
         return Promise.all([
           step(function () { if (typeof igInit === 'function') igInit(); }),
           step(function () { if (typeof upInit === 'function') upInit(); }),

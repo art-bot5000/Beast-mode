@@ -840,11 +840,11 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
      is forced hidden while collapsed so it can't escape the 60px rail. */
   body .proj-nav { padding: 8px var(--mode-nav-pad-x) 0; }
   body .proj-nav-toggle {
-    padding: 8px; gap: 0; justify-content: flex-start;
+    padding: 8px 0; gap: 0; justify-content: flex-start;
     background: transparent; border-color: transparent;
   }
   body .mode-nav:hover .proj-nav-toggle {
-    padding: 8px 10px; gap: 8px;
+    padding: 9px 14px; gap: 10px;
     background: var(--surface2); border-color: var(--border);
   }
   body .proj-nav-dot, body .proj-nav-icon { flex-shrink: 0; }
@@ -947,14 +947,26 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 /* ── PROJECTS switcher (title-bar dropdown, sits under the brand) ──────────── */
 .proj-nav { position:relative; padding:8px 8px 0; flex-shrink:0; display:block; }
 .proj-nav-toggle {
-  display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px;
+  display:flex; align-items:center; gap:10px; width:100%; padding:9px 14px;
   background:var(--surface2); border:1px solid var(--border); border-radius:6px;
   font-family:'IBM Plex Mono',sans-serif; font-size:12px; letter-spacing:1.5px;
   color:var(--text); cursor:pointer; transition:all .15s; text-transform:uppercase;
 }
 .proj-nav-toggle:hover { border-color:var(--accent); }
 .proj-nav-toggle[aria-expanded="true"] { border-color:var(--accent); }
+/* Marker sits in a 24px box like the mode-tab icons so dot/icon line up with the
+   tabs below and centre vertically against the label. The coloured dot is an
+   inner pip; the icon variant renders at the tab-icon scale (18px). This larger
+   framing applies to the TOGGLE only — dropdown rows keep a compact dot. */
+.proj-nav-toggle > .proj-nav-dot {
+  width:24px; height:24px; flex-shrink:0; background:transparent;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; line-height:1;
+}
+.proj-nav-toggle > .proj-nav-dot .proj-nav-pip { width:12px; height:12px; border-radius:50%; display:block; }
+/* Compact dot for dropdown rows + any other surface using projMarkerHTML. */
 .proj-nav-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.proj-nav-dot.proj-marker-icon { width:auto; height:auto; border-radius:0; font-size:14px; }
 .proj-nav-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
 .proj-nav-caret { font-size:11px; color:var(--muted); flex-shrink:0; }
 .proj-nav-menu {
@@ -978,7 +990,7 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .proj-nav-item:hover .proj-nav-del { opacity:.5; }
 .proj-nav-del:hover { opacity:1 !important; color:#ff4444; }
 .proj-nav-new { color:var(--accent); }
-.proj-nav-new .proj-nav-dot { display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--accent); }
+.proj-nav-new .proj-nav-dot { display:flex; align-items:center; justify-content:center; width:auto; height:auto; font-size:14px; color:var(--accent); }
 
 /* New Project modal colour swatches */
 .proj-swatch {
