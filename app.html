@@ -557,8 +557,8 @@ handleShareTarget()
        the dedicated mobile "PROJECTS" section is rendered into #projMobileWrap. -->
   <div class="proj-nav" id="projNavWrap">
     <button class="proj-nav-toggle" id="projNavToggle" onclick="projToggleNav()" aria-expanded="false" aria-haspopup="true">
-      <span class="proj-nav-dot" id="projNavDot"></span>
-      <span class="proj-nav-label" id="projNavLabel">DEFAULT</span>
+      <span class="proj-nav-dot proj-nav-head-ico" id="projNavDot"><i class="ti ti-folders"></i></span>
+      <span class="proj-nav-label" id="projNavLabel">PROJECTS</span>
       <span class="proj-nav-caret" aria-hidden="true">▾</span>
     </button>
     <div class="proj-nav-menu" id="projNavMenu" hidden></div>
@@ -2258,7 +2258,7 @@ handleShareTarget()
 <div id="projNewModal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:20001;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)projCloseNewModal()">
   <div class="modal-card" style="max-width:440px;width:100%;">
     <div class="modal-header">
-      <div class="modal-title">// NEW PROJECT</div>
+      <div class="modal-title" id="projModalTitle">// NEW PROJECT</div>
       <button class="modal-close" onclick="projCloseNewModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -2272,9 +2272,11 @@ handleShareTarget()
       <div id="projNewIcons" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
       <div id="projNewSeedNote" style="font-size:11px;color:var(--muted);opacity:.7;margin-top:6px;"></div>
     </div>
-    <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:0 20px 20px;">
+    <div class="modal-footer" style="display:flex;gap:8px;align-items:center;padding:0 20px 20px;">
+      <button class="btn btn-ghost" id="projModalDelete" style="font-size:12px;color:#ff5555;border-color:rgba(255,85,85,.4);display:none;" onclick="projEditDelete()">DELETE</button>
+      <div style="flex:1;"></div>
       <button class="btn btn-ghost" style="font-size:12px;" onclick="projCloseNewModal()">CANCEL</button>
-      <button class="btn btn-primary" style="font-size:12px;" onclick="projConfirmNewModal()">CREATE PROJECT</button>
+      <button class="btn btn-primary" id="projModalConfirm" style="font-size:12px;" onclick="projConfirmNewModal()">CREATE PROJECT</button>
     </div>
   </div>
 </div>
@@ -8020,33 +8022,21 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') projCloseNav
 // Build the title-bar dropdown contents + the toggle's current-state label/dot.
 function projRenderNav() {
   const menu = document.getElementById('projNavMenu')
-  const label = document.getElementById('projNavLabel')
-  const dot   = document.getElementById('projNavDot')
-  const active = projActiveId ? projById(projActiveId) : null
-  if (label) label.textContent = active ? (active.name || 'PROJECT').toUpperCase() : 'DEFAULT'
-  // Toggle marker: icon (tinted) when the active project has one, else a dot.
-  // Default → theme-accent dot. We rewrite the span's contents/style in place so
-  // the #projNavDot id (and its fixed sizing) is preserved.
-  if (dot) {
-    if (active && active.icon && PROJ_ICONS.indexOf(active.icon) !== -1) {
-      dot.style.background = 'transparent'
-      dot.innerHTML = `<i class="ti ti-${active.icon}" style="color:${active.color || 'var(--muted)'};font-size:18px;line-height:1;"></i>`
-    } else {
-      dot.style.background = 'transparent'
-      // Inner pip carries the colour so the 20px box stays a clean centring frame.
-      dot.innerHTML = `<span class="proj-nav-pip" style="background:${active ? (active.color || 'var(--muted)') : 'var(--accent)'};"></span>`
-    }
-  }
+  // The toggle is now a constant "PROJECTS" header (folders icon + label), so it
+  // no longer mirrors the active project — the active row is highlighted inside
+  // the open menu instead. Nothing to mutate on the toggle here.
   if (!menu) return
   menu.innerHTML = ''
-  // Default row (always top) — clears projActiveId.
+  // Default row (always top) — clears projActiveId. Uses a folder icon tinted to
+  // the theme accent so it reads as the home/all view.
   const def = document.createElement('button')
   def.type = 'button'
   def.className = 'proj-nav-item' + (!projActiveId ? ' active' : '')
-  def.innerHTML = `${projMarkerHTML(null,'proj-nav-dot')}<span class="proj-nav-item-name">Default</span>`
+  def.innerHTML = `<i class="ti ti-folder proj-nav-dot proj-marker-icon" style="color:var(--accent);"></i><span class="proj-nav-item-name">Default</span>`
   def.onclick = () => projSetActive(null)
   menu.appendChild(def)
-  // One row per project (selecting sets active; ✕ deletes — §7).
+  // One row per project. Marker + name select; the count shows membership; the
+  // pencil (far right, where the × used to be) opens the edit modal.
   projects.forEach(p => {
     const row = document.createElement('div')
     row.className = 'proj-nav-item' + (p.id === projActiveId ? ' active' : '')
@@ -8054,12 +8044,12 @@ function projRenderNav() {
       ${projMarkerHTML(p,'proj-nav-dot')}
       <span class="proj-nav-item-name">${projEsc(p.name || 'Project')}</span>
       <span class="proj-nav-count">${projCount(p.id)}</span>
-      <span class="proj-nav-del" title="Delete project">×</span>`
+      <span class="proj-nav-edit" title="Edit project"><i class="ti ti-pencil"></i></span>`
     const marker = row.querySelector('.proj-nav-dot')
     row.querySelector('.proj-nav-item-name').onclick = () => projSetActive(p.id)
     if (marker) marker.onclick = () => projSetActive(p.id)
     row.querySelector('.proj-nav-count').onclick = () => projSetActive(p.id)
-    row.querySelector('.proj-nav-del').onclick = (e) => { e.stopPropagation(); projDelete(p.id) }
+    row.querySelector('.proj-nav-edit').onclick = (e) => { e.stopPropagation(); projCloseNav(); projOpenEditModal(p.id) }
     menu.appendChild(row)
   })
   // + New Project (opens the source-agnostic modal — §5f)
@@ -8081,7 +8071,7 @@ function projRenderLibList() {
   const def = document.createElement('div')
   def.className = 'lib-folder-item' + (!projActiveId ? ' active' : '')
   def.innerHTML = `
-    <span class="lib-folder-dot" style="background:var(--accent);"></span>
+    <i class="ti ti-folder lib-folder-dot proj-marker-icon" style="color:var(--accent);"></i>
     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Default</span>
     <span class="lib-folder-count">${favourites.length}</span>`
   def.onclick = () => projSetActive(null)
@@ -8093,12 +8083,12 @@ function projRenderLibList() {
       ${projMarkerHTML(p,'lib-folder-dot')}
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${projEsc(p.name || 'Project')}</span>
       <span class="lib-folder-count">${projCount(p.id)}</span>
-      <span class="lib-folder-del" title="Delete project">×</span>`
+      <span class="lib-folder-edit" title="Edit project"><i class="ti ti-pencil"></i></span>`
     const marker = item.querySelector('.lib-folder-dot')
     item.querySelector(':scope > span:nth-child(2)').onclick = () => projSetActive(p.id)
     if (marker) marker.onclick = () => projSetActive(p.id)
     item.querySelector('.lib-folder-count').onclick = () => projSetActive(p.id)
-    item.querySelector('.lib-folder-del').onclick = (e) => { e.stopPropagation(); projDelete(p.id) }
+    item.querySelector('.lib-folder-edit').onclick = (e) => { e.stopPropagation(); projOpenEditModal(p.id) }
     frag.appendChild(item)
   })
   list.appendChild(frag)
@@ -8130,15 +8120,51 @@ let _projNewSeedIds = []
 let _projNewColor = null
 let _projNewIcon = null
 let _projNewFromSurface = null
+let _projEditId = null   // non-null when the modal is editing an existing project
 function projOpenNewModal(opts) {
+  _projEditId = null
+  _projOpenModalShared({
+    seedFavIds: (opts && Array.isArray(opts.seedFavIds)) ? opts.seedFavIds.map(String) : [],
+    fromSurface: (opts && opts.fromSurface) ? opts.fromSurface : null,
+    name: (opts && opts.name) ? opts.name : '',
+    color: PROJ_COLORS[_projColorIdx % PROJ_COLORS.length],
+    icon: null,
+    title: '// NEW PROJECT',
+    confirmLabel: 'CREATE PROJECT',
+    showDelete: false,
+  })
+}
+// Edit an existing project: same modal, prefilled, with a DELETE button.
+function projOpenEditModal(id) {
+  const p = projById(id)
+  if (!p) return
+  _projEditId = id
+  _projOpenModalShared({
+    seedFavIds: [],
+    fromSurface: null,
+    name: p.name || '',
+    color: p.color || PROJ_COLORS[0],
+    icon: (p.icon && PROJ_ICONS.indexOf(p.icon) !== -1) ? p.icon : null,
+    title: '// EDIT PROJECT',
+    confirmLabel: 'SAVE CHANGES',
+    showDelete: true,
+  })
+}
+function _projOpenModalShared(cfg) {
   const modal = document.getElementById('projNewModal')
   if (!modal) { return } // DOM missing — fail closed rather than throw
-  _projNewSeedIds = (opts && Array.isArray(opts.seedFavIds)) ? opts.seedFavIds.map(String) : []
-  _projNewFromSurface = (opts && opts.fromSurface) ? opts.fromSurface : null
-  _projNewColor = PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
-  _projNewIcon = null // null = colour dot (no icon)
+  _projNewSeedIds = cfg.seedFavIds || []
+  _projNewFromSurface = cfg.fromSurface || null
+  _projNewColor = cfg.color
+  _projNewIcon = cfg.icon || null
+  const titleEl = document.getElementById('projModalTitle')
+  if (titleEl) titleEl.textContent = cfg.title
+  const confirmEl = document.getElementById('projModalConfirm')
+  if (confirmEl) confirmEl.textContent = cfg.confirmLabel
+  const delEl = document.getElementById('projModalDelete')
+  if (delEl) delEl.style.display = cfg.showDelete ? '' : 'none'
   const nameEl = document.getElementById('projNewName')
-  if (nameEl) { nameEl.value = (opts && opts.name) ? opts.name : '' }
+  if (nameEl) { nameEl.value = cfg.name || '' }
   // Re-tint the selected icon preview to match the active colour.
   const tintIcons = () => {
     const ig = document.getElementById('projNewIcons')
@@ -8173,7 +8199,7 @@ function projOpenNewModal(opts) {
     ig.innerHTML = ''
     const none = document.createElement('button')
     none.type = 'button'
-    none.className = 'proj-icon-opt proj-icon-none sel'
+    none.className = 'proj-icon-opt proj-icon-none' + (_projNewIcon ? '' : ' sel')
     none.dataset.icon = ''
     none.title = 'No icon (colour dot)'
     none.innerHTML = '<span class="proj-icon-dot" style="background:' + (_projNewColor || 'var(--accent)') + '"></span>'
@@ -8188,7 +8214,7 @@ function projOpenNewModal(opts) {
     PROJ_ICONS.forEach(ic => {
       const b = document.createElement('button')
       b.type = 'button'
-      b.className = 'proj-icon-opt'
+      b.className = 'proj-icon-opt' + (_projNewIcon === ic ? ' sel' : '')
       b.dataset.icon = ic
       b.title = ic
       b.innerHTML = `<i class="ti ti-${ic}"></i>`
@@ -8214,15 +8240,33 @@ function projCloseNewModal() {
   const modal = document.getElementById('projNewModal')
   if (modal) modal.style.display = 'none'
   _projNewSeedIds = []
+  _projEditId = null
 }
 function projConfirmNewModal() {
   const nameEl = document.getElementById('projNewName')
   const name = nameEl ? nameEl.value.trim() : ''
   if (!name) { if (nameEl) nameEl.focus(); return }
+  const icon = (_projNewIcon && PROJ_ICONS.indexOf(_projNewIcon) !== -1) ? _projNewIcon : null
+  // EDIT MODE: update the existing project's name/colour/icon in place.
+  if (_projEditId) {
+    const p = projById(_projEditId)
+    if (p) {
+      p.name = name
+      p.color = _projNewColor || p.color
+      p.icon = icon
+      p.updatedAt = Date.now()
+      projDocSave()
+      if (typeof lsSaveAll === 'function') lsSaveAll()
+    }
+    projCloseNewModal()
+    if (typeof projRenderAll === 'function') projRenderAll()
+    if (typeof renderLibrary === 'function') renderLibrary()
+    return
+  }
   const isFirstEver = projects.length === 0
   const color = _projNewColor || PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
   _projColorIdx++
-  const proj = { id: 'proj_' + Date.now().toString(36), name, color, icon: (_projNewIcon && PROJ_ICONS.indexOf(_projNewIcon) !== -1) ? _projNewIcon : null, createdAt: Date.now() }
+  const proj = { id: 'proj_' + Date.now().toString(36), name, color, icon, createdAt: Date.now() }
   projects.push(proj)
   const seeds = _projNewSeedIds.slice()
   seeds.forEach(fid => {
@@ -8253,6 +8297,17 @@ function projDelete(id) {
   projDocSave()
   if (typeof lsSaveAll === 'function') lsSaveAll()
   projSetActive(projActiveId) // re-renders + persists active fallback
+}
+
+// Delete from inside the edit modal: confirm, delete, then close the modal.
+// projDelete already prompts for confirmation and re-renders everything.
+function projEditDelete() {
+  const id = _projEditId
+  if (!id) return
+  const before = projects.length
+  projDelete(id)
+  // Only close if the delete actually happened (user confirmed → count dropped).
+  if (projects.length < before) projCloseNewModal()
 }
 
 // Mobile folder dropdown change handler — same effect as tapping a chip.

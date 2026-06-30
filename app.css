@@ -50,6 +50,7 @@
 .ti-copy:before { content: "\ea7a"; }
 .ti-download:before { content: "\ea96"; }
 .ti-folder-plus:before { content: "\eaab"; }
+.ti-folders:before { content: "\eaae"; }
 .ti-folder:before { content: "\eaad"; }
 .ti-heart:before { content: "\eabe"; }
 .ti-home:before { content: "\eac1"; }
@@ -964,6 +965,11 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   font-size:18px; line-height:1;
 }
 .proj-nav-toggle > .proj-nav-dot .proj-nav-pip { width:12px; height:12px; border-radius:50%; display:block; }
+/* Constant "Projects" header icon (folders): renders at tab-icon scale, tinted
+   to the theme accent, centred in the 24px box so it lines up with the mode
+   icons below. */
+.proj-nav-head-ico { color:var(--accent); }
+.proj-nav-head-ico > i { font-size:18px; line-height:1; }
 /* Compact dot for dropdown rows + any other surface using projMarkerHTML. */
 .proj-nav-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .proj-nav-dot.proj-marker-icon { width:auto; height:auto; border-radius:0; font-size:14px; }
@@ -989,6 +995,11 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 .proj-nav-del { opacity:0; font-size:15px; line-height:1; padding:0 2px; flex-shrink:0; transition:opacity .15s; }
 .proj-nav-item:hover .proj-nav-del { opacity:.5; }
 .proj-nav-del:hover { opacity:1 !important; color:#ff4444; }
+/* Edit pencil (replaces the delete ×) — far right, after the count. Hover-reveals
+   like the old × but tints to accent since it's edit, not destructive. */
+.proj-nav-edit { opacity:0; font-size:14px; line-height:1; padding:0 2px; flex-shrink:0; color:var(--muted); transition:opacity .15s, color .15s; display:inline-flex; align-items:center; }
+.proj-nav-item:hover .proj-nav-edit { opacity:.6; }
+.proj-nav-edit:hover { opacity:1 !important; color:var(--accent); }
 .proj-nav-new { color:var(--accent); }
 .proj-nav-new .proj-nav-dot { display:flex; align-items:center; justify-content:center; width:auto; height:auto; font-size:14px; color:var(--accent); }
 
@@ -3101,6 +3112,13 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .lib-folder-item:hover .lib-folder-del { opacity:.5; }
 .lib-folder-item .lib-folder-del:hover { opacity:1;color:#ff4444; }
+.lib-folder-item .lib-folder-edit {
+  opacity:0;font-size:13px;margin-left:2px;cursor:pointer;
+  transition:opacity .1s,color .1s;color:var(--muted);
+  display:inline-flex;align-items:center;
+}
+.lib-folder-item:hover .lib-folder-edit { opacity:.55; }
+.lib-folder-item .lib-folder-edit:hover { opacity:1;color:var(--accent); }
 /* Mobile folder dropdown — hidden on desktop, replaces the chip list on mobile. */
 .lib-folder-mobile-select { display:none; }
 @media(max-width:640px){
