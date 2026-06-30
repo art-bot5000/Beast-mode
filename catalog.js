@@ -35,35 +35,24 @@
 
 /** @type {CatalogModel[]} */
 export const CATALOG = [
-  // ── Google "Nano Banana" — DIRECT Gemini API (google.js adapter) ──────────
-  // Routed via the google: prefix, NOT Runware, so the Google AI Studio free
-  // tier can be used. Requires GEMINI_API_KEY (soft-degrades if unset).
+  // ── Google "Nano Banana" ───────────────────────────────────────────────────
   {
-    id: 'google:gemini-3-pro-image',
+    id: 'runware:google:4@2',
     label: 'Nano Banana Pro',
     family: 'Google',
-    architecture: 'gemini',
+    architecture: 'preset',
     snap: false,
     i2i: true,
     note: 'Gemini 3 Pro Image — 1K/2K/4K, multi-image blending, top quality.',
   },
   {
-    id: 'google:gemini-3.1-flash-image',
+    id: 'runware:google:4@3',
     label: 'Nano Banana 2',
     family: 'Google',
-    architecture: 'gemini',
+    architecture: 'preset',
     snap: false,
     i2i: true,
     note: 'Gemini 3.1 Flash Image — fast, 4K-capable, great text rendering.',
-  },
-  {
-    id: 'google:gemini-2.5-flash-image',
-    label: 'Nano Banana (free tier)',
-    family: 'Google',
-    architecture: 'gemini',
-    snap: false,
-    i2i: true,
-    note: 'Gemini 2.5 Flash Image — most generous free-tier quota. Ideal for testing.',
   },
 
   // ── OpenAI ─────────────────────────────────────────────────────────────────
@@ -164,6 +153,103 @@ export const CATALOG = [
     open: true,
     note: 'Classic SDXL base. Strong with LoRAs/fine-tunes.',
   },
+
+  // ── Outpaint models (Tools → Outpaint). Listed here so findInCatalog/snap and
+  // quote() resolve them; they are NOT shown in the generic Image Gen dropdown
+  // (catalogByFamily groups by family, but the frontend filters by registry).
+  // Ideogram/Expand are preset models → exact dims (snap=false); Fill [dev] is
+  // an open FLUX.1 model → /64 snapping (snap omitted = true).
+  {
+    id: 'runware:ideogram:4@4',
+    label: 'Ideogram 4.0 Reframe',
+    family: 'Outpaint',
+    architecture: 'preset',
+    snap: false,
+    i2i: true,
+    note: 'Style-consistent outpainting to a new aspect ratio.',
+  },
+  {
+    id: 'runware:bfl:1@3',
+    label: 'FLUX.1 Expand [pro]',
+    family: 'Outpaint',
+    architecture: 'preset',
+    snap: false,
+    i2i: true,
+    note: 'Expand beyond the frame, preserving structure & lighting.',
+  },
+  {
+    id: 'runware:runware:102@1',
+    label: 'FLUX.1 Fill [dev]',
+    family: 'Outpaint',
+    architecture: 'flux',
+    open: true,
+    i2i: true,
+    note: 'Open inpaint/outpaint with mask. Steps/CFG exposed.',
+  },
+];
+
+/**
+ * Curated outpaint models (Tools → Outpaint). Each declares its control surface
+ * so the frontend renders the right UI:
+ *   mode 'outpaint' — true Runware outpaint API (AR dropdown + anchor + preview,
+ *                     plus optional manual per-side pixels). Sends seedImage +
+ *                     outpaint{}; width/height = final combined dims.
+ *   mode 'expand'   — prompt-guided (Gemini/GPT). Simpler "expand to ratio"
+ *                     control, no pixel-exact preview.
+ * maskAuto = the frontend must generate a white/black outpaint mask client-side
+ * and send it as maskImage (Fill [dev] only).
+ */
+export const OUTPAINT_MODELS = [
+  {
+    id: 'runware:ideogram:4@4',
+    label: 'Ideogram 4.0 Reframe',
+    family: 'Ideogram',
+    mode: 'outpaint',
+    maskAuto: false,
+    prompt: 'optional',
+    speed: true,
+    note: 'Style-consistent outpainting. Best for design & typography.',
+  },
+  {
+    id: 'runware:bfl:1@3',
+    label: 'FLUX.1 Expand [pro]',
+    family: 'FLUX',
+    mode: 'outpaint',
+    maskAuto: false,
+    prompt: 'optional',
+    manualPixels: true,
+    note: 'Photoreal expansion. AR presets or manual per-side pixels.',
+  },
+  {
+    id: 'runware:runware:102@1',
+    label: 'FLUX.1 Fill [dev]',
+    family: 'FLUX',
+    mode: 'outpaint',
+    maskAuto: true,
+    prompt: 'optional',
+    manualPixels: true,
+    sampler: { steps: 28, cfg: 3.5 },
+    note: 'Open weights. Mask auto-generated. Steps/CFG control.',
+  },
+  {
+    id: 'google:gemini-2.5-flash-image',
+    label: 'Nano Banana 2.5',
+    family: 'Gemini',
+    mode: 'expand',
+    maskAuto: false,
+    prompt: 'optional',
+    note: 'Prompt-guided expand. Simpler ratio control, no pixel preview.',
+  },
+  {
+    id: 'runware:openai:gpt-image@2',
+    label: 'GPT Image 2',
+    family: 'OpenAI',
+    mode: 'expand',
+    maskAuto: false,
+    prompt: 'optional',
+    quality: true,
+    note: 'Prompt-guided expand with quality control. No pixel preview.',
+  },
 ];
 
 /** Models grouped for the dropdown's <optgroup>s. */
@@ -190,8 +276,6 @@ export function defaultsFor(architecture) {
     case 'free16':
     case 'free32':
       return { width: 1024, height: 1024 }; // closed models: no steps/CFG
-    case 'gemini':
-      return { resolution: '1K' }; // direct Gemini: AR + size tier, no pixel dims
     default:
       return { steps: 30, cfgScale: 7.0, width: 1024, height: 1024 };
   }

@@ -542,6 +542,10 @@ handleShareTarget()
       <span class="tab-label">LIBRARY</span>
       <span class="tab-badge" id="libBadge" style="display:none">0</span>
     </button>
+    <button class="nav-tab" id="navTools" onclick="switchView('tools')">
+      <span class="tab-icon"><i class="ti ti-wand"></i></span>
+      <span class="tab-label">TOOLS</span>
+    </button>
     <button class="nav-tab active" id="navGenerator" onclick="switchView('generator')">
       <span class="tab-icon"><i class="ti ti-cube"></i></span>
       <span class="tab-label">BEAST MODE</span>
@@ -1048,6 +1052,129 @@ handleShareTarget()
 
   </div><!-- /view-inner -->
 </div><!-- /viewGenerator -->
+
+<!-- ═══════════════════════ TOOLS VIEW ═══════════════════════ -->
+<div class="view" id="viewTools">
+  <div class="tools-inner">
+    <h1 class="tools-title" id="toolsTitle">// TOOLS</h1>
+
+    <!-- Card grid (landing). Hidden when a tool panel is open. -->
+    <div class="tools-grid" id="toolsGrid">
+      <button class="tool-card" onclick="toolsOpen('markup')">
+        <span class="tool-card-icon"><i class="ti ti-wand"></i></span>
+        <span class="tool-card-title">MARKUP IMAGES</span>
+        <span class="tool-card-desc">Mark regions by colour and seed change instructions on any image.</span>
+      </button>
+      <button class="tool-card" onclick="toolsOpen('outpaint')">
+        <span class="tool-card-icon"><i class="ti ti-arrows-maximize"></i></span>
+        <span class="tool-card-title">OUTPAINT</span>
+        <span class="tool-card-desc">Expand an image beyond its borders to a new aspect ratio.</span>
+      </button>
+      <button class="tool-card" onclick="toolsOpen('bgremove')">
+        <span class="tool-card-icon"><i class="ti ti-photo"></i></span>
+        <span class="tool-card-title">BACKGROUND REMOVAL</span>
+        <span class="tool-card-desc">Cut out the subject with a clean transparent background.</span>
+      </button>
+    </div>
+
+    <!-- ───────────────────── OUTPAINT PANEL ───────────────────── -->
+    <div class="tool-panel" id="toolOutpaint" style="display:none;">
+      <button class="tool-back" onclick="toolsBack()"><i class="ti ti-arrows-maximize"></i> &larr; TOOLS</button>
+      <div class="tool-panel-head">// OUTPAINT</div>
+
+      <label class="tool-lab">Model</label>
+      <select class="tool-select" id="opModel" onchange="opModelChanged()"></select>
+      <div class="tool-note" id="opModelNote"></div>
+
+      <label class="tool-lab">Image</label>
+      <div class="tool-drop" id="opDrop" onclick="opPickFile()">
+        <i class="ti ti-photo"></i>
+        <span id="opDropLabel">Drop image, click to browse, paste, or pick from Library</span>
+      </div>
+      <input type="file" id="opFileInput" accept="image/*" style="display:none;" onchange="opFilePicked(this.files)">
+
+      <!-- AR + anchor (true outpaint models only) -->
+      <div id="opArBlock">
+        <label class="tool-lab">Target aspect ratio</label>
+        <select class="tool-select" id="opAr" onchange="opArChanged()"></select>
+        <div class="tool-note" id="opArHint"></div>
+
+        <label class="tool-lab" id="opAnchorLab">Anchor &mdash; where the original sits</label>
+        <div class="op-anchor-grid" id="opAnchorGrid"></div>
+      </div>
+
+      <!-- Preview -->
+      <div class="op-preview-wrap" id="opPreviewWrap" style="display:none;">
+        <label class="tool-lab">Preview</label>
+        <div class="op-preview">
+          <svg id="opPreviewSvg" viewBox="0 0 320 320" preserveAspectRatio="xMidYMid meet">
+            <rect id="opNewCanvas" x="40" y="40" width="240" height="240" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <image id="opOrigImg" x="100" y="100" width="120" height="120" preserveAspectRatio="none"/>
+            <rect id="opOrigBorder" x="100" y="100" width="120" height="120" fill="none" stroke="var(--muted)" stroke-width="1"/>
+          </svg>
+        </div>
+        <div class="op-preview-meta"><span>Dashed = new canvas &middot; solid = original</span><span id="opDimReadout"></span></div>
+      </div>
+
+      <!-- Manual per-side pixels (FLUX models, collapsible) -->
+      <div id="opManualBlock" style="display:none;">
+        <button class="tool-collapse" id="opManualToggle" onclick="opToggleManual()">&#9656; Advanced &mdash; manual pixels</button>
+        <div id="opManualInputs" style="display:none;">
+          <div class="op-manual-grid">
+            <label>Top<input type="number" min="0" step="8" id="opPxTop" value="0" oninput="opManualChanged()"></label>
+            <label>Right<input type="number" min="0" step="8" id="opPxRight" value="0" oninput="opManualChanged()"></label>
+            <label>Bottom<input type="number" min="0" step="8" id="opPxBottom" value="0" oninput="opManualChanged()"></label>
+            <label>Left<input type="number" min="0" step="8" id="opPxLeft" value="0" oninput="opManualChanged()"></label>
+          </div>
+        </div>
+      </div>
+
+      <label class="tool-lab">Prompt <span class="tool-lab-opt">(optional &mdash; guides the fill)</span></label>
+      <textarea class="tool-textarea" id="opPrompt" rows="2" placeholder="Leave blank to extend the scene automatically"></textarea>
+
+      <div class="tool-runbar">
+        <button class="tool-run" id="opRunBtn" onclick="opRun()">OUTPAINT &middot; <span id="opCost">◆ &mdash;</span></button>
+        <span class="tool-runnote">Saved to Library, stamped to your active project.</span>
+      </div>
+      <div class="tool-status" id="opStatus"></div>
+    </div>
+
+    <!-- ───────────────────── BACKGROUND REMOVAL PANEL ───────────────────── -->
+    <div class="tool-panel" id="toolBgremove" style="display:none;">
+      <button class="tool-back" onclick="toolsBack()"><i class="ti ti-photo"></i> &larr; TOOLS</button>
+      <div class="tool-panel-head">// BACKGROUND REMOVAL</div>
+
+      <label class="tool-lab">Model</label>
+      <div class="bg-models" id="bgModels"></div>
+
+      <label class="tool-lab">Image</label>
+      <div class="tool-drop" id="bgDrop" onclick="bgPickFile()">
+        <i class="ti ti-photo"></i>
+        <span id="bgDropLabel">Drop image, click to browse, paste, or pick from Library</span>
+      </div>
+      <input type="file" id="bgFileInput" accept="image/*" style="display:none;" onchange="bgFilePicked(this.files)">
+
+      <label class="tool-lab">Output format</label>
+      <select class="tool-select" id="bgFmt" style="max-width:200px;">
+        <option value="PNG">PNG &middot; transparent</option>
+        <option value="WEBP">WEBP &middot; transparent</option>
+        <option value="JPG">JPG &middot; white background</option>
+      </select>
+
+      <div id="bgGeminiBlock" style="display:none;">
+        <div class="bg-warn"><span aria-hidden="true">◆</span><span>Gemini is far pricier than BiRefNet. Use it only when BiRefNet struggles.</span></div>
+        <label class="tool-lab">Prompt</label>
+        <textarea class="tool-textarea" id="bgPrompt" rows="2">keep the main subject, remove the background</textarea>
+      </div>
+
+      <div class="tool-runbar">
+        <button class="tool-run" id="bgRunBtn" onclick="bgRun()">REMOVE &middot; <span id="bgCost">◆ &mdash;</span></button>
+        <span class="tool-runnote">Saved to Library, stamped to your active project.</span>
+      </div>
+      <div class="tool-status" id="bgStatus"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════ IMAGE GEN VIEW ═══════════════════════ -->
 
@@ -6259,6 +6386,7 @@ const VIEW_HASHES = {
   'builder':   'prompt-lab',
   'settings':  'settings',
   'queue':     'queue',
+  'tools':     'tools',
 }
 const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) => [h,v]))
 
@@ -6268,7 +6396,7 @@ const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_HASHES).map(([v,h]) 
 // the left). Values mirror each view's in-section // heading.
 const MODE_TITLES = {
   generator: '// BEAST MODE', imagegen: '// IMAGE GEN', upscaler: '// UPSCALER', builder: '// PROMPT LAB',
-  library: '// PROMPT LIBRARY', settings: '// SETTINGS', queue: '// GENERATION QUEUE',
+  library: '// PROMPT LIBRARY', settings: '// SETTINGS', queue: '// GENERATION QUEUE', tools: '// TOOLS',
 };
 function toggleModeNav() {
   document.body.classList.contains('mode-nav-open') ? closeModeNav() : openModeNav();
@@ -6306,6 +6434,7 @@ function switchView(view, pushState = true) {
     if (typeof bmRenderStorageMeter === 'function') bmRenderStorageMeter()
   }
   if (view === 'imagegen' && typeof igInit === 'function') igInit()
+  if (view === 'tools' && typeof toolsInit === 'function') toolsInit()
   if (view === 'upscaler' && typeof upInit === 'function') upInit()
   document.body.classList.toggle('up-sticky', view === 'upscaler')
   // Image Gen mirrors the Upscaler's fixed bottom-bar layout (own ig-* classes).
@@ -17682,6 +17811,9 @@ const bmQueue = (() => {
   function enqueueUpscale(body, meta) {
     return enqueue({ ...body, kind: 'upscale' }, meta);
   }
+  function enqueueBgRemove(body, meta) {
+    return enqueue({ ...body, kind: 'removeBackground' }, meta);
+  }
 
   // ── Poll + drain ─────────────────────────────────────────────────────────
   async function poll() {
@@ -17771,6 +17903,21 @@ const bmQueue = (() => {
           if (savedFav && savedFav.id != null && jobFav[job.id] == null) jobFav[job.id] = savedFav.id;
         }
       });
+    } else if (job.kind === 'removeBackground') {
+      // Background removal returns a single image, saved as a plain library
+      // entry (NOT upscale-flavoured): project-stamped like a fresh generate.
+      const im = r.image;
+      if (im && im.url && typeof autoSaveGeneratedImage === 'function') {
+        const pristine = (typeof im.url === 'string' && im.url.startsWith('data:')) ? im.url : null;
+        let srvFavId = null;
+        const mu = (typeof im.url === 'string') ? im.url.match(/\/api\/img\/(\d+)/) : null;
+        if (mu) srvFavId = Number(mu[1]);
+        const savedFav = autoSaveGeneratedImage(prompt || 'Background removed', fullText, im.url, model, pristine,
+          tokens.ref, (typeof tokens.perImage === 'number' ? tokens.perImage : tokens.charged),
+          { serverFavId: srvFavId, lineage: (typeof im.lineage === 'string' ? im.lineage : null) });
+        if (savedFav && savedFav.id != null && job.savedFavId == null) job.savedFavId = savedFav.id;
+        if (savedFav && savedFav.id != null && jobFav[job.id] == null) jobFav[job.id] = savedFav.id;
+      }
     } else { // upscale
       const im = r.image;
       if (im && im.url && typeof autoSaveGeneratedImage === 'function') {
@@ -18302,7 +18449,7 @@ const bmQueue = (() => {
   }
 
   return {
-    enqueueGenerate, enqueueUpscale, onJob,
+    enqueueGenerate, enqueueUpscale, enqueueBgRemove, onJob,
     start, stop, resume, poll, render, renderView, renderInto, dismiss, clearAll,
     favIdFor, retryJob, retriesLeft, metaFor, RETRY_MAX,
     get jobs() { return lastJobs; },
@@ -26868,6 +27015,519 @@ async function bmFetchImageBlob(src) {
     return null
   }
 }
+
+// ═══════════════════════ TOOLS (Markup · Outpaint · Background removal) ═══════
+// Self-contained controller for the Tools view. Reuses the shared queue
+// (bmQueue.enqueueGenerate), R2 upload (bmUploadToR2), the markup editor
+// (mkOpen) and the project-stamping autosave path (drain → autoSaveGenerated
+// image → projStampNew). No new save machinery.
+
+let toolsInited = false;
+const opState = {
+  models: [], modelId: null, imageData: null, imageW: 0, imageH: 0,
+  ar: '1:1', anchor: 'mc', manual: { top: 0, right: 0, bottom: 0, left: 0 },
+  manualMode: false, busy: false,
+};
+const bgState = {
+  models: [], modelId: null, imageData: null, outputFormat: 'PNG', busy: false,
+};
+
+// All aspect ratios the AR dropdown can list; per-model support is gated.
+const OP_ALL_ARS = [
+  ['1:1', 'square'], ['16:9', 'landscape'], ['9:16', 'portrait'], ['4:3', ''],
+  ['3:4', ''], ['3:2', ''], ['2:3', ''], ['16:10', ''], ['10:16', ''],
+  ['3:1', 'pano'], ['1:3', 'tall'],
+];
+// Ratios each true-outpaint model supports (verified ranges; conservative).
+const OP_MODEL_ARS = {
+  'runware:ideogram:4@4': ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '16:10', '10:16', '3:1', '1:3'],
+  'runware:bfl:1@3':      ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
+  'runware:runware:102@1': ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
+  // expand-mode models (Gemini/GPT): simpler ratio set
+  'google:gemini-2.5-flash-image': ['1:1', '16:9', '9:16', '4:3', '3:4'],
+  'runware:openai:gpt-image@2':    ['1:1', '16:9', '9:16', '4:3', '3:4'],
+};
+const OP_ANCHORS = [
+  ['tl', '\u2196'], ['tc', '\u2191'], ['tr', '\u2197'],
+  ['ml', '\u2190'], ['mc', '\u2022'], ['mr', '\u2192'],
+  ['bl', '\u2199'], ['bc', '\u2193'], ['br', '\u2198'],
+];
+
+function toolsInit() {
+  if (toolsInited) return;
+  toolsInited = true;
+  // Lazy-load the two model registries from the backend.
+  opLoadModels();
+  bgLoadModels();
+  toolsBack(); // start on the card grid
+}
+
+function toolsOpen(which) {
+  document.getElementById('toolsGrid').style.display = 'none';
+  document.getElementById('toolOutpaint').style.display = (which === 'outpaint') ? 'block' : 'none';
+  document.getElementById('toolBgremove').style.display = (which === 'bgremove') ? 'block' : 'none';
+  const title = document.getElementById('toolsTitle');
+  if (which === 'markup') {
+    // Markup has no panel — it delegates straight to the editor via a chooser.
+    toolsBack();
+    toolsMarkupStart();
+    return;
+  }
+  if (title) title.textContent = which === 'outpaint' ? '// TOOLS / OUTPAINT' : '// TOOLS / BACKGROUND REMOVAL';
+}
+
+function toolsBack() {
+  document.getElementById('toolsGrid').style.display = '';
+  document.getElementById('toolOutpaint').style.display = 'none';
+  document.getElementById('toolBgremove').style.display = 'none';
+  const title = document.getElementById('toolsTitle');
+  if (title) title.textContent = '// TOOLS';
+}
+
+// ── Markup delegation ────────────────────────────────────────────────────────
+// Opens a file/library chooser, then hands the chosen image to the existing
+// vector editor. On apply we just save the result to the library (markup from
+// Image Gen prepends prompt seeds; here it's a standalone edit).
+function toolsMarkupStart() {
+  // Reuse the library/file chooser already built for Image Gen markup.
+  const input = document.getElementById('opFileInput');
+  // Simplest entry: a file picker that opens the editor. (Library picking is
+  // available from the card too, but the file route covers the common case.)
+  const picker = document.createElement('input');
+  picker.type = 'file'; picker.accept = 'image/*';
+  picker.onchange = () => {
+    const f = picker.files && picker.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = e => { if (typeof mkOpen === 'function') mkOpen(e.target.result, toolsMarkupApply); };
+    r.readAsDataURL(f);
+  };
+  picker.click();
+}
+function toolsMarkupApply(result) {
+  // result.image is the marked-up data URI. Save it as a normal library image
+  // through the queue so it is project-stamped like any other.
+  if (!result || !result.image) return;
+  toolsSaveDirect(result.image, 'Markup', 'markup');
+}
+
+// Save an already-produced data URI to the library by uploading to R2 and
+// running it through the queue as a trivial pass-through is not possible (no
+// model), so we save it directly via the same autosave the app uses. We fall
+// back to the markup library save helper if present.
+function toolsSaveDirect(dataUri, label, kind) {
+  if (typeof autoSaveGeneratedImage === 'function') {
+    try {
+      const fav = autoSaveGeneratedImage(label, '', dataUri, kind, dataUri, null, 0, {});
+      if (typeof projStampNew === 'function' && fav) { try { projStampNew(fav); } catch (_) {} }
+      if (typeof renderLibrary === 'function') renderLibrary();
+      toolsToast('Saved to Library.');
+      return;
+    } catch (_) { /* fall through */ }
+  }
+  toolsToast('Could not save — try again.', true);
+}
+
+function toolsToast(msg, isErr) {
+  if (typeof bmToast === 'function') { bmToast(msg, isErr); return; }
+  // Fallback: write into whichever status line is visible.
+  const el = document.getElementById('opStatus') || document.getElementById('bgStatus');
+  if (el) { el.textContent = msg; el.className = 'tool-status' + (isErr ? ' err' : ''); }
+}
+
+// ── Outpaint: model loading + UI ─────────────────────────────────────────────
+async function opLoadModels() {
+  try {
+    const tok = (window.bmSession && window.bmSession.sessionToken) || null;
+    const res = await fetch('/api/outpaint-models', tok ? { headers: { Authorization: 'Bearer ' + tok } } : {});
+    const data = await res.json();
+    opState.models = Array.isArray(data.models) ? data.models : [];
+  } catch (_) { opState.models = []; }
+  if (!opState.modelId && opState.models.length) opState.modelId = opState.models[0].id;
+  opRenderModelSelect();
+  opModelChanged();
+}
+
+function opModel() { return opState.models.find(m => m.id === opState.modelId) || opState.models[0] || null; }
+
+function opRenderModelSelect() {
+  const sel = document.getElementById('opModel');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const fams = {};
+  opState.models.forEach(m => (fams[m.family] ||= []).push(m));
+  Object.entries(fams).forEach(([fam, ms]) => {
+    const og = document.createElement('optgroup'); og.label = fam;
+    ms.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.label + (m.tokens != null ? '  \u00b7 \u25c6 ' + m.tokens : '');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  if (opState.modelId) sel.value = opState.modelId;
+}
+
+function opModelChanged() {
+  const selVal = document.getElementById('opModel') && document.getElementById('opModel').value;
+  if (selVal) opState.modelId = selVal;
+  const m = opModel();
+  if (!m) return;
+  document.getElementById('opModelNote').textContent = m.note || '';
+  // True-outpaint models get the full preview + anchor + (FLUX) manual pixels.
+  // Expand-mode (Gemini/GPT) get only a ratio dropdown, no pixel preview.
+  const isOutpaint = m.mode === 'outpaint';
+  document.getElementById('opAnchorLab').style.display = isOutpaint ? '' : 'none';
+  document.getElementById('opAnchorGrid').style.display = isOutpaint ? '' : 'none';
+  document.getElementById('opPreviewWrap').style.display = (isOutpaint && opState.imageData) ? '' : 'none';
+  document.getElementById('opManualBlock').style.display = (isOutpaint && m.manualPixels) ? '' : 'none';
+  if (!isOutpaint) { opState.manualMode = false; }
+  opBuildArSelect();
+  opBuildAnchors();
+  opDraw();
+  opUpdateCost();
+}
+
+function opBuildArSelect() {
+  const m = opModel(); if (!m) return;
+  const supported = OP_MODEL_ARS[m.id] || ['1:1', '16:9', '9:16', '4:3', '3:4'];
+  const supSet = {}; supported.forEach(a => supSet[a] = true);
+  const sel = document.getElementById('opAr'); sel.innerHTML = '';
+  OP_ALL_ARS.forEach(([ar, tag]) => {
+    const o = document.createElement('option');
+    o.value = ar; o.textContent = ar + (tag ? ' \u00b7 ' + tag : '');
+    if (!supSet[ar]) { o.disabled = true; o.textContent += ' (unsupported)'; }
+    sel.appendChild(o);
+  });
+  if (!supSet[opState.ar]) opState.ar = supported[0];
+  sel.value = opState.ar;
+  const hint = document.getElementById('opArHint');
+  hint.textContent = supported.length + ' of ' + OP_ALL_ARS.length + ' ratios supported. Unsupported ones are disabled.';
+}
+
+function opBuildAnchors() {
+  const g = document.getElementById('opAnchorGrid'); if (!g) return;
+  g.innerHTML = '';
+  OP_ANCHORS.forEach(([id, glyph]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'op-anchor' + (id === opState.anchor ? ' sel' : '');
+    b.textContent = glyph; b.setAttribute('aria-label', 'anchor ' + id);
+    b.onclick = () => { opState.anchor = id; opBuildAnchors(); opDraw(); };
+    g.appendChild(b);
+  });
+}
+
+function opArChanged() {
+  opState.ar = document.getElementById('opAr').value;
+  opState.manualMode = false; // choosing a ratio leaves manual mode
+  opDraw();
+}
+
+function opToggleManual() {
+  const box = document.getElementById('opManualInputs');
+  const open = box.style.display === 'none';
+  box.style.display = open ? '' : 'none';
+  document.getElementById('opManualToggle').innerHTML = (open ? '\u25be' : '\u25b8') + ' Advanced \u2014 manual pixels';
+}
+
+function opManualChanged() {
+  opState.manual = {
+    top: Math.max(0, parseInt(document.getElementById('opPxTop').value, 10) || 0),
+    right: Math.max(0, parseInt(document.getElementById('opPxRight').value, 10) || 0),
+    bottom: Math.max(0, parseInt(document.getElementById('opPxBottom').value, 10) || 0),
+    left: Math.max(0, parseInt(document.getElementById('opPxLeft').value, 10) || 0),
+  };
+  opState.manualMode = true;
+  opDraw();
+}
+
+// Compute the four per-side pixel extents from AR + anchor (grow-only, never
+// crop). Returns { outpaint:{top,right,bottom,left}, finalW, finalH }.
+function opComputeFromAr() {
+  const W = opState.imageW, H = opState.imageH;
+  if (!W || !H) return null;
+  const [tw, th] = opState.ar.split(':').map(Number);
+  const targetRatio = tw / th, srcRatio = W / H;
+  let finalW = W, finalH = H;
+  if (targetRatio >= srcRatio) {
+    finalH = H; finalW = Math.round(H * targetRatio);
+  } else {
+    finalW = W; finalH = Math.round(W / targetRatio);
+  }
+  const padX = Math.max(0, finalW - W), padY = Math.max(0, finalH - H);
+  const col = opState.anchor.charAt(1), row = opState.anchor.charAt(0);
+  let left, right, top, bottom;
+  if (col === 'l') { left = 0; right = padX; }
+  else if (col === 'r') { left = padX; right = 0; }
+  else { left = Math.floor(padX / 2); right = padX - left; }
+  if (row === 't') { top = 0; bottom = padY; }
+  else if (row === 'b') { top = padY; bottom = 0; }
+  else { top = Math.floor(padY / 2); bottom = padY - top; }
+  return { outpaint: { top, right, bottom, left }, finalW, finalH };
+}
+
+// Resolve the active outpaint spec (manual or AR), applying /64 snap for the
+// models that require it (Fill [dev] = flux arch). Returns null if no image.
+function opResolveSpec() {
+  const m = opModel(); if (!m || !opState.imageW) return null;
+  const W = opState.imageW, H = opState.imageH;
+  let op, finalW, finalH;
+  if (opState.manualMode && m.manualPixels) {
+    op = { ...opState.manual };
+    finalW = W + op.left + op.right;
+    finalH = H + op.top + op.bottom;
+  } else {
+    const c = opComputeFromAr(); if (!c) return null;
+    op = c.outpaint; finalW = c.finalW; finalH = c.finalH;
+  }
+  // Fill [dev] (open flux) needs /64; Ideogram/Expand are presets (exact).
+  if (m.id === 'runware:runware:102@1') {
+    finalW = Math.round(finalW / 64) * 64;
+    finalH = Math.round(finalH / 64) * 64;
+  }
+  return { outpaint: op, finalW, finalH };
+}
+
+function opDraw() {
+  const m = opModel();
+  if (!m || m.mode !== 'outpaint' || !opState.imageData) {
+    document.getElementById('opPreviewWrap').style.display = 'none';
+    return;
+  }
+  document.getElementById('opPreviewWrap').style.display = '';
+  const spec = opResolveSpec(); if (!spec) return;
+  const { outpaint: op, finalW, finalH } = spec;
+  // Map final canvas into the 320 viewBox, centred.
+  const VB = 320, MAX = 280;
+  const scale = MAX / Math.max(finalW, finalH);
+  const cw = finalW * scale, ch = finalH * scale;
+  const cx = VB / 2, cy = VB / 2;
+  const nx = cx - cw / 2, ny = cy - ch / 2;
+  const newC = document.getElementById('opNewCanvas');
+  newC.setAttribute('x', nx); newC.setAttribute('y', ny);
+  newC.setAttribute('width', cw); newC.setAttribute('height', ch);
+  // Original sits at (left,top) offset within the canvas, native scale.
+  const ow = opState.imageW * scale, oh = opState.imageH * scale;
+  const ox = nx + op.left * scale, oy = ny + op.top * scale;
+  ['opOrigImg', 'opOrigBorder'].forEach(id => {
+    const el = document.getElementById(id);
+    el.setAttribute('x', ox); el.setAttribute('y', oy);
+    el.setAttribute('width', ow); el.setAttribute('height', oh);
+  });
+  document.getElementById('opOrigImg').setAttribute('href', opState.imageData);
+  document.getElementById('opDimReadout').textContent = finalW + ' \u00d7 ' + finalH;
+}
+
+// ── Outpaint: image input ────────────────────────────────────────────────────
+function opPickFile() { document.getElementById('opFileInput').click(); }
+function opFilePicked(files) {
+  const f = files && files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e => opSetImage(e.target.result);
+  r.readAsDataURL(f);
+}
+function opSetImage(dataUri) {
+  const img = new Image();
+  img.onload = () => {
+    opState.imageData = dataUri; opState.imageW = img.naturalWidth; opState.imageH = img.naturalHeight;
+    document.getElementById('opDropLabel').textContent = img.naturalWidth + ' \u00d7 ' + img.naturalHeight + ' \u2014 click to replace';
+    opModelChanged();
+  };
+  img.src = dataUri;
+}
+
+function opUpdateCost() {
+  const m = opModel(); const btn = document.getElementById('opRunBtn');
+  if (!m || !btn) return;
+  btn.innerHTML = 'OUTPAINT &middot; <span id="opCost">\u25c6 ' + (m.tokens != null ? m.tokens : '\u2014') + '</span>';
+}
+
+// Build a white(new)/black(keep) mask for Fill [dev] at final dims.
+function opBuildMask(finalW, finalH, op) {
+  const c = document.createElement('canvas'); c.width = finalW; c.height = finalH;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, finalW, finalH);            // all "generate"
+  ctx.fillStyle = '#000';
+  ctx.fillRect(op.left, op.top, opState.imageW, opState.imageH);         // keep the original
+  return c.toDataURL('image/png');
+}
+
+async function opRun() {
+  if (opState.busy) return;
+  const m = opModel();
+  if (!m) { opStatus('\u2717 No model selected.', true); return; }
+  if (!opState.imageData) { opStatus('\u2717 Upload an image first.', true); return; }
+  if (!window.bmSession || !window.bmSession.sessionToken) {
+    if (typeof openAuthModal === 'function') openAuthModal('login');
+    return;
+  }
+  const prompt = (document.getElementById('opPrompt').value || '').trim();
+  opState.busy = true;
+  const btn = document.getElementById('opRunBtn'); btn.disabled = true; btn.style.opacity = '0.6';
+  opStatus('\u25cc Uploading image\u2026', false);
+
+  try {
+    const seedUrl = await bmUploadToR2(opState.imageData);
+    let body;
+    if (m.mode === 'outpaint') {
+      const spec = opResolveSpec();
+      if (!spec) { throw new Error('Could not compute outpaint geometry.'); }
+      body = {
+        model: m.id,
+        seedImage: seedUrl,
+        outpaint: spec.outpaint,
+        width: spec.finalW,
+        height: spec.finalH,
+        positivePrompt: prompt || '__BLANK__',
+        prompt: prompt || '__BLANK__',
+      };
+      if (m.maskAuto) {
+        const maskUri = opBuildMask(spec.finalW, spec.finalH, spec.outpaint);
+        body.maskImage = await bmUploadToR2(maskUri);
+      }
+      if (m.sampler) { body.steps = m.sampler.steps; body.cfgScale = m.sampler.cfg; }
+      if (m.speed) body.renderingSpeed = 'DEFAULT';
+    } else {
+      // Expand-mode (Gemini/GPT): prompt-guided. Send the original as a
+      // reference + a target aspect ratio; the model extends to fill.
+      body = {
+        model: m.id,
+        referenceImages: [seedUrl],
+        aspectRatio: opState.ar,
+        prompt: (prompt || 'Outpaint and extend this image to fill the frame naturally, seamless continuation of the scene, lighting and texture.'),
+      };
+      if (m.quality) body.quality = 'high';
+    }
+
+    opStatus('\u25cc OUTPAINTING\u2026 (' + m.label + ')', false);
+    const r = await bmQueue.enqueueGenerate(body, {
+      prompt: prompt || 'Outpaint', fullText: '', model: m.id,
+    });
+    if (!r.ok) {
+      if (r.code === 'auth_required') { if (typeof openAuthModal === 'function') openAuthModal('login'); }
+      opStatus('\u2717 ' + (r.error || 'Could not start the outpaint.'), true);
+    } else {
+      opStatus('\u2713 Queued \u2014 your result will appear in the Library.', false);
+    }
+  } catch (e) {
+    opStatus('\u2717 ' + (e && e.message ? e.message : 'Outpaint failed.'), true);
+  } finally {
+    opState.busy = false;
+    btn.disabled = false; btn.style.opacity = '';
+    opUpdateCost();
+  }
+}
+
+function opStatus(msg, isErr) {
+  const el = document.getElementById('opStatus');
+  if (el) { el.textContent = msg; el.className = 'tool-status' + (isErr ? ' err' : ''); }
+}
+
+// ── Background removal ───────────────────────────────────────────────────────
+async function bgLoadModels() {
+  try {
+    const tok = (window.bmSession && window.bmSession.sessionToken) || null;
+    const res = await fetch('/api/bg-removers', tok ? { headers: { Authorization: 'Bearer ' + tok } } : {});
+    const data = await res.json();
+    bgState.models = Array.isArray(data.models) ? data.models : [];
+  } catch (_) { bgState.models = []; }
+  if (!bgState.modelId) {
+    const def = bgState.models.find(m => m.default) || bgState.models[0];
+    bgState.modelId = def && def.id;
+  }
+  bgRenderModels();
+}
+
+function bgModel() { return bgState.models.find(m => m.id === bgState.modelId) || bgState.models[0] || null; }
+
+function bgRenderModels() {
+  const w = document.getElementById('bgModels'); if (!w) return;
+  w.innerHTML = '';
+  bgState.models.forEach(m => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'bg-model' + (m.id === bgState.modelId ? ' sel' : '');
+    b.innerHTML = '<span class="bg-model-main"><span class="bg-model-nm">' + m.label +
+      '</span><span class="bg-model-mt">' + (m.note || '') + '</span></span>' +
+      '<span class="bg-model-cost">\u25c6 ' + (m.tokens != null ? m.tokens : '\u2014') + '</span>';
+    b.onclick = () => { bgState.modelId = m.id; bgRenderModels(); bgModelChanged(); };
+    w.appendChild(b);
+  });
+  bgModelChanged();
+}
+
+function bgModelChanged() {
+  const m = bgModel(); if (!m) return;
+  const isGemini = m.kind === 'gemini-bg';
+  document.getElementById('bgGeminiBlock').style.display = isGemini ? '' : 'none';
+  if (isGemini) { bgState.outputFormat = 'PNG'; document.getElementById('bgFmt').value = 'PNG'; }
+  const btn = document.getElementById('bgRunBtn');
+  if (btn) btn.innerHTML = 'REMOVE &middot; <span id="bgCost">\u25c6 ' + (m.tokens != null ? m.tokens : '\u2014') + '</span>';
+}
+
+function bgPickFile() { document.getElementById('bgFileInput').click(); }
+function bgFilePicked(files) {
+  const f = files && files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    bgState.imageData = e.target.result;
+    const img = new Image();
+    img.onload = () => {
+      document.getElementById('bgDropLabel').textContent = img.naturalWidth + ' \u00d7 ' + img.naturalHeight + ' \u2014 click to replace';
+    };
+    img.src = bgState.imageData;
+  };
+  r.readAsDataURL(f);
+}
+
+async function bgRun() {
+  if (bgState.busy) return;
+  const m = bgModel();
+  if (!m) { bgStatus('\u2717 No model selected.', true); return; }
+  if (!bgState.imageData) { bgStatus('\u2717 Upload an image first.', true); return; }
+  if (!window.bmSession || !window.bmSession.sessionToken) {
+    if (typeof openAuthModal === 'function') openAuthModal('login');
+    return;
+  }
+  bgState.busy = true;
+  const btn = document.getElementById('bgRunBtn'); btn.disabled = true; btn.style.opacity = '0.6';
+  bgStatus('\u25cc Uploading image\u2026', false);
+  try {
+    const inUrl = await bmUploadToR2(bgState.imageData);
+    const body = {
+      model: m.id,
+      inputImage: inUrl,
+      outputFormat: document.getElementById('bgFmt').value || 'PNG',
+    };
+    if (m.kind === 'gemini-bg') {
+      body.prompt = (document.getElementById('bgPrompt').value || '').trim() || 'keep the main subject, remove the background';
+    }
+    bgStatus('\u25cc REMOVING BACKGROUND\u2026 (' + m.label + ')', false);
+    const r = await bmQueue.enqueueBgRemove(body, { prompt: 'Background removed', fullText: '', model: m.id });
+    if (!r.ok) {
+      if (r.code === 'auth_required') { if (typeof openAuthModal === 'function') openAuthModal('login'); }
+      bgStatus('\u2717 ' + (r.error || 'Could not start background removal.'), true);
+    } else {
+      bgStatus('\u2713 Queued \u2014 your result will appear in the Library.', false);
+    }
+  } catch (e) {
+    bgStatus('\u2717 ' + (e && e.message ? e.message : 'Background removal failed.'), true);
+  } finally {
+    bgState.busy = false;
+    btn.disabled = false; btn.style.opacity = '';
+    bgModelChanged();
+  }
+}
+
+function bgStatus(msg, isErr) {
+  const el = document.getElementById('bgStatus');
+  if (el) { el.textContent = msg; el.className = 'tool-status' + (isErr ? ' err' : ''); }
+}
+
+window.toolsInit = toolsInit;
+window.toolsOpen = toolsOpen;
+window.toolsBack = toolsBack;
 
 // ── Direct-to-R2 upload for generation sources (reference images + upscale
 // inputs). Replaces the old base64-in-JSON path that materialised multi-MB

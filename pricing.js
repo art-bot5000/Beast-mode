@@ -114,6 +114,14 @@ export const PRICING = {
   'runware:runware:101@1':            { label: 'FLUX.1 Dev',        kind: 'flat', tokens: 2, costUsd: 0.0085 },
   'runware:runware:100@1':            { label: 'FLUX.1 Schnell',    kind: 'flat', tokens: 1, costUsd: 0.0019 },
   'runware:civitai:101055@128078':    { label: 'SDXL 1.0 (base)',   kind: 'flat', tokens: 1, costUsd: 0.0019 },
+
+  // ── Outpaint models (Tools → Outpaint) ────────────────────────────────────
+  // Provider costs verified June 2026. Tiering per house rules: Ideogram reframe
+  // treated mid (×1.75); FLUX Expand pro mid; FLUX Fill dev draft (×2). Gemini &
+  // GPT outpaint reuse their existing rows below (same model ids).
+  'runware:ideogram:4@4':             { label: 'Ideogram 4.0 Reframe', kind: 'flat', tokens: 12, costUsd: 0.07 },
+  'runware:bfl:1@3':                  { label: 'FLUX.1 Expand [pro]',  kind: 'flat', tokens: 9,  costUsd: 0.05 },
+  'runware:runware:102@1':            { label: 'FLUX.1 Fill [dev]',    kind: 'flat', tokens: 4,  costUsd: 0.02 },
 };
 
 // ── UPSCALER PRICING ─────────────────────────────────────────────────────────
@@ -167,6 +175,22 @@ export const UPSCALE_PRICING = {
     costUsd: 0.039,
   },
 };
+
+// ── BACKGROUND-REMOVAL PRICING (Tools → Background removal) ───────────────────
+// BiRefNet variants are dirt cheap (~$0.0006/image) → floor to 1 token standard.
+// The Gemini option reuses the 2.5-flash image cost (~$0.039) since it's a real
+// generate-with-reference edit under the hood. Provider costs verified June 2026.
+export const BG_PRICING = {
+  'runware:runware:112@1':  { label: 'BiRefNet General',  kind: 'flat', tokens: 1, costUsd: 0.0006 },
+  'runware:runware:112@2':  { label: 'BiRefNet COD',      kind: 'flat', tokens: 1, costUsd: 0.0006 },
+  'runware:runware:112@10': { label: 'BiRefNet Portrait', kind: 'flat', tokens: 1, costUsd: 0.0006 },
+  'google:gemini-2.5-flash-image': { label: 'Gemini (Nano Banana 2.5) bg', kind: 'flat', tokens: 6, costUsd: 0.039 },
+};
+
+/** Resolve a background-remover id to its pricing row, or null. */
+export function bgPricingFor(modelId) {
+  return BG_PRICING[modelId] || null;
+}
 
 /** Resolve an upscaler model id to its pricing row, or null. */
 export function upscalePricingFor(modelId) {
@@ -348,6 +372,54 @@ export function estimatedUpscaleCostUsd(modelId, opts = {}) {
     return (bucket && row.costUsd[bucket]) || maxOf(row.costUsd);
   }
   return null;
+}
+
+// ── Background-removal quotes (Tools → Background removal) ────────────────────
+// One output image per task (no batching). BiRefNet rows are flat; the Gemini
+// row is flat too (we charge the standard tier and log actual usage cost via
+// geminiUsageCostUsd at settle time, same as Gemini upscale).
+
+/** Standard tokens charged per background-removal task. */
+export function tokensPerRemoveBg(modelId) {
+  const row = bgPricingFor(modelId);
+  if (!row) return DEFAULT_TOKENS;
+  return Math.max(1, Math.ceil(row.tokens));
+}
+
+/** Full standard quote for a background-removal task. */
+export function quoteRemoveBg(modelId) {
+  const perImage = tokensPerRemoveBg(modelId);
+  return {
+    modelId,
+    perImage,
+    count: 1,
+    totalTokens: perImage,
+    retailUsd: +(perImage * TOKEN_USD).toFixed(2),
+    listed: !!bgPricingFor(modelId),
+  };
+}
+
+/** Limelight tokens for a background-removal task: ceil(costUsd × 1000) ÷ 100. */
+export function limelightTokensPerRemoveBg(modelId) {
+  const row = bgPricingFor(modelId);
+  const cost = row && typeof row.costUsd === 'number' ? row.costUsd : null;
+  if (cost == null) return tokensPerRemoveBg(modelId);
+  const tokens = Math.ceil(cost * 1000) / 10;
+  return Math.round(tokens * 10) / 10;
+}
+
+/** Full Limelight quote for a background-removal task. */
+export function quoteRemoveBgForLimelight(modelId) {
+  const perImage = limelightTokensPerRemoveBg(modelId);
+  return {
+    modelId,
+    perImage,
+    count: 1,
+    totalTokens: perImage,
+    retailUsd: +(perImage * TOKEN_USD).toFixed(4),
+    listed: !!bgPricingFor(modelId),
+    limelight: true,
+  };
 }
 
 // ── Resolution inference ─────────────────────────────────────────────────────

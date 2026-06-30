@@ -88,6 +88,26 @@ export const runwareAdapter = {
       task.inputs = { referenceImages: req.referenceImages.slice(0, 10) };
     }
 
+    // ── Outpainting (Tools → Outpaint). Unified Runware shape across the
+    // outpaint-capable models (ideogram:4@4 reframe, bfl:1@3 Expand [pro],
+    // runware:102@1 Fill [dev]). The original travels as `seedImage`; the four
+    // per-side pixel extents go on `outpaint`; width/height MUST already be the
+    // FINAL combined dims (original + extensions) — the route computes those.
+    // Fill [dev] additionally needs a mask (white = generate, black = keep); the
+    // frontend builds it client-side and sends it as `maskImage` so the three
+    // models behave identically here.
+    if (typeof req.seedImage === 'string' && req.seedImage) {
+      task.seedImage = req.seedImage;
+    }
+    if (req.outpaint && typeof req.outpaint === 'object') {
+      const o = req.outpaint;
+      const px = (v) => Math.max(0, Math.round(Number(v) || 0));
+      task.outpaint = { top: px(o.top), right: px(o.right), bottom: px(o.bottom), left: px(o.left) };
+    }
+    if (typeof req.maskImage === 'string' && req.maskImage) {
+      task.maskImage = req.maskImage;
+    }
+
     if (req.negativePrompt) task.negativePrompt = req.negativePrompt;
     if (Number.isFinite(req.steps)) task.steps = req.steps;
     if (Number.isFinite(req.cfgScale)) task.CFGScale = req.cfgScale;
@@ -278,6 +298,83 @@ export const runwareAdapter = {
     const ours = items.filter((d) => d.taskUUID === taskUUID);
     if (!ours.length) {
       throw new ProviderError('Runware response contained no upscaled image for this task', {
+        provider: 'runware', code: 'upstream', status: 502, raw: body,
+      });
+    }
+
+    const d = ours[0];
+    const costUsd = typeof d.cost === 'number' ? d.cost : undefined;
+    return {
+      provider: 'runware',
+      model: req.model,
+      image: { url: d.imageURL, b64: d.imageBase64Data || undefined },
+      costUsd,
+      raw: body,
+    };
+  },
+
+  /**
+   * Background removal (Tools → Background removal). Uses Runware's
+   * `removeBackground` taskType with the source under inputs.image. BiRefNet
+   * variants (runware:112@1 General, 112@2 COD, 112@10 Portrait) take no width/
+   * height/prompt. Output defaults to PNG so the transparent alpha is preserved.
+   * The response taskType is `imageBackgroundRemoval`, so we match on taskUUID
+   * only (same as upscale).
+   * @param {{model:string, inputImage:string, outputFormat?:string, outputQuality?:number, signal?:AbortSignal}} req
+   * @returns {Promise<{provider:string, model:string, image:{url:string,b64?:string}, costUsd?:number, raw?:Object}>}
+   */
+  async removeBackground(req) {
+    const taskUUID = randomUUID();
+    const task = {
+      taskType: 'removeBackground',
+      taskUUID,
+      model: req.model,
+      outputType: 'URL',
+      outputFormat: req.outputFormat && /^(JPG|PNG|WEBP)$/.test(req.outputFormat) ? req.outputFormat : 'PNG',
+      includeCost: true,
+      inputs: { image: req.inputImage },
+    };
+    if (Number.isFinite(req.outputQuality)) {
+      task.outputQuality = Math.max(20, Math.min(99, Math.round(req.outputQuality)));
+    }
+
+    const key = apiKey();
+
+    let res;
+    try {
+      res = await fetch(RUNWARE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify([task]),
+        signal: req.signal,
+      });
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        throw new ProviderError('Background removal cancelled', { provider: 'runware', code: 'timeout', status: 499 });
+      }
+      throw new ProviderError(`Network error reaching Runware: ${e.message}`, {
+        provider: 'runware', code: 'upstream', status: 502,
+      });
+    }
+
+    let body;
+    try {
+      body = await res.json();
+    } catch {
+      throw new ProviderError(`Runware returned non-JSON (HTTP ${res.status})`, {
+        provider: 'runware', code: 'upstream', status: 502,
+      });
+    }
+
+    const errors = body?.errors || (body?.error ? [body.error] : null);
+    if (errors && errors.length) throw mapRunwareError(errors[0], res.status, body);
+
+    const items = Array.isArray(body?.data) ? body.data : [];
+    // Response taskType is `imageBackgroundRemoval`, not the `removeBackground`
+    // we sent — match on taskUUID only (mirrors the upscale path).
+    const ours = items.filter((d) => d.taskUUID === taskUUID);
+    if (!ours.length) {
+      throw new ProviderError('Runware response contained no image for this task', {
         provider: 'runware', code: 'upstream', status: 502, raw: body,
       });
     }

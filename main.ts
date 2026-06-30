@@ -62,9 +62,9 @@ if (missing.length) {
 
 // Provider abstraction (the modules we built). Note: import as .js — Deno runs
 // them directly. generate() picks the provider from the model-id prefix.
-import { generate, searchModels, upscale, UPSCALERS, findUpscaler, ProviderError } from "./index.js";
-import { catalogByFamily, findInCatalog, defaultsFor } from "./catalog.js";
-import { pricingTable, quote, quoteForLimelight, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, quoteUpscaleForLimelight, tokensPerUpscale, estimatedUpscaleCostUsd } from "./pricing.js";
+import { generate, searchModels, upscale, removeBackground, UPSCALERS, findUpscaler, findBgRemover, BG_REMOVERS, ProviderError } from "./index.js";
+import { catalogByFamily, findInCatalog, defaultsFor, OUTPAINT_MODELS } from "./catalog.js";
+import { pricingTable, quote, quoteForLimelight, estimatedCostUsd, geminiUsageCostUsd, quoteUpscale, quoteUpscaleForLimelight, tokensPerUpscale, estimatedUpscaleCostUsd, quoteRemoveBg, quoteRemoveBgForLimelight } from "./pricing.js";
 import { getBalance, holdTokens, settleHold, refundHold, listLedger, isLimelight, addLimelight, removeLimelight, listLimelight } from "./tokens.ts";
 import { r2Enabled, trimR2ToNewest, presignR2Put, presignR2Get } from "./r2.js";
 import { storeImage, readImage, deleteImage, userUsage, listManifest, patchImageMeta, fetchJobBlob, clearJobBlobs, isJobBlobMarker } from "./data-store.ts";
@@ -188,6 +188,9 @@ async function runGenerateHeld(
       aspectRatio: body.aspectRatio as string | undefined,
       quality: body.quality as string | undefined,
       renderingSpeed: body.renderingSpeed as string | undefined,
+      seedImage: body.seedImage as string | undefined,
+      outpaint: body.outpaint as { top: number; right: number; bottom: number; left: number } | undefined,
+      maskImage: body.maskImage as string | undefined,
       snapDims,
       signal: body.signal as AbortSignal | undefined,
     });
@@ -407,6 +410,88 @@ async function runUpscaleHeld(
   }
 }
 
+// Background-removal worker helper. Mirrors runUpscaleHeld: single output image,
+// hold settle/refund, store bytes to /data and hand back a stable /api/img URL.
+async function runRemoveBgHeld(
+  userHash: string,
+  body: Record<string, unknown>,
+  q: { totalTokens: number; perImage: number },
+  holdRef: string,
+): Promise<RunUpResult> {
+  const bgModel = body.model as string;
+  try {
+    const result = await removeBackground({
+      model: bgModel,
+      inputImage: body.inputImage as string,
+      outputFormat: body.outputFormat as string | undefined,
+      outputQuality: body.outputQuality as number | undefined,
+      prompt: body.prompt as string | undefined,
+      signal: body.signal as AbortSignal | undefined,
+    });
+
+    const out = result.image as { url?: string; b64?: string; favId?: string };
+    if (out && (out.url || out.b64)) {
+      const favId = String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, "0");
+      let bytes: Uint8Array | undefined;
+      let mime = "image/png";
+      try {
+        if (out.b64) {
+          mime = "image/png";
+          bytes = decodeBase64(out.b64);
+          delete out.b64;
+        } else {
+          const res = await fetch(out.url as string);
+          if (!res.ok) throw new Error(`fetch bg-removed image: HTTP ${res.status}`);
+          mime = res.headers.get("content-type") || "image/png";
+          bytes = new Uint8Array(await res.arrayBuffer());
+        }
+        out.url = await storeImage(userHash, favId, bytes, mime, undefined, {
+          lineage: typeof body.lineage === "string" ? body.lineage as string : undefined,
+          tokenRef: holdRef,
+        });
+        out.favId = favId;
+        (out as { lineage?: string }).lineage = typeof body.lineage === "string" ? body.lineage as string : undefined;
+      } catch (e) {
+        if (bytes) { out.url = `data:${mime};base64,${encodeBase64(bytes)}`; }
+        console.warn("/data store failed (bg-removal), serving inline:", (e as Error).message);
+      }
+    }
+
+    const delivered = out?.url ? 1 : 0;
+    const charged = delivered ? q.totalTokens : 0;
+    const rawUsage = (result.raw && typeof result.raw === "object")
+      ? (result.raw as Record<string, unknown>).usageMetadata
+      : undefined;
+    const actualCostUsd = (typeof result.costUsd === "number" ? result.costUsd : null)
+      ?? geminiUsageCostUsd(bgModel, rawUsage)
+      ?? null;
+    const settled = await settleHold(userHash, holdRef, {
+      chargedTokens: charged,
+      refundTokens: q.totalTokens - charged,
+      model: bgModel,
+      images: delivered,
+      actualCostUsd,
+    });
+
+    if (!delivered) {
+      throw new ProviderError("Background remover returned no image.", { code: "upstream", status: 502 });
+    }
+    return {
+      model: result.model,
+      provider: result.provider,
+      image: out,
+      tokens: { charged, perImage: q.perImage, balance: settled.balance, ref: holdRef },
+    };
+  } catch (e) {
+    if (!(e instanceof ProviderError && e.code === "upstream")) {
+      await refundHold(userHash, holdRef, q.totalTokens,
+        e instanceof ProviderError ? `provider:${e.code}` : "internal_error",
+      ).catch((re) => console.error("CRITICAL: refund failed after bg-removal error:", (re as Error).message));
+    }
+    throw e;
+  }
+}
+
 // ── Background worker ─────────────────────────────────────────────────────────
 // A single in-process loop claims queued jobs and runs them via the shared
 // functions above. The hold is already taken (at enqueue); the worker settles
@@ -484,7 +569,7 @@ async function runJob(job: JobRecord): Promise<void> {
   // DELETE route can abort an in-flight job, and a timer aborts a hung upstream.
   const controller = new AbortController();
   runningControllers.set(job.id, controller);
-  const timeoutMs = job.kind === "upscale" ? UPSCALE_TIMEOUT_MS : JOB_TIMEOUT_MS;
+  const timeoutMs = (job.kind === "upscale" || job.kind === "removeBackground") ? UPSCALE_TIMEOUT_MS : JOB_TIMEOUT_MS;
   const timeoutTimer = setTimeout(() => {
     try { controller.abort(); } catch { /* noop */ }
   }, timeoutMs);
@@ -501,6 +586,9 @@ async function runJob(job: JobRecord): Promise<void> {
       };
       const res = await runGenerateHeld(job.userHash, body, q, job.holdRef, genCount, genOpts);
       await completeJob(job, { provider: res.provider, model: res.model, images: res.images, tokens: res.tokens });
+    } else if (job.kind === "removeBackground") {
+      const res = await runRemoveBgHeld(job.userHash, body, q, job.holdRef);
+      await completeJob(job, { provider: res.provider, model: res.model, image: res.image, tokens: res.tokens });
     } else {
       const upModel = body.model as string;
       const upOpts = {
@@ -636,8 +724,38 @@ async function enqueueImageJob(
   userHash: string,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  const kind = body.kind === "upscale" ? "upscale" : "generate";
+  const kind = body.kind === "upscale"
+    ? "upscale"
+    : body.kind === "removeBackground"
+    ? "removeBackground"
+    : "generate";
   const jobUserIsLimelight = await isLimelight(userHash);
+
+  if (kind === "removeBackground") {
+    const bgModel = body.model as string;
+    if (!findBgRemover(bgModel)) {
+      return json({ error: `Unknown background remover "${bgModel}".`, code: "bad_request" }, 400);
+    }
+    const q = jobUserIsLimelight
+      ? quoteRemoveBgForLimelight(bgModel)
+      : quoteRemoveBg(bgModel);
+    const hold = await holdTokens(userHash, q.totalTokens, { model: bgModel });
+    if (!hold.ok) {
+      return json({
+        error: `Not enough tokens — this needs ${q.totalTokens}, you have ${Number.isFinite(hold.balance) ? hold.balance : 0}.`,
+        code: "insufficient_tokens",
+        needed: q.totalTokens,
+        balance: Number.isFinite(hold.balance) ? hold.balance : 0,
+      }, 402);
+    }
+    const job = await enqueueJob({
+      userHash, kind, request: body,
+      holdRef: hold.ref, quotedTotal: q.totalTokens, perImage: q.perImage,
+      model: bgModel, label: `Remove background · ${(findBgRemover(bgModel)?.label) || bgModel}`,
+    });
+    startWorker();
+    return json({ jobId: job.id, status: job.status, balance: hold.balance });
+  }
 
   if (kind === "generate") {
     const genCount = Math.max(1, Math.min(4, Number(body.count) || 1));
@@ -1299,7 +1417,31 @@ async function handler(req: Request): Promise<Response> {
     return json({ models });
   }
 
-  // ── Token price table (Pass 3 pricing foundation). Read-only, public:
+  // ── Background removers (Tools → Background removal). Curated list + tokens. ─
+  if (path === "/api/bg-removers" && req.method === "GET") {
+    const brAuthHeader = req.headers.get("authorization") || "";
+    const brToken = brAuthHeader.startsWith("Bearer ") ? brAuthHeader.slice(7) : null;
+    const brUser = brToken ? await verifySessionToken(brToken) : null;
+    const brLimelight = brUser ? await isLimelight(brUser) : false;
+    const models = BG_REMOVERS.map((m) => {
+      const qb = brLimelight ? quoteRemoveBgForLimelight(m.id) : quoteRemoveBg(m.id);
+      return { ...m, tokens: qb.perImage };
+    });
+    return json({ models });
+  }
+
+  // ── Outpaint models (Tools → Outpaint). Curated list + per-model tokens. ────
+  if (path === "/api/outpaint-models" && req.method === "GET") {
+    const opAuthHeader = req.headers.get("authorization") || "";
+    const opToken = opAuthHeader.startsWith("Bearer ") ? opAuthHeader.slice(7) : null;
+    const opUser = opToken ? await verifySessionToken(opToken) : null;
+    const opLimelight = opUser ? await isLimelight(opUser) : false;
+    const models = OUTPAINT_MODELS.map((m) => {
+      const qb = opLimelight ? quoteForLimelight(m.id, {}, 1) : quote(m.id, {}, 1);
+      return { ...m, tokens: qb.perImage };
+    });
+    return json({ models });
+  }
   // the frontend labels the model dropdown and pre-flight quotes from this.
   // Charging happens in the ledger (next step) — this endpoint never mutates.
   if (path === "/api/pricing" && req.method === "GET") {

@@ -38,6 +38,13 @@
  *                                        Set false for closed models with exact dim tables.
  * @property {string} [quality]          GPT Image quality (auto|low|medium|high).
  * @property {string} [renderingSpeed]   Ideogram speed (TURBO|DEFAULT|QUALITY).
+ * @property {string} [seedImage]        Outpainting source (URL or data URI). The
+ *                                        original image the model expands beyond.
+ * @property {{top:number,right:number,bottom:number,left:number}} [outpaint]
+ *                                        Per-side pixel extents for outpainting.
+ *                                        width/height must be the FINAL combined dims.
+ * @property {string} [maskImage]        Outpaint mask (Fill [dev] only) — white =
+ *                                        generate, black = keep. URL or data URI.
  * @property {AbortSignal} [signal]      Optional cancellation.
  */
 
@@ -165,6 +172,36 @@ export async function generate(req) {
       if (isDataUri && r.length > 15_000_000) {
         throw new ProviderError('Reference image too large (max ~10MB per image)', { code: 'bad_request', status: 400 });
       }
+    }
+  }
+
+  // Validate outpainting inputs (Tools → Outpaint) before the adapter. seedImage
+  // and maskImage accept the same forms as reference images; outpaint must be an
+  // object of four non-negative pixel extents.
+  const isImgRef = (s) =>
+    /^https?:\/\//i.test(s) || /^data:image\/[a-z0-9.+-]+;base64,/i.test(s);
+  if (req.seedImage !== undefined) {
+    if (typeof req.seedImage !== 'string' || !isImgRef(req.seedImage)) {
+      throw new ProviderError('"seedImage" must be an http(s) URL or a base64 image data URI', { code: 'bad_request', status: 400 });
+    }
+    if (/^data:/i.test(req.seedImage) && req.seedImage.length > 15_000_000) {
+      throw new ProviderError('Seed image too large (max ~10MB)', { code: 'bad_request', status: 400 });
+    }
+  }
+  if (req.maskImage !== undefined) {
+    if (typeof req.maskImage !== 'string' || !isImgRef(req.maskImage)) {
+      throw new ProviderError('"maskImage" must be an http(s) URL or a base64 image data URI', { code: 'bad_request', status: 400 });
+    }
+    if (/^data:/i.test(req.maskImage) && req.maskImage.length > 15_000_000) {
+      throw new ProviderError('Mask image too large (max ~10MB)', { code: 'bad_request', status: 400 });
+    }
+  }
+  if (req.outpaint !== undefined) {
+    const o = req.outpaint;
+    const ok = o && typeof o === 'object' &&
+      ['top', 'right', 'bottom', 'left'].every((k) => Number.isFinite(Number(o[k])) && Number(o[k]) >= 0);
+    if (!ok) {
+      throw new ProviderError('"outpaint" must be an object with non-negative top/right/bottom/left pixel values', { code: 'bad_request', status: 400 });
     }
   }
 
@@ -390,4 +427,122 @@ export async function upscale(req) {
     throw new ProviderError('Upscaling is not available', { code: 'bad_request', status: 400 });
   }
   return adapter.upscale(req);
+}
+
+/**
+ * Curated background-removal catalogue (Tools → Background removal). BiRefNet
+ * variants run through Runware's removeBackground task; the Gemini option runs a
+ * prompt-guided edit through googleAdapter.generate(). Costs verified June 2026.
+ */
+export const BG_REMOVERS = [
+  {
+    id: 'runware:runware:112@1',
+    label: 'General',
+    family: 'BiRefNet',
+    kind: 'birefnet',
+    default: true,
+    note: 'BiRefNet v1 Base — best all-round subject cut-out.',
+  },
+  {
+    id: 'runware:runware:112@2',
+    label: 'Complex / camouflaged',
+    family: 'BiRefNet',
+    kind: 'birefnet',
+    note: 'BiRefNet COD — subjects that blend into the background.',
+  },
+  {
+    id: 'runware:runware:112@10',
+    label: 'Portrait',
+    family: 'BiRefNet',
+    kind: 'birefnet',
+    note: 'BiRefNet Portrait — people, clean hair edges.',
+  },
+  {
+    id: 'google:gemini-2.5-flash-image',
+    label: 'Gemini (Nano Banana 2.5)',
+    family: 'Gemini',
+    kind: 'gemini-bg',
+    geminiModel: 'google:gemini-2.5-flash-image',
+    note: 'Prompt-guided removal — flexible but far pricier than BiRefNet.',
+  },
+];
+
+/** Look up a background remover by canonical id. */
+export function findBgRemover(modelId) {
+  return BG_REMOVERS.find((m) => m.id === modelId) || null;
+}
+
+/**
+ * Remove the background from an image. BiRefNet models route to the Runware
+ * removeBackground task; the Gemini model routes to googleAdapter.generate()
+ * with a removal prompt. Mirrors upscale()'s validation + routing.
+ * @param {{model:string, inputImage:string, outputFormat?:string, prompt?:string, signal?:AbortSignal}} req
+ * @returns {Promise<{provider:string, model:string, image:{url:string,b64?:string}, costUsd?:number, raw?:Object}>}
+ */
+export async function removeBackground(req) {
+  if (!req || typeof req.model !== 'string' || !req.model) {
+    throw new ProviderError('A background-removal "model" is required', { code: 'bad_request', status: 400 });
+  }
+  const entry = findBgRemover(req.model);
+  if (!entry) {
+    throw new ProviderError(`Unknown background remover "${req.model}"`, { code: 'bad_request', status: 400 });
+  }
+  const img = req.inputImage;
+  if (typeof img !== 'string' || !img) {
+    throw new ProviderError('An "inputImage" is required', { code: 'bad_request', status: 400 });
+  }
+  const isUrl = /^https?:\/\//i.test(img);
+  const isDataUri = /^data:image\/[a-z0-9.+-]+;base64,/i.test(img);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(img);
+  if (!isUrl && !isDataUri && !isUuid) {
+    throw new ProviderError('inputImage must be an http(s) URL, a base64 image data URI, or a Runware image UUID', { code: 'bad_request', status: 400 });
+  }
+  if (isDataUri && img.length > 15_000_000) {
+    throw new ProviderError('Source image too large (max ~10MB)', { code: 'bad_request', status: 400 });
+  }
+
+  // ── Gemini prompt-guided removal (AI edit with reference image) ─────────────
+  if (entry.kind === 'gemini-bg') {
+    if (!isDataUri && !isUrl) {
+      throw new ProviderError('Gemini background removal requires a data URI or https URL as inputImage', { code: 'bad_request', status: 400 });
+    }
+    const prompt = req.prompt || 'keep the main subject, remove the background';
+    const genReq = {
+      model: entry.geminiModel,
+      prompt,
+      referenceImages: [img],
+      signal: req.signal,
+    };
+    const adapter = registry()[googleAdapter.id];
+    if (!adapter || typeof adapter.generate !== 'function') {
+      throw new ProviderError('Google Gemini adapter is not available', { code: 'auth', status: 503 });
+    }
+    const result = await adapter.generate(genReq);
+    const firstImage = Array.isArray(result.images) ? result.images[0] : null;
+    if (!firstImage) {
+      throw new ProviderError('Gemini returned no image', { code: 'upstream', status: 502 });
+    }
+    return {
+      provider: result.provider,
+      model: entry.geminiModel,
+      image: { url: firstImage.url, b64: firstImage.b64 },
+      costUsd: result.costUsd || null,
+      raw: result.raw || null,
+    };
+  }
+
+  // ── BiRefNet via Runware removeBackground task ─────────────────────────────
+  const adapter = registry()[runwareAdapter.id];
+  if (!adapter || typeof adapter.removeBackground !== 'function') {
+    throw new ProviderError('Background removal is not available', { code: 'bad_request', status: 400 });
+  }
+  // Strip the leading "runware:" prefix — the adapter expects the native ref.
+  const [, modelRef] = parseModelId(req.model);
+  return adapter.removeBackground({
+    model: modelRef,
+    inputImage: img,
+    outputFormat: req.outputFormat,
+    outputQuality: req.outputQuality,
+    signal: req.signal,
+  });
 }

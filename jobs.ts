@@ -42,7 +42,7 @@ const RESULT_BLOB_FIELDS = [
   ...Array.from({ length: 8 }, (_, i) => `result_img_${i}`),
 ];
 
-export type JobKind = "generate" | "upscale";
+export type JobKind = "generate" | "upscale" | "removeBackground";
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
 export interface JobRecord {
