@@ -835,28 +835,29 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   /* Vertically centre the four mode tabs in the rail's free space. */
   body .mode-nav-tabs { justify-content: center; gap: 18px; }
 
-  /* Project switcher collapses with the rail: in the resting (icon) state only
-     the dot/icon shows, aligned to the same fixed left inset as the tab icons;
-     the label + caret fade in when the rail expands on hover. The dropdown menu
-     is forced hidden while collapsed so it can't escape the 60px rail. */
-  body .proj-nav { padding: 8px var(--mode-nav-pad-x) 0; }
+  /* The Projects toggle must place its icon at the EXACT same left inset as the
+     mode-tab icons below — and hold it there in both states. The mode tabs do
+     this with a single constant `padding-left: var(--mode-nav-pad-x)` on the tab
+     itself (no wrapper inset, no hover override). We mirror that precisely:
+     the .proj-nav wrapper contributes ZERO horizontal padding, and the toggle
+     carries the constant left inset. Border is 0-width in both states (the hover
+     box is background-only, like the active mode tab) so it never nudges the
+     content box or misaligns the icon against the borderless tabs. Only the
+     RIGHT padding + gap open up on hover to reveal the label/caret. */
+  body .proj-nav { padding: 8px 0 0; }
   body .proj-nav-toggle {
-    padding: 8px 0; gap: 0; justify-content: flex-start;
-    background: transparent; border-color: transparent;
+    padding: 8px 0 8px var(--mode-nav-pad-x); gap: 0; justify-content: flex-start;
+    background: transparent; border-color: transparent; border-width: 0;
   }
-  /* Vertical padding (8px) is IDENTICAL to the collapsed rule above — only the
-     horizontal padding/gap change on hover. A vertical delta here would make the
-     toggle a few px taller on hover, which (since mode-nav-tabs is vertically
-     centred below it) pushes every mode icon down by 1-2px when the rail opens.
-     This was a real bug, not cosmetic — keep these two rules' top/bottom padding
-     in lockstep. LEFT padding is also locked at 0 in both states (only the RIGHT
-     side gains room for the label/caret) — the icon's left edge must never move,
-     same invariant the mode tabs already rely on (their padding-left is a single
-     constant rule, never overridden on hover). A left-padding delta here was the
-     second bug: the icon visibly slid right on hover and snapped back on exit. */
+  /* Vertical padding (8px) is IDENTICAL in both states so the toggle's height
+     never changes (a height delta would push the vertically-centred mode tabs
+     down 1-2px on open). Left inset is the SAME constant var(--mode-nav-pad-x)
+     in both states, so the icon never moves horizontally either. Border stays
+     0-width (background-only box on hover, like the active mode tab) so it can't
+     add a sub-pixel inset that would misalign against the borderless tabs. */
   body .mode-nav:hover .proj-nav-toggle {
-    padding: 8px 14px 8px 0; gap: 10px;
-    background: var(--surface2); border-color: var(--border);
+    padding: 8px 14px 8px var(--mode-nav-pad-x); gap: 10px;
+    background: var(--surface2); border-color: transparent; border-width: 0;
   }
   body .proj-nav-dot, body .proj-nav-icon { flex-shrink: 0; }
   body .proj-nav-label, body .proj-nav-caret {
