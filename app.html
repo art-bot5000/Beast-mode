@@ -276,7 +276,7 @@ handleShareTarget()
     </div>
     <div class="img-modal-body">
       <div id="imgDropZone" class="img-drop-zone" onclick="document.getElementById('imgFileInput').click()">
-        <span class="drop-icon">🖼</span>
+        <span class="drop-icon"><i class="ti ti-photo"></i></span>
         <p>TAP TO UPLOAD IMAGE</p>
         <p style="font-size:11px;opacity:.6;">JPG, PNG, WEBP — compressed to thumbnail</p>
       </div>
@@ -363,13 +363,13 @@ handleShareTarget()
     </div>
     <div class="img-modal-body">
       <div class="pfi-tabs">
-        <button class="pfi-tab active" id="pfiTabUpload" onclick="pfiSwitchTab('upload')">⬆ UPLOAD</button>
+        <button class="pfi-tab active" id="pfiTabUpload" onclick="pfiSwitchTab('upload')"><i class="ti ti-upload"></i> UPLOAD</button>
         <button class="pfi-tab" id="pfiTabLibrary" onclick="pfiSwitchTab('library')"><i class="ti ti-stack-2"></i>FROM LIBRARY</button>
       </div>
 
       <div id="pfiUploadPane">
         <div class="img-drop-zone" onclick="document.getElementById('pfiFileInput').click()">
-          <span class="drop-icon">🖼</span>
+          <span class="drop-icon"><i class="ti ti-photo"></i></span>
           <p>TAP TO UPLOAD IMAGE</p>
         </div>
         <input type="file" id="pfiFileInput" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="pfiFilePicked(this.files)">
@@ -395,7 +395,7 @@ handleShareTarget()
 <!-- MARKUP EDITOR OVERLAY -->
 <div id="mkOverlay">
   <div class="mk-top">
-    <div class="mk-title">✎ MARKUP IMAGE</div>
+    <div class="mk-title"><i class="ti ti-pencil"></i> MARKUP IMAGE</div>
     <span class="mk-hint" id="mkHint">Pick a colour, draw on the regions to change, then Apply.</span>
     <div class="mk-spacer"></div>
     <button class="mk-btn" onclick="mkUndo()">↶ UNDO</button>
@@ -406,7 +406,7 @@ handleShareTarget()
   <div class="mk-tools">
     <div class="mk-colors" id="mkColors"></div>
     <span class="mk-hint">·</span>
-    <button class="mk-btn active" id="mkToolBrush" onclick="mkSetTool('brush')">✏ BRUSH</button>
+    <button class="mk-btn active" id="mkToolBrush" onclick="mkSetTool('brush')"><i class="ti ti-pencil"></i> BRUSH</button>
     <div class="mk-shapewrap">
       <button class="mk-btn" id="mkToolShape" onclick="mkShapePickerToggle(event)" aria-haspopup="true" aria-expanded="false">◇ SHAPE <span class="mk-shape-cur" id="mkShapeCur">rectangle</span> ▾</button>
       <div class="mk-shape-pop" id="mkShapePop" role="menu"></div>
@@ -623,7 +623,7 @@ handleShareTarget()
 <div id="generateOnlyBanner" style="display:none;background:color-mix(in srgb,var(--accent) 8%,transparent);border-bottom:1px solid color-mix(in srgb,var(--accent) 25%,transparent);padding:8px 16px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
   <span style="font-size:11px;letter-spacing:1.5px;color:var(--accent);font-weight:700;"><i class="ti ti-player-play"></i>GENERATE MODE</span>
   <span style="font-size:11px;color:var(--muted);flex:1;">Saving disabled — connect cloud to unlock full mode</span>
-  <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:5px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK FULL MODE</button>
+  <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:5px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;"><i class="ti ti-upload"></i> UNLOCK FULL MODE</button>
 </div>
 
 <!-- ═══════════════════════ LIBRARY VIEW ═══════════════════════ -->
@@ -673,9 +673,9 @@ handleShareTarget()
         <!-- Bulk action bar — slides up when items selected -->
         <div id="libBulkBar" style="display:none;" class="lib-bulk-bar">
           <span id="libBulkCount" style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:1px;flex:1;"></span>
-          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkStar()">★ STAR ALL</button>
-          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkMove()">📁 MOVE</button>
-          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkAddToProject()">◈ ADD TO…</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkStar()"><i class="ti ti-star"></i> STAR ALL</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkMove()"><i class="ti ti-folder"></i> MOVE</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkAddToProject()"><i class="ti ti-folder-plus"></i> ADD TO…</button>
           <button class="btn btn-ghost" id="libBulkRemoveProjBtn" style="font-size:11px;display:none;" onclick="libBulkRemoveFromProject()">− REMOVE FROM PROJECT</button>
           <button class="btn btn-ghost" style="font-size:11px;" onclick="libBulkExport()"><i class="ti ti-download"></i>EXPORT</button>
           <button class="btn btn-ghost danger" style="font-size:11px;" onclick="libBulkDelete()">✕ DELETE</button>
@@ -715,13 +715,13 @@ handleShareTarget()
       </div>
       <div class="mode-toggle" style="margin-top:14px;">
         <button class="mode-btn active" id="btnInsect" onclick="setMode('insect')">⬡ INSECT MODE</button>
-        <button class="mode-btn" id="btnBeast" onclick="setMode('beast')">☠ BEAST MODE</button>
+        <button class="mode-btn" id="btnBeast" onclick="setMode('beast')"><i class="ti ti-skull"></i> BEAST MODE</button>
         <button class="mode-btn" id="btnFusion" onclick="setMode('fusion')">⚡ FUSION MODE</button>
       </div>
       <div style="margin-top:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <span style="font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:700;">// STYLE PRESET</span>
-          <button class="btn btn-ghost" onclick="openStyleEditor()" style="padding:4px 12px;font-size:12px;">✎ CUSTOMISE STYLES</button>
+          <button class="btn btn-ghost" onclick="openStyleEditor()" style="padding:4px 12px;font-size:12px;"><i class="ti ti-pencil"></i> CUSTOMISE STYLES</button>
         </div>
         <div id="presetRow" style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;"></div>
       </div>
@@ -917,7 +917,7 @@ handleShareTarget()
     <button class="btn btn-primary" onclick="generateSingle()"><i class="ti ti-player-play"></i>GENERATE PROMPT</button>
     <button class="btn btn-outline" onclick="generateBatch()">⊞ BATCH × 10</button>
     <button class="btn btn-outline" onclick="randomiseAll()"><i class="ti ti-dice-5"></i>RANDOMISE ALL</button>
-    <button class="btn btn-ghost" onclick="saveFav()">♥ SAVE PROMPT</button>
+    <button class="btn btn-ghost" onclick="saveFav()"><i class="ti ti-heart"></i> SAVE PROMPT</button>
     <button class="btn btn-ghost" onclick="exportAll()"><i class="ti ti-download"></i>EXPORT .TXT</button>
   </div>
   <div style="display:flex;align-items:center;gap:6px;margin-top:10px;">
@@ -933,8 +933,8 @@ handleShareTarget()
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
     <div class="panel-title" style="margin-bottom:0;">// OUTPUT PROMPT</div>
     <div style="display:flex;gap:6px;">
-      <button class="btn btn-ghost" id="copyPromptBtn" onclick="copyPromptOnly()" style="padding:4px 12px;font-size:12px;">⎘ COPY PROMPT</button>
-      <button class="btn btn-ghost" id="copyOutBtn" onclick="copyOutput()" style="padding:4px 12px;font-size:12px;">⎘ COPY ALL</button>
+      <button class="btn btn-ghost" id="copyPromptBtn" onclick="copyPromptOnly()" style="padding:4px 12px;font-size:12px;"><i class="ti ti-copy"></i> COPY PROMPT</button>
+      <button class="btn btn-ghost" id="copyOutBtn" onclick="copyOutput()" style="padding:4px 12px;font-size:12px;"><i class="ti ti-copy"></i> COPY ALL</button>
       <button class="btn btn-primary" id="genImageBtn" onclick="generateImage()" style="padding:4px 12px;font-size:12px;">GENERATE IMAGE</button>
     </div>
   </div>
@@ -968,7 +968,7 @@ handleShareTarget()
 <div class="panel" id="genOnlyRecentPanel" style="display:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div class="panel-title" style="margin-bottom:0;">// RECENT PROMPTS <span style="font-size:10px;color:var(--muted);font-weight:400;letter-spacing:1px;">(last 10)</span></div>
-    <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">⬆ UNLOCK SAVING</button>
+    <button onclick="exitGenerateOnlyMode()" style="background:var(--accent);color:#000;border:none;border-radius:3px;padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;"><i class="ti ti-upload"></i> UNLOCK SAVING</button>
   </div>
   <div id="genOnlyRecentList" style="display:flex;flex-direction:column;gap:8px;">
     <div style="color:var(--muted);font-size:12px;letter-spacing:.5px;">Generate a prompt to see it here.</div>
@@ -996,7 +996,7 @@ handleShareTarget()
     " oninput="onLoadTextareaInput()"></textarea>
     <input type="file" id="loadFileInput" accept=".txt" style="display:none" onchange="onFileImport(event)">
     <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="loadBtn" onclick="loadFromText()" disabled style="opacity:.4;">⬆ RESTORE SETTINGS</button>
+      <button class="btn btn-primary" id="loadBtn" onclick="loadFromText()" disabled style="opacity:.4;"><i class="ti ti-upload"></i> RESTORE SETTINGS</button>
       <button class="btn btn-outline" onclick="document.getElementById('loadFileInput').click()">📂 IMPORT .TXT</button>
       <button class="btn btn-ghost" onclick="clearLoadPanel()">✕ CLEAR</button>
       <span id="loadStatus" style="font-size:12px;letter-spacing:2px;color:var(--muted);"></span>
@@ -1224,10 +1224,10 @@ handleShareTarget()
 
         <div id="igRefsWrap" style="display:none;">
           <div class="ig-label">REFERENCE IMAGES <span id="igRefsCount" style="color:var(--accent);"></span></div>
-          <div class="ig-drop" id="igDrop" onclick="document.getElementById('igRefFile').click()">⬆ SELECT BELOW OR CLICK TO UPLOAD</div>
+          <div class="ig-drop" id="igDrop" onclick="document.getElementById('igRefFile').click()"><i class="ti ti-upload"></i> SELECT BELOW OR CLICK TO UPLOAD</div>
           <input type="file" id="igRefFile" accept="image/png,image/jpeg,image/webp" multiple style="display:none;" onchange="igRefFilesPicked(this.files)">
           <div class="ig-refs" id="igRefThumbs"></div>
-          <button class="btn btn-ghost" id="igMarkupBtn" style="margin-top:8px;font-size:13px;letter-spacing:1px;" onclick="igMarkupFromRefs()">✎ MARKUP IMAGE</button>
+          <button class="btn btn-ghost" id="igMarkupBtn" style="margin-top:8px;font-size:13px;letter-spacing:1px;" onclick="igMarkupFromRefs()"><i class="ti ti-pencil"></i> MARKUP IMAGE</button>
           <input type="file" id="igMarkupFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="igMarkupFilePicked(this.files)">
           <div class="ig-note">Image-to-image: the model uses these as visual references / edit sources. Use <b>Markup image</b> to mark regions by colour and seed change instructions.</div>
         </div>
@@ -1876,7 +1876,7 @@ handleShareTarget()
           <div class="settings-section">
             <div class="settings-section-title">Style Presets</div>
             <div style="font-size:12px;color:var(--muted);letter-spacing:1px;margin-bottom:12px;line-height:1.6;">Manage built-in and custom style presets.</div>
-            <button class="btn btn-outline" onclick="openStyleEditor();switchView('generator')" style="font-size:12px;width:100%;">✎ OPEN STYLE EDITOR</button>
+            <button class="btn btn-outline" onclick="openStyleEditor();switchView('generator')" style="font-size:12px;width:100%;"><i class="ti ti-pencil"></i> OPEN STYLE EDITOR</button>
           </div>
 
           <!-- Export -->
@@ -1887,7 +1887,7 @@ handleShareTarget()
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
               <button class="btn btn-primary" onclick="exportZip()" style="font-size:12px;">📦 DOWNLOAD FULL BACKUP (.ZIP)</button>
-              <button class="btn btn-outline" onclick="document.getElementById('zipImportModal').style.display='flex'" style="font-size:12px;">⬆ RESTORE FROM ZIP</button>
+              <button class="btn btn-outline" onclick="document.getElementById('zipImportModal').style.display='flex'" style="font-size:12px;"><i class="ti ti-upload"></i> RESTORE FROM ZIP</button>
             </div>
             <div style="height:1px;background:var(--border);margin:10px 0;"></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -2004,14 +2004,14 @@ handleShareTarget()
       <div style="font-size:13px;letter-spacing:1.5px;color:var(--muted);margin-top:4px;font-style:italic;">Your style, your expertise, your prompt.</div>
       <!-- Mode toggle — large, directly below subheading -->
       <div class="pb-mode-toggle pb-mode-toggle-hero" id="pbModeToggle" style="margin-top:12px;">
-        <button class="pb-mode-btn active" id="pbModeEditorBtn" onclick="pbSetLabMode('editor')">✏ EDITOR</button>
+        <button class="pb-mode-btn active" id="pbModeEditorBtn" onclick="pbSetLabMode('editor')"><i class="ti ti-pencil"></i> EDITOR</button>
         <button class="pb-mode-btn" id="pbModeCreatorBtn" onclick="pbSetLabMode('creator')">⚡ CREATOR</button>
       </div>
     </header>
 
     <!-- Edit mode banner — shown when editing an existing library prompt -->
     <div id="pbEditBanner" style="display:none;background:color-mix(in srgb,#38b6ff 12%,transparent);border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:5px;padding:8px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
-      <span style="font-size:12px;letter-spacing:1px;color:#38b6ff;font-weight:700;">✎ EDITING:</span>
+      <span style="font-size:12px;letter-spacing:1px;color:#38b6ff;font-weight:700;"><i class="ti ti-pencil"></i> EDITING:</span>
       <span id="pbEditBannerTitle" style="font-size:12px;color:var(--text);flex:1;"></span>
       <button onclick="pbCancelEdit()" style="background:none;border:1px solid color-mix(in srgb,#38b6ff 40%,transparent);border-radius:3px;padding:3px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:#38b6ff;">✕ CANCEL EDIT</button>
     </div>
@@ -2022,8 +2022,8 @@ handleShareTarget()
         <div class="pb-section-label" style="margin-bottom:0;">// ASSEMBLED PROMPT</div>
         <div style="display:flex;gap:5px;">
           <button onclick="pbSurpriseMe()" title="Surprise Me — generate a thematically coherent random prompt" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">⚡ SURPRISE ME</button>
-          <button onclick="pbVoiceToParticle()" title="Voice to Particle — speak your prompt" id="pbVoiceBtn" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🎙 VOICE</button>
-          <button onclick="pbOpenWizard()" title="Prompt Wizard — guided step-by-step builder" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">🧙 WIZARD</button>
+          <button onclick="pbVoiceToParticle()" title="Voice to Particle — speak your prompt" id="pbVoiceBtn" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><i class="ti ti-microphone"></i> VOICE</button>
+          <button onclick="pbOpenWizard()" title="Prompt Wizard — guided step-by-step builder" style="background:none;border:1px solid var(--border);border-radius:3px;padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--muted);transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'"><i class="ti ti-wand"></i> WIZARD</button>
         </div>
       </div>
       <div class="pb-formula pb-formula-output" id="pbFormula" contenteditable="true" spellcheck="false"></div>
@@ -2047,9 +2047,9 @@ handleShareTarget()
         <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbClearFormula()">✕ CLEAR</button>
         <button id="pbUndoBtn" class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbUndo()" title="Undo (Ctrl+Z)" disabled>↩ UNDO</button>
         <button id="pbRedoBtn" class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbRedo()" title="Redo (Ctrl+Y)" disabled>↪ REDO</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbOpenFormulaPresets()" title="Formula Presets">◈ PRESETS</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbCopyOutput()">⎘ COPY</button>
-        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" id="pbSaveBtn" onclick="pbSaveToLibrary()">♥ SAVE</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbOpenFormulaPresets()" title="Formula Presets"><i class="ti ti-folder-plus"></i> PRESETS</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px;" onclick="pbCopyOutput()"><i class="ti ti-copy"></i> COPY</button>
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" id="pbSaveBtn" onclick="pbSaveToLibrary()"><i class="ti ti-heart"></i> SAVE</button>
       </div>
 
       <!-- Prompt Analyser -->
@@ -2086,8 +2086,8 @@ handleShareTarget()
       <!-- Row 2: actions right-aligned -->
       <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-outline" style="font-size:12px;padding:5px 12px;" onclick="pbToggleAddForm()">+ ADD PARTICLE</button>
-        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="pbOpenImport()">⬆ IMPORT PROMPT</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:5px 12px;" onclick="openBulkImport()" title="Bulk import — paste multiple prompts at once">⬆⬆ BULK IMPORT</button>
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;" onclick="pbOpenImport()"><i class="ti ti-upload"></i> IMPORT PROMPT</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:5px 12px;" onclick="openBulkImport()" title="Bulk import — paste multiple prompts at once"><i class="ti ti-upload"></i> BULK IMPORT</button>
       </div>
     </div>
 
@@ -2096,16 +2096,16 @@ handleShareTarget()
       <!-- Base filter: Personal / Built-in / All -->
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
         <button class="pb-creator-btn" id="pbCreatorPersonalBtn" onclick="pbCreatorSetFilter('mine')"><i class="ti ti-user"></i>PERSONAL</button>
-        <button class="pb-creator-btn active" id="pbCreatorBuiltinBtn" onclick="pbCreatorSetFilter('builtin')">◈ BUILT-IN</button>
+        <button class="pb-creator-btn active" id="pbCreatorBuiltinBtn" onclick="pbCreatorSetFilter('builtin')"><i class="ti ti-folder-plus"></i> BUILT-IN</button>
         <button class="pb-creator-btn" id="pbCreatorAllFilterBtn" onclick="pbCreatorSetFilter('all')"><i class="ti ti-flask"></i><i class="ti ti-user"></i>ALL</button>
         <!-- Favourites toggle -->
-        <button class="pb-creator-btn pb-creator-fav-toggle" id="pbCreatorFavBtn" onclick="pbCreatorToggleFavs()">⭐ FAVOURITES</button>
+        <button class="pb-creator-btn pb-creator-fav-toggle" id="pbCreatorFavBtn" onclick="pbCreatorToggleFavs()"><i class="ti ti-star"></i> FAVOURITES</button>
       </div>
       <!-- Sub-filter row — shown for built-in and all -->
       <div id="pbCreatorSubfilter" style="display:flex;gap:5px;flex-wrap:wrap;">
         <button class="pb-creator-sub active" id="pbCreatorAllBtn" onclick="pbCreatorSetSub('all')">ALL</button>
         <button class="pb-creator-sub" id="pbCreatorInsectBtn" onclick="pbCreatorSetSub('insect')">⬡ INSECT</button>
-        <button class="pb-creator-sub" id="pbCreatorBeastBtn" onclick="pbCreatorSetSub('beast')">☠ BEAST</button>
+        <button class="pb-creator-sub" id="pbCreatorBeastBtn" onclick="pbCreatorSetSub('beast')"><i class="ti ti-skull"></i> BEAST</button>
       </div>
     </div>
 
@@ -2202,7 +2202,7 @@ handleShareTarget()
       <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:14px;line-height:1.6;">Upload an image to extract its dominant colours as particles.</div>
       <input type="file" id="pbPaletteInput" accept="image/*" style="display:none;" onchange="pbPaletteLoad(this)">
       <div id="pbPaletteDropzone" onclick="document.getElementById('pbPaletteInput').click()" style="border:2px dashed var(--border);border-radius:6px;padding:32px;text-align:center;cursor:pointer;margin-bottom:14px;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="font-size:28px;margin-bottom:8px;">🎨</div>
+        <div style="font-size:28px;margin-bottom:8px;"><i class="ti ti-palette"></i></div>
         <div style="font-size:12px;font-weight:700;letter-spacing:1px;color:var(--muted);">TAP TO CHOOSE IMAGE</div>
         <div style="font-size:11px;color:var(--muted);opacity:.6;margin-top:4px;">Camera or gallery on mobile</div>
       </div>
@@ -2271,7 +2271,7 @@ handleShareTarget()
      Gated by projWelcomeSeen (persisted in the settings doc). -->
 <div id="projWelcomeOverlay" style="display:none;position:fixed;inset:0;z-index:20003;background:var(--bg,#0c0f12);align-items:center;justify-content:center;padding:24px;">
   <div style="max-width:560px;width:100%;text-align:center;">
-    <div style="font-size:48px;line-height:1;color:var(--accent);margin-bottom:24px;">◈</div>
+    <div style="font-size:48px;line-height:1;color:var(--accent);margin-bottom:24px;"><i class="ti ti-folder-plus"></i></div>
     <div style="font-family:'IBM Plex Mono',sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:20px;">// Your First Project</div>
     <div style="font-size:15px;color:var(--text);line-height:1.7;letter-spacing:.3px;margin-bottom:16px;">
       A project is a blank space — room for an idea to grow without the noise of everything else.
@@ -2317,8 +2317,8 @@ handleShareTarget()
     <div class="pb-bottom-bar-actions">
       <button class="pb-bottom-bar-expand" id="pbBottomExpand" onclick="pbToggleBottomExpand()">▲ EDIT PROMPT</button>
       <div class="pb-bottom-bar-btns">
-        <button class="pb-bottom-bar-btn" onclick="pbCopyOutput()" title="Copy prompt">⎘ COPY</button>
-        <button class="pb-bottom-bar-btn pb-bottom-bar-save" onclick="pbSaveToLibrary()" title="Save prompt">♥ SAVE</button>
+        <button class="pb-bottom-bar-btn" onclick="pbCopyOutput()" title="Copy prompt"><i class="ti ti-copy"></i> COPY</button>
+        <button class="pb-bottom-bar-btn pb-bottom-bar-save" onclick="pbSaveToLibrary()" title="Save prompt"><i class="ti ti-heart"></i> SAVE</button>
       </div>
     </div>
   </div>
@@ -2382,7 +2382,7 @@ handleShareTarget()
         </select>
       </div>
       <button class="btn btn-ghost" style="font-size:12px;" onclick="bkiImportToLab()">⊛ SEND TO LAB</button>
-      <button class="btn btn-primary" style="font-size:12px;" id="bkiImportBtn" onclick="bkiImportAll()" disabled>⬆ IMPORT ALL</button>
+      <button class="btn btn-primary" style="font-size:12px;" id="bkiImportBtn" onclick="bkiImportAll()" disabled><i class="ti ti-upload"></i> IMPORT ALL</button>
     </div>
   </div>
 </div>
@@ -2530,7 +2530,7 @@ handleShareTarget()
     <div class="modal-header">
       <div class="modal-title">// VARIANTS</div>
       <div style="display:flex;gap:6px;align-items:center;">
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="iterCopyAll()">⎘ COPY ALL</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="iterCopyAll()"><i class="ti ti-copy"></i> COPY ALL</button>
         <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="iterExportTxt()"><i class="ti ti-download"></i>EXPORT .TXT</button>
         <button class="modal-close" onclick="document.getElementById('iterResultsModal').style.display='none'">✕</button>
       </div>
@@ -2554,7 +2554,7 @@ handleShareTarget()
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
         <button class="btn btn-ghost" style="font-size:12px;" id="drivePhotoBack" onclick="drivePhotoBrowseParent()" disabled>← BACK</button>
         <button class="btn btn-ghost" style="font-size:12px;" onclick="drivePhotoGoHome()"><i class="ti ti-home"></i>ROOT</button>
-        <button class="btn btn-outline" style="font-size:12px;" onclick="setDriveDefaultFolder()" id="driveSetDefaultBtn">★ DEFAULT</button>
+        <button class="btn btn-outline" style="font-size:12px;" onclick="setDriveDefaultFolder()" id="driveSetDefaultBtn"><i class="ti ti-star"></i> DEFAULT</button>
         <span id="driveDefaultLabel" style="font-size:11px;color:var(--muted);letter-spacing:1px;flex:1;"></span>
       </div>
       <!-- Sort controls -->
@@ -5183,7 +5183,7 @@ function renderFavs(){
       <span class="fav-tag" style="background:color-mix(in srgb,#ff6a00 15%,transparent);color:#ff9a40;">${(f.preset || 'upload').toUpperCase()}</span>
       <span class="fav-text">${display}${ellipsis}</span>
       <div class="fav-actions">
-        <button class="fav-restore" onclick="restoreFav(${f.id})">⬆ RESTORE</button>
+        <button class="fav-restore" onclick="restoreFav(${f.id})"><i class="ti ti-upload"></i> RESTORE</button>
         <button class="fav-btn fav-copy" onclick="copyFav(${f.id})">COPY</button>
         <button class="fav-btn fav-del" onclick="deleteFav(${f.id})">✕</button>
       </div>
@@ -7018,13 +7018,13 @@ function renderLibrary() {
         <div class="lib-empty-sub">Head to the Generator tab, build a mech,<br>and tap ♥ SAVE to add your first prompt.</div>
         <div class="lib-empty-cta" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="switchView('generator')" style="font-size:13px;"><i class="ti ti-settings"></i>GO TO GENERATOR</button>
-          <button class="btn btn-outline" onclick="switchView('builder');setTimeout(pbOpenImport,300)" style="font-size:13px;">⬆ IMPORT PROMPT</button>
+          <button class="btn btn-outline" onclick="switchView('builder');setTimeout(pbOpenImport,300)" style="font-size:13px;"><i class="ti ti-upload"></i> IMPORT PROMPT</button>
         </div>
       `
     } else if (projActiveId && !favourites.some(f => Array.isArray(f.projects) && f.projects.includes(projActiveId))) {
       // Active project genuinely has no member images yet (spec §9).
       empty.innerHTML = `
-        <span class="lib-empty-icon">◈</span>
+        <span class="lib-empty-icon"><i class="ti ti-folder-plus"></i></span>
         <div class="lib-empty-title">NO IMAGES YET</div>
         <div class="lib-empty-sub">Generate inside this project or add some from your Library.</div>
         <div class="lib-empty-cta" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
@@ -7293,7 +7293,7 @@ function buildLibCard(f) {
   }
   tags.innerHTML = `
     ${_cardModel ? `<span class="lib-tag tag-model">🤖 ${(f.isUpscale || f.upscaleMeta) ? bmUpscalerLabel((f.upscaleMeta && f.upscaleMeta.model) || _cardModel) : bmModelLabel(_cardModel)}</span>` : ''}
-    ${folder ? `<span class="lib-tag tag-folder">📁 ${folder.name}</span>` : ''}
+    ${folder ? `<span class="lib-tag tag-folder"><i class="ti ti-folder"></i> ${folder.name}</span>` : ''}
     ${(f.versions||[]).length > 1 ? `<span class="lib-tag" style="background:color-mix(in srgb,#38b6ff 10%,transparent);color:#38b6ff;">v${(f.versions||[]).length}</span>` : ''}
     ${f.needsProcessing ? `<span class="lib-tag tag-needs-processing">⊛ UNPROCESSED</span>` : ''}
     ${(typeof f.tokenCost === 'number' && f.tokenCost >= 0) ? `<span class="lib-tag tag-cost"><i class="ti ti-flask" aria-hidden="true"></i> ${f.tokenCost}</span>` : ''}
@@ -8232,8 +8232,8 @@ function openVersionHistory(favId) {
       </div>
       <div class="version-text">${chipHtml || (promptOnly.slice(0, 200) + (promptOnly.length > 200 ? '…' : ''))}</div>
       ${!isLatest ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
-        <button class="btn btn-ghost version-restore" onclick="restoreVersion(${favId},${idx})">⬆ RESTORE</button>
-        ${v.particles ? `<button class="btn btn-ghost version-restore" onclick="editVersionInLab(${favId},${idx})" style="font-size:11px;">✎ EDIT IN LAB</button>` : ''}
+        <button class="btn btn-ghost version-restore" onclick="restoreVersion(${favId},${idx})"><i class="ti ti-upload"></i> RESTORE</button>
+        ${v.particles ? `<button class="btn btn-ghost version-restore" onclick="editVersionInLab(${favId},${idx})" style="font-size:11px;"><i class="ti ti-pencil"></i> EDIT IN LAB</button>` : ''}
       </div>` : ''}
     `
     body.appendChild(row)
@@ -8589,8 +8589,8 @@ function iterGenerate() {
       <div class="iter-result-label">VARIANT ${i+1} — ${pbEsc(pbTrunc(p.text, 50))}</div>
       <div class="iter-result-text">${pbEsc(variant)}</div>
       <div class="iter-result-actions">
-        <button class="btn btn-ghost" style="font-size:12px;" onclick="iterCopyVariant(this)">⎘ COPY</button>
-        <button class="btn btn-primary" style="font-size:12px;" onclick="iterSaveVariant(this,${iterFavId})">♥ SAVE</button>
+        <button class="btn btn-ghost" style="font-size:12px;" onclick="iterCopyVariant(this)"><i class="ti ti-copy"></i> COPY</button>
+        <button class="btn btn-primary" style="font-size:12px;" onclick="iterSaveVariant(this,${iterFavId})"><i class="ti ti-heart"></i> SAVE</button>
       </div>
     `
     item.dataset.variantText = variant
@@ -8814,7 +8814,7 @@ async function drivePhotoBrowse(folderId) {
       } else {
         const thumb = file.thumbnailLink || ''
         item.innerHTML = `
-          ${thumb ? `<img class="drive-photo-thumb" src="${thumb}" alt="${file.name}" style="object-fit:cover;">` : `<div class="drive-photo-thumb" style="font-size:26px;">🖼</div>`}
+          ${thumb ? `<img class="drive-photo-thumb" src="${thumb}" alt="${file.name}" style="object-fit:cover;">` : `<div class="drive-photo-thumb" style="font-size:26px;"><i class="ti ti-photo"></i></div>`}
           <div class="drive-photo-name">${file.name}</div>
           ${subtitle}
         `
@@ -11003,14 +11003,14 @@ function pbRenderLibrary() {
               <br>Star particles using ★ while browsing
               <button onclick="pbCreatorSetFilter('mine');pbCreatorFavsOn=false;pbCreatorToggleFavs&&null;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);"><i class="ti ti-user"></i>PERSONAL</button>
               or
-              <button onclick="pbCreatorSetFilter('builtin');pbCreatorFavsOn=false;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">◈ BUILT-IN</button>
+              <button onclick="pbCreatorSetFilter('builtin');pbCreatorFavsOn=false;document.getElementById('pbCreatorFavBtn')?.classList.remove('active');pbRenderLibrary()" style="background:none;border:none;padding:0;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);"><i class="ti ti-folder-plus"></i> BUILT-IN</button>
             </div>`
         } else if (isPersonalCreator) {
           empty.innerHTML = `
             <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;line-height:1.8;">
               No personal particles yet for this type.
               <br>
-              <button onclick="pbSetLabMode('editor')" style="margin-top:6px;background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);">✏ SWITCH TO EDITOR TO CREATE PARTICLES</button>
+              <button onclick="pbSetLabMode('editor')" style="margin-top:6px;background:none;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;color:var(--accent);"><i class="ti ti-pencil"></i> SWITCH TO EDITOR TO CREATE PARTICLES</button>
             </div>`
         } else {
           empty.style.cssText = 'color:var(--muted);font-size:12px;letter-spacing:1px;padding:4px 0;'
@@ -11060,7 +11060,7 @@ function pbRenderLibrary() {
       tuner.className = 'pb-colour-tuner'
       tuner.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div style="font-size:11px;letter-spacing:3px;color:${t.color};font-weight:700;">🎨 CUSTOM COLOUR MIXER</div>
+          <div style="font-size:11px;letter-spacing:3px;color:${t.color};font-weight:700;"><i class="ti ti-palette"></i> CUSTOM COLOUR MIXER</div>
           <button onclick="pbOpenPaletteImporter()" style="padding:4px 10px;border:1px solid ${t.color}66;border-radius:3px;background:transparent;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;color:${t.color};">📷 IMPORT FROM IMAGE</button>
         </div>
         <div style="font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;font-weight:700;">BASE PALETTE</div>
@@ -17584,7 +17584,7 @@ document.addEventListener('viewSwitched', e => {
       </button>
       <!-- Recommendation notice -->
       <div style="background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:5px;padding:10px 14px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:5px;">⚠ KEEP YOUR IMAGES SAFE</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);margin-bottom:5px;"><i class="ti ti-alert-triangle"></i> KEEP YOUR IMAGES SAFE</div>
         <div style="font-size:11px;color:var(--muted);line-height:1.7;letter-spacing:.3px;">
           Without cloud sync, your prompts live in this browser only and <strong style="color:var(--text);">only your last 5 generated images</strong> are kept online — older ones are removed. Connect <strong style="color:var(--text);">Google Drive</strong> or <strong style="color:var(--text);">Dropbox</strong> to keep everything saved and synced across devices.
         </div>
@@ -26061,7 +26061,7 @@ function renderRegister() {
     <input class="bm-auth-input" id="bmRPass" type="password" autocomplete="new-password">
     <div class="bm-auth-label">Confirm passphrase</div>
     <input class="bm-auth-input" id="bmRPass2" type="password" autocomplete="new-password">
-    <div class="bm-warn">⚠ Your passphrase encrypts your data and is never sent to the server. If you lose it, only your recovery codes can restore access — we cannot reset it for you.</div>
+    <div class="bm-warn"><i class="ti ti-alert-triangle"></i> Your passphrase encrypts your data and is never sent to the server. If you lose it, only your recovery codes can restore access — we cannot reset it for you.</div>
     <button class="bm-auth-btn" id="bmRBtn">Create Account</button>
     <div class="bm-auth-msg" id="bmRMsg"></div>
     <div class="bm-auth-switch">Have an account? <a id="bmToLogin">Sign in</a></div>
@@ -26099,7 +26099,7 @@ function renderCodes({ codes }) {
   body().innerHTML = `
     <div class="bm-warn">These 10 codes are the ONLY way to recover your account if you forget your passphrase. Save them somewhere safe. They are shown once and never again.</div>
     <div class="bm-codes">${codes.map(c => `<div class="bm-code">${esc(c)}</div>`).join('')}</div>
-    <button class="bm-auth-btn bm-auth-btn-ghost" id="bmCopyCodes">⎘ Copy all codes</button>
+    <button class="bm-auth-btn bm-auth-btn-ghost" id="bmCopyCodes"><i class="ti ti-copy"></i> Copy all codes</button>
     <label style="font-size:12px;color:var(--muted,#888);display:flex;gap:8px;align-items:center;">
       <input type="checkbox" id="bmCodesSaved"> I have saved these codes
     </label>

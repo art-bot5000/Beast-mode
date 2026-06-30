@@ -28,44 +28,84 @@
   font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600;
   font-display: swap; src: url('/fonts/plex-mono-600.woff2') format('woff2');
 }
-/* ── Tabler icon webfont (phase: icon migration) ──────────────────
-   Self-hosted like the Plex fonts. Glyphs referenced via <i class="ti ti-NAME">.
-   woff2 lives in public/fonts/ — see Dockerfile COPY + sw.js CACHE_URLS.
-   Codepoints extracted verbatim from @tabler/icons-webfont 3.5.0. */
+/* ── Tabler icon webfont (subset — generated) ────────────────
+   Source: @tabler/icons-webfont 3.5.0 (outline). Codepoints read directly
+   from the subset woff2 — do NOT hand-edit. 66 glyphs. */
 @font-face {
   font-family: 'tabler-icons'; font-style: normal; font-weight: 400;
   font-display: block; src: url('/fonts/tabler-icons.woff2') format('woff2');
 }
 .ti {
   font-family: 'tabler-icons' !important; font-weight: 400; font-style: normal;
-  display: inline-block; line-height: 1; -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale; text-transform: none; vertical-align: middle;
+  -webkit-font-smoothing: antialiased; display: inline-block;
+  line-height: 1; speak: none; text-transform: none;
 }
-.ti-photo:before { content: "\eb0a"; }
+.ti-adjustments:before { content: "\ea03"; }
+.ti-alert-triangle:before { content: "\ea06"; }
 .ti-arrows-maximize:before { content: "\ea28"; }
-.ti-hexagon:before { content: "\ec02"; }
-.ti-flask:before { content: "\ebd2"; }
-.ti-stack-2:before { content: "\eef7"; }
-.ti-clock-hour-4:before { content: "\f319"; }
-.ti-menu-2:before { content: "\ec42"; }
-.ti-sun:before { content: "\eb30"; }
-.ti-coffee:before { content: "\ef0e"; }
+.ti-bolt:before { content: "\ea38"; }
+.ti-camera:before { content: "\ea54"; }
+.ti-chevron-down:before { content: "\ea5f"; }
+.ti-chevron-up:before { content: "\ea62"; }
+.ti-copy:before { content: "\ea7a"; }
+.ti-download:before { content: "\ea96"; }
+.ti-folder-plus:before { content: "\eaab"; }
+.ti-folder:before { content: "\eaad"; }
+.ti-heart:before { content: "\eabe"; }
+.ti-home:before { content: "\eac1"; }
 .ti-mail:before { content: "\eae5"; }
+.ti-microphone:before { content: "\eaf0"; }
+.ti-moon:before { content: "\eaf8"; }
+.ti-palette:before { content: "\eb01"; }
+.ti-pencil:before { content: "\eb04"; }
+.ti-photo:before { content: "\eb0a"; }
+.ti-refresh:before { content: "\eb13"; }
 .ti-settings:before { content: "\eb20"; }
+.ti-star:before { content: "\eb2e"; }
+.ti-sun:before { content: "\eb30"; }
+.ti-upload:before { content: "\eb47"; }
+.ti-user:before { content: "\eb4d"; }
+.ti-logout:before { content: "\eba8"; }
+.ti-wand:before { content: "\ebcb"; }
+.ti-flask:before { content: "\ebd2"; }
+.ti-hexagon:before { content: "\ec02"; }
+.ti-planet:before { content: "\ec08"; }
+.ti-snowflake:before { content: "\ec0b"; }
+.ti-layout-list:before { content: "\ec14"; }
+.ti-flame:before { content: "\ec2c"; }
+.ti-menu-2:before { content: "\ec42"; }
+.ti-rocket:before { content: "\ec45"; }
+.ti-pin:before { content: "\ec9c"; }
+.ti-crown:before { content: "\ed12"; }
+.ti-player-play:before { content: "\ed46"; }
+.ti-leaf:before { content: "\ed4f"; }
+.ti-arrows-left-right:before { content: "\edb0"; }
+.ti-layout-grid:before { content: "\edba"; }
+.ti-feather:before { content: "\ee8b"; }
+.ti-mask:before { content: "\eeb0"; }
+.ti-stack-2:before { content: "\eef7"; }
+.ti-coffee:before { content: "\ef0e"; }
+.ti-mushroom:before { content: "\ef14"; }
+.ti-cup:before { content: "\ef28"; }
+.ti-fish:before { content: "\ef2b"; }
+.ti-butterfly:before { content: "\efd9"; }
+.ti-flower:before { content: "\eff6"; }
+.ti-paw:before { content: "\eff9"; }
+.ti-robot:before { content: "\f00b"; }
+.ti-dice-5:before { content: "\f08f"; }
+.ti-swords:before { content: "\f132"; }
+.ti-clover:before { content: "\f1ea"; }
+.ti-cactus:before { content: "\f21b"; }
+.ti-ufo:before { content: "\f26f"; }
+.ti-skull:before { content: "\f292"; }
+.ti-spider:before { content: "\f293"; }
+.ti-clock-hour-4:before { content: "\f319"; }
+.ti-ghost-2:before { content: "\f57c"; }
+.ti-brain:before { content: "\f59f"; }
+.ti-cat:before { content: "\f65b"; }
 .ti-sparkles:before { content: "\f6d7"; }
 .ti-cube:before { content: "\fa97"; }
-.ti-upload:before { content: "\eb47"; }
-.ti-download:before { content: "\ea96"; }
-.ti-refresh:before { content: "\eb13"; }
-.ti-user:before { content: "\eb4d"; }
-.ti-home:before { content: "\eac1"; }
-.ti-player-play:before { content: "\ed46"; }
-.ti-dice-5:before { content: "\f08f"; }
-.ti-folder:before { content: "\eaad"; }
-.ti-wand:before { content: "\ebcb"; }
-.ti-adjustments:before { content: "\ea03"; }
-.ti-microphone:before { content: "\eaf0"; }
-.ti-palette:before { content: "\eb01"; }
+.ti-cookie-man:before { content: "\fdb2"; }
 
 :root {
   --bg: #06080a;
