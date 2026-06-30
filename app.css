@@ -834,6 +834,28 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   /* Vertically centre the four mode tabs in the rail's free space. */
   body .mode-nav-tabs { justify-content: center; gap: 18px; }
 
+  /* Project switcher collapses with the rail: in the resting (icon) state only
+     the dot/icon shows, aligned to the same fixed left inset as the tab icons;
+     the label + caret fade in when the rail expands on hover. The dropdown menu
+     is forced hidden while collapsed so it can't escape the 60px rail. */
+  body .proj-nav { padding: 8px var(--mode-nav-pad-x) 0; }
+  body .proj-nav-toggle {
+    padding: 8px; gap: 0; justify-content: flex-start;
+    background: transparent; border-color: transparent;
+  }
+  body .mode-nav:hover .proj-nav-toggle {
+    padding: 8px 10px; gap: 8px;
+    background: var(--surface2); border-color: var(--border);
+  }
+  body .proj-nav-dot, body .proj-nav-icon { flex-shrink: 0; }
+  body .proj-nav-label, body .proj-nav-caret {
+    opacity: 0; transition: opacity .14s ease .02s;
+  }
+  body .mode-nav:hover .proj-nav-label,
+  body .mode-nav:hover .proj-nav-caret { opacity: 1; }
+  /* Collapsed: never let the dropdown render outside the slim rail. */
+  body .mode-nav:not(:hover) .proj-nav-menu { display: none !important; }
+
   /* Icons hold a constant left inset in BOTH states → they never move.
      Labels are clipped by the rail's overflow until it widens. */
   body .mode-nav .nav-tab {
@@ -965,6 +987,21 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
 }
 .proj-swatch:hover { transform:scale(1.12); }
 .proj-swatch.sel { border-color:var(--text); transform:scale(1.12); }
+
+/* New Project icon grid: square buttons, glyph tinted by the active colour when
+   selected; the first ("no icon") option shows a colour dot instead of a glyph. */
+.proj-icon-opt {
+  width:34px; height:34px; border-radius:8px; border:1px solid var(--border);
+  background:var(--surface2); cursor:pointer; padding:0; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:18px;
+  transition:border-color .12s, transform .12s;
+}
+.proj-icon-opt:hover { transform:scale(1.08); border-color:var(--muted); }
+.proj-icon-opt.sel { border-color:var(--accent); }
+.proj-icon-dot { width:10px; height:10px; border-radius:50%; display:inline-block; background:var(--accent); }
+/* Project marker rendered as an icon (nav/lib rows): drop the dot's round bg,
+   centre the glyph in the dot's footprint, inherit the tint colour. */
+.proj-marker-icon { background:transparent !important; display:inline-flex; align-items:center; justify-content:center; font-size:12px; line-height:1; }
 
 /* Mobile slide-out PROJECTS section (spec §8) — hidden on desktop, shown in the
    .mode-nav drawer at <=640px with extra top spacing below the Queue tab. */
@@ -1490,6 +1527,19 @@ img.bm-thumb-missing { background:var(--surface2); }
 }
 .pfi-grid img:hover { border-color:var(--accent); }
 .pfi-grid img.sel { border-color:var(--accent); }
+/* Markup lib picker wraps each image in a positioned cell for the re-editable
+   badge; keep the cell's image styled like a bare .pfi-grid img. */
+#mkLibGrid > div { position:relative; cursor:pointer; }
+#mkLibGrid > div > img {
+  width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;display:block;
+  border:2px solid transparent;transition:border-color .15s;
+}
+#mkLibGrid > div:hover > img { border-color:var(--accent); }
+.mk-lib-badge {
+  position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;
+  background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center;
+  font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.5);pointer-events:none;
+}
 
 /* ===== MARKUP EDITOR ===== */
 #mkOverlay {
@@ -1501,6 +1551,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .mk-title { font-family:'IBM Plex Mono',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--accent); }
 .mk-spacer { flex:1; }
 .mk-hint { font-size:12px;color:var(--muted);letter-spacing:.5px; }
+.mk-editnote { font-size:11px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-weight:700;opacity:.9; }
 .mk-btn {
   background:transparent;border:1px solid var(--border);color:var(--text);
   border-radius:var(--radius);padding:7px 12px;cursor:pointer;
@@ -1537,6 +1588,7 @@ img.bm-thumb-missing { background:var(--surface2); }
 .mk-size-label { font-size:11px;letter-spacing:2px;color:var(--muted);font-weight:700; }
 .mk-size input[type=range] { width:90px;accent-color:var(--accent);cursor:pointer; }
 .mk-size-val { font-size:12px;color:var(--accent);font-weight:700;min-width:24px;text-align:right; }
+.mk-size-swatch { display:inline-block;border-radius:50%;flex-shrink:0;background:var(--accent);box-shadow:0 0 0 1px rgba(255,255,255,.25);transition:width .1s ease,height .1s ease,background .1s ease;min-width:8px;min-height:8px; }
 .mk-stage { flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0; }
 #mkCanvas { max-width:100%;max-height:100%;background:#000;cursor:crosshair;touch-action:none;border:1px solid var(--border); }
 .img-modal-card {

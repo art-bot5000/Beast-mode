@@ -396,12 +396,13 @@ handleShareTarget()
 <div id="mkOverlay">
   <div class="mk-top">
     <div class="mk-title"><i class="ti ti-pencil"></i> MARKUP IMAGE</div>
-    <span class="mk-hint" id="mkHint">Pick a colour, draw on the regions to change, then Apply.</span>
+    <span class="mk-hint" id="mkHint">Pick a colour, draw on the regions to change, then save.</span>
+    <span class="mk-editnote" id="mkEditNote" style="display:none;"></span>
     <div class="mk-spacer"></div>
     <button class="mk-btn" onclick="mkUndo()">↶ UNDO</button>
     <button class="mk-btn" onclick="mkClear()">CLEAR</button>
-    <button class="mk-btn" onclick="mkClose()">CANCEL</button>
-    <button class="mk-btn primary" onclick="mkApply()">APPLY</button>
+    <button class="mk-btn" id="mkCloseBtn" onclick="mkClose()">CLOSE</button>
+    <button class="mk-btn primary" id="mkPrimaryBtn" onclick="mkPrimaryAction()">APPLY</button>
   </div>
   <div class="mk-tools">
     <div class="mk-colors" id="mkColors"></div>
@@ -416,12 +417,47 @@ handleShareTarget()
     <span class="mk-hint">·</span>
     <label class="mk-size" title="Brush size">
       <span class="mk-size-label">SIZE</span>
-      <input type="range" id="mkBrushRange" min="0.5" max="3" step="0.5" value="1" oninput="mkSetBrush(this.value)">
-      <span class="mk-size-val" id="mkBrushVal">1×</span>
+      <input type="range" id="mkBrushRange" min="3" max="10" step="0.5" value="3" oninput="mkSetBrush(this.value)">
+      <span class="mk-size-val" id="mkBrushVal">3×</span>
+      <span class="mk-size-swatch" id="mkBrushSwatch" aria-hidden="true"></span>
     </label>
   </div>
   <div class="mk-stage">
     <canvas id="mkCanvas"></canvas>
+  </div>
+</div>
+
+<!-- MARKUP SOURCE CHOOSER — shown when the Markup tool is opened from Tools.
+     Two paths: pick an existing Library image (re-editable if it carries saved
+     strokes) or upload a new one (original is always saved to Library first). -->
+<div id="mkSourceModal" style="display:none;position:fixed;inset:0;z-index:20003;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)mkSourceClose()">
+  <div class="modal-card" style="max-width:420px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">// MARKUP — CHOOSE IMAGE</div>
+      <button class="modal-close" onclick="mkSourceClose()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="mkSourceLibrary()"><i class="ti ti-stack-2"></i>&nbsp; SELECT FROM LIBRARY</button>
+      <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="mkSourceUpload()"><i class="ti ti-upload"></i>&nbsp; UPLOAD</button>
+      <div style="font-size:11px;color:var(--muted);opacity:.75;line-height:1.5;margin-top:4px;">
+        Uploads are saved to your Library automatically. Re-open a marked-up Library image to keep editing it.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MARKUP LIBRARY PICKER — grid of saved images; picking one opens the editor.
+     Images that carry saved strokes (mkStrokes) re-open as editable vectors. -->
+<div id="mkLibModal" style="display:none;position:fixed;inset:0;z-index:20004;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)mkLibClose()">
+  <div class="modal-card" style="max-width:680px;width:100%;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <div class="modal-title">// SELECT FROM LIBRARY</div>
+      <button class="modal-close" onclick="mkLibClose()">✕</button>
+    </div>
+    <div class="modal-body" style="overflow:auto;">
+      <div id="mkLibGrid" class="pfi-grid"></div>
+      <div id="mkLibEmpty" class="ig-note" style="display:none;">No saved images yet — generate or save one first.</div>
+    </div>
   </div>
 </div>
 
@@ -2231,7 +2267,9 @@ handleShareTarget()
              onkeydown="if(event.key==='Enter')projConfirmNewModal();if(event.key==='Escape')projCloseNewModal()"
              style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;letter-spacing:.5px;margin-bottom:16px;">
       <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:8px;">COLOUR</div>
-      <div id="projNewSwatches" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
+      <div id="projNewSwatches" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;"></div>
+      <div style="font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:8px;">ICON</div>
+      <div id="projNewIcons" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
       <div id="projNewSeedNote" style="font-size:11px;color:var(--muted);opacity:.7;margin-top:6px;"></div>
     </div>
     <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:0 20px 20px;">
@@ -7695,6 +7733,13 @@ function markupFav(f) {
   // resolver so the editor gets a drawable image rather than an unauthed URL.
   const openEditor = (src) => {
     if (!src) { if (typeof setDriveStatus === 'function') setDriveStatus('\u2717 COULD NOT LOAD IMAGE', 'err'); return }
+    // Re-open editable when this fav carries saved strokes; the 'apply' ctx makes
+    // a save update THIS fav in place (image + mkStrokes), matching the Tools flow.
+    const hasStrokes = Array.isArray(f.mkStrokes) && f.mkStrokes.length
+    if (hasStrokes && typeof mkToolsApply === 'function') {
+      mkOpen(src, mkToolsApply, { mode:'apply', targetFavId:f.id, strokes:f.mkStrokes })
+      return
+    }
     mkOpen(src, result => {
       if (!result || !result.image) return
       _markupFavSave(f, result)
@@ -7890,6 +7935,10 @@ function renderFolderSidebar() {
 // Projects are a saved scope over `favourites` (fav.projects[]). Selecting one
 // sets projActiveId (compose base-scope), distinct from libActiveFolderId.
 const PROJ_COLORS = ['#ff6b6b','#ffa94d','#ffd43b','#69db7c','#4dabf7','#cc5de8','#f783ac','#a9e34b']
+// In-subset Tabler glyphs only (confirmed present in the webfont subset). Stored
+// on the project as the bare suffix (e.g. 'star'); rendered as `ti ti-<icon>`,
+// tinted with the project colour. A null/absent icon falls back to a colour dot.
+const PROJ_ICONS = ['folder','star','heart','sparkles','flask','cube','skull','user','home','palette','image','photo']
 let _projColorIdx = 0
 
 // Re-render every project surface after a state change (active/list/membership).
@@ -7976,14 +8025,25 @@ function projRenderNav() {
   const dot   = document.getElementById('projNavDot')
   const active = projActiveId ? projById(projActiveId) : null
   if (label) label.textContent = active ? (active.name || 'PROJECT').toUpperCase() : 'DEFAULT'
-  if (dot) dot.style.background = active ? (active.color || 'var(--muted)') : 'transparent'
+  // Toggle marker: icon (tinted) when the active project has one, else a dot.
+  // Default → theme-accent dot. We rewrite the span's contents/style in place so
+  // the #projNavDot id (and its fixed sizing) is preserved.
+  if (dot) {
+    if (active && active.icon && PROJ_ICONS.indexOf(active.icon) !== -1) {
+      dot.style.background = 'transparent'
+      dot.innerHTML = `<i class="ti ti-${active.icon}" style="color:${active.color || 'var(--muted)'};font-size:12px;line-height:1;"></i>`
+    } else {
+      dot.innerHTML = ''
+      dot.style.background = active ? (active.color || 'var(--muted)') : 'var(--accent)'
+    }
+  }
   if (!menu) return
   menu.innerHTML = ''
   // Default row (always top) — clears projActiveId.
   const def = document.createElement('button')
   def.type = 'button'
   def.className = 'proj-nav-item' + (!projActiveId ? ' active' : '')
-  def.innerHTML = `<span class="proj-nav-dot" style="background:transparent;border:1px solid var(--border);"></span><span class="proj-nav-item-name">Default</span>`
+  def.innerHTML = `${projMarkerHTML(null,'proj-nav-dot')}<span class="proj-nav-item-name">Default</span>`
   def.onclick = () => projSetActive(null)
   menu.appendChild(def)
   // One row per project (selecting sets active; ✕ deletes — §7).
@@ -7991,12 +8051,13 @@ function projRenderNav() {
     const row = document.createElement('div')
     row.className = 'proj-nav-item' + (p.id === projActiveId ? ' active' : '')
     row.innerHTML = `
-      <span class="proj-nav-dot" style="background:${p.color || 'var(--muted)'}"></span>
+      ${projMarkerHTML(p,'proj-nav-dot')}
       <span class="proj-nav-item-name">${projEsc(p.name || 'Project')}</span>
       <span class="proj-nav-count">${projCount(p.id)}</span>
       <span class="proj-nav-del" title="Delete project">×</span>`
+    const marker = row.querySelector('.proj-nav-dot')
     row.querySelector('.proj-nav-item-name').onclick = () => projSetActive(p.id)
-    row.querySelector('.proj-nav-dot').onclick = () => projSetActive(p.id)
+    if (marker) marker.onclick = () => projSetActive(p.id)
     row.querySelector('.proj-nav-count').onclick = () => projSetActive(p.id)
     row.querySelector('.proj-nav-del').onclick = (e) => { e.stopPropagation(); projDelete(p.id) }
     menu.appendChild(row)
@@ -8020,7 +8081,7 @@ function projRenderLibList() {
   const def = document.createElement('div')
   def.className = 'lib-folder-item' + (!projActiveId ? ' active' : '')
   def.innerHTML = `
-    <span class="lib-folder-dot" style="background:transparent;border:1px solid var(--border);"></span>
+    <span class="lib-folder-dot" style="background:var(--accent);"></span>
     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Default</span>
     <span class="lib-folder-count">${favourites.length}</span>`
   def.onclick = () => projSetActive(null)
@@ -8029,12 +8090,13 @@ function projRenderLibList() {
     const item = document.createElement('div')
     item.className = 'lib-folder-item' + (p.id === projActiveId ? ' active' : '')
     item.innerHTML = `
-      <span class="lib-folder-dot" style="background:${p.color || 'var(--muted)'}"></span>
+      ${projMarkerHTML(p,'lib-folder-dot')}
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${projEsc(p.name || 'Project')}</span>
       <span class="lib-folder-count">${projCount(p.id)}</span>
       <span class="lib-folder-del" title="Delete project">×</span>`
+    const marker = item.querySelector('.lib-folder-dot')
     item.querySelector(':scope > span:nth-child(2)').onclick = () => projSetActive(p.id)
-    item.querySelector('.lib-folder-dot').onclick = () => projSetActive(p.id)
+    if (marker) marker.onclick = () => projSetActive(p.id)
     item.querySelector('.lib-folder-count').onclick = () => projSetActive(p.id)
     item.querySelector('.lib-folder-del').onclick = (e) => { e.stopPropagation(); projDelete(p.id) }
     frag.appendChild(item)
@@ -8049,9 +8111,24 @@ function projEsc(s) {
   ))
 }
 
+// Marker for a project (or Default). Returns an inline element string: a tinted
+// Tabler icon when the project has one, else a colour dot. `proj` null = Default
+// → theme-accent dot. `cls` is the dot/icon class used on that surface so each
+// surface keeps its own sizing (.proj-nav-dot, .lib-folder-dot, etc).
+function projMarkerHTML(proj, cls) {
+  const klass = cls || 'proj-nav-dot'
+  if (!proj) return `<span class="${klass}" style="background:var(--accent);"></span>`
+  const col = proj.color || 'var(--muted)'
+  if (proj.icon && PROJ_ICONS.indexOf(proj.icon) !== -1) {
+    return `<i class="ti ti-${proj.icon} ${klass} proj-marker-icon" style="background:transparent;color:${col};"></i>`
+  }
+  return `<span class="${klass}" style="background:${col}"></span>`
+}
+
 // ── New Project modal (spec §5f) — source-agnostic: takes a fav-id list. ──────
 let _projNewSeedIds = []
 let _projNewColor = null
+let _projNewIcon = null
 let _projNewFromSurface = null
 function projOpenNewModal(opts) {
   const modal = document.getElementById('projNewModal')
@@ -8059,8 +8136,17 @@ function projOpenNewModal(opts) {
   _projNewSeedIds = (opts && Array.isArray(opts.seedFavIds)) ? opts.seedFavIds.map(String) : []
   _projNewFromSurface = (opts && opts.fromSurface) ? opts.fromSurface : null
   _projNewColor = PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
+  _projNewIcon = null // null = colour dot (no icon)
   const nameEl = document.getElementById('projNewName')
   if (nameEl) { nameEl.value = (opts && opts.name) ? opts.name : '' }
+  // Re-tint the selected icon preview to match the active colour.
+  const tintIcons = () => {
+    const ig = document.getElementById('projNewIcons')
+    if (!ig) return
+    ig.querySelectorAll('.proj-icon-opt').forEach(el => {
+      el.style.color = (el.dataset.icon === _projNewIcon) ? (_projNewColor || 'var(--accent)') : 'var(--muted)'
+    })
+  }
   // Colour swatches
   const sw = document.getElementById('projNewSwatches')
   if (sw) {
@@ -8075,9 +8161,47 @@ function projOpenNewModal(opts) {
         _projNewColor = c
         sw.querySelectorAll('.proj-swatch').forEach(x => x.classList.remove('sel'))
         b.classList.add('sel')
+        tintIcons()
       }
       sw.appendChild(b)
     })
+  }
+  // Icon grid (in-subset Tabler glyphs). First option = "no icon" (colour dot);
+  // the rest are selectable glyphs, tinted to the chosen colour when selected.
+  const ig = document.getElementById('projNewIcons')
+  if (ig) {
+    ig.innerHTML = ''
+    const none = document.createElement('button')
+    none.type = 'button'
+    none.className = 'proj-icon-opt proj-icon-none sel'
+    none.dataset.icon = ''
+    none.title = 'No icon (colour dot)'
+    none.innerHTML = '<span class="proj-icon-dot" style="background:' + (_projNewColor || 'var(--accent)') + '"></span>'
+    none.onclick = () => {
+      _projNewIcon = null
+      ig.querySelectorAll('.proj-icon-opt').forEach(x => x.classList.remove('sel'))
+      none.classList.add('sel')
+      const d = none.querySelector('.proj-icon-dot'); if (d) d.style.background = _projNewColor || 'var(--accent)'
+      tintIcons()
+    }
+    ig.appendChild(none)
+    PROJ_ICONS.forEach(ic => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'proj-icon-opt'
+      b.dataset.icon = ic
+      b.title = ic
+      b.innerHTML = `<i class="ti ti-${ic}"></i>`
+      b.style.color = 'var(--muted)'
+      b.onclick = () => {
+        _projNewIcon = ic
+        ig.querySelectorAll('.proj-icon-opt').forEach(x => x.classList.remove('sel'))
+        b.classList.add('sel')
+        tintIcons()
+      }
+      ig.appendChild(b)
+    })
+    tintIcons()
   }
   const note = document.getElementById('projNewSeedNote')
   if (note) note.textContent = _projNewSeedIds.length
@@ -8098,7 +8222,7 @@ function projConfirmNewModal() {
   const isFirstEver = projects.length === 0
   const color = _projNewColor || PROJ_COLORS[_projColorIdx % PROJ_COLORS.length]
   _projColorIdx++
-  const proj = { id: 'proj_' + Date.now().toString(36), name, color, icon: null, createdAt: Date.now() }
+  const proj = { id: 'proj_' + Date.now().toString(36), name, color, icon: (_projNewIcon && PROJ_ICONS.indexOf(_projNewIcon) !== -1) ? _projNewIcon : null, createdAt: Date.now() }
   projects.push(proj)
   const seeds = _projNewSeedIds.slice()
   seeds.forEach(fid => {
@@ -20749,11 +20873,13 @@ const mk = {
   open:false, tool:'brush', colourIdx:0,
   shape:'rectangle',        // active shape id (used when tool==='shape')
   fill:false,               // fill new closed shapes vs outline only
-  brush:1,                  // brush-size multiplier (0.5 = fine … 3 = heavy)
+  brush:3,                  // brush-size multiplier (3 = fine … 10 = heavy)
   img:null,                 // HTMLImageElement (base)
   strokes:[],               // committed ops, each { tool, colour, name, pts:[], text?, shape?, fill? }
   cur:null,                 // in-progress op
   onApply:null,
+  ctx:null,                 // tools-flow context { mode, targetFavId, originalFavId }
+  saved:false,              // savecopy: has the copy been saved at least once?
   dpr:1,
 };
 
@@ -20765,9 +20891,10 @@ function mkBuildPalette(){
     b.className='mk-color'+(i===mk.colourIdx?' sel':'');
     b.style.background=c.hex; b.style.color=c.hex;
     b.title=c.name;
-    b.onclick=()=>{ mk.colourIdx=i; mkBuildPalette(); };
+    b.onclick=()=>{ mk.colourIdx=i; mkBuildPalette(); mkUpdateBrushSwatch(); };
     wrap.appendChild(b);
   });
+  mkUpdateBrushSwatch();
 }
 // Tool buttons are now: brush, shape (dropdown), text. The shape button stays
 // highlighted whenever the shape tool is active. Guard each lookup so a missing
@@ -20840,22 +20967,43 @@ function mkColour(){ return MK_COLOURS[mk.colourIdx]; }
 // affects subsequent marks without resizing committed ones.
 function mkSetBrush(v){
   const n=parseFloat(v);
-  mk.brush=(isFinite(n)&&n>0)?n:1;
+  mk.brush=(isFinite(n)&&n>=3)?n:3;
   const lbl=document.getElementById('mkBrushVal');
   if(lbl) lbl.textContent=mk.brush+'\u00D7';
+  mkUpdateBrushSwatch();
+}
+// Live indicator: a dot in the active colour whose diameter tracks the brush
+// multiplier (3× → 10× mapped to ~8–26px), shown inline in the SIZE row.
+function mkUpdateBrushSwatch(){
+  const sw=document.getElementById('mkBrushSwatch');
+  if(!sw) return;
+  const px=Math.round(8 + (mk.brush-3)*(18/7)); // 3→8px … 10→26px
+  sw.style.width=px+'px'; sw.style.height=px+'px';
+  const c=mkColour();
+  sw.style.background=(c&&c.hex)||'var(--accent)';
 }
 
-function mkOpen(dataUri, onApply){
-  mk.onApply=onApply; mk.strokes=[]; mk.cur=null;
-  mk.tool='brush'; mk.colourIdx=0; mk.brush=1;
+function mkOpen(dataUri, onApply, opts){
+  opts = opts || {};
+  mk.onApply=onApply; mk.cur=null;
+  // Preload editable strokes when re-opening a marked-up image; else start clean.
+  mk.strokes = (opts.strokes && Array.isArray(opts.strokes)) ? opts.strokes.map(s => Object.assign({}, s)) : [];
+  mk.ctx = (opts.mode) ? {
+    mode: opts.mode,
+    targetFavId: (opts.targetFavId != null) ? opts.targetFavId : null,
+    originalFavId: (opts.originalFavId != null) ? opts.originalFavId : null,
+  } : null;
+  mk.saved=false;
+  mk.tool='brush'; mk.colourIdx=0; mk.brush=3;
   mk.shape='rectangle'; mk.fill=false;
-  const _r=document.getElementById('mkBrushRange'); if(_r) _r.value='1';
-  mkSetBrush(1);
+  const _r=document.getElementById('mkBrushRange'); if(_r) _r.value='3';
+  mkSetBrush(3);
   mkBuildPalette(); mkSetTool('brush');
   mkBuildShapePicker(); mkShapePickerClose();
   const _sc=document.getElementById('mkShapeCur'); if(_sc) _sc.textContent='rectangle';
   const _fs=document.getElementById('mkFillState'); if(_fs) _fs.textContent='NONE';
   const _fb=document.getElementById('mkFillBtn'); if(_fb){ _fb.classList.remove('on'); _fb.setAttribute('aria-pressed','false'); }
+  mkConfigButtons();
   const img=new Image();
   img.onload=()=>{
     mk.img=img;
@@ -20866,9 +21014,32 @@ function mkOpen(dataUri, onApply){
   };
   img.src=dataUri;
 }
+// Configure the primary/close buttons + edit note for the current mode:
+//   • no ctx (legacy Image-Gen markup) → single APPLY, CLOSE hidden text "CANCEL"
+//   • savecopy, not yet saved → primary "SAVE A COPY"
+//   • savecopy, already saved  → primary "SAVE" + note "editing copy of original"
+//   • apply (re-editing a Library image) → primary "SAVE"
+function mkConfigButtons(){
+  const primary=document.getElementById('mkPrimaryBtn');
+  const closeBtn=document.getElementById('mkCloseBtn');
+  const note=document.getElementById('mkEditNote');
+  if(closeBtn) closeBtn.textContent='CLOSE';
+  if(note){ note.style.display='none'; note.textContent=''; }
+  if(!primary) return;
+  const mode = mk.ctx && mk.ctx.mode;
+  if(mode==='savecopy'){
+    primary.textContent = mk.saved ? 'SAVE' : 'SAVE A COPY';
+    if(mk.saved && note){ note.textContent='editing copy of original'; note.style.display=''; }
+  } else if(mode==='apply'){
+    primary.textContent='SAVE';
+  } else {
+    primary.textContent='APPLY';
+    if(closeBtn) closeBtn.textContent='CANCEL';
+  }
+}
 function mkClose(){
   document.getElementById('mkOverlay').classList.remove('open');
-  mk.open=false; mk.img=null; mk.strokes=[]; mk.cur=null;
+  mk.open=false; mk.img=null; mk.strokes=[]; mk.cur=null; mk.ctx=null; mk.saved=false;
 }
 
 function mkFitCanvas(){
@@ -20902,7 +21073,9 @@ function mkDrawOp(ctx,op,cv){
   // the slider later never retro-resizes earlier marks; the in-progress op falls
   // back to the live setting.
   const mult=(typeof op.brush==='number' && op.brush>0)?op.brush:mk.brush;
-  const lw=Math.max(1, baseLw*mult);
+  // Brush slider is 3×–10×; normalise to a line-width factor (3→1.0 … 10→~3.3)
+  // so the heavier range stays usable rather than runaway-thick.
+  const lw=Math.max(1, baseLw*(mult/3));
   ctx.lineWidth=lw; ctx.strokeStyle=op.colour; ctx.fillStyle=op.colour;
   ctx.lineCap='round'; ctx.lineJoin='round';
   if(op.tool==='brush'){
@@ -21046,6 +21219,7 @@ function mkUsedColours(){
   return seen; // in first-use order
 }
 
+// Legacy entry (Image-Gen markup): flatten, hand back, and close. Unchanged.
 function mkApply(){
   if(!mk.strokes.length){ mkClose(); return; }
   const cv=document.getElementById('mkCanvas');
@@ -21054,6 +21228,35 @@ function mkApply(){
   const cb=mk.onApply;
   mkClose();
   if(typeof cb==='function') cb({ image:out, colours });
+}
+
+// Primary-button handler. Legacy (no ctx) → mkApply (closes). Tools modes
+// (savecopy/apply) → save WITHOUT closing so the user can keep editing; the
+// editor re-anchors to the saved/updated fav and the button becomes SAVE.
+function mkPrimaryAction(){
+  if(!mk.ctx){ mkApply(); return; }
+  if(!mk.strokes.length){
+    // Nothing drawn yet — in apply mode there's nothing to save; nudge instead.
+    if(typeof toolsToast==='function') toolsToast('Draw something first, or press Close.', true);
+    return;
+  }
+  const cv=document.getElementById('mkCanvas');
+  const out=cv.toDataURL('image/jpeg',0.9);
+  const colours=mkUsedColours();
+  // Strokes are stored as a plain serialisable copy on the fav (re-editable).
+  const strokesCopy=mk.strokes.map(s=>Object.assign({}, s));
+  const cb=mk.onApply;
+  let savedFav=null;
+  if(typeof cb==='function') savedFav=cb({ image:out, colours, strokes:strokesCopy }, mk.ctx);
+  // After the first savecopy, re-anchor to the copy so further saves update IT
+  // (mode flips to 'apply' against the new fav) and show the editing-copy note.
+  if(mk.ctx.mode==='savecopy' && savedFav){
+    mk.ctx={ mode:'apply', targetFavId:savedFav.id, originalFavId:mk.ctx.originalFavId };
+    mk.saved=true;
+  } else if(mk.ctx.mode==='savecopy'){
+    mk.saved=true; // save failed to return a fav, but still flip the label
+  }
+  mkConfigButtons();
 }
 
 /* bind pointer events */
@@ -27045,6 +27248,8 @@ const OP_MODEL_ARS = {
   'runware:runware:102@1': ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
   // expand-mode models (Gemini/GPT): simpler ratio set
   'google:gemini-2.5-flash-image': ['1:1', '16:9', '9:16', '4:3', '3:4'],
+  'runware:google:4@2':            ['1:1', '16:9', '9:16', '4:3', '3:4'],
+  'runware:google:4@3':            ['1:1', '16:9', '9:16', '4:3', '3:4'],
   'runware:openai:gpt-image@2':    ['1:1', '16:9', '9:16', '4:3', '3:4'],
 };
 const OP_ANCHORS = [
@@ -27073,7 +27278,9 @@ function toolsOpen(which) {
     toolsMarkupStart();
     return;
   }
-  if (title) title.textContent = which === 'outpaint' ? '// TOOLS / OUTPAINT' : '// TOOLS / BACKGROUND REMOVAL';
+  // The panel carries its own // OUTPAINT / // BACKGROUND REMOVAL head + a back
+  // button, so the page title would just duplicate it — hide it inside a panel.
+  if (title) title.style.display = 'none';
 }
 
 function toolsBack() {
@@ -27081,34 +27288,145 @@ function toolsBack() {
   document.getElementById('toolOutpaint').style.display = 'none';
   document.getElementById('toolBgremove').style.display = 'none';
   const title = document.getElementById('toolsTitle');
-  if (title) title.textContent = '// TOOLS';
+  if (title) { title.style.display = ''; title.textContent = '// TOOLS'; }
 }
 
 // ── Markup delegation ────────────────────────────────────────────────────────
 // Opens a file/library chooser, then hands the chosen image to the existing
 // vector editor. On apply we just save the result to the library (markup from
 // Image Gen prepends prompt seeds; here it's a standalone edit).
-function toolsMarkupStart() {
-  // Reuse the library/file chooser already built for Image Gen markup.
-  const input = document.getElementById('opFileInput');
-  // Simplest entry: a file picker that opens the editor. (Library picking is
-  // available from the card too, but the file route covers the common case.)
+// Markup entry from the Tools card. Opens a source chooser: pick an existing
+// Library image (re-editable if it carries saved strokes) or upload a new one
+// (the original is always saved to Library first; edits become a saved copy).
+function toolsMarkupStart() { mkSourceOpen(); }
+
+// ── Markup source chooser (Library vs Upload) ────────────────────────────────
+function mkSourceOpen()  { const m=document.getElementById('mkSourceModal'); if(m) m.style.display='flex'; }
+function mkSourceClose() { const m=document.getElementById('mkSourceModal'); if(m) m.style.display='none'; }
+
+// Upload path: read the file, save the ORIGINAL to the Library immediately, then
+// open the editor in 'savecopy' mode anchored to that original. Saving produces
+// a separate copy so the untouched original is always preserved.
+function mkSourceUpload() {
+  mkSourceClose();
   const picker = document.createElement('input');
   picker.type = 'file'; picker.accept = 'image/*';
   picker.onchange = () => {
     const f = picker.files && picker.files[0];
     if (!f) return;
     const r = new FileReader();
-    r.onload = e => { if (typeof mkOpen === 'function') mkOpen(e.target.result, toolsMarkupApply); };
+    r.onload = e => {
+      const dataUri = e.target.result;
+      // Save the original first; keep its id so the copy can record provenance.
+      let originalFav = null;
+      if (typeof autoSaveGeneratedImage === 'function') {
+        try {
+          originalFav = autoSaveGeneratedImage('Upload', '', dataUri, 'markup-src', dataUri, null, 0, {});
+          if (typeof projStampNew === 'function' && originalFav) { try { projStampNew(originalFav); } catch(_){} }
+        } catch(_) { originalFav = null; }
+      }
+      if (typeof lsSaveAll === 'function') lsSaveAll();
+      if (typeof renderLibrary === 'function') renderLibrary();
+      mkOpen(dataUri, mkToolsApply, {
+        mode: 'savecopy',
+        originalFavId: originalFav ? originalFav.id : null,
+      });
+    };
     r.readAsDataURL(f);
   };
   picker.click();
 }
-function toolsMarkupApply(result) {
-  // result.image is the marked-up data URI. Save it as a normal library image
-  // through the queue so it is project-stamped like any other.
-  if (!result || !result.image) return;
-  toolsSaveDirect(result.image, 'Markup', 'markup');
+
+// Library path: show the picker grid; choosing a fav opens the editor. If the
+// fav already carries saved strokes (mkStrokes) we re-open it editable, anchored
+// to that same fav so saving updates it in place ('apply' mode). Otherwise it's
+// a fresh markup over the chosen image, still saved as a copy.
+function mkSourceLibrary() {
+  mkSourceClose();
+  mkLibOpen();
+}
+function mkLibOpen()  { mkRenderLibGrid(); const m=document.getElementById('mkLibModal'); if(m) m.style.display='flex'; }
+function mkLibClose() { const m=document.getElementById('mkLibModal'); if(m) m.style.display='none'; }
+function mkRenderLibGrid() {
+  const grid = document.getElementById('mkLibGrid');
+  const empty = document.getElementById('mkLibEmpty');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const withImg = (typeof favourites !== 'undefined' ? favourites : []).filter(f => f.imageData);
+  if (!withImg.length) { if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+  withImg.slice(0, 80).forEach(f => {
+    const cell = document.createElement('div');
+    cell.style.position = 'relative';
+    const img = document.createElement('img');
+    if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); } else { img.src = f.imageData; }
+    img.alt = f.title || ''; img.loading = 'lazy';
+    cell.appendChild(img);
+    // Badge re-editable images so the user knows they'll reload as vectors.
+    if (Array.isArray(f.mkStrokes) && f.mkStrokes.length) {
+      const tag = document.createElement('span');
+      tag.className = 'mk-lib-badge';
+      tag.innerHTML = '<i class="ti ti-pencil"></i>';
+      tag.title = 'Has saved markup — opens editable';
+      cell.appendChild(tag);
+    }
+    cell.onclick = () => mkOpenFromFav(f);
+    grid.appendChild(cell);
+  });
+}
+function mkOpenFromFav(f) {
+  mkLibClose();
+  const hasStrokes = Array.isArray(f.mkStrokes) && f.mkStrokes.length;
+  mkOpen(f.imageData, mkToolsApply, {
+    mode: 'apply',                 // update this fav in place
+    targetFavId: f.id,
+    strokes: hasStrokes ? f.mkStrokes : null,
+  });
+}
+
+// Editor save callback for the Tools-driven Markup flow. `result` carries the
+// flattened image + the editable stroke list. Behaviour depends on mode:
+//   • 'apply'    → update the target fav's image + mkStrokes in place
+//   • 'savecopy' → save a NEW fav (the copy), recording its source original
+// Returns the saved/updated fav so the editor can re-anchor in 'savecopy' mode
+// (so a second Save re-saves the SAME copy rather than spawning duplicates).
+function mkToolsApply(result, ctx) {
+  if (!result || !result.image) return null;
+  ctx = ctx || {};
+  const strokes = Array.isArray(result.strokes) ? result.strokes : [];
+  // Update an existing fav in place.
+  if (ctx.mode === 'apply' && ctx.targetFavId != null && typeof favourites !== 'undefined') {
+    const fav = favourites.find(x => String(x.id) === String(ctx.targetFavId));
+    if (fav) {
+      fav.imageData = result.image;
+      fav.mkStrokes = strokes;
+      fav.updatedAt = Date.now();
+      if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+      if (typeof lsSaveAll === 'function') lsSaveAll();
+      if (typeof renderLibrary === 'function') renderLibrary();
+      toolsToast('Markup saved.');
+      return fav;
+    }
+  }
+  // Save a new copy.
+  if (typeof autoSaveGeneratedImage === 'function') {
+    try {
+      const fav = autoSaveGeneratedImage('Markup', '', result.image, 'markup', result.image, null, 0, {
+        markupFromId: (ctx.originalFavId != null) ? ctx.originalFavId : null,
+      });
+      if (fav) {
+        fav.mkStrokes = strokes;
+        if (typeof driveSavePrompt === 'function') driveSavePrompt(fav);
+        if (typeof projStampNew === 'function') { try { projStampNew(fav); } catch(_){} }
+      }
+      if (typeof lsSaveAll === 'function') lsSaveAll();
+      if (typeof renderLibrary === 'function') renderLibrary();
+      toolsToast('Saved a copy to Library.');
+      return fav;
+    } catch(_) { /* fall through */ }
+  }
+  toolsToast('Could not save — try again.', true);
+  return null;
 }
 
 // Save an already-produced data URI to the library by uploading to R2 and
