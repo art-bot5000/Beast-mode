@@ -21885,9 +21885,33 @@ function igLibUpdateSelection() {
   const bar = document.getElementById('igLibBar');
   if (!bar || igFamily.open) { igRenderLibBar(); return; }
   const m = igModel();
-  // Project-mode (or non-i2i) selection is rendered by the full bar builder
-  // (project ticks aren't numbered refs), so defer to it.
-  if (igState.selectMode === 'project' || !(m && m.i2i)) { igRenderLibBar(); return; }
+  // PROJECT mode: surgically toggle each tick from projSel membership rather than
+  // rebuilding the whole bar (a full rebuild flashes every thumbnail). Project
+  // ticks carry no selection-order badge, so there's nothing else to update.
+  if (igState.selectMode === 'project') {
+    const psel = igState.projSel || new Set();
+    bar.querySelectorAll('.ig-libbar-thumb').forEach(cell => {
+      const favId = cell.dataset.favId;
+      // projSel is keyed by the fav's raw id; dataset.favId is a string, so test
+      // both forms rather than assume a type.
+      const on = psel.has(favId) || psel.has(Number(favId)) ||
+                 [...psel].some(id => String(id) === String(favId));
+      cell.classList.toggle('sel', on);
+      const num = cell.querySelector('.ig-libbar-selnum'); if (num) num.remove();
+      const tick = cell.querySelector('.ig-libbar-tick');
+      if (tick) {
+        tick.classList.toggle('checked', on);
+        tick.removeAttribute('data-selnum');
+        tick.title = on ? 'Deselect' : 'Select';
+        tick.setAttribute('aria-checked', on ? 'true' : 'false');
+      }
+    });
+    const hint = document.getElementById('igLibBarHint');
+    if (hint) hint.textContent = psel.size + ' selected \u00B7 use the \u22EE menu to add to a project';
+    return;
+  }
+  // Non-i2i (timeline) has no selectable ticks → defer to the full builder.
+  if (!(m && m.i2i)) { igRenderLibBar(); return; }
   bar.querySelectorAll('.ig-libbar-thumb').forEach(cell => {
     const favId = cell.dataset.favId;
     const selIdx = igState.refs.findIndex(r => r && String(r.favId) === String(favId));
@@ -22336,6 +22360,7 @@ function bmSelCtx(surface) {
       nativeCap: (m && m.maxRefs) || 1,
       nativeSize: () => igState.refs.length,
       render: () => { if (typeof igRenderLibBar === 'function') igRenderLibBar(); },
+      renderSel: () => { if (typeof igLibUpdateSelection === 'function') igLibUpdateSelection(); else if (typeof igRenderLibBar === 'function') igRenderLibBar(); },
     };
   }
   return {
@@ -22346,6 +22371,7 @@ function bmSelCtx(surface) {
     nativeCap: BATCH_MAX,
     nativeSize: () => (upState.batchIds ? upState.batchIds.size : 0),
     render: () => { if (typeof upRenderLibBar === 'function') upRenderLibBar(); },
+    renderSel: () => { if (typeof upUpdateBatchUI === 'function') upUpdateBatchUI(); else if (typeof upRenderLibBar === 'function') upRenderLibBar(); },
   };
 }
 
@@ -22386,7 +22412,12 @@ function bmSelToggleProject(surface, f) {
     c.state.projSel.add(f.id);
     c.state.selectMode = 'project';
   }
-  c.render();
+  // Surgical update (toggle the affected ticks) avoids the full-bar rebuild that
+  // flashes every thumbnail. When the selection just emptied, selectMode is now
+  // null and the surgical updater would mis-handle it, so fall back to a full
+  // render in that one case to restore the resting (no-selection) bar.
+  if (c.state.selectMode === 'project' && typeof c.renderSel === 'function') c.renderSel();
+  else c.render();
 }
 
 // Clear ALL selection on a surface (both axes) and reset the locked intent.
@@ -23816,9 +23847,16 @@ function upRenderLibBar() {
     tick.setAttribute('aria-label', 'Select ' + (f.title || 'image'));
     // Cap only applies to the BATCH intent; project selection is unlimited.
     if (!tick.checked && upState.selectMode === 'batch' && upState.batchIds.size >= BATCH_MAX) tick.disabled = true;
-    tick.onclick = (e) => { e.stopPropagation(); };
-    tick.onchange = (e) => {
+    // Use onclick (not onchange) to mirror the Image Gen tick: the chooser
+    // popover arms a deferred document-level outside-click listener, and a
+    // checkbox's change event is followed by a separate click that would trip
+    // that listener and immediately close the chooser. A single click handler
+    // with stopPropagation keeps the whole interaction in one event.
+    tick.onclick = (e) => {
       e.stopPropagation();
+      // The browser toggles .checked on click; authoritative state drives the
+      // real selection, so revert here and let upLibTickClick decide.
+      tick.checked = upState.batchIds.has(f.id) || (upState.projSel && upState.projSel.has(f.id));
       upLibTickClick(f, tick);
     };
     cell.appendChild(tick);
@@ -23905,14 +23943,20 @@ function upToggleBatch(f, on) {
 
 // Refresh per-thumb tick state (checked + cap-disable + .ticked border) without a
 // full re-render, then update the Upscale button label (batch vs single cost).
+// Reflects BOTH batch and project selection so project toggles don't need a full
+// rebuild (which flashes every thumbnail).
 function upUpdateBatchUI() {
   const bar = document.getElementById('upLibBar');
   if (bar) {
-    const capped = upState.batchIds.size >= BATCH_MAX;
+    const capped = upState.selectMode === 'batch' && upState.batchIds.size >= BATCH_MAX;
+    const psel = upState.projSel || new Set();
     bar.querySelectorAll('.up-libbar-thumb').forEach(cell => {
       const id = Number(cell.dataset.favId);
-      const on = upState.batchIds.has(id) || upState.batchIds.has(cell.dataset.favId);
+      const inBatch = upState.batchIds.has(id) || upState.batchIds.has(cell.dataset.favId);
+      const inProj  = psel.has(id) || psel.has(cell.dataset.favId);
+      const on = inBatch || inProj;
       cell.classList.toggle('ticked', on);
+      cell.classList.toggle('sel', on);
       const box = cell.querySelector('.up-libbar-tick');
       if (box) { box.checked = on; box.disabled = (!on && capped); }
     });
