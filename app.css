@@ -844,8 +844,14 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
     padding: 8px 0; gap: 0; justify-content: flex-start;
     background: transparent; border-color: transparent;
   }
+  /* Vertical padding (8px) is IDENTICAL to the collapsed rule above — only the
+     horizontal padding/gap change on hover. A vertical delta here would make the
+     toggle a few px taller on hover, which (since mode-nav-tabs is vertically
+     centred below it) pushes every mode icon down by 1-2px when the rail opens.
+     This was a real bug, not cosmetic — keep these two rules' top/bottom padding
+     in lockstep. */
   body .mode-nav:hover .proj-nav-toggle {
-    padding: 9px 14px; gap: 10px;
+    padding: 8px 14px; gap: 10px;
     background: var(--surface2); border-color: var(--border);
   }
   body .proj-nav-dot, body .proj-nav-icon { flex-shrink: 0; }
@@ -907,6 +913,11 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
   /* Icons at -25% from the prior pass: 23px glyphs in a 24px box. */
   body .mode-nav .nav-tab .tab-icon { font-size: 23px; width: 24px; }
   body .mode-nav-brand .brand-mark { font-size: 26px; width: 30px; text-align: center; }
+  /* Projects header icon matches the SAME 23px/24px scale as the mode-tab icons
+     on this rail — without this override it stays at the base 18px (correct for
+     the mobile drawer) and visibly undersizes against IMAGE GEN / UPSCALER /
+     etc below it. */
+  body .proj-nav-head-ico > i { font-size: 23px; }
 
   /* Profile thumb stays a CONSTANT 30px in both states (so the footer row height
      never changes → no bounce); centred on the shared 40px icon line. */
