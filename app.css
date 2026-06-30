@@ -849,9 +849,13 @@ body.light .preset-dd-item:hover { background:var(--surface2); }
      toggle a few px taller on hover, which (since mode-nav-tabs is vertically
      centred below it) pushes every mode icon down by 1-2px when the rail opens.
      This was a real bug, not cosmetic — keep these two rules' top/bottom padding
-     in lockstep. */
+     in lockstep. LEFT padding is also locked at 0 in both states (only the RIGHT
+     side gains room for the label/caret) — the icon's left edge must never move,
+     same invariant the mode tabs already rely on (their padding-left is a single
+     constant rule, never overridden on hover). A left-padding delta here was the
+     second bug: the icon visibly slid right on hover and snapped back on exit. */
   body .mode-nav:hover .proj-nav-toggle {
-    padding: 8px 14px; gap: 10px;
+    padding: 8px 14px 8px 0; gap: 10px;
     background: var(--surface2); border-color: var(--border);
   }
   body .proj-nav-dot, body .proj-nav-icon { flex-shrink: 0; }

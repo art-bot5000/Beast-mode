@@ -8021,10 +8021,30 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') projCloseNav
 
 // Build the title-bar dropdown contents + the toggle's current-state label/dot.
 function projRenderNav() {
-  const menu = document.getElementById('projNavMenu')
-  // The toggle is now a constant "PROJECTS" header (folders icon + label), so it
-  // no longer mirrors the active project — the active row is highlighted inside
-  // the open menu instead. Nothing to mutate on the toggle here.
+  const menu  = document.getElementById('projNavMenu')
+  const label = document.getElementById('projNavLabel')
+  const dot   = document.getElementById('projNavDot')
+  const active = projActiveId ? projById(projActiveId) : null
+  // Default → generic "PROJECTS" header (folders icon, theme-accent tint).
+  // A specific project active → the toggle reflects THAT project: its name as
+  // the label, its own icon (tinted to its colour) or a colour pip as the
+  // marker. Either way the marker keeps the same enlarged 23px/24px box used by
+  // the mode-tab icons (.proj-nav-head-ico), so size + position never change —
+  // only the glyph and tint swap.
+  if (label) label.textContent = active ? (active.name || 'Project').toUpperCase() : 'PROJECTS'
+  if (dot) {
+    dot.classList.add('proj-nav-head-ico')
+    if (active && active.icon && PROJ_ICONS.indexOf(active.icon) !== -1) {
+      dot.style.color = active.color || 'var(--accent)'
+      dot.innerHTML = `<i class="ti ti-${active.icon}"></i>`
+    } else if (active) {
+      dot.style.color = ''
+      dot.innerHTML = `<span class="proj-nav-pip" style="background:${active.color || 'var(--muted)'};"></span>`
+    } else {
+      dot.style.color = 'var(--accent)'
+      dot.innerHTML = `<i class="ti ti-folders"></i>`
+    }
+  }
   if (!menu) return
   menu.innerHTML = ''
   // Default row (always top) — clears projActiveId. Uses a folder icon tinted to
