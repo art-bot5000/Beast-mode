@@ -20083,6 +20083,7 @@ const IG_OPEN_DIMS = { // multiples of 64 (community / open checkpoints)
 const IG_MODELS = [
   { id:'google:gemini-3-pro-image', label:'Nano Banana Pro', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 3 Pro Image via DIRECT Google API \u2014 1K/2K/4K, multi-image blending.' },
   { id:'google:gemini-3.1-flash-image', label:'Nano Banana 2', family:'Google', dims:IG_GOOGLE_DIMS, gemini:true, sendRes:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 3.1 Flash Image via DIRECT Google API \u2014 fast, 4K-capable, great text.' },
+  { id:'google:gemini-3.1-flash-lite-image', label:'Nano Banana 2 Lite', family:'Google', dims:{ '1K': IG_GOOGLE_DIMS['1K'] }, gemini:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 3.1 Flash Lite Image \u2014 fastest & cheapest Nano Banana, ~4s, 1K. Ideal for drafts.' },
   { id:'google:gemini-2.5-flash-image', label:'Nano Banana 2.5', family:'Google', dims:{ '1K': IG_GOOGLE_DIMS['1K'] }, gemini:true, i2i:true, maxRefs:6, seed:false, autoAR:true, cost:'', note:'Gemini 2.5 Flash Image \u2014 lowest-cost Nano Banana, ideal for drafts.' },
   { id:'runware:openai:gpt-image@2', label:'GPT Image 2', family:'OpenAI', dims:IG_GPT_DIMS, i2i:true, maxRefs:6, seed:false, quality:true, cost:'1\u201321 tokens / image (by quality)', note:'Strong prompt fidelity, text & layout control. No seed support.' },
   { id:'runware:ideogram:4@0', label:'Ideogram 4.0', family:'Ideogram', dims:IG_OPEN_DIMS, i2i:false, seed:false, speed:true, cost:'3\u201310 tokens / image (by speed)', note:'Design & typography specialist. Text-to-image only.' },
@@ -27371,6 +27372,7 @@ const OP_MODEL_ARS = {
   'runware:bfl:1@3':      ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
   'runware:runware:102@1': ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
   // expand-mode models (Gemini/GPT): simpler ratio set
+  'google:gemini-3.1-flash-lite-image': ['1:1', '16:9', '9:16', '4:3', '3:4'],
   'google:gemini-2.5-flash-image': ['1:1', '16:9', '9:16', '4:3', '3:4'],
   'runware:google:4@2':            ['1:1', '16:9', '9:16', '4:3', '3:4'],
   'runware:google:4@3':            ['1:1', '16:9', '9:16', '4:3', '3:4'],
@@ -27476,14 +27478,29 @@ function mkRenderLibGrid() {
   const empty = document.getElementById('mkLibEmpty');
   if (!grid) return;
   grid.innerHTML = '';
-  const withImg = (typeof favourites !== 'undefined' ? favourites : []).filter(f => f.imageData);
+  // Match buildLibCard's "has a picture" test: inline bytes OR a server-backed
+  // image (thumbKey / serverImageUrl / an /api/img imageData URL). Previously
+  // this filtered on f.imageData alone, which hid every cross-device-synced or
+  // i2i-output image that lives server-side — so only locally-markup'd images
+  // (which retain inline bytes) showed up. Now the whole Library is available.
+  const withImg = (typeof favourites !== 'undefined' ? favourites : [])
+    .filter(f => f && !f.noPreview && (f.imageData || f.thumbKey || f.serverImageUrl));
   if (!withImg.length) { if (empty) empty.style.display = 'block'; return; }
   if (empty) empty.style.display = 'none';
   withImg.slice(0, 80).forEach(f => {
     const cell = document.createElement('div');
     cell.style.position = 'relative';
     const img = document.createElement('img');
-    if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, f.imageData); } else { img.src = f.imageData; }
+    // Resolve the preview the same way library cards do: bmLazyThumb handles
+    // server-backed thumbs (authed /api/img) and inline bytes alike. Fall back
+    // to bmSetImgSrc / raw src only when the lazy resolver is unavailable. A raw
+    // /api/img URL as <img src> would 401 (needs Bearer), so avoid seeding it.
+    img.dataset.favId = f.id;
+    const inlineSeed = (typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') !== 0) ? f.imageData : '';
+    if (typeof bmLazyThumb === 'function') { img.src = inlineSeed; bmLazyThumb(img, f); }
+    else if (typeof bmApplyThumb === 'function') { img.src = inlineSeed; bmApplyThumb(img, f); }
+    else if (typeof bmSetImgSrc === 'function') { bmSetImgSrc(img, inlineSeed); }
+    else { img.src = inlineSeed; }
     img.alt = f.title || ''; img.loading = 'lazy';
     cell.appendChild(img);
     // Badge re-editable images so the user knows they'll reload as vectors.
@@ -27500,12 +27517,29 @@ function mkRenderLibGrid() {
 }
 function mkOpenFromFav(f) {
   mkLibClose();
+  if (!f) return;
   const hasStrokes = Array.isArray(f.mkStrokes) && f.mkStrokes.length;
-  mkOpen(f.imageData, mkToolsApply, {
-    mode: 'apply',                 // update this fav in place
-    targetFavId: f.id,
-    strokes: hasStrokes ? f.mkStrokes : null,
-  });
+  const open = (src) => {
+    if (!src) { toolsToast('Could not load image — try again.', true); return; }
+    mkOpen(src, mkToolsApply, {
+      mode: 'apply',                 // update this fav in place
+      targetFavId: f.id,
+      strokes: hasStrokes ? f.mkStrokes : null,
+    });
+  };
+  // Inline data: URIs open directly. Server-backed favs (thumbKey /
+  // serverImageUrl / an /api/img imageData URL — i2i outputs and cross-device
+  // syncs) resolve to real drawable bytes first, mirroring markupFav()'s path;
+  // the editor needs full pixels, not a thumbnail or an unauthed URL.
+  const inlineUsable = (typeof f.imageData === 'string' && f.imageData && f.imageData.indexOf('/api/img/') !== 0);
+  if (inlineUsable) { open(f.imageData); return; }
+  const serverUrl = f.serverImageUrl
+    || ((typeof f.imageData === 'string' && f.imageData.indexOf('/api/img/') === 0) ? f.imageData : ('/api/img/' + f.id));
+  if (typeof upResolveInputImage === 'function') {
+    upResolveInputImage(serverUrl).then(open).catch(() => open(null));
+  } else if (typeof bmGetCachedImage === 'function') {
+    bmGetCachedImage(f.id).then(open).catch(() => open(null));
+  } else { open(f.imageData || null); }
 }
 
 // Editor save callback for the Tools-driven Markup flow. `result` carries the
