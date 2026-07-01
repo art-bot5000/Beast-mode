@@ -22,6 +22,7 @@
 // Canonical model ids handled here (the part after "google:" is the Gemini id):
 //   "google:gemini-3-pro-image"     -> Nano Banana Pro
 //   "google:gemini-3.1-flash-image" -> Nano Banana 2
+//   "google:gemini-3.1-flash-lite-image" -> Nano Banana 2 Lite
 //   "google:gemini-2.5-flash-image" -> Nano Banana (2.5)
 
 import { ProviderError, parseModelId } from './index.js';
@@ -31,9 +32,10 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 // Models this adapter serves, with which extra config each accepts. Only the
 // 3-series accepts an explicit image size; 2.5 Flash ignores it.
 const GEMINI_MODELS = {
-  'gemini-3-pro-image':     { sizes: true },
-  'gemini-3.1-flash-image': { sizes: true },
-  'gemini-2.5-flash-image': { sizes: false },
+  'gemini-3-pro-image':          { sizes: true },
+  'gemini-3.1-flash-image':      { sizes: true },
+  'gemini-3.1-flash-lite-image': { sizes: true },
+  'gemini-2.5-flash-image':      { sizes: false },
 };
 
 function apiKey() {

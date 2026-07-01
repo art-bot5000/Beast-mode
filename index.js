@@ -335,6 +335,16 @@ export const UPSCALERS = [
     note: 'Gemini 3.1 Flash: fast AI-guided enhancement at up to 4K. Great text rendering. Direct Google API.',
   },
   {
+    id: 'google:gemini-3.1-flash-lite-image:upscale',
+    label: 'Nano Banana 2 Lite',
+    family: 'Google',
+    kind: 'gemini-upscale',
+    geminiModel: 'google:gemini-3.1-flash-lite-image',
+    resolution: { values: ['1K'], default: '1K' }, // Lite priced/positioned as 1K draft tier
+    prompt: true,
+    note: 'Gemini 3.1 Flash Lite: fastest, cheapest AI-guided enhancement at ~1K. Direct Google API.',
+  },
+  {
     id: 'google:gemini-2.5-flash-image:upscale',
     label: 'Nano Banana (2.5)',
     family: 'Google',

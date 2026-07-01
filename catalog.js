@@ -232,6 +232,15 @@ export const OUTPAINT_MODELS = [
     note: 'Open weights. Mask auto-generated. Steps/CFG control.',
   },
   {
+    id: 'google:gemini-3.1-flash-lite-image',
+    label: 'Nano Banana 2 Lite',
+    family: 'Gemini',
+    mode: 'expand',
+    maskAuto: false,
+    prompt: 'optional',
+    note: 'Gemini 3.1 Flash Lite expand \u2014 fastest & cheapest, ~1K. Simpler ratio control.',
+  },
+  {
     id: 'google:gemini-2.5-flash-image',
     label: 'Nano Banana 2.5',
     family: 'Gemini',

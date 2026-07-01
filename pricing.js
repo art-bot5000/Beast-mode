@@ -85,6 +85,17 @@ export const PRICING = {
     tokens: 6,
     costUsd: 0.039,
   },
+  // Nano Banana 2 Lite (gemini-3.1-flash-lite-image): Google's fastest/cheapest
+  // Nano Banana. Official price $0.034 per 1K image (batch-tier rate of NB2).
+  // Flat 1K-only: matches its draft/high-throughput positioning; Google hasn't
+  // published a 2K/4K image-token ladder for the Lite variant yet, so we don't
+  // guess higher tiers. ×1.40 anchor: 0.034 × 1.4 × 100 = 4.76 → ceil 5 tokens.
+  'google:gemini-3.1-flash-lite-image': {
+    label: 'Nano Banana 2 Lite',
+    kind: 'flat',
+    tokens: 5,
+    costUsd: 0.034,
+  },
 
   // ── Mid tier (×1.75) ───────────────────────────────────────────────────────
   'runware:openai:gpt-image@2': {
@@ -173,6 +184,13 @@ export const UPSCALE_PRICING = {
     kind: 'flat',
     tokens: 6,
     costUsd: 0.039,
+  },
+  // Nano Banana 2 Lite upscale — flat 1K, 5 tokens (×1.40 anchor, $0.034 base).
+  'google:gemini-3.1-flash-lite-image:upscale': {
+    label: 'Nano Banana 2 Lite (upscale)',
+    kind: 'flat',
+    tokens: 5,
+    costUsd: 0.034,
   },
 };
 
@@ -549,6 +567,9 @@ const GEMINI_RATES = {
   'google:gemini-3-pro-image':     { inPerM: 2.00, outTextPerM: 12.00, outImagePerM: 120.00 },
   'google:gemini-3.1-flash-image': { inPerM: 0.50, outTextPerM: 3.00,  outImagePerM: 60.00 },
   'google:gemini-2.5-flash-image': { inPerM: 0.30, outTextPerM: 2.50,  outImagePerM: 30.00 },
+  // Lite: text I/O $0.25/$1.50 per 1M (Google); image-output rate not separately
+  // published — use NB2's $60/1M so margin logging never under-reports cost.
+  'google:gemini-3.1-flash-lite-image': { inPerM: 0.25, outTextPerM: 1.50, outImagePerM: 60.00 },
 };
 
 /**
